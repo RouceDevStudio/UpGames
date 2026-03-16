@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UpGames | Redirección Segura</title>
+    <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+    <style>
+        :root { --neon-green: #39FF14; --dark-bg: #0a0a0a; --card-bg: #1a1a1a; }
+        body { background-color: var(--dark-bg); color: #fff; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; overflow-x: hidden; }
+        .container { background: var(--card-bg); padding: 30px; border-radius: 20px; border: 1px solid rgba(57, 255, 20, 0.2); box-shadow: 0 0 20px rgba(0,0,0,0.5); max-width: 90%; width: 450px; text-align: center; }
+        h1 { color: var(--neon-green); font-size: 1.5rem; text-transform: uppercase; letter-spacing: 2px; }
+        p { color: #aaa; font-size: 0.9rem; line-height: 1.5; margin-bottom: 20px; }
+        .ad-space { background: #000; border: 1px dashed var(--neon-green); padding: 40px 10px; margin: 20px 0; border-radius: 10px; color: #555; }
+        #timer { font-size: 1.2rem; font-weight: bold; color: var(--neon-green); margin: 20px 0; }
+        .btn-neon { background: var(--neon-green); color: #000; padding: 15px 40px; border: none; border-radius: 50px; font-weight: bold; cursor: pointer; text-transform: uppercase; transition: 0.3s; box-shadow: 0 0 15px rgba(57, 255, 20, 0.4); display: none; margin: 0 auto; }
+        .btn-neon:hover { transform: scale(1.05); box-shadow: 0 0 25px var(--neon-green); }
+        .btn-neon:disabled { opacity: 0.5; cursor: not-allowed; }
+        .footer-note { font-size: 0.7rem; color: #444; margin-top: 30px; }
+
+        /* ── VIDEO DEL JUEGO ── */
+        #game-media-wrap {
+            width: 100%; margin: 12px 0;
+            border-radius: 12px; overflow: hidden;
+            background: #000; display: none;
+            position: relative; aspect-ratio: 16/9;
+        }
+        #game-media-wrap iframe,
+        #game-media-wrap video {
+            width: 100%; height: 100%; border: none; display: block;
+        }
+        #game-title-bar {
+            font-size: .8rem; color: #888; margin: 4px 0 12px;
+            text-align: center; white-space: nowrap;
+            overflow: hidden; text-overflow: ellipsis;
+        }
+        .error-box { background: rgba(255, 67, 67, 0.1); border: 1px solid #ff4343; padding: 15px; border-radius: 10px; color: #ff4343; margin: 15px 0; }
+        .success-box { background: rgba(57, 255, 20, 0.1); border: 1px solid var(--neon-green); padding: 15px; border-radius: 10px; color: var(--neon-green); margin: 15px 0; }
+        .debug-info { background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 5px; font-size: 0.7rem; color: #666; margin-top: 15px; text-align: left; max-height: 200px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    
+    <div class="container">
+        <ion-icon name="shield-checkmark-outline" style="font-size: 48px; color: var(--neon-green);"></ion-icon>
+        <h1>Saliendo de UpGames</h1>
+        <p>Estás siendo redirigido a un servidor externo. Recuerda que UpGames es un directorio neutral y no almacena archivos.</p>
+
+        <!-- ⭐ MEDIA DEL JUEGO — se carga dinámicamente desde los parámetros de URL -->
+        <div id="game-title-bar"></div>
+        <div id="game-media-wrap">
+            <!-- Se rellena con JS -->
+        </div>
+        
+        <!-- ⭐ PUBLICIDAD 1 -->
+        <script>
+            atOptions = {
+                'key': '0af19e39530f3a17d0722c5f0c91735a',
+                'format': 'iframe',
+                'height': 250,
+                'width': 300,
+                'params': {}
+            };
+        </script>
+        <script src="https://www.highperformanceformat.com/0af19e39530f3a17d0722c5f0c91735a/invoke.js"></script><br /><br />
+
+        <div id="timer">Preparando enlace en 30...</div>
+        <div id="error-msg" class="error-box" style="display:none;"></div>
+        <div id="success-msg" class="success-box" style="display:none;"></div>
+        <button id="btn" class="btn-neon">Obtener Enlace</button><br />
+        
+        <!-- ⭐ PUBLICIDAD 2 -->
+        <script async="async" data-cfasync="false" src="https://pl28635483.effectivegatecpm.com/d0ede3882435cb5a80915e26542fd8db/invoke.js"></script>
+        <div id="container-d0ede3882435cb5a80915e26542fd8db"></div><br />
+
+        <script>
+          atOptions = {
+            'key' : '247173c86298a1f5a8e01a0e1c5889cd',
+            'format' : 'iframe',
+            'height' : 600,
+            'width' : 160,
+            'params' : {}
+          };
+        </script>
+        <script src="https://www.highperformanceformat.com/247173c86298a1f5a8e01a0e1c5889cd/invoke.js"></script>
+
+        <div class="footer-note">
+            La responsabilidad legal recae en el usuario que indexó el link.
+        </div>
+        
+        <!-- DEBUG INFO (solo visible en desarrollo) -->
+        <div id="debug-info" class="debug-info" style="display:none;"></div>
+    </div>
+
+    <script>
+        // ⭐ CONFIGURACIÓN
+        const API_URL   = "https://backendapp-037y.onrender.com";
+        const NEXUS_URL = "https://backendbuscador.onrender.com";
+        const DEBUG_MODE = false; // Cambiar a true para ver logs detallados
+
+        // ── Notifica la descarga a NEXUS (fire & forget, no bloquea al usuario) ──
+        function notificarDescargaANexus(itemId, itemData) {
+            try {
+                const usuario = localStorage.getItem('user_admin');
+                if (!usuario) return; // usuario no logueado, no hay perfil que actualizar
+                fetch(`${NEXUS_URL}/api/upgames/evento`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        usuario,
+                        tipo: 'download',
+                        datos: {
+                            itemId,
+                            title:    itemData?.title    || '',
+                            category: itemData?.category || '',
+                            tags:     itemData?.tags     || []
+                        }
+                    })
+                }).catch(() => {}); // silenciar errores — nunca bloquear la descarga
+            } catch(_) {}
+        }
+        
+        // ⭐ ELEMENTOS DOM
+        const timerEl = document.getElementById('timer');
+        const btnEl = document.getElementById('btn');
+        const errorEl = document.getElementById('error-msg');
+        const successEl = document.getElementById('success-msg');
+        const debugEl = document.getElementById('debug-info');
+        
+        // ⭐ ESTADO
+        let countdown = 30;
+        let enlaceFinal = null;
+        let validacionRealizada = false;
+        let tieneAdBlocker = false; // Se detecta al cargar
+
+        // ⭐ DETECCIÓN DE AD BLOCKER
+        // Crea un elemento "cebo" con clases típicas de anuncios.
+        // Los bloqueadores los ocultan o eliminan → los detectamos.
+        async function detectarAdBlocker() {
+            return new Promise(resolve => {
+                const bait = document.createElement('div');
+                bait.className = 'ad-banner ad-unit ads adsbox ad-placeholder adsbygoogle pub_300x250';
+                bait.style.cssText = 'width:1px;height:1px;position:absolute;top:-9999px;left:-9999px;pointer-events:none;';
+                bait.setAttribute('aria-hidden', 'true');
+                document.body.appendChild(bait);
+
+                // Dar tiempo al bloqueador para actuar (~150ms es suficiente)
+                setTimeout(() => {
+                    const style = window.getComputedStyle(bait);
+                    const bloqueado =
+                        bait.offsetHeight === 0 ||
+                        bait.offsetWidth  === 0 ||
+                        style.display     === 'none' ||
+                        style.visibility  === 'hidden' ||
+                        style.opacity     === '0' ||
+                        !document.body.contains(bait); // algunos lo eliminan del DOM
+
+                    try { document.body.removeChild(bait); } catch (_) {}
+                    resolve(bloqueado);
+                }, 200);
+            });
+        }
+
+        // Lanzar detección al cargar (sin bloquear el countdown)
+        detectarAdBlocker().then(resultado => {
+            tieneAdBlocker = resultado;
+            if (resultado) {
+                log("⚠️ Ad Blocker detectado — la descarga NO contará para el autor", 'error');
+            } else {
+                log("✅ Sin Ad Blocker detectado", 'success');
+            }
+        });
+        
+        // ⭐ OBTENER PARÁMETROS DE URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const juegoId = urlParams.get('id');
+        const destino = urlParams.get('dest'); // Fallback para formato antiguo
+        const mediaParam = urlParams.get('media') ? decodeURIComponent(urlParams.get('media')) : '';
+        const titleParam = urlParams.get('title') ? decodeURIComponent(urlParams.get('title')) : '';
+
+        // ⭐ CARGAR MEDIA DEL JUEGO (video o imagen)
+        (function loadGameMedia() {
+            if (!mediaParam) return;
+
+            const wrap     = document.getElementById('game-media-wrap');
+            const titleBar = document.getElementById('game-title-bar');
+
+            if (titleParam) titleBar.textContent = titleParam;
+
+            const isYT  = /youtu\.be\/|youtube\.com\/(watch|embed)/i.test(mediaParam);
+            const isMp4 = /\.(mp4|webm|mov)(\?.*)?$/i.test(mediaParam);
+
+            if (isYT) {
+                // Extraer ID de YouTube
+                let ytId = '';
+                const m1 = mediaParam.match(/youtu\.be\/([^?&]+)/);
+                const m2 = mediaParam.match(/[?&]v=([^?&]+)/);
+                const m3 = mediaParam.match(/\/embed\/([^?&]+)/);
+                ytId = (m1||m2||m3||[])[1] || '';
+                if (ytId) {
+                    wrap.innerHTML = `<iframe
+                        src="https://www.youtube.com/embed/${ytId}?autoplay=1&mute=1&loop=1&playlist=${ytId}&controls=1&rel=0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowfullscreen></iframe>`;
+                    wrap.style.display = 'block';
+                }
+            } else if (isMp4) {
+                wrap.innerHTML = `<video src="${mediaParam}" autoplay muted loop playsinline controls></video>`;
+                wrap.style.display = 'block';
+            } else if (mediaParam.startsWith('http')) {
+                // Imagen
+                wrap.style.aspectRatio = 'auto';
+                wrap.innerHTML = `<img src="${mediaParam}" alt="${titleParam}"
+                    style="width:100%;border-radius:12px;display:block;max-height:200px;object-fit:cover;"
+                    onerror="document.getElementById('game-media-wrap').style.display='none'">`;
+                wrap.style.display = 'block';
+            }
+        })();
+        
+        // ⭐ FUNCIÓN DE DEBUG
+        function log(msg, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const emoji = type === 'error' ? '❌' : type === 'success' ? '✅' : 'ℹ️';
+            const logMsg = `[${timestamp}] ${emoji} ${msg}`;
+            
+            console.log(logMsg);
+            
+            if (DEBUG_MODE) {
+                debugEl.style.display = 'block';
+                debugEl.innerHTML += `<div>${logMsg}</div>`;
+                debugEl.scrollTop = debugEl.scrollHeight;
+            }
+        }
+
+        // ⭐ VALIDACIÓN INICIAL
+        log(`Iniciando puente.html - ID: ${juegoId || 'N/A'}`);
+        
+        if (!juegoId && !destino) {
+            showError("❌ Error crítico: No se proporcionó ID del juego ni enlace de destino");
+            log("Sin ID ni destino", 'error');
+        } else {
+            log(`Parámetros recibidos OK - ID: ${juegoId}`);
+        }
+
+        // ⭐ COUNTDOWN TIMER
+        const interval = setInterval(() => {
+            countdown--;
+            timerEl.innerText = `Preparando enlace en ${countdown}...`;
+            
+            if (countdown <= 0) {
+                clearInterval(interval);
+                timerEl.style.display = 'none';
+                btnEl.style.display = 'block';
+                
+                log("Timer completado, iniciando validación");
+                
+                // ⭐ VALIDAR DESCARGA EN EL BACKEND
+                if (juegoId) {
+                    validarDescarga(juegoId);
+                } else if (destino) {
+                    // Modo legacy (sin economía)
+                    log("Modo legacy activado");
+                    enlaceFinal = decodeURIComponent(destino);
+                    habilitarBoton();
+                }
+            }
+        }, 1000);
+
+        // ⭐ FUNCIÓN PRINCIPAL: VALIDAR DESCARGA
+        async function validarDescarga(juegoId) {
+            if (validacionRealizada) {
+                log("Validación ya realizada, ignorando");
+                return;
+            }
+            
+            validacionRealizada = true;
+            btnEl.disabled = true;
+            btnEl.innerText = "⏳ Validando descarga...";
+            
+            log(`Enviando petición al backend - Juego ID: ${juegoId}`);
+            
+            try {
+                const requestBody = { juegoId, tieneAdBlocker };
+                log(`Body de la petición: ${JSON.stringify(requestBody)}`);
+                
+                // ⭐ AVISO VISUAL si hay ad blocker (no bloquea, solo informa)
+                if (tieneAdBlocker) {
+                    showWarning("⚠️ Bloqueador de anuncios detectado. El autor no recibirá comisión por esta descarga.");
+                }
+                
+                const response = await fetch(`${API_URL}/economia/validar-descarga`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                log(`Respuesta recibida - Status: ${response.status}`);
+
+                // ⭐ MANEJAR ERRORES HTTP
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    log(`Error HTTP ${response.status}: ${errorText}`, 'error');
+                    throw new Error(`Error HTTP ${response.status}: ${errorText}`);
+                }
+
+                const data = await response.json();
+                log(`Datos recibidos: ${JSON.stringify(data)}`, 'success');
+
+                if (data.success) {
+                    // ⭐ CRÍTICO: Asignar el enlace primero
+                    enlaceFinal = data.link;
+
+                    // Guardar metadata del item para notificar a NEXUS al hacer clic
+                    window._itemData = {
+                        title:    data.title    || data.juego?.title    || '',
+                        category: data.category || data.juego?.category || '',
+                        tags:     data.tags     || data.juego?.tags     || []
+                    };
+
+                    // ⭐ VALIDAR que el enlace existe Y es una URL válida
+                    if (!enlaceFinal || enlaceFinal.trim() === '') {
+                        log(`⚠️ Backend no devolvió enlace. Data completa: ${JSON.stringify(data)}`, 'error');
+                        showError("❌ Error: El backend no devolvió un enlace de descarga válido");
+                        btnEl.disabled = true;
+                        btnEl.innerText = "Error - Sin enlace";
+                        return;
+                    }
+                    
+                    log(`✅ Enlace recibido: ${enlaceFinal.substring(0, 50)}...`, 'success');
+                    
+                    // ⭐ MOSTRAR MENSAJE SEGÚN EL ESTADO
+                    if (data.adBlockerDetectado) {
+                        showWarning("⚠️ Acceso permitido, pero tu bloqueador de anuncios impide que el autor reciba comisión. Considera desactivarlo.");
+                        log("Ad Blocker confirmado — descarga no contada para el autor", 'info');
+                    } else if (data.limiteAlcanzado) {
+                        showWarning("⚠️ " + (data.mensaje || "Ya descargaste este juego 2 veces hoy. Aún puedes acceder al enlace."));
+                        log("Límite alcanzado pero enlace permitido", 'info');
+                    } else {
+                        showSuccess(`✅ Descarga validada (${data.descargasEfectivas || 'N/A'} descargas efectivas)`);
+                        log(`Descarga contada - Total: ${data.descargasEfectivas}`, 'success');
+                    }
+                    
+                    // ⭐ SIEMPRE HABILITAR EL BOTÓN si tenemos enlace
+                    habilitarBoton();
+                    
+                } else {
+                    const errorMsg = data.error || data.mensaje || "Error desconocido al validar descarga";
+                    log(`Error en respuesta: ${errorMsg}`, 'error');
+                    showError("❌ " + errorMsg);
+                    btnEl.disabled = true;
+                    btnEl.innerText = "Error en validación";
+                }
+                
+            } catch (error) {
+                log(`Error crítico: ${error.message}`, 'error');
+                console.error("❌ Error completo:", error);
+                
+                let errorMessage = "Error de conexión con el servidor";
+                
+                if (error.message.includes("Failed to fetch")) {
+                    errorMessage = "No se pudo conectar al servidor. Verifica tu conexión a internet.";
+                } else if (error.message.includes("NetworkError")) {
+                    errorMessage = "Error de red. El servidor puede estar caído.";
+                } else if (error.message.includes("HTTP 4")) {
+                    errorMessage = "Petición inválida. Verifica el ID del juego.";
+                } else if (error.message.includes("HTTP 5")) {
+                    errorMessage = "Error del servidor. Intenta de nuevo en unos minutos.";
+                }
+                
+                showError(`❌ ${errorMessage}`);
+                btnEl.disabled = true;
+                btnEl.innerText = "Validación fallida";
+            }
+        }
+
+        // ⭐ HABILITAR BOTÓN DE DESCARGA
+        function habilitarBoton() {
+            btnEl.disabled = false;
+            btnEl.innerText = "🚀 Obtener Enlace";
+            btnEl.style.display = 'block';
+            
+            log("Botón habilitado", 'success');
+            
+            btnEl.onclick = () => {
+                if (enlaceFinal) {
+                    log(`Abriendo enlace: ${enlaceFinal}`);
+
+                    // Notificar a NEXUS que hubo una descarga real (fire & forget)
+                    notificarDescargaANexus(juegoId, window._itemData || {});
+
+                    // Abrir en nueva pestaña
+                    const nuevaVentana = window.open(enlaceFinal, '_blank');
+                    
+                    if (nuevaVentana) {
+                        timerEl.style.display = 'block';
+                        timerEl.innerText = "✅ Enlace abierto en nueva pestaña";
+                        timerEl.style.color = "var(--neon-green)";
+                        btnEl.innerText = "🔄 Volver a abrir";
+                        log("Enlace abierto correctamente", 'success');
+                    } else {
+                        showError("⚠️ El navegador bloqueó la ventana emergente. Permite ventanas emergentes para este sitio.");
+                        log("Popup bloqueado", 'error');
+                    }
+                } else {
+                    showError("❌ Error: Enlace no disponible");
+                    log("Intento de click sin enlace", 'error');
+                }
+            };
+        }
+
+        // ⭐ FUNCIONES DE UI
+        function showError(msg) {
+            errorEl.innerText = msg;
+            errorEl.style.display = 'block';
+            successEl.style.display = 'none';
+        }
+
+        function showSuccess(msg) {
+            successEl.innerText = msg;
+            successEl.style.display = 'block';
+            errorEl.style.display = 'none';
+        }
+
+        function showWarning(msg) {
+            timerEl.innerText = msg;
+            timerEl.style.color = "#ffcc00";
+            timerEl.style.display = 'block';
+        }
+        
+        // ⭐ LOG FINAL DE INICIALIZACIÓN
+        log("Puente.html inicializado completamente");
+    </script>
+
+<!-- ══════════════════════════════════════════════
+     🎓 TUTORIAL PUENTE — Primera vez
+     REGLAS: 
+     ✅ Solo aparece 1 vez (localStorage)
+     ✅ NO bloquea el countdown ni los anuncios
+     ✅ NO toca ninguna variable/función existente
+     ✅ Se descarta al tocar el botón principal
+     ✅ Mobile-first
+══════════════════════════════════════════════ -->
+<style>
+/* ── CARD TUTORIAL FLOTANTE ──────────────────────────────────
+   Se muestra encima del contenido SIN bloquear nada.
+   El usuario puede interactuar con la página normalmente.
+─────────────────────────────────────────────────────────── */
+#bridge-tut {
+    display: none;
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    width: min(340px, calc(100vw - 24px));
+    background: #0f0f0f;
+    border: 1.5px solid #39FF14;
+    border-radius: 18px;
+    padding: 16px 18px 14px;
+    box-shadow: 0 8px 40px rgba(57,255,20,0.18), 0 2px 16px rgba(0,0,0,0.85);
+    font-family: 'Segoe UI', Roboto, sans-serif;
+    box-sizing: border-box;
+    animation: btgSlideUp .4s cubic-bezier(.34,1.56,.64,1) forwards;
+}
+@keyframes btgSlideUp {
+    from { opacity:0; transform:translateX(-50%) translateY(24px); }
+    to   { opacity:1; transform:translateX(-50%) translateY(0); }
+}
+#bridge-tut.closing {
+    animation: btgSlideDown .3s ease forwards;
+}
+@keyframes btgSlideDown {
+    to { opacity:0; transform:translateX(-50%) translateY(30px); }
+}
+
+/* Header */
+#bridge-tut .bt-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+#bridge-tut .bt-badge {
+    font-size: .6rem; font-weight: 900; letter-spacing: 1.5px;
+    color: #39FF14;
+    background: rgba(57,255,20,.1);
+    border: 1px solid rgba(57,255,20,.3);
+    border-radius: 20px;
+    padding: 3px 10px;
+    text-transform: uppercase;
+}
+#bridge-tut .bt-step {
+    font-size: .65rem; font-weight: 700;
+    color: rgba(57,255,20,.5);
+    letter-spacing: .5px;
+}
+/* Contenido */
+#bridge-tut .bt-title {
+    font-size: .92rem; font-weight: 800;
+    color: #fff;
+    margin-bottom: 7px;
+    line-height: 1.3;
+}
+#bridge-tut .bt-body {
+    font-size: .78rem; color: #aaa;
+    line-height: 1.6;
+    margin-bottom: 14px;
+}
+#bridge-tut .bt-body strong { color: #39FF14; }
+
+/* Footer */
+#bridge-tut .bt-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+#bridge-tut .bt-dots {
+    display: flex; gap: 5px; align-items: center;
+}
+#bridge-tut .bt-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #2a2a2a;
+    transition: background .3s, transform .3s;
+}
+#bridge-tut .bt-dot.on { background: #39FF14; transform: scale(1.3); }
+
+#bridge-tut .bt-nav { display: flex; gap: 8px; }
+#bridge-tut .bt-btn {
+    padding: 8px 16px; border-radius: 9px;
+    font-size: .72rem; font-weight: 800;
+    letter-spacing: .5px; cursor: pointer;
+    border: none; text-transform: uppercase;
+    min-height: 36px; transition: all .18s;
+}
+#bridge-tut .bt-prev { background: transparent; color: #555; border: 1px solid #2a2a2a; }
+#bridge-tut .bt-prev:hover { color: #fff; border-color: #555; }
+#bridge-tut .bt-next { background: #39FF14; color: #000; }
+#bridge-tut .bt-next:hover { filter: brightness(1.1); }
+
+/* Botón cerrar esquina */
+#bridge-tut .bt-close {
+    position: absolute;
+    top: 12px; right: 14px;
+    background: none; border: none;
+    color: #555; cursor: pointer;
+    font-size: .95rem; line-height: 1;
+    padding: 4px; border-radius: 6px;
+    min-width: 28px; min-height: 28px;
+    display: flex; align-items: center; justify-content: center;
+    transition: color .2s;
+}
+#bridge-tut .bt-close:hover { color: #ff4343; }
+</style>
+
+<!-- La tarjeta del tutorial — flota sobre la página sin bloquear nada -->
+<div id="bridge-tut">
+    <button class="bt-close" id="btg-close" aria-label="Cerrar">✕</button>
+    <div class="bt-head">
+        <span class="bt-badge">Cómo funciona</span>
+        <span class="bt-step" id="btg-step">1 / 4</span>
+    </div>
+    <div class="bt-title" id="btg-title"></div>
+    <div class="bt-body"  id="btg-body"></div>
+    <div class="bt-foot">
+        <div class="bt-dots" id="btg-dots"></div>
+        <div class="bt-nav">
+            <button class="bt-btn bt-prev" id="btg-prev">← Atrás</button>
+            <button class="bt-btn bt-next" id="btg-next">Siguiente →</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+/* ── REGLA PRINCIPAL: no tocar nada del scope global existente ──
+   Todas las variables son locales a este IIFE.
+─────────────────────────────────────────────────────────────── */
+
+const DONE_KEY = 'upgames_puente_tutorial_done';
+if (localStorage.getItem(DONE_KEY) === '1') return; // ya lo vio, salir
+
+/* ── PASOS ─────────────────────────────────────────────────── */
+const STEPS = [
+    {
+        ttl: "🔒 Página de Acceso Seguro",
+        bod: "Esta página es el <strong>puente de seguridad</strong> de UpGames. Antes de darte el enlace de descarga, el sistema verifica que todo esté en orden y registra la descarga para que el autor gane su comisión."
+    },
+    {
+        ttl: "⏱️ El Contador de 30 Segundos",
+        bod: "El contador es <strong>obligatorio</strong> — no se puede saltar. Durante ese tiempo el sistema consulta el servidor y valida el enlace. Cuando llegue a 0, aparecerá el botón de descarga automáticamente."
+    },
+    {
+        ttl: "🚀 El Botón \"Obtener Enlace\"",
+        bod: "Cuando el botón aparezca en verde, tócalo una sola vez. <strong>Se abrirá el enlace en una nueva pestaña</strong>. Si el navegador bloquea la ventana emergente, toca el aviso que aparece arriba y permite las ventanas de este sitio."
+    },
+    {
+        ttl: "⚠️ Mensajes Importantes",
+        bod: "<strong>Verde ✅</strong> = descarga validada correctamente.\n<strong>Amarillo ⚠️</strong> = ya descargaste este archivo 2 veces hoy (sigue funcionando).\n<strong>Rojo ❌</strong> = hubo un error, recarga la página e intenta de nuevo.\n\n<strong>Recuerda:</strong> UpGames no almacena archivos, solo indexa los enlaces."
+    }
+];
+
+/* ── REFS ───────────────────────────────────────────────────── */
+const card  = document.getElementById('bridge-tut');
+const stepE = document.getElementById('btg-step');
+const ttlE  = document.getElementById('btg-title');
+const bodE  = document.getElementById('btg-body');
+const dotsE = document.getElementById('btg-dots');
+const prevB = document.getElementById('btg-prev');
+const nextB = document.getElementById('btg-next');
+const closeB= document.getElementById('btg-close');
+
+let idx = 0;
+
+/* ── RENDER ─────────────────────────────────────────────────── */
+function render() {
+    const s = STEPS[idx], total = STEPS.length;
+    stepE.textContent  = `${idx+1} / ${total}`;
+    ttlE.textContent   = s.ttl;
+    bodE.innerHTML     = s.bod.replace(/\n/g, '<br>');
+    prevB.style.visibility = idx === 0 ? 'hidden' : 'visible';
+    nextB.textContent  = idx === total-1 ? 'Entendido ✓' : 'Siguiente →';
+
+    dotsE.innerHTML = '';
+    STEPS.forEach((_,i) => {
+        const d = document.createElement('span');
+        d.className = 'bt-dot' + (i===idx?' on':'');
+        dotsE.appendChild(d);
+    });
+}
+
+function dismiss() {
+    localStorage.setItem(DONE_KEY, '1');
+    card.classList.add('closing');
+    setTimeout(() => { card.style.display = 'none'; }, 320);
+}
+
+/* ── EVENTOS ────────────────────────────────────────────────── */
+nextB.addEventListener('click', () => {
+    if (idx < STEPS.length-1) { idx++; render(); }
+    else dismiss();
+});
+prevB.addEventListener('click', () => {
+    if (idx > 0) { idx--; render(); }
+});
+closeB.addEventListener('click', dismiss);
+
+/* Al tocar el botón principal de la página, cerrar el tutorial */
+const mainBtn = document.getElementById('btn');
+if (mainBtn) {
+    mainBtn.addEventListener('click', () => {
+        if (card.style.display !== 'none') dismiss();
+    }, { once: true });
+}
+
+/* ── MOSTRAR (con pequeño delay para no competir con los scripts de ads) ── */
+function show() {
+    render();
+    card.style.display = 'block';
+}
+
+// Esperar a que todo cargue antes de mostrar el tutorial
+if (document.readyState === 'complete') {
+    setTimeout(show, 1200);
+} else {
+    window.addEventListener('load', () => setTimeout(show, 1200));
+}
+
+})();
+</script>
+<!-- FIN TUTORIAL PUENTE -->
+<script src="https://pl28710944.effectivegatecpm.com/3b/d4/b6/3bd4b68842c2959a8afb8ce3fedc3a87.js"></script>
+
+</body>
+</html>

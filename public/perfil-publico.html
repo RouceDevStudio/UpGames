@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+
+    <!-- ╔══════════════════════════════════════════════╗
+         ║  UpGames · SEO & Social Sharing              ║
+         ╚══════════════════════════════════════════════╝ -->
+    <meta name="description" content="Biblioteca digital inteligente indexada por la comunidad. Juegos, mods, apps y software. Monetiza tus aportes y deja que NEXUS IA personalice tu experiencia.">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230a0a0a'/><text y='.9em' font-size='72' x='50%' dominant-baseline='middle' text-anchor='middle'>🎮</text></svg>">
+    <!-- Open Graph (el JS de la página sobreescribe dinámicamente og:title/description con el nombre real del usuario) -->
+    <meta property="og:type"        content="profile">
+    <meta property="og:site_name"   content="UpGames">
+    <meta property="og:title"       content="Perfil — UpGames">
+    <meta property="og:description" content="Biblioteca digital inteligente indexada por la comunidad. Juegos, mods, apps y software. Monetiza tus aportes y deja que NEXUS IA personalice tu experiencia.">
+    <meta property="og:image"       content="https://roucedevstudio.github.io/Up_Games/public/og-cover.png">
+    <meta property="og:image:width"  content="1200">
+    <meta property="og:image:height" content="630">
+    <!-- Twitter Card -->
+    <meta name="twitter:card"        content="summary_large_image">
+    <meta name="twitter:title"       content="Perfil — UpGames">
+    <meta name="twitter:image"       content="https://roucedevstudio.github.io/Up_Games/public/og-cover.png">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#07070f">
+    <title>Perfil de Usuario — UpGames</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://unpkg.com">
+    <style>
+/* ═══════════════════════════════════════════
+   TOKENS — idénticos a biblioteca.html
+═══════════════════════════════════════════ */
+:root {
+  --g:       #5EFF43;
+  --g-dim:   rgba(94,255,67,.12);
+  --g-glow:  rgba(94,255,67,.25);
+  --cy:      #00f2ff;
+  --cy-dim:  rgba(0,242,255,.1);
+  --bg:      #07070f;
+  --bg1:     #0d0d1a;
+  --bg2:     #12121f;
+  --bg3:     #191927;
+  --bd:      rgba(255,255,255,.07);
+  --bd-g:    rgba(94,255,67,.2);
+  --txt:     #f0f0f8;
+  --txt2:    #9090aa;
+  --txt3:    #555570;
+  --danger:  #ff4343;
+  --warning: #ffcc00;
+  --bronce:  #cd7f32;
+  --oro:     #c0c0c0;
+  --elite:   #FFFF50;
+  --card-r:  18px;
+  --ease:    cubic-bezier(.4,0,.2,1);
+  --spring:  cubic-bezier(.34,1.4,.64,1);
+  --ff:      'Manrope', -apple-system, sans-serif;
+  --ff-mono: 'DM Mono', monospace;
+  --ff-disp: 'Bebas Neue', sans-serif;
+  --hdr-h:   56px;
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior:smooth; }
+body {
+  background: var(--bg);
+  font-family: var(--ff);
+  color: var(--txt);
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+img { display:block; }
+button { cursor:pointer; background:none; border:none; color:inherit; font-family:inherit; }
+a { text-decoration:none; color:inherit; }
+::-webkit-scrollbar { display:none; }
+
+/* ═══════════════════════════════════════════
+   TOP BAR — sticky, mismo estilo que biblioteca
+═══════════════════════════════════════════ */
+.top-bar {
+  position: sticky;
+  top: 0;
+  z-index: 300;
+  height: var(--hdr-h);
+  background: rgba(7,7,15,.9);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-bottom: 1px solid var(--bd);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  gap: 12px;
+}
+.top-bar-logo {
+  font-family: var(--ff-disp);
+  font-size: 1.5rem;
+  letter-spacing: 3px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.top-bar-logo .up { color: var(--g); }
+.top-bar-logo .gm { color: var(--txt); }
+
+.btn-volver {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: var(--bg2);
+  border: 1.5px solid var(--bd);
+  color: var(--txt2);
+  font-size: .78rem;
+  font-weight: 700;
+  letter-spacing: .3px;
+  transition: border-color .2s, color .2s;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: var(--ff);
+}
+.btn-volver ion-icon { font-size: .95rem; }
+.btn-volver:hover { border-color: var(--bd-g); color: var(--g); }
+
+/* ═══════════════════════════════════════════
+   HERO — portada inmersiva + avatar flotante
+═══════════════════════════════════════════ */
+.profile-hero { position: relative; }
+
+.hero-cover {
+  height: 148px;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg1);
+}
+.hero-cover-gradient {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 120% 100% at 80% -20%, rgba(94,255,67,.18) 0%, transparent 60%),
+    radial-gradient(ellipse 80% 80% at 10% 110%, rgba(0,242,255,.12) 0%, transparent 55%),
+    linear-gradient(180deg, var(--bg2) 0%, var(--bg1) 100%);
+}
+.hero-cover-scan {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0px, transparent 3px,
+    rgba(255,255,255,.013) 3px, rgba(255,255,255,.013) 4px
+  );
+  pointer-events: none;
+}
+.hero-cover-glow {
+  position: absolute;
+  top: -80px; right: -60px;
+  width: 280px; height: 280px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(94,255,67,.13), transparent 70%);
+  pointer-events: none;
+  animation: coverGlow 4s ease-in-out infinite;
+}
+@keyframes coverGlow {
+  0%,100% { opacity:.7; transform:scale(1); }
+  50%      { opacity:1; transform:scale(1.08); }
+}
+.hero-cover-line {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 1.5px;
+  background: linear-gradient(90deg,
+    transparent 0%, var(--g) 20%, var(--cy) 50%, var(--g) 80%, transparent 100%);
+  opacity: .35;
+}
+
+/* Avatar flotante */
+.hero-avatar-wrap {
+  position: relative;
+  left: 20px;
+  bottom: -55px;
+  z-index: 100;
+}
+.avatar {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--g), var(--cy));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--ff-disp);
+  font-size: 2.8rem;
+  letter-spacing: 2px;
+  color: #000;
+  border: 3.5px solid var(--bg);
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1.5px var(--bd-g), 0 10px 40px rgba(0,0,0,.7), 0 0 30px rgba(94,255,67,.1);
+  position: relative;
+}
+.avatar img { width:100%;
+height:100%; object-fit:cover;
+display:block;
+    
+}
+
+
+/* Info tras la portada */
+.hero-info {
+  padding: 62px 16px 18px;
+  background: var(--bg1);
+  border-bottom: 1px solid var(--bd);
+}
+.hero-top-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.hero-name-col { flex: 1; min-width: 0; }
+.hero-username {
+  font-family: var(--ff-disp);
+  font-size: 2rem;
+  letter-spacing: 2.5px;
+  color: var(--txt);
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.hero-at { color: var(--g); }
+
+.verificado-badge { display:inline-flex; align-items:center; font-size:1.05rem; }
+.verificado-badge.level-1 { color: var(--bronce); }
+.verificado-badge.level-2 { color: var(--oro); filter: drop-shadow(0 0 4px rgba(255,215,0,.4)); }
+.verificado-badge.level-3 { color: var(--elite); filter: drop-shadow(0 0 8px var(--elite)); }
+
+.hero-bio {
+  font-size: .75rem;
+  color: var(--txt3);
+  font-family: var(--ff-mono);
+  line-height: 1.5;
+  margin-top: 6px;
+  margin-bottom: 16px;
+  max-width: 420px;
+}
+
+/* ═══════════════════════════════════════════
+   STATS — 3 columnas (idéntico a biblioteca)
+═══════════════════════════════════════════ */
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.stat-item {
+  background: var(--bg2);
+  border: 1px solid var(--bd);
+  border-radius: 14px;
+  padding: 10px 8px;
+  text-align: center;
+  transition: border-color .2s, background .2s;
+}
+.stat-item:hover { border-color: var(--bd-g); background: var(--bg3); }
+.stat-number {
+  font-family: var(--ff-disp);
+  font-size: 1.5rem;
+  letter-spacing: 1.5px;
+  color: var(--txt);
+  line-height: 1;
+  display: block;
+}
+.stat-label {
+  font-size: .56rem;
+  color: var(--txt3);
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  display: block;
+  margin-top: 3px;
+}
+
+/* ═══════════════════════════════════════════
+   BOTÓN SEGUIR
+═══════════════════════════════════════════ */
+.btn-seguir {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 40px;
+  padding: 0 18px;
+  border-radius: 12px;
+  background: var(--g);
+  color: #000;
+  font-size: .8rem;
+  font-weight: 800;
+  letter-spacing: .4px;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity .18s var(--ease), transform .18s var(--spring), box-shadow .18s;
+  position: relative;
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: var(--ff);
+}
+.btn-seguir::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,.18), transparent);
+  pointer-events: none;
+}
+.btn-seguir:hover:not(:disabled) { box-shadow: 0 4px 20px var(--g-glow); transform: translateY(-1px); }
+.btn-seguir:active:not(:disabled) { opacity:.82; transform:scale(.97); }
+.btn-seguir:disabled { opacity:.38; cursor:not-allowed; transform:none; box-shadow:none; }
+.btn-seguir ion-icon { font-size: 1rem; }
+.btn-seguir.btn-siguiendo {
+  background: transparent;
+  color: var(--g);
+  border: 1.5px solid var(--bd-g);
+  box-shadow: none;
+}
+.btn-seguir.btn-siguiendo::before { display: none; }
+.btn-seguir.btn-siguiendo:hover:not(:disabled) { background: var(--g-dim); transform: none; box-shadow: none; }
+
+/* ═══════════════════════════════════════════
+   SECTION HEADER
+═══════════════════════════════════════════ */
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 16px 12px;
+}
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: .7rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--txt2);
+}
+.section-title ion-icon { color: var(--g); font-size: .9rem; }
+.section-count { font-family: var(--ff-mono); font-size: .68rem; color: var(--txt3); }
+
+/* ═══════════════════════════════════════════
+   GRID DE PUBLICACIONES
+═══════════════════════════════════════════ */
+.container { padding-bottom: 40px; }
+
+.items-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 0 12px;
+}
+
+/* Card — gemelo visual de game-tile de biblioteca */
+.item-card {
+  background: var(--bg1);
+  border-radius: var(--card-r);
+  border: 1px solid var(--bd);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform .18s var(--spring), border-color .18s, box-shadow .18s;
+  position: relative;
+  will-change: transform;
+  animation: cardIn .35s var(--ease) both;
+}
+@keyframes cardIn {
+  from { opacity:0; transform:translateY(10px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+.item-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--bd-g);
+  box-shadow: 0 8px 28px rgba(94,255,67,.1);
+}
+.item-card:active { transform:scale(.96); border-color:var(--bd-g); }
+
+/* Thumbnail 16:9 */
+.item-card .thumb-wrap {
+  position: relative;
+  aspect-ratio: 16/9;
+  overflow: hidden;
+  background: var(--bg2);
+}
+.item-card .thumb-wrap img {
+  width: 100%; height: 100%;
+  object-fit: cover; display: block;
+  transition: transform .3s var(--ease);
+}
+.item-card:hover .thumb-wrap img { transform: scale(1.04); }
+
+/* Badge de estado */
+.item-link-badge {
+  position: absolute;
+  top: 6px; right: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: .58rem;
+  font-weight: 800;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid transparent;
+}
+.item-link-badge.online   { background:rgba(94,255,67,.15); color:var(--g);  border-color:rgba(94,255,67,.3); }
+.item-link-badge.revision { background:rgba(255,204,0,.15); color:#ffcc00;   border-color:rgba(255,204,0,.3); }
+.item-link-badge.caido    { background:rgba(255,67,67,.15);  color:#ff4343;  border-color:rgba(255,67,67,.3); }
+.item-link-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+  animation: dotBlink 1.8s ease-in-out infinite;
+}
+@keyframes dotBlink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* Info del card */
+.item-info { padding: 10px; display: flex; flex-direction: column; gap: 4px; }
+.item-category {
+  font-size: .6rem;
+  font-weight: 700;
+  color: var(--cy);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.item-title {
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--txt);
+  line-height: 1.25;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.item-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 6px 8px;
+  background: var(--bg3);
+  border-radius: 8px;
+}
+.item-stat {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--ff-mono);
+  font-size: .62rem;
+  color: var(--txt3);
+  flex: 1;
+}
+.item-stat ion-icon { font-size: .78rem; color: var(--g); flex-shrink: 0; }
+.item-stat-val { color: var(--txt2); font-weight: 500; }
+
+/* ═══════════════════════════════════════════
+   EMPTY & ERROR
+═══════════════════════════════════════════ */
+.empty-msg {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  gap: 12px;
+  text-align: center;
+}
+.empty-msg ion-icon { font-size: 3rem; color: var(--txt3); opacity: .45; }
+.empty-msg h3 { font-size: .95rem; font-weight: 700; color: var(--txt2); }
+.empty-msg p  { font-size: .82rem; color: var(--txt3); line-height: 1.5; }
+.btn-volver-inicio {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: var(--g);
+  color: #000;
+  border-radius: 12px;
+  font-size: .82rem;
+  font-weight: 800;
+  border: none;
+  cursor: pointer;
+  transition: opacity .18s;
+  font-family: var(--ff);
+}
+.btn-volver-inicio:active { opacity: .8; }
+
+/* ═══════════════════════════════════════════
+   SHIMMER para estados de carga
+═══════════════════════════════════════════ */
+@keyframes shimmer { from{transform:translateX(-100%)} to{transform:translateX(100%)} }
+
+/* ═══════════════════════════════════════════
+   RESPONSIVE
+═══════════════════════════════════════════ */
+@media (min-width: 480px) {
+  .items-grid { grid-template-columns: repeat(3, 1fr); }
+  .hero-username { font-size: 2.3rem; }
+}
+@media (min-width: 700px) {
+  .items-grid { grid-template-columns: repeat(4, 1fr); }
+  .hero-cover  { height: 190px; }
+  .hero-avatar-wrap { left: 28px; bottom: -54px; }
+  .avatar { width: 108px; height: 108px; }
+  .hero-info { padding-top: 70px; }
+}
+@media (min-width: 1000px) {
+  .items-grid { grid-template-columns: repeat(5, 1fr); }
+  .hero-cover  { height: 220px; }
+}
+    </style>
+
+    <!-- ╔══════════════════════════════════════════════╗
+         ║  UpGames · Configuración Centralizada        ║
+         ║  Edita SOLO este bloque para cambiar URLs    ║
+         ╚══════════════════════════════════════════════╝ -->
+    <script>
+      window.UG_CONFIG = {
+        API_URL    : "https://backendapp-037y.onrender.com",
+        NEXUS_URL  : "https://backendbuscador.onrender.com",
+        NEXUS_DOMAIN: "backendbuscador.onrender.com"
+      };
+    </script>
+</head>
+<body>
+
+    <!-- ── TOP BAR ── -->
+    <header class="top-bar">
+        <div class="top-bar-logo">
+            <span class="up">UP</span><span class="gm">GAMES</span>
+        </div>
+        <a href="./biblioteca.html" class="btn-volver">
+            <ion-icon name="arrow-back-outline"></ion-icon>
+            Volver
+        </a>
+    </header>
+
+    <!-- ── HERO SECTION ── -->
+    <section class="profile-hero">
+        <div class="hero-cover" id="hero-cover">
+            <div class="hero-cover-gradient"></div>
+            <div class="hero-cover-scan"></div>
+            <div class="hero-cover-glow"></div>
+            <div class="hero-cover-line"></div>
+            <div class="hero-avatar-wrap">
+                <div class="avatar" id="avatar-wrap">
+                    <ion-icon name="person" id="avatar-icon" style="font-size:2.6rem;"></ion-icon>
+                    <img id="avatar-img" style="display:none;" alt="Avatar">
+                </div>
+                <div class="avatar-ring"></div>
+            </div>
+        </div>
+
+        <div class="hero-info" id="hero-info">
+            <div class="hero-top-row">
+                <div class="hero-name-col">
+                    <div class="hero-username">
+                        <span class="hero-at">@</span><span id="user-name-display">usuario</span>
+                        <span id="verificado-badge"></span>
+                    </div>
+                    <p class="hero-bio" id="user-bio">Cargando perfil…</p>
+                </div>
+                <button id="btn-seguir" class="btn-seguir">
+                    <ion-icon name="person-add-outline"></ion-icon>
+                    Seguir
+                </button>
+            </div>
+            <div class="stats">
+                <div class="stat-item">
+                    <span class="stat-number" id="stat-uploads">—</span>
+                    <span class="stat-label">Publicaciones</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" id="stat-followers">—</span>
+                    <span class="stat-label">Seguidores</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" id="stat-following">—</span>
+                    <span class="stat-label">Siguiendo</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ── PUBLICACIONES ── -->
+    <div class="container">
+        <div class="section-header">
+            <h3 class="section-title">
+                <ion-icon name="cloud-outline"></ion-icon>
+                Publicaciones
+            </h3>
+            <span class="section-count" id="pub-count"></span>
+        </div>
+        <div id="user-items" class="items-grid"></div>
+    </div>
+
+    <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+    <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+
+    <script>
+        const API_URL = window.UG_CONFIG?.API_URL ?? "https://backendapp-037y.onrender.com";
+        const usuarioActual = localStorage.getItem("user_admin");
+        const params = new URLSearchParams(window.location.search);
+        const usuarioViendo = params.get("usuario");
+
+        console.log("👤 Usuario actual:", usuarioActual);
+        console.log("👁️ Viendo perfil de:", usuarioViendo);
+
+        // Helper: fetch con manejo de errores
+        async function fetchAPI(url, options = {}) {
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return await response.json();
+            } catch (error) {
+                console.error("❌ Error en fetch:", error);
+                throw error;
+            }
+        }
+
+        // Helper: Badge de verificación
+        function getVerificadoBadge(nivel) {
+            if (!nivel || nivel === 0) return '';
+            
+            let levelClass = '';
+            let icon = 'checkmark-circle';
+            
+            if (nivel === 1) levelClass = 'level-1';
+            else if (nivel === 2) levelClass = 'level-2';
+            else if (nivel === 3) {
+                levelClass = 'level-3';
+                icon = 'checkmark-done-circle-sharp';
+            }
+            
+            return `<span class="verificado-badge ${levelClass}"><ion-icon name="${icon}"></ion-icon></span>`;
+        }
+
+        // ✅ CARGAR PERFIL
+        async function cargarPerfilUsuario() {
+            if (!usuarioViendo) {
+                mostrarError('Usuario no encontrado', 'No se especificó un usuario válido.');
+                return;
+            }
+
+            try {
+                console.log("📡 Cargando perfil de:", usuarioViendo);
+                
+                const response = await fetchAPI(`${API_URL}/usuarios/perfil-publico/${usuarioViendo}`);
+                
+                if (!response.success || !response.usuario) {
+                    throw new Error("Usuario no encontrado");
+                }
+
+                const user = response.usuario;
+                console.log("✅ Perfil cargado:", user);
+
+                // Actualizar UI
+                document.getElementById('user-name-display').textContent = user.usuario;
+                
+                // Badge de verificación
+                if (user.verificadoNivel > 0) {
+                    document.getElementById('verificado-badge').innerHTML = getVerificadoBadge(user.verificadoNivel);
+                }
+
+                // Avatar
+                const avatarImg = document.getElementById('avatar-img');
+                const avatarIcon = document.getElementById('avatar-icon');
+                
+                if (user.avatar && user.avatar.trim() !== '') {
+                    avatarImg.src = user.avatar;
+                    avatarImg.style.display = 'block';
+                    avatarIcon.style.display = 'none';
+                } else {
+                    avatarIcon.textContent = user.usuario.charAt(0).toUpperCase();
+                    avatarIcon.style.display = 'block';
+                    avatarImg.style.display = 'none';
+                }
+
+                // Biografía
+                document.getElementById('user-bio').textContent = user.bio || 'Sin biografía';
+
+                // Estadísticas
+                document.getElementById('stat-uploads').textContent = user.publicaciones || 0;
+                document.getElementById('stat-followers').textContent = user.seguidores || 0;
+                document.getElementById('stat-following').textContent = user.siguiendo || 0;
+
+                // Cargar publicaciones
+                await cargarPublicaciones();
+
+                // Verificar seguimiento
+                if (usuarioActual) {
+                    await verificarSeguimiento();
+                } else {
+                    configurarBotonSeguir(false);
+                }
+
+            } catch (error) {
+                console.error("❌ Error cargando perfil:", error);
+                mostrarError('Error al cargar perfil', error.message);
+            }
+        }
+
+        // ✅ CARGAR PUBLICACIONES
+        async function cargarPublicaciones() {
+            try {
+                const response = await fetchAPI(`${API_URL}/items/user/${usuarioViendo}`);
+                
+                // ⭐ Si el usuario viendo es el autor, mostrar TODAS sus publicaciones (incluyendo caídas)
+                // Si es otro usuario, solo mostrar las aprobadas
+                const esAutor = usuarioActual && usuarioActual.toLowerCase() === usuarioViendo.toLowerCase();
+                const itemsUsuario = Array.isArray(response) 
+                    ? (esAutor ? response : response.filter(item => item.status === 'aprobado'))
+                    : [];
+
+                console.log(`📦 Publicaciones de ${usuarioViendo}:`, itemsUsuario.length);
+
+                const container = document.getElementById('user-items');
+
+                // Actualizar contador
+                const countEl = document.getElementById('pub-count');
+                if (countEl) countEl.textContent = itemsUsuario.length > 0 ? `${itemsUsuario.length} resultados` : '';
+
+                if (itemsUsuario.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-msg">
+                            <ion-icon name="cloud-offline-outline"></ion-icon>
+                            <h3>Sin publicaciones</h3>
+                            <p>Este usuario aún no ha publicado nada.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = '';
+
+                itemsUsuario.forEach((item, idx) => {
+                    // ⭐ AGREGAR ESTADÍSTICAS DE DESCARGAS
+                    const descargas = item.descargasEfectivas || 0;
+                    const linkStatus = item.linkStatus || 'online';
+                    const linkStatusText = linkStatus === 'online' ? 'Online' : 
+                                           linkStatus === 'revision' ? 'Revisión' : 
+                                           'Caído';
+
+                    const card = document.createElement('div');
+                    card.className = 'item-card';
+                    card.style.animationDelay = `${idx * 40}ms`;
+                    card.onclick = () => {
+                        window.location.href = `./biblioteca.html?id=${item._id}`;
+                    };
+
+                    card.innerHTML = `
+                        <div class="thumb-wrap">
+                            <img src="${item.image || 'https://via.placeholder.com/300x170/12121f/555570?text=Sin+Imagen'}" 
+                                 alt="${item.title}" 
+                                 onerror="this.src='https://via.placeholder.com/300x170/12121f/555570?text=Sin+Imagen'">
+                            <div class="item-link-badge ${linkStatus}">
+                                <span class="item-link-dot"></span>
+                                ${linkStatusText}
+                            </div>
+                        </div>
+                        <div class="item-info">
+                            <div class="item-category">${item.category || 'General'}</div>
+                            <div class="item-title">${item.title}</div>
+                            <div class="item-stats">
+                                <div class="item-stat">
+                                    <ion-icon name="cloud-download-outline"></ion-icon>
+                                    <span class="item-stat-val">${descargas >= 1000 ? (descargas/1000).toFixed(1)+'K' : descargas}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                    container.appendChild(card);
+                });
+
+            } catch (error) {
+                console.error("❌ Error cargando publicaciones:", error);
+                document.getElementById('user-items').innerHTML = `
+                    <div class="empty-msg">
+                        <ion-icon name="warning-outline"></ion-icon>
+                        <h3>Error</h3>
+                        <p>No se pudieron cargar las publicaciones</p>
+                    </div>
+                `;
+            }
+        }
+
+        // ✅ VERIFICAR SEGUIMIENTO
+        async function verificarSeguimiento() {
+            const btnSeguir = document.getElementById('btn-seguir');
+            
+            // Si es el mismo usuario
+            if (usuarioActual && usuarioActual.toLowerCase() === usuarioViendo.toLowerCase()) {
+                btnSeguir.innerHTML = `<ion-icon name="person-circle-outline"></ion-icon> Tu perfil`;
+                btnSeguir.disabled = true;
+                btnSeguir.style.opacity = '0.5';
+                return;
+            }
+
+            // Si no hay usuario logueado
+            if (!usuarioActual) {
+                configurarBotonSeguir(false);
+                return;
+            }
+
+            try {
+                const response = await fetchAPI(
+                    `${API_URL}/usuarios/verifica-seguimiento/${usuarioActual}/${usuarioViendo}`
+                );
+                
+                configurarBotonSeguir(response.estaSiguiendo || false);
+
+            } catch (error) {
+                console.error("❌ Error verificando seguimiento:", error);
+                configurarBotonSeguir(false);
+            }
+        }
+
+        // ✅ CONFIGURAR BOTÓN DE SEGUIR
+        function configurarBotonSeguir(estaSiguiendo) {
+            const btnSeguir = document.getElementById('btn-seguir');
+            
+            if (!usuarioActual) {
+                btnSeguir.innerHTML = `<ion-icon name="log-in-outline"></ion-icon> Iniciar sesión`;
+                btnSeguir.onclick = () => window.location.href = './index.html';
+                btnSeguir.disabled = false;
+                btnSeguir.className = 'btn-seguir';
+                return;
+            }
+
+            btnSeguir.disabled = false;
+            
+            if (estaSiguiendo) {
+                btnSeguir.innerHTML = `<ion-icon name="checkmark-circle-outline"></ion-icon> Siguiendo`;
+                btnSeguir.className = 'btn-seguir btn-siguiendo';
+                btnSeguir.onclick = dejarDeSeguir;
+            } else {
+                btnSeguir.innerHTML = `<ion-icon name="person-add-outline"></ion-icon> Seguir`;
+                btnSeguir.className = 'btn-seguir';
+                btnSeguir.onclick = seguirUsuario;
+            }
+        }
+
+        // ✅ SEGUIR USUARIO
+        async function seguirUsuario() {
+            if (!usuarioActual) {
+                alert("Debes iniciar sesión para seguir usuarios");
+                window.location.href = './puente.html';
+                return;
+            }
+
+            const btnSeguir = document.getElementById('btn-seguir');
+            const originalContent = btnSeguir.innerHTML;
+            btnSeguir.disabled = true;
+            btnSeguir.innerHTML = `<ion-icon name="hourglass-outline"></ion-icon> Procesando...`;
+
+            try {
+                const response = await fetch(`${API_URL}/usuarios/toggle-seguir/${usuarioActual}/${usuarioViendo}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    if (data.siguiendo) {
+                        alert(`✅ Ahora sigues a @${usuarioViendo}`);
+                    }
+                    await cargarPerfilUsuario();
+                } else {
+                    throw new Error(data.error || "Error al seguir");
+                }
+            } catch (error) {
+                console.error("❌ Error:", error);
+                alert(error.message || "Error de conexión");
+                btnSeguir.disabled = false;
+                btnSeguir.innerHTML = originalContent;
+            }
+        }
+
+        // ✅ DEJAR DE SEGUIR
+        async function dejarDeSeguir() {
+            if (!confirm(`¿Dejar de seguir a @${usuarioViendo}?`)) return;
+            
+            const btnSeguir = document.getElementById('btn-seguir');
+            const originalContent = btnSeguir.innerHTML;
+            btnSeguir.disabled = true;
+            btnSeguir.innerHTML = `<ion-icon name="hourglass-outline"></ion-icon> Procesando...`;
+
+            try {
+                const response = await fetch(`${API_URL}/usuarios/toggle-seguir/${usuarioActual}/${usuarioViendo}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    if (!data.siguiendo) {
+                        alert(`💔 Dejaste de seguir a @${usuarioViendo}`);
+                    }
+                    await cargarPerfilUsuario();
+                } else {
+                    throw new Error(data.error || "Error al dejar de seguir");
+                }
+            } catch (error) {
+                console.error("❌ Error:", error);
+                alert(error.message || "Error de conexión");
+                btnSeguir.disabled = false;
+                btnSeguir.innerHTML = originalContent;
+            }
+        }
+
+        // ✅ MOSTRAR ERROR
+        function mostrarError(titulo, mensaje) {
+            document.querySelector('.container').innerHTML = `
+                <div style="padding:0 12px">
+                    <div class="empty-msg">
+                        <ion-icon name="alert-circle-outline" style="color:var(--danger);opacity:1;"></ion-icon>
+                        <h3>${titulo}</h3>
+                        <p>${mensaje}</p>
+                        <button class="btn-volver-inicio" onclick="location.href='./biblioteca.html'">
+                            <ion-icon name="arrow-back-outline"></ion-icon>
+                            Volver al inicio
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ✅ INICIALIZAR
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log("🚀 Inicializando perfil público...");
+            cargarPerfilUsuario();
+        });
+    </script>
+</body>
+</html>
