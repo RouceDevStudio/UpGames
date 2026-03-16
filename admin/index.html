@@ -1,1 +1,2301 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>⚡ CORE ADMIN PRO — UP GAMES 2026</title>
+<style>
+:root{
+  --neon:#5EFF43;--danger:#ff3e3e;--bg:#000;--card:#111;--card2:#141414;
+  --blue:#4388ff;--yellow:#ffcc00;--tx:.3s cubic-bezier(.4,0,.2,1);
+  --bronce:#cd7f32;--oro:#ffd700;--elite:#c300ff;
+  --online:#5EFF43;--revision:#ffcc00;--caido:#ff3e3e;--negra:#ff6b00;
+  --purple:#9b59ff;--cyan:#00d4ff;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;outline:none;}
+body{background:var(--bg);color:#fff;font-family:'Segoe UI',system-ui,-apple-system;margin:0;padding-top:175px;overflow-x:hidden;}
 
+
+/* ── LOGIN PIN ── */
+#pin-overlay{position:fixed;inset:0;z-index:99999;background:#000;display:flex;align-items:center;justify-content:center;}
+#pin-overlay.hidden{display:none;}
+.pin-box{background:#111;border:1px solid #1f1f1f;border-radius:20px;padding:40px 30px;width:340px;max-width:90vw;text-align:center;}
+.pin-logo{color:#5EFF43;font-size:1.5rem;font-weight:900;letter-spacing:2px;margin-bottom:6px;}
+.pin-sub{color:#444;font-size:.7rem;margin-bottom:30px;}
+.pin-label{color:#666;font-size:.7rem;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;display:block;}
+#pinInput{width:100%;background:#000;border:1px solid #2a2a2a;border-radius:10px;padding:14px;color:#5EFF43;font-size:1rem;font-family:monospace;text-align:center;letter-spacing:4px;transition:border-color .2s;}
+#pinInput:focus{border-color:#5EFF43;outline:none;}
+#pinInput.shake{animation:shake .3s ease;}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
+.pin-btn{margin-top:16px;width:100%;background:#5EFF43;color:#000;border:none;border-radius:10px;padding:14px;font-weight:900;font-size:.9rem;cursor:pointer;letter-spacing:1px;transition:transform .1s;}
+.pin-btn:active{transform:scale(.97);}
+.pin-btn:disabled{opacity:.5;cursor:not-allowed;}
+.pin-error{color:#ff3e3e;font-size:.75rem;margin-top:10px;min-height:18px;}
+.pin-session{position:fixed;top:0;right:14px;z-index:10001;display:flex;align-items:center;gap:8px;font-size:.65rem;color:#333;padding:4px 0;}
+.session-dot{width:6px;height:6px;border-radius:50%;background:#5EFF43;animation:blink 2s infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── HEADER ── */
+.hdr{position:fixed;top:0;left:0;width:100%;z-index:1000;background:rgba(0,0,0,.97);backdrop-filter:blur(20px);border-bottom:1px solid #1a1a1a;}
+.hdr-top{padding:12px 14px 8px;display:flex;gap:10px;align-items:center;}
+.admin-logo{color:var(--neon);font-weight:900;font-size:.85rem;letter-spacing:1px;white-space:nowrap;display:flex;align-items:center;gap:6px;}
+.admin-logo span{font-size:.6rem;color:#444;font-weight:400;}
+.search-box{flex:1;position:relative;}
+.search-box ion-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--neon);font-size:14px;}
+#gSearch{width:100%;background:#161616;border:1px solid #2a2a2a;padding:9px 9px 9px 34px;border-radius:10px;color:#fff;font-size:.82rem;transition:border-color var(--tx);}
+#gSearch:focus{border-color:var(--neon);}
+.hdr-btns{display:flex;gap:6px;}
+.hbtn{background:#1a1a1a;border:1px solid #2a2a2a;color:#888;padding:7px 11px;border-radius:8px;cursor:pointer;font-size:.7rem;font-weight:700;transition:var(--tx);display:flex;align-items:center;gap:4px;white-space:nowrap;}
+.hbtn:hover{border-color:#444;color:#fff;}
+.hbtn.green{background:var(--neon);color:#000;border-color:var(--neon);}
+.hbtn.green:active{transform:scale(.95);}
+.hbtn.bulk-active{background:rgba(255,204,0,.1);border-color:var(--yellow);color:var(--yellow);}
+
+/* ── TABS ── */
+.tabs{display:grid;grid-template-columns:repeat(9,1fr);padding:0 4px 8px;gap:2px;}
+.tab{padding:9px 1px;text-align:center;cursor:pointer;border-bottom:2px solid transparent;transition:var(--tx);opacity:.4;border-radius:6px 6px 0 0;position:relative;}
+.tab.active{opacity:1;border-bottom:2px solid var(--neon);background:rgba(94,255,67,.04);}
+.tab-n{font-size:.85rem;font-weight:800;display:block;}
+.tab-l{font-size:.42rem;color:#666;text-transform:uppercase;font-weight:700;}
+.tab-dot{position:absolute;top:4px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--danger);display:none;}
+.tab-dot.show{display:block;}
+
+/* ── CONTENT ── */
+.content{padding:0 13px 120px;}
+.view{display:none;}
+.view.active{display:block;}
+
+/* ── DASHBOARD ── */
+.dash-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px;}
+.dash-card{background:var(--card);border:1px solid #1e1e1e;border-radius:14px;padding:14px;position:relative;overflow:hidden;}
+.dash-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.dash-card.green::before{background:var(--neon);}
+.dash-card.blue::before{background:var(--blue);}
+.dash-card.yellow::before{background:var(--yellow);}
+.dash-card.red::before{background:var(--danger);}
+.dash-card.purple::before{background:var(--purple);}
+.dash-card.cyan::before{background:var(--cyan);}
+.dc-main{font-size:1.7rem;font-weight:900;line-height:1;}
+.dc-sub{font-size:.6rem;color:#444;text-transform:uppercase;margin-top:5px;font-weight:700;}
+.dc-detail{font-size:.68rem;color:#555;margin-top:6px;}
+.dc-detail span{color:#888;}
+.dc-ico{position:absolute;right:14px;top:14px;font-size:1.6rem;opacity:.12;}
+.green .dc-main{color:var(--neon);}
+.blue .dc-main{color:var(--blue);}
+.yellow .dc-main{color:var(--yellow);}
+.red .dc-main{color:var(--danger);}
+.purple .dc-main{color:var(--purple);}
+.cyan .dc-main{color:var(--cyan);}
+
+.dash-wide{grid-column:span 2;}
+.top-table{width:100%;border-collapse:collapse;font-size:.72rem;}
+.top-table th{color:#444;text-transform:uppercase;font-size:.58rem;padding:6px 8px;text-align:left;border-bottom:1px solid #1a1a1a;}
+.top-table td{padding:7px 8px;border-bottom:1px solid #141414;}
+.top-table tr:last-child td{border-bottom:none;}
+.top-table .rank{color:#333;font-weight:800;font-size:.65rem;}
+.top-table .uname{color:var(--neon);font-weight:700;}
+.top-table .num{color:var(--yellow);font-weight:800;}
+
+/* ── ITEMS GRID ── */
+.items-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:12px;}
+.item-card{background:var(--card);border-radius:14px;border:1px solid #1e1e1e;overflow:hidden;transition:transform .2s,border-color .2s;position:relative;}
+.item-card:hover{transform:translateY(-2px);}
+.item-card.selected{border-color:var(--neon);box-shadow:0 0 12px rgba(94,255,67,.2);}
+.item-card img{width:100%;height:105px;object-fit:cover;background:#090909;}
+.lsb{position:absolute;top:7px;right:7px;padding:3px 8px;border-radius:10px;font-size:.6rem;font-weight:900;display:flex;align-items:center;gap:3px;text-transform:uppercase;backdrop-filter:blur(8px);}
+.lsb.online{background:rgba(94,255,67,.2);color:var(--online);border:1px solid var(--online);}
+.lsb.revision{background:rgba(255,204,0,.2);color:var(--revision);border:1px solid var(--revision);}
+.lsb.caido{background:rgba(255,62,62,.2);color:var(--caido);border:1px solid var(--caido);}
+.rep-badge{position:absolute;top:7px;left:7px;background:rgba(255,62,62,.9);color:#fff;padding:3px 7px;border-radius:7px;font-size:.6rem;font-weight:900;display:flex;align-items:center;gap:2px;}
+.sel-check{position:absolute;bottom:7px;left:7px;width:20px;height:20px;border-radius:6px;border:2px solid #333;background:rgba(0,0,0,.7);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:var(--tx);z-index:2;}
+.sel-check.checked{background:var(--neon);border-color:var(--neon);}
+.sel-check ion-icon{font-size:12px;color:#000;display:none;}
+.sel-check.checked ion-icon{display:block;}
+.card-info{padding:9px;}
+.card-title{font-size:.75rem;margin:0 0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700;}
+.card-user{font-size:.65rem;color:var(--neon);margin-bottom:4px;}
+.card-meta{font-size:.6rem;color:#555;display:flex;justify-content:space-between;}
+.item-btns{display:flex;border-top:1px solid #1a1a1a;}
+.ba{flex:1;padding:11px;border:none;background:transparent;font-size:16px;display:flex;justify-content:center;cursor:pointer;transition:background .15s;}
+.ba:active{background:rgba(255,255,255,.04);}
+.ba.be{color:var(--blue);border-right:1px solid #1a1a1a;}
+.ba.bv{color:var(--neon);border-right:1px solid #1a1a1a;}
+.ba.bd{color:var(--danger);}
+
+/* BULK BAR */
+.bulk-bar{display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1a1a1a;border:1px solid #333;border-radius:16px;padding:10px 16px;z-index:500;flex-direction:row;align-items:center;gap:10px;box-shadow:0 8px 30px rgba(0,0,0,.7);min-width:320px;}
+.bulk-bar.show{display:flex;}
+.bulk-count{font-size:.75rem;color:var(--yellow);font-weight:800;white-space:nowrap;}
+.bulk-actions{display:flex;gap:6px;flex:1;justify-content:flex-end;}
+.bulk-btn{padding:7px 12px;border:none;border-radius:8px;font-size:.7rem;font-weight:900;cursor:pointer;transition:var(--tx);}
+.bulk-btn:active{transform:scale(.96);}
+.bb-ok{background:var(--neon);color:#000;}
+.bb-rej{background:#333;color:#aaa;}
+.bb-del{background:var(--danger);color:#fff;}
+.bb-cancel{background:transparent;color:#555;border:1px solid #2a2a2a;}
+
+/* ── USUARIOS ── */
+.u-toolbar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;}
+.u-sort{background:#161616;border:1px solid #2a2a2a;color:#777;padding:6px 10px;border-radius:8px;font-size:.68rem;cursor:pointer;transition:var(--tx);}
+.u-sort.active{border-color:var(--neon);color:var(--neon);}
+.filter-chip{padding:5px 12px;border-radius:18px;border:1px solid #222;background:var(--card);color:#555;font-size:.65rem;font-weight:700;cursor:pointer;transition:var(--tx);text-transform:uppercase;}
+.filter-chip.active{border-color:var(--neon);color:var(--neon);background:rgba(94,255,67,.06);}
+.filter-chip.fn.active{border-color:var(--negra);color:var(--negra);background:rgba(255,107,0,.06);}
+
+.qs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}
+.qsc{background:var(--card);border:1px solid #1e1e1e;border-radius:12px;padding:11px;text-align:center;}
+.qsn{font-size:1.25rem;font-weight:900;}
+.qsl{font-size:.55rem;color:#444;text-transform:uppercase;margin-top:2px;}
+
+.users-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;}
+.uc{background:var(--card);border:1px solid #1e1e1e;border-radius:15px;overflow:hidden;transition:border-color .2s;position:relative;}
+.uc.neg{border-color:rgba(255,107,0,.4);box-shadow:0 0 14px rgba(255,107,0,.08);}
+.badge-neg{position:absolute;top:8px;right:8px;background:var(--negra);color:#fff;font-size:.55rem;font-weight:900;padding:2px 7px;border-radius:7px;text-transform:uppercase;display:flex;align-items:center;gap:2px;z-index:2;}
+.uc-hd{padding:12px 12px 8px;border-bottom:1px solid #181818;}
+.uc-nr{display:flex;align-items:center;gap:5px;margin-bottom:4px;}
+.uc-name{font-size:.85rem;font-weight:800;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.uc-date{font-size:.55rem;color:#333;}
+.uv{font-size:.9rem;flex-shrink:0;}
+.r-b{color:var(--bronce);}.r-o{color:var(--oro);}.r-e{color:var(--elite);}
+.uc-data{padding:8px 12px;display:flex;flex-direction:column;gap:6px;border-bottom:1px solid #181818;}
+.ucf{display:flex;flex-direction:column;gap:1px;}
+.ucl{font-size:.55rem;color:#3a3a3a;text-transform:uppercase;font-weight:700;letter-spacing:.3px;}
+.ucv{font-size:.7rem;color:#aaa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;transition:color .12s;}
+.ucv:hover{color:#fff;}
+.ucv.em{color:#6aaf6a;}.ucv.pp{color:#4aa8d4;}.ucv.ip{color:#8080d4;font-family:monospace;font-size:.64rem;}
+.ucv.mt{color:#333;font-style:italic;pointer-events:none;}
+.uc-stats{display:grid;grid-template-columns:1fr 1fr 1fr;border-bottom:1px solid #181818;}
+.ucs{padding:8px 4px;text-align:center;border-right:1px solid #181818;}
+.ucs:last-child{border-right:none;}
+.ucs-n{font-size:.95rem;font-weight:800;color:var(--neon);}
+.ucs-l{font-size:.53rem;color:#3a3a3a;text-transform:uppercase;}
+.uc-notas{padding:7px 11px;border-bottom:1px solid #181818;}
+.nota-inp{width:100%;background:#090909;border:1px solid #181818;border-radius:7px;padding:5px 7px;color:#777;font-size:.65rem;resize:none;min-height:34px;max-height:65px;font-family:inherit;transition:border-color .15s;}
+.nota-inp:focus{border-color:#2a2a2a;color:#999;outline:none;}
+.nota-inp::placeholder{color:#222;}
+.uc-acts{display:grid;grid-template-columns:repeat(5,1fr);}
+.ua{padding:11px 3px;border:none;background:transparent;font-size:15px;cursor:pointer;transition:background .15s;display:flex;justify-content:center;align-items:center;border-right:1px solid #181818;color:#333;}
+.ua:last-child{border-right:none;}
+.ua:active{background:rgba(255,255,255,.03);}
+.ua.uv-btn{color:var(--neon);}
+.ua.un-btn{color:var(--negra);}
+.ua.un-btn.act{background:rgba(255,107,0,.1);color:#ff9040;}
+.ua.ud-btn{color:var(--blue);}
+.ua.us-btn{color:var(--yellow);}
+.ua.ux-btn{color:var(--danger);}
+
+/* ── COMENTARIOS ── */
+.comm-item{background:var(--card);padding:13px;border-radius:11px;border:1px solid #1e1e1e;margin-bottom:9px;display:flex;align-items:flex-start;gap:10px;justify-content:space-between;}
+
+/* ── PAGOS ── */
+.pago-card{background:var(--card);border:1px solid #1e1e1e;border-radius:14px;padding:14px;margin-bottom:11px;}
+.pago-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:11px;padding-bottom:9px;border-bottom:1px solid #1a1a1a;}
+.pago-u{font-size:.95rem;font-weight:800;color:var(--neon);display:flex;align-items:center;gap:7px;}
+.pago-m{font-size:1.25rem;font-weight:900;color:var(--yellow);}
+.pago-info{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:11px;}
+.pi-i{font-size:.72rem;}
+.pi-l{color:#444;text-transform:uppercase;font-weight:700;margin-bottom:3px;font-size:.58rem;}
+.pi-v{color:#ccc;font-weight:600;}
+.pago-pp{background:rgba(94,255,67,.07);border:1px solid rgba(94,255,67,.2);padding:8px 11px;border-radius:8px;font-size:.77rem;color:var(--neon);font-weight:700;margin-bottom:11px;word-break:break-all;cursor:pointer;}
+.pago-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.pbtn{padding:11px;border:none;border-radius:8px;font-weight:900;cursor:pointer;font-size:.8rem;display:flex;align-items:center;justify-content:center;gap:6px;transition:var(--tx);}
+.pbtn:active{transform:scale(.98);}
+.pbtn.ok{background:var(--neon);color:#000;}
+.pbtn.rej{background:#2a2a2a;color:#888;}
+
+/* ── HISTORIAL PAGOS ── */
+.hist-item{background:var(--card);border:1px solid #1e1e1e;border-radius:11px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:12px;}
+.hist-estado{padding:4px 9px;border-radius:8px;font-size:.6rem;font-weight:900;text-transform:uppercase;white-space:nowrap;}
+.he-pendiente{background:rgba(255,204,0,.15);color:var(--yellow);}
+.he-completado{background:rgba(94,255,67,.12);color:var(--neon);}
+.he-rechazado{background:rgba(255,62,62,.12);color:var(--danger);}
+.hist-data{flex:1;}
+.hist-u{font-size:.8rem;font-weight:700;color:var(--neon);}
+.hist-m{font-size:.72rem;color:#888;}
+.hist-monto{font-size:1rem;font-weight:900;color:var(--yellow);}
+
+/* ── MODALES ── */
+.modal{display:none;position:fixed;z-index:2000;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,.93);backdrop-filter:blur(12px);animation:fadeIn .18s;}
+.modal.active{display:flex;justify-content:center;align-items:center;}
+.mc{background:#111;border-radius:18px;padding:20px;width:92%;max-width:480px;max-height:92vh;overflow-y:auto;border:1px solid #222;}
+.mhdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}
+.mtitle{font-size:.95rem;font-weight:900;color:var(--neon);}
+.mclose{background:none;border:none;color:#555;font-size:24px;cursor:pointer;padding:0;width:28px;height:28px;display:flex;align-items:center;justify-content:center;}
+.mclose:hover{color:#fff;}
+.fg{margin-bottom:13px;}
+.fl{display:block;font-size:.68rem;color:#555;margin-bottom:4px;font-weight:700;text-transform:uppercase;}
+.fi{width:100%;background:#191919;border:1px solid #2a2a2a;padding:10px;border-radius:9px;color:#fff;font-size:.85rem;}
+.fi:focus{border-color:var(--neon);outline:none;}
+.fta{min-height:75px;resize:vertical;font-family:inherit;}
+.ma{display:flex;gap:9px;margin-top:16px;}
+.bs{flex:1;background:var(--neon);color:#000;border:none;padding:11px;border-radius:11px;font-weight:900;cursor:pointer;font-size:.85rem;}
+.bs-r{flex:1;background:var(--danger);color:#fff;border:none;padding:11px;border-radius:11px;font-weight:900;cursor:pointer;font-size:.85rem;}
+.bs-o{flex:1;background:var(--negra);color:#fff;border:none;padding:11px;border-radius:11px;font-weight:900;cursor:pointer;font-size:.85rem;}
+.bc{flex:1;background:#1e1e1e;color:#888;border:none;padding:11px;border-radius:11px;font-weight:900;cursor:pointer;font-size:.85rem;}
+
+/* STATUS SELECTORS */
+.ss{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;}
+.sb{padding:9px;border:2px solid #2a2a2a;background:#191919;border-radius:9px;cursor:pointer;font-weight:700;font-size:.75rem;text-align:center;color:#fff;transition:var(--tx);}
+.sb.active{border-color:var(--neon);background:rgba(94,255,67,.07);}
+.lss{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:9px;}
+.lsb2{padding:9px;border:2px solid #2a2a2a;background:#191919;border-radius:9px;cursor:pointer;font-weight:700;font-size:.68rem;text-align:center;text-transform:uppercase;color:#fff;transition:var(--tx);}
+.lsb2.online.active{border-color:var(--online);background:rgba(94,255,67,.06);color:var(--online);}
+.lsb2.revision.active{border-color:var(--revision);background:rgba(255,204,0,.06);color:var(--revision);}
+.lsb2.caido.active{border-color:var(--caido);background:rgba(255,62,62,.06);color:var(--caido);}
+
+/* MODAL VERIFICACIÓN */
+.vg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+.vo{padding:14px 8px;border:2px solid #2a2a2a;border-radius:11px;background:#191919;cursor:pointer;text-align:center;transition:var(--tx);}
+.vo:hover{border-color:#3a3a3a;}
+.vo-i{font-size:1.5rem;margin-bottom:4px;}
+.vo-l{font-size:.7rem;font-weight:800;}
+.vo-s{font-size:.58rem;color:#444;margin-top:2px;}
+.v-none{color:#444;}.v-bronce{color:var(--bronce);}.v-oro{color:var(--oro);}.v-elite{color:var(--elite);}
+.v-bronce:hover{border-color:var(--bronce);}.v-oro:hover{border-color:var(--oro);}.v-elite:hover{border-color:var(--elite);}
+
+/* MODAL LISTA NEGRA */
+.nb{background:rgba(255,107,0,.07);border:1px solid rgba(255,107,0,.2);border-radius:11px;padding:13px;margin-bottom:14px;text-align:center;}
+.nb-i{font-size:2rem;display:block;margin-bottom:5px;}
+.nb-u{font-size:.95rem;font-weight:900;color:var(--negra);margin-bottom:3px;}
+.nb-s{font-size:.72rem;color:#555;}
+
+/* MODAL AJUSTE SALDO */
+.saldo-banner{background:rgba(255,204,0,.06);border:1px solid rgba(255,204,0,.2);border-radius:11px;padding:12px;margin-bottom:14px;text-align:center;}
+.sb-actual{font-size:.65rem;color:#666;text-transform:uppercase;margin-bottom:3px;}
+.sb-num{font-size:1.8rem;font-weight:900;color:var(--yellow);}
+
+/* DETALLE USUARIO */
+.dg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:13px;}
+.dc2{background:#191919;border-radius:9px;padding:9px;}
+.dc2-l{font-size:.57rem;color:#3a3a3a;text-transform:uppercase;font-weight:700;margin-bottom:3px;}
+.dc2-v{font-size:.7rem;color:#aaa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;}
+.dc2-v:hover{color:#fff;}
+
+/* TOAST */
+#toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:var(--neon);color:#000;padding:11px 26px;border-radius:40px;font-weight:900;display:none;z-index:4000;box-shadow:0 8px 24px rgba(0,0,0,.5);font-size:.8rem;white-space:nowrap;}
+#toast.err{background:var(--danger);color:#fff;}
+#toast.warn{background:var(--negra);color:#fff;}
+#toast.info{background:var(--blue);color:#fff;}
+
+/* SYNC */
+.sync-ind{position:fixed;top:141px;right:13px;background:rgba(94,255,67,.07);border:1px solid rgba(94,255,67,.25);border-radius:16px;padding:4px 10px;font-size:.62rem;color:var(--neon);font-weight:700;z-index:999;display:flex;align-items:center;gap:4px;}
+.sp{width:6px;height:6px;background:var(--neon);border-radius:50%;animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+::-webkit-scrollbar{width:5px;}
+::-webkit-scrollbar-track{background:#0a0a0a;}
+::-webkit-scrollbar-thumb{background:#222;border-radius:4px;}
+
+/* ── FRAUD CARDS ── */
+.fraud-card{background:var(--card);border:1px solid #1e1e1e;border-radius:14px;padding:14px;position:relative;overflow:hidden;transition:border-color .2s;}
+.fraud-card.critical{border-color:rgba(255,62,62,0.4);box-shadow:0 0 14px rgba(255,62,62,0.08);}
+.fraud-card.high{border-color:rgba(255,107,0,0.4);box-shadow:0 0 14px rgba(255,107,0,0.08);}
+.fraud-card.medium{border-color:rgba(255,204,0,0.3);}
+.fraud-card.reviewed{opacity:0.5;}
+.fraud-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;}
+.fraud-user{font-size:0.95rem;font-weight:800;color:var(--neon);}
+.fraud-severity{padding:3px 10px;border-radius:12px;font-size:0.6rem;font-weight:900;text-transform:uppercase;}
+.fraud-severity.critical{background:var(--danger);color:#fff;}
+.fraud-severity.high{background:var(--negra);color:#fff;}
+.fraud-severity.medium{background:var(--yellow);color:#000;}
+.fraud-severity.low{background:#555;color:#fff;}
+.fraud-type{font-size:0.65rem;color:#666;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:5px;}
+.fraud-details{background:#0a0a0a;border:1px solid #1a1a1a;border-radius:8px;padding:10px;margin-bottom:10px;}
+.fraud-detail-row{font-size:0.7rem;color:#888;margin-bottom:4px;display:flex;justify-content:space-between;}
+.fraud-detail-row:last-child{margin-bottom:0;}
+.fraud-detail-label{color:#555;}
+.fraud-detail-value{color:#fff;font-weight:700;}
+.fraud-actions{display:flex;gap:8px;margin-top:10px;}
+.fraud-btn{flex:1;padding:9px;border:none;border-radius:8px;font-size:0.7rem;font-weight:900;cursor:pointer;transition:var(--tx);}
+.fraud-btn:active{transform:scale(0.96);}
+.fb-view{background:var(--blue);color:#fff;}
+.fb-mark{background:var(--neon);color:#000;}
+.fb-reviewed{background:#333;color:#888;}
+.fraud-auto-flag{position:absolute;top:10px;right:10px;background:var(--danger);color:#fff;padding:3px 8px;border-radius:8px;font-size:0.55rem;font-weight:900;display:flex;align-items:center;gap:3px;}
+
+/* ── MEDIA SLOTS (imágenes/videos en modal editar) ── */
+.media-slots { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px; }
+.media-slot { display:flex; flex-direction:column; gap:4px; }
+.slot-label { font-size:.58rem; color:#444; text-transform:uppercase; font-weight:700; letter-spacing:.3px; }
+.slot-preview {
+  width:100%; height:50px; border-radius:7px;
+  overflow:hidden; background:#0a0a0a;
+  border:1px solid #1a1a1a; display:none;
+  position:relative;
+}
+.slot-preview.show { display:block; }
+.slot-preview img { width:100%; height:100%; object-fit:cover; display:block; }
+.slot-preview .yt-icon {
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:1.2rem; color:#fff;
+  text-shadow:0 1px 6px rgba(0,0,0,.8);
+  pointer-events:none;
+}
+
+/* ── VIDEO BADGE en cards ── */
+.vid-badge {
+  position:absolute; bottom:7px; left:7px;
+  background:rgba(0,0,0,.75); backdrop-filter:blur(4px);
+  border:1px solid rgba(255,255,255,.15);
+  color:#fff; padding:2px 7px; border-radius:7px;
+  font-size:.58rem; font-weight:900;
+  display:flex; align-items:center; gap:3px;
+}
+.vid-badge.yt { color:#ff4444; border-color:rgba(255,68,68,.3); }
+.vid-badge.mp4 { color:var(--neon); border-color:rgba(94,255,67,.3); }
+
+/* ── GALERÍA en modal detalle ── */
+.admin-gallery {
+  display:flex; gap:6px; overflow-x:auto;
+  scrollbar-width:none; margin-top:6px; padding-bottom:2px;
+}
+.admin-gallery::-webkit-scrollbar { display:none; }
+.admin-gallery-thumb {
+  flex-shrink:0; width:64px; height:46px;
+  border-radius:6px; overflow:hidden;
+  border:2px solid #222; cursor:pointer;
+  position:relative; background:#0a0a0a;
+  transition:border-color .15s;
+}
+.admin-gallery-thumb.active { border-color:var(--neon); }
+.admin-gallery-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.admin-gallery-thumb .yt-icon {
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  font-size:.9rem; color:#fff;
+}
+</style>
+</head>
+<body>
+
+<!-- ⬇ LOGIN PIN OVERLAY ⬇ -->
+<div id="pin-overlay">
+  <div class="pin-box">
+    <div class="pin-logo">⚡ UPGAMES</div>
+    <div class="pin-sub">PANEL DE ADMINISTRACIÓN — ACCESO RESTRINGIDO</div>
+    <span class="pin-label">Ingresa el PIN de administrador</span>
+    <input type="password" id="pinInput" placeholder="••••••••••••" autocomplete="off" spellcheck="false">
+    <button class="pin-btn" id="pinBtn" onclick="doAdminLogin()">ACCEDER</button>
+    <div class="pin-error" id="pinError"></div>
+  </div>
+</div>
+<!-- Indicador de sesión (visible cuando está autenticado) -->
+<div class="pin-session" id="sessionIndicator" style="display:none;">
+  <div class="session-dot"></div>
+  <span id="sessionTimer">Sesión activa</span>
+  <button onclick="doAdminLogout()" style="background:none;border:1px solid #2a2a2a;color:#555;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:.6rem;margin-left:4px;">SALIR</button>
+</div>
+
+
+<div id="toast"></div>
+<div class="sync-ind"><div class="sp"></div>LIVE</div>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="hdr-top">
+    <div class="admin-logo">⚡ ADMIN <span>UP GAMES 2026</span></div>
+    <div class="search-box">
+      <ion-icon name="search-outline"></ion-icon>
+      <input type="text" id="gSearch" placeholder="Buscar en todo..." oninput="debF()">
+    </div>
+    <div class="hdr-btns">
+      <button class="hbtn" id="bulkToggle" onclick="toggleBulk()" title="Selección múltiple"><ion-icon name="checkmark-done-outline"></ion-icon></button>
+      <button class="hbtn green" onclick="sync()"><ion-icon name="sync-outline"></ion-icon></button>
+    </div>
+  </div>
+  <nav class="tabs">
+    <div class="tab active" id="tabDB" onclick="setTab('dash')">
+      <span class="tab-n">📊</span>
+      <span class="tab-l">Dashboard</span>
+    </div>
+    <div class="tab" id="tabP" onclick="setTab('pend')">
+      <span class="tab-n" id="cP">0</span>
+      <span class="tab-l">Espera</span>
+      <div class="tab-dot" id="dotP"></div>
+    </div>
+    <div class="tab" id="tabA" onclick="setTab('apro')">
+      <span class="tab-n" id="cA">0</span>
+      <span class="tab-l">Prod</span>
+    </div>
+    <div class="tab" id="tabC" onclick="setTab('comt')">
+      <span class="tab-n" id="cC">0</span>
+      <span class="tab-l">Coments</span>
+    </div>
+    <div class="tab" id="tabU" onclick="setTab('usrs')">
+      <span class="tab-n" id="cU">0</span>
+      <span class="tab-l">Users</span>
+    </div>
+    <div class="tab" id="tabPay" onclick="setTab('pays')">
+      <span class="tab-n" id="cPay">0</span>
+      <span class="tab-l">💰 Pagos</span>
+      <div class="tab-dot" id="dotPay"></div>
+    </div>
+    <div class="tab" id="tabRev" onclick="setTab('revn')">
+      <span class="tab-n" id="cRev">0</span>
+      <span class="tab-l">⚠️ Rev.</span>
+      <div class="tab-dot" id="dotRev"></div>
+    </div>
+    <div class="tab" id="tabFraud" onclick="setTab('fraud')">
+      <span class="tab-n">🚨</span>
+      <span class="tab-l">Fraude</span>
+      <div class="tab-dot" id="dotFraud"></div>
+    </div>
+    <div class="tab" id="tabReport" onclick="setTab('reportes')">
+      <span class="tab-n" id="cReport">0</span>
+      <span class="tab-l">📋 Reportes</span>
+      <div class="tab-dot" id="dotReport"></div>
+    </div>
+  </nav>
+</div>
+
+<div class="content">
+
+  <!-- DASHBOARD -->
+  <div id="view-dash" class="view active">
+    <div class="dash-grid" id="dashGrid">
+      <div class="dash-card green dash-wide" style="display:flex;align-items:center;gap:20px;padding:16px 20px;">
+        <div>
+          <div style="font-size:.6rem;color:#444;text-transform:uppercase;font-weight:700;margin-bottom:4px">Cargando datos del servidor...</div>
+          <div style="font-size:.8rem;color:#333">Sincronizando dashboard</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PENDIENTES -->
+  <div id="view-pend" class="view">
+    <div id="itemsPend" class="items-grid"></div>
+  </div>
+
+  <!-- APROBADOS -->
+  <div id="view-apro" class="view">
+    <div id="itemsApro" class="items-grid"></div>
+  </div>
+
+  <!-- COMENTARIOS -->
+  <div id="view-comt" class="view">
+    <div id="commsList"></div>
+  </div>
+
+  <!-- USUARIOS -->
+  <div id="view-usrs" class="view">
+    <div id="usrQS" class="qs" style="display:none">
+      <div class="qsc"><div class="qsn" id="qTotal" style="color:var(--neon)">0</div><div class="qsl">Total</div></div>
+      <div class="qsc"><div class="qsn" id="qNeg" style="color:var(--negra)">0</div><div class="qsl">🚫 Negra</div></div>
+      <div class="qsc"><div class="qsn" id="qVer" style="color:var(--oro)">0</div><div class="qsl">Verif.</div></div>
+      <div class="qsc"><div class="qsn" id="qSal" style="color:var(--blue)">0</div><div class="qsl">Con $</div></div>
+    </div>
+    <div id="usrFilters" class="u-toolbar" style="display:none">
+      <div class="filter-chip active" onclick="setUF('all',this)">Todos</div>
+      <div class="filter-chip" onclick="setUF('verif',this)">✅ Verif</div>
+      <div class="filter-chip fn" onclick="setUF('neg',this)">🚫 Negra</div>
+      <div class="filter-chip" onclick="setUF('saldo',this)">💰 Saldo</div>
+      <div class="filter-chip" onclick="setUF('sinpp',this)">Sin PayPal</div>
+      <select id="uSort" class="u-sort" onchange="filtrar()">
+        <option value="fecha">↕ Fecha reg.</option>
+        <option value="saldo">↕ Saldo</option>
+        <option value="descargas">↕ Descargas</option>
+        <option value="nombre">↕ Nombre</option>
+      </select>
+    </div>
+    <div id="usrList" class="users-grid"></div>
+  </div>
+
+  <!-- PAGOS -->
+  <div id="view-pays" class="view">
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+      <div class="filter-chip active" onclick="setPF('pend',this)">⏳ Pendientes</div>
+      <div class="filter-chip" onclick="setPF('hist',this)">📋 Historial</div>
+    </div>
+    <div id="pagosList"></div>
+    <div id="histPagos" style="display:none"></div>
+  </div>
+
+  <!-- REVISIÓN -->
+  <div id="view-revn" class="view">
+    <div id="revList" class="items-grid"></div>
+  </div>
+
+  <!-- ⚠️ NUEVA VISTA: FRAUDE -->
+  <div id="view-fraud" class="view">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div>
+        <h2 style="margin:0;font-size:1.5rem;font-weight:900;letter-spacing:-0.5px;">🚨 DETECCIÓN DE FRAUDE</h2>
+        <p style="margin:4px 0 0;font-size:.7rem;color:#555;">Sistema automático de detección de comportamiento sospechoso</p>
+      </div>
+      <button class="hbtn green" onclick="syncFraud()">
+        <ion-icon name="refresh"></ion-icon> ACTUALIZAR
+      </button>
+    </div>
+
+    <div class="dash-grid" style="margin-bottom:16px;">
+      <div class="dash-card red">
+        <ion-icon name="alert-circle" class="dc-ico"></ion-icon>
+        <div class="dc-main" id="fraudTotal">0</div>
+        <div class="dc-sub">Total Alertas</div>
+      </div>
+      <div class="dash-card yellow">
+        <ion-icon name="time" class="dc-ico"></ion-icon>
+        <div class="dc-main" id="fraudPending">0</div>
+        <div class="dc-sub">Sin Revisar</div>
+      </div>
+      <div class="dash-card purple">
+        <ion-icon name="ban" class="dc-ico"></ion-icon>
+        <div class="dc-main" id="fraudAutoFlagged">0</div>
+        <div class="dc-sub">Auto-Marcados</div>
+      </div>
+      <div class="dash-card cyan">
+        <ion-icon name="shield-checkmark" class="dc-ico"></ion-icon>
+        <div class="dc-main" id="fraudReviewed">0</div>
+        <div class="dc-sub">Revisados</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;">
+      <div class="qsc">
+        <div class="qsn" style="color:#888;" id="fraudLow">0</div>
+        <div class="qsl">Low</div>
+      </div>
+      <div class="qsc">
+        <div class="qsn" style="color:var(--yellow);" id="fraudMedium">0</div>
+        <div class="qsl">Medium</div>
+      </div>
+      <div class="qsc">
+        <div class="qsn" style="color:var(--negra);" id="fraudHigh">0</div>
+        <div class="qsl">High</div>
+      </div>
+      <div class="qsc">
+        <div class="qsn" style="color:var(--danger);" id="fraudCritical">0</div>
+        <div class="qsl">Critical</div>
+      </div>
+    </div>
+
+    <div class="u-toolbar">
+      <div class="filter-chip active" data-fraud-filter="all" onclick="filterFraud('all')">TODOS</div>
+      <div class="filter-chip" data-fraud-filter="pending" onclick="filterFraud('pending')">PENDIENTES</div>
+      <div class="filter-chip" data-fraud-filter="auto" onclick="filterFraud('auto')">AUTO-MARCADOS</div>
+      <div class="filter-chip" data-fraud-filter="critical" onclick="filterFraud('critical')">CRÍTICOS</div>
+      <div class="filter-chip" data-fraud-filter="reviewed" onclick="filterFraud('reviewed')">REVISADOS</div>
+    </div>
+
+    <div id="fraudList" style="display:grid;gap:12px;"></div>
+  </div>
+
+</div>
+
+<!-- BULK BAR -->
+<div class="bulk-bar" id="bulkBar">
+  <span class="bulk-count" id="bulkCount">0 sel.</span>
+  <div class="bulk-actions">
+    <button class="bulk-btn bb-ok" onclick="doBulk('aprobar')">✓ Aprobar</button>
+    <button class="bulk-btn bb-rej" onclick="doBulk('rechazar')">✗ Rechazar</button>
+    <button class="bulk-btn bb-del" onclick="doBulk('eliminar')">🗑 Eliminar</button>
+    <button class="bulk-btn bb-cancel" onclick="clearSel()">Cancelar</button>
+  </div>
+</div>
+
+<!-- VIEW: REPORTES -->
+<div id="view-reportes" class="view">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <div>
+      <h2 style="margin:0;font-size:1.5rem;font-weight:900;letter-spacing:-0.5px;">📋 REPORTES DE CONTENIDO</h2>
+      <p style="margin:4px 0 0;font-size:.7rem;color:#555;">Gestiona y revisa reportes de usuarios</p>
+    </div>
+    <button class="hbtn green" onclick="syncReportes()">
+      <ion-icon name="refresh"></ion-icon> ACTUALIZAR
+    </button>
+  </div>
+
+  <div class="dash-grid" style="margin-bottom:16px;">
+    <div class="dash-card yellow">
+      <ion-icon name="warning" class="dc-ico"></ion-icon>
+      <div class="dc-main" id="totRep">0</div>
+      <div class="dc-sub">Total Reportes</div>
+    </div>
+    <div class="dash-card red">
+      <ion-icon name="alert-circle" class="dc-ico"></ion-icon>
+      <div class="dc-main" id="totRev">0</div>
+      <div class="dc-sub">En Revisión</div>
+    </div>
+  </div>
+
+  <div id="outputReportes" style="display:grid;gap:14px;"></div>
+</div>
+
+<!-- MODAL EDITAR ITEM -->
+<div id="mEdit" class="modal">
+  <div class="mc">
+    <div class="mhdr"><div class="mtitle">EDITAR ITEM</div><button class="mclose" onclick="cm('mEdit')">×</button></div>
+    <form id="editForm">
+      <input type="hidden" id="eid">
+      <div class="fg"><label class="fl">Título</label><input type="text" id="etitle" class="fi" required></div>
+      <div class="fg"><label class="fl">Descripción</label><textarea id="edesc" class="fi fta"></textarea></div>
+      <div class="fg"><label class="fl">Link</label><input type="url" id="elink" class="fi" required></div>
+      <div class="fg">
+        <label class="fl">Portada (imagen o YouTube URL)</label>
+        <input type="url" id="eimg" class="fi" placeholder="https://... o youtu.be/..." oninput="previewSlot(0)">
+        <div class="slot-preview" id="slot-prev-0"><img src="" alt=""><div class="yt-icon" id="slot-yt-0" style="display:none">▶</div></div>
+      </div>
+      <div class="fg">
+        <label class="fl">Medias adicionales (hasta 3 más)</label>
+        <div class="media-slots">
+          <div class="media-slot">
+            <span class="slot-label">Media 2</span>
+            <input type="url" id="eimg2" class="fi" placeholder="URL imagen o YouTube..." oninput="previewSlot(1)">
+            <div class="slot-preview" id="slot-prev-1"><img src="" alt=""><div class="yt-icon" id="slot-yt-1" style="display:none">▶</div></div>
+          </div>
+          <div class="media-slot">
+            <span class="slot-label">Media 3</span>
+            <input type="url" id="eimg3" class="fi" placeholder="URL imagen o YouTube..." oninput="previewSlot(2)">
+            <div class="slot-preview" id="slot-prev-2"><img src="" alt=""><div class="yt-icon" id="slot-yt-2" style="display:none">▶</div></div>
+          </div>
+          <div class="media-slot">
+            <span class="slot-label">Media 4</span>
+            <input type="url" id="eimg4" class="fi" placeholder="URL imagen o YouTube..." oninput="previewSlot(3)">
+            <div class="slot-preview" id="slot-prev-3"><img src="" alt=""><div class="yt-icon" id="slot-yt-3" style="display:none">▶</div></div>
+          </div>
+          <div class="media-slot">
+            <span class="slot-label">Media 5</span>
+            <input type="url" id="eimg5" class="fi" placeholder="URL imagen o YouTube..." oninput="previewSlot(4)">
+            <div class="slot-preview" id="slot-prev-4"><img src="" alt=""><div class="yt-icon" id="slot-yt-4" style="display:none">▶</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="fg"><label class="fl">Categoría</label><input type="text" id="ecat" class="fi"></div>
+      <div class="fg"><label class="fl">Estado</label>
+        <div class="ss">
+          <div class="sb" data-s="pendiente" onclick="setSt('pendiente')">PENDIENTE</div>
+          <div class="sb" data-s="aprobado" onclick="setSt('aprobado')">APROBADO</div>
+        </div>
+      </div>
+      <div class="fg"><label class="fl">Estado del Link</label>
+        <div class="lss">
+          <div class="lsb2 online" data-ls="online" onclick="setLS('online')">ONLINE</div>
+          <div class="lsb2 revision" data-ls="revision" onclick="setLS('revision')">REVISIÓN</div>
+          <div class="lsb2 caido" data-ls="caido" onclick="setLS('caido')">CAÍDO</div>
+        </div>
+      </div>
+      <div class="fg"><label class="fl">Reportes</label><input type="number" id="erep" class="fi" min="0"></div>
+      <div class="ma"><button type="button" class="bc" onclick="cm('mEdit')">CANCELAR</button><button type="submit" class="bs">GUARDAR</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL VERIFICACIÓN -->
+<div id="mVerif" class="modal">
+  <div class="mc">
+    <div class="mhdr"><div class="mtitle" id="mVerifT">VERIFICAR</div><button class="mclose" onclick="cm('mVerif')">×</button></div>
+    <p style="font-size:.75rem;color:#444;margin:0 0 13px">Selecciona nivel de verificación:</p>
+    <div class="vg">
+      <div class="vo v-none" onclick="doVerif(0)" style="grid-column:span 2"><div class="vo-i">⭕</div><div class="vo-l">SIN VERIFICAR</div><div class="vo-s">Quitar verificación</div></div>
+      <div class="vo v-bronce" onclick="doVerif(1)"><div class="vo-i">🥉</div><div class="vo-l">BRONCE</div><div class="vo-s">Puede cobrar</div></div>
+      <div class="vo v-oro" onclick="doVerif(2)"><div class="vo-i">🥇</div><div class="vo-l">ORO</div><div class="vo-s">Alta confianza</div></div>
+      <div class="vo v-elite" onclick="doVerif(3)" style="grid-column:span 2"><div class="vo-i">👑</div><div class="vo-l">ÉLITE</div><div class="vo-s">Máximo nivel</div></div>
+    </div>
+    <button class="bc" onclick="cm('mVerif')" style="width:100%">CANCELAR</button>
+  </div>
+</div>
+
+<!-- MODAL LISTA NEGRA -->
+<div id="mNeg" class="modal">
+  <div class="mc">
+    <div class="mhdr"><div class="mtitle" style="color:var(--negra)">🚫 LISTA NEGRA</div><button class="mclose" onclick="cm('mNeg')">×</button></div>
+    <div class="nb"><span class="nb-i">🚫</span><div class="nb-u" id="mNegUser"></div><div class="nb-s" id="mNegSub"></div></div>
+    <div class="fg"><label class="fl">Notas privadas (solo tú las ves)</label><textarea id="mNegNotas" class="fi fta" placeholder="Razón, comportamiento, evidencia..."></textarea></div>
+    <div class="ma"><button class="bc" onclick="cm('mNeg')">CANCELAR</button><button id="mNegBtn" class="bs-o" onclick="doNeg()">AGREGAR</button></div>
+  </div>
+</div>
+
+<!-- MODAL AJUSTAR SALDO -->
+<div id="mSaldo" class="modal">
+  <div class="mc">
+    <div class="mhdr"><div class="mtitle" style="color:var(--yellow)">💰 AJUSTAR SALDO</div><button class="mclose" onclick="cm('mSaldo')">×</button></div>
+    <div class="saldo-banner"><div class="sb-actual">Saldo actual</div><div class="sb-num" id="mSaldoActual">$0.00</div><div style="font-size:.65rem;color:#444;margin-top:3px" id="mSaldoUser"></div></div>
+    <div class="fg"><label class="fl">Nuevo saldo (USD)</label><input type="number" id="mSaldoVal" class="fi" min="0" step="0.01" placeholder="0.00"></div>
+    <div class="fg"><label class="fl">Motivo (opcional)</label><input type="text" id="mSaldoMotivo" class="fi" placeholder="Ej: Corrección manual, bonificación..."></div>
+    <div style="display:flex;gap:8px;margin-bottom:13px;flex-wrap:wrap;">
+      <button class="bulk-btn bb-cancel" style="flex:1;padding:8px;border-radius:8px;font-size:.68rem" onclick="setQuickSaldo(0)">Reset a $0</button>
+      <button class="bulk-btn" style="flex:1;padding:8px;border-radius:8px;font-size:.68rem;background:rgba(255,204,0,.1);color:var(--yellow);border:1px solid rgba(255,204,0,.2)" onclick="setQuickSaldo(10)">+$10</button>
+      <button class="bulk-btn" style="flex:1;padding:8px;border-radius:8px;font-size:.68rem;background:rgba(255,204,0,.1);color:var(--yellow);border:1px solid rgba(255,204,0,.2)" onclick="setQuickSaldo(50)">+$50</button>
+    </div>
+    <div class="ma"><button class="bc" onclick="cm('mSaldo')">CANCELAR</button><button class="bs" onclick="doAjusteSaldo()">GUARDAR</button></div>
+  </div>
+</div>
+
+<!-- MODAL DETALLE USUARIO -->
+<div id="mDetail" class="modal">
+  <div class="mc" style="max-width:520px">
+    <div class="mhdr"><div class="mtitle" id="mDetailT">DETALLE</div><button class="mclose" onclick="cm('mDetail')">×</button></div>
+    <div id="mDetailBody"></div>
+  </div>
+</div>
+
+<!-- MODAL RECHAZAR PAGO -->
+<div id="mRejPago" class="modal">
+  <div class="mc">
+    <div class="mhdr"><div class="mtitle" style="color:var(--danger)">✗ RECHAZAR PAGO</div><button class="mclose" onclick="cm('mRejPago')">×</button></div>
+    <div style="background:rgba(255,62,62,.07);border:1px solid rgba(255,62,62,.2);border-radius:11px;padding:13px;margin-bottom:14px;text-align:center;">
+      <div style="font-size:1.5rem;margin-bottom:5px">⚠️</div>
+      <div style="font-weight:800;color:var(--danger)" id="mRejUser"></div>
+      <div style="font-size:.72rem;color:#555;margin-top:3px">Se notificará al usuario y podrá volver a solicitar</div>
+    </div>
+    <div class="fg"><label class="fl">Motivo del rechazo</label><textarea id="mRejMotivo" class="fi fta" placeholder="Ej: Información incorrecta, saldo insuficiente..."></textarea></div>
+    <div class="ma"><button class="bc" onclick="cm('mRejPago')">CANCELAR</button><button class="bs-r" onclick="doRejPago()">RECHAZAR</button></div>
+  </div>
+</div>
+
+<script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+<script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+
+<script>
+const API = "https://backendapp-037y.onrender.com";
+let D = { items:[], users:[], comments:[], pagos:[] };
+
+// ==========================================
+// 🔐 SISTEMA DE AUTENTICACIÓN ADMIN
+// ==========================================
+let adminToken = sessionStorage.getItem('adminToken') || null;
+let sessionStartTime = parseInt(sessionStorage.getItem('sessionStart') || '0');
+const SESSION_DURATION = 8 * 60 * 60 * 1000; // 8h — igual que el backend
+let sessionInterval = null;
+let keepAliveInterval = null;
+
+// Obtener headers con el token admin para TODAS las peticiones al panel
+function adminHeaders(extra = {}) {
+  return {
+    'Content-Type': 'application/json',
+    'x-admin-token': adminToken || '',
+    ...extra
+  };
+}
+
+async function doAdminLogin() {
+  const pin = document.getElementById('pinInput').value.trim();
+  const btn = document.getElementById('pinBtn');
+  const err = document.getElementById('pinError');
+  const input = document.getElementById('pinInput');
+  
+  if (!pin) { err.textContent = 'Ingresa el PIN'; return; }
+  
+  btn.disabled = true;
+  btn.textContent = 'VERIFICANDO...';
+  err.textContent = '';
+  
+  try {
+    const res = await fetch(`${API}/admin/auth/login`, {
+      method: 'POST',
+      headers: adminHeaders(),
+      body: JSON.stringify({ pin })
+    });
+    const data = await res.json();
+    
+    if (data.success && data.adminToken) {
+      adminToken = data.adminToken;
+      sessionStartTime = Date.now();
+      sessionStorage.setItem('adminToken', adminToken);
+      sessionStorage.setItem('sessionStart', sessionStartTime.toString());
+      
+      document.getElementById('pin-overlay').classList.add('hidden');
+      document.getElementById('sessionIndicator').style.display = 'flex';
+      
+      startSessionTimer();
+      startKeepAlive();
+      
+      // Cargar datos del panel
+      sync();
+      syncFraud();
+      // Tutorial automatico al primer login
+      setTimeout(function(){if(!sessionStorage.getItem("tour_v1")&&typeof window._tourStart==="function")window._tourStart();},800);
+    } else {
+      err.textContent = data.error || 'PIN incorrecto';
+      input.classList.add('shake');
+      input.value = '';
+      setTimeout(() => input.classList.remove('shake'), 400);
+    }
+  } catch(e) {
+    err.textContent = 'Error de conexión con el servidor';
+  }
+  
+  btn.disabled = false;
+  btn.textContent = 'ACCEDER';
+}
+
+async function doAdminLogout() {
+  try {
+    await fetch(`${API}/admin/auth/logout`, {
+      method: 'POST',
+      headers: { 'x-admin-token': adminToken || '' }
+    });
+  } catch(e) {}
+  
+  adminToken = null;
+  sessionStorage.removeItem('adminToken');
+  sessionStorage.removeItem('sessionStart');
+  clearInterval(sessionInterval);
+  clearInterval(keepAliveInterval);
+  
+  document.getElementById('pin-overlay').classList.remove('hidden');
+  document.getElementById('sessionIndicator').style.display = 'none';
+  document.getElementById('pinInput').value = '';
+  document.getElementById('pinError').textContent = '';
+}
+
+function startSessionTimer() {
+  clearInterval(sessionInterval);
+  sessionInterval = setInterval(() => {
+    const elapsed = Date.now() - sessionStartTime;
+    const remaining = SESSION_DURATION - elapsed;
+    
+    if (remaining <= 0) {
+      clearInterval(sessionInterval);
+      clearInterval(keepAliveInterval);
+      toast('⏰ Sesión expirada — ingresa el PIN nuevamente', 'err');
+      doAdminLogout();
+      return;
+    }
+    
+    const h = Math.floor(remaining / 3600000);
+    const m = Math.floor((remaining % 3600000) / 60000);
+    const timerEl = document.getElementById('sessionTimer');
+    if (timerEl) timerEl.textContent = `Sesión: ${h}h ${m}m restantes`;
+  }, 30000); // actualizar cada 30s
+}
+
+// Ping al backend cada 5 minutos para mantener sesión activa
+function startKeepAlive() {
+  clearInterval(keepAliveInterval);
+  keepAliveInterval = setInterval(async () => {
+    if (!adminToken) return;
+    try {
+      const res = await fetch(`${API}/admin/auth/verify`, {
+        headers: { 'x-admin-token': adminToken }
+      });
+      if (!res.ok) {
+        toast('⏰ Sesión expirada', 'err');
+        doAdminLogout();
+      }
+    } catch(e) {}
+  }, 5 * 60 * 1000);
+}
+
+// Verificar sesión existente en sessionStorage al cargar
+async function checkExistingSession() {
+  if (!adminToken || !sessionStartTime) return false;
+  
+  const elapsed = Date.now() - sessionStartTime;
+  if (elapsed >= SESSION_DURATION) {
+    sessionStorage.removeItem('adminToken');
+    sessionStorage.removeItem('sessionStart');
+    adminToken = null;
+    return false;
+  }
+  
+  // Verificar con el backend que la sesión sigue activa
+  try {
+    const res = await fetch(`${API}/admin/auth/verify`, {
+      headers: { 'x-admin-token': adminToken }
+    });
+    if (res.ok) {
+      document.getElementById('pin-overlay').classList.add('hidden');
+      document.getElementById('sessionIndicator').style.display = 'flex';
+      startSessionTimer();
+      startKeepAlive();
+      return true;
+    }
+  } catch(e) {}
+  
+  adminToken = null;
+  sessionStorage.removeItem('adminToken');
+  return false;
+}
+
+// Permitir Enter en el input del PIN
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('pinInput')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') doAdminLogin();
+  });
+});
+let dash = null;
+let fT; // filter debounce
+let eSt='pendiente', eLS='online'; // edit modal state
+let uFilter='all', pFilter='pend';
+let notasT={};
+// modales
+let verifUid,verifUname;
+let negUid,negUname,negAct;
+let saldoUid,saldoUname,saldoAct;
+let rejPagoId,rejPagoUser;
+// bulk
+let bulkMode=false, selIds=new Set();
+
+// ==========================================
+// SYNC
+// ==========================================
+async function sync() {
+  try {
+    const [iR,uR,cR,pR,dR] = await Promise.all([
+      fetch(`${API}/admin/items`, {headers: adminHeaders()}).then(r=>r.json()).catch(()=>({items:[]})),
+      fetch(`${API}/auth/users`, {headers: adminHeaders()}).then(r=>r.json()).catch(()=>[]),
+      fetch(`${API}/comentarios`, {headers: adminHeaders()}).then(r=>r.json()).catch(()=>[]),
+      fetch(`${API}/admin/finanzas/solicitudes-pendientes`, {headers: adminHeaders()}).then(r=>r.json()).catch(()=>({solicitudes:[]})),
+      fetch(`${API}/admin/stats/dashboard`, {headers: adminHeaders()}).then(r=>r.json()).catch(()=>({success:false}))
+    ]);
+    D = {
+      items: Array.isArray(iR.items)?iR.items:(Array.isArray(iR)?iR:[]),
+      users: Array.isArray(uR)?uR:[],
+      comments: Array.isArray(cR)?cR:[],
+      pagos: Array.isArray(pR.solicitudes)?pR.solicitudes:[]
+    };
+    if(dR.success) dash = dR.dashboard;
+    updCounters(); filtrar();
+    toast("✓ Sincronizado");
+  } catch(e){ toast("ERROR DE RED","err"); }
+}
+
+function updCounters(){
+  const pend = D.items.filter(i=>i.status==='pendiente'||i.status==='pending').length;
+  const aprob = D.items.filter(i=>i.status==='aprobado').length;
+  const rev = D.items.filter(i=>i.linkStatus==='revision').length;
+  document.getElementById('cP').innerText=pend;
+  document.getElementById('cA').innerText=aprob;
+  document.getElementById('cC').innerText=D.comments.length;
+  document.getElementById('cU').innerText=D.users.length;
+  document.getElementById('cPay').innerText=D.pagos.length;
+  document.getElementById('cRev').innerText=rev;
+  // dots
+  document.getElementById('dotP').classList.toggle('show',pend>0);
+  document.getElementById('dotPay').classList.toggle('show',D.pagos.length>0);
+  document.getElementById('dotRev').classList.toggle('show',rev>0);
+}
+
+function setTab(t){
+  document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
+  const map={dash:'tabDB',pend:'tabP',apro:'tabA',comt:'tabC',usrs:'tabU',pays:'tabPay',revn:'tabRev',fraud:'tabFraud',reportes:'tabReport'};
+  if(map[t]) document.getElementById(map[t]).classList.add('active');
+  document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
+  document.getElementById(`view-${t}`).classList.add('active');
+  filtrar();
+}
+
+function debF(){ clearTimeout(fT); fT=setTimeout(filtrar,200); }
+
+function filtrar(){
+  const q=document.getElementById('gSearch').value.toLowerCase().trim();
+  const tab=document.querySelector('.tab.active')?.id;
+  if(tab==='tabDB') renderDash();
+  else if(tab==='tabP') renderItems('pend',q,'itemsPend');
+  else if(tab==='tabA') renderItems('apro',q,'itemsApro');
+  else if(tab==='tabC') renderComments(q);
+  else if(tab==='tabU') renderUsers(q);
+  else if(tab==='tabPay') renderPagos(q);
+  else if(tab==='tabRev') renderRevision(q);
+  else if(tab==='tabFraud') renderFraudList();
+  else if(tab==='tabReport') renderReportes(q);
+}
+
+// ==========================================
+// DASHBOARD
+// ==========================================
+function renderDash(){
+  const g=document.getElementById('dashGrid');
+  if(!dash){ g.innerHTML=`<div class="dash-card green dash-wide" style="text-align:center;padding:30px"><ion-icon name="sync-outline" style="font-size:2rem;margin-bottom:8px;display:block;opacity:.4"></ion-icon><div style="font-size:.8rem;color:#444">Cargando datos...</div></div>`; return; }
+  const d=dash;
+  g.innerHTML=`
+    <div class="dash-card green">
+      <ion-icon class="dc-ico" name="people-outline"></ion-icon>
+      <div class="dc-main">${d.usuarios.total}</div>
+      <div class="dc-sub">Usuarios totales</div>
+      <div class="dc-detail">Hoy: <span>+${d.usuarios.hoy}</span> · Semana: <span>+${d.usuarios.semana}</span>${d.usuarios.listaNegra>0?` · 🚫 <span style="color:var(--negra)">${d.usuarios.listaNegra}</span> en negra`:''}</div>
+    </div>
+    <div class="dash-card blue">
+      <ion-icon class="dc-ico" name="game-controller-outline"></ion-icon>
+      <div class="dc-main">${d.items.total}</div>
+      <div class="dc-sub">Items totales</div>
+      <div class="dc-detail">Aprobados: <span>${d.items.aprobados}</span> · Pendientes: <span style="color:var(--yellow)">${d.items.pendientes}</span> · Hoy: <span>+${d.items.hoy}</span></div>
+    </div>
+    <div class="dash-card cyan">
+      <ion-icon class="dc-ico" name="download-outline"></ion-icon>
+      <div class="dc-main">${(d.descargas.total||0).toLocaleString()}</div>
+      <div class="dc-sub">Descargas efectivas</div>
+      <div class="dc-detail">Hoy: <span>+${d.descargas.hoy}</span></div>
+    </div>
+    <div class="dash-card yellow">
+      <ion-icon class="dc-ico" name="wallet-outline"></ion-icon>
+      <div class="dc-main">$${d.finanzas.saldoEnCirculacion.toFixed(2)}</div>
+      <div class="dc-sub">Saldo en circulación</div>
+      <div class="dc-detail">Pendiente de pago: <span>$${d.finanzas.pendienteDePago.toFixed(2)}</span></div>
+    </div>
+    <div class="dash-card purple">
+      <ion-icon class="dc-ico" name="chatbubbles-outline"></ion-icon>
+      <div class="dc-main">${d.comentarios.total}</div>
+      <div class="dc-sub">Comentarios</div>
+      <div class="dc-detail">Hoy: <span>+${d.comentarios.hoy}</span></div>
+    </div>
+    <div class="dash-card red">
+      <ion-icon class="dc-ico" name="alert-circle-outline"></ion-icon>
+      <div class="dc-main">${D.items.filter(i=>i.linkStatus==='revision').length}</div>
+      <div class="dc-sub">Links en revisión</div>
+      <div class="dc-detail">Solicitudes de pago: <span>${D.pagos.length}</span></div>
+    </div>
+    ${d.topUploaders&&d.topUploaders.length?`
+    <div class="dash-card dash-wide">
+      <div class="dc-sub" style="margin-bottom:10px">🏆 TOP UPLOADERS (por descargas)</div>
+      <table class="top-table">
+        <tr><th>#</th><th>Usuario</th><th>Descargas</th><th>Items</th></tr>
+        ${d.topUploaders.map((u,i)=>`<tr><td class="rank">${i+1}</td><td class="uname">@${u._id}</td><td class="num">${(u.totalDescargas||0).toLocaleString()}</td><td>${u.totalItems}</td></tr>`).join('')}
+      </table>
+    </div>`:''}
+    ${d.itemsMasDescargados&&d.itemsMasDescargados.length?`
+    <div class="dash-card dash-wide">
+      <div class="dc-sub" style="margin-bottom:10px">🔥 ITEMS MÁS DESCARGADOS</div>
+      <table class="top-table">
+        <tr><th>#</th><th>Título</th><th>Por</th><th>Descargas</th></tr>
+        ${d.itemsMasDescargados.map((j,i)=>`<tr><td class="rank">${i+1}</td><td style="color:#ccc;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${j.title}</td><td class="uname">@${j.usuario}</td><td class="num">${(j.descargasEfectivas||0).toLocaleString()}</td></tr>`).join('')}
+      </table>
+    </div>`:''}
+  `;
+}
+
+// ==========================================
+// ITEMS + BULK
+// ==========================================
+function toggleBulk(){
+  bulkMode=!bulkMode;
+  document.getElementById('bulkToggle').classList.toggle('bulk-active',bulkMode);
+  if(!bulkMode){ selIds.clear(); updBulkBar(); }
+  filtrar();
+}
+
+function toggleSel(id){
+  if(selIds.has(id)) selIds.delete(id);
+  else selIds.add(id);
+  const card=document.getElementById('ic-'+id);
+  if(card){ card.classList.toggle('selected',selIds.has(id)); card.querySelector('.sel-check')?.classList.toggle('checked',selIds.has(id)); }
+  updBulkBar();
+}
+
+function updBulkBar(){
+  const bar=document.getElementById('bulkBar');
+  bar.classList.toggle('show',selIds.size>0&&bulkMode);
+  document.getElementById('bulkCount').innerText=`${selIds.size} sel.`;
+}
+
+function clearSel(){ selIds.clear(); bulkMode=false; document.getElementById('bulkToggle').classList.remove('bulk-active'); updBulkBar(); filtrar(); }
+
+async function doBulk(action){
+  if(!selIds.size) return;
+  const labels={aprobar:'APROBAR',rechazar:'RECHAZAR',eliminar:'ELIMINAR'};
+  if(!confirm(`¿${labels[action]} ${selIds.size} items?`)) return;
+  try {
+    const r=await fetch(`${API}/admin/items/bulk-action`,{method:'PUT',headers:adminHeaders(),body:JSON.stringify({ids:[...selIds],action})});
+    const d=await r.json();
+    if(d.success){ toast(`✓ ${d.afectados} items: ${action}`); clearSel(); sync(); }
+    else toast("Error: "+(d.error||"Fallo"),"err");
+  } catch(e){ toast("ERROR DE RED","err"); }
+}
+
+function renderItems(tab,q,cid){
+  const c=document.getElementById(cid);
+  c.innerHTML="";
+  D.items.forEach(j=>{
+    const ms = tab==='pend'?(j.status==='pendiente'||j.status==='pending'):(j.status==='aprobado');
+    const mq = !q||(j.title||'').toLowerCase().includes(q)||(j.usuario||'').toLowerCase().includes(q);
+    if(!ms||!mq) return;
+    const ls=j.linkStatus||(j.reportes>=3?'revision':'online');
+    const rep=j.reportes||0;
+    const dias=j.diasDesdeCreacion||Math.floor((Date.now()-new Date(j.createdAt).getTime())/(1000*60*60*24));
+    const isSel=selIds.has(j._id);
+    c.innerHTML+=`
+    <div class="item-card ${isSel?'selected':''}" id="ic-${j._id}">
+      ${rep>0?`<div class="rep-badge"><ion-icon name="flag"></ion-icon>${rep}</div>`:''}
+      <div class="lsb ${ls}"><ion-icon name="${lsI(ls)}"></ion-icon>${ls}</div>
+      ${bulkMode?`<div class="sel-check ${isSel?'checked':''}" onclick="toggleSel('${j._id}')"><ion-icon name="checkmark"></ion-icon></div>`:''}
+      ${(()=>{
+        const ytId = j.image ? (j.image.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|v\/))([-\w]{11})/i)||[])[1] : null;
+        const isMp4 = j.image && /\.(mp4|webm|mov)$/i.test(j.image);
+        const thumb = ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : (j.image||'https://via.placeholder.com/150');
+        const extraBadge = ytId ? `<div class="vid-badge yt"><ion-icon name="logo-youtube"></ion-icon>YT</div>` : (isMp4 ? `<div class="vid-badge mp4"><ion-icon name="play-circle-outline"></ion-icon>MP4</div>` : '');
+        const hasExtra = j.images && j.images.filter(u=>u).length > 0;
+        return `<div style="position:relative"><img src="${thumb}" onerror="this.src='https://via.placeholder.com/150'" onclick="${bulkMode?`toggleSel('${j._id}')`:''}" style="${bulkMode?'cursor:pointer':''}">${extraBadge}${hasExtra?`<div class="vid-badge" style="right:7px;left:auto;color:#ccc;border-color:#333"><ion-icon name="images-outline"></ion-icon>${j.images.filter(u=>u).length+1}</div>`:''}</div>`;
+      })()}
+      <div class="card-info">
+        <div class="card-title">${j.title||'Sin título'}</div>
+        <div class="card-user">@${j.usuario||'?'}</div>
+        <div class="card-meta"><span>${j.category||'General'}</span><span>${dias}d · ${j.descargasEfectivas||0}↓</span></div>
+      </div>
+      <div class="item-btns">
+        <button class="ba be" onclick="openEdit('${j._id}')"><ion-icon name="create-outline"></ion-icon></button>
+        ${tab==='pend'?`<button class="ba bv" onclick="runItem('${j._id}','approve')"><ion-icon name="checkmark"></ion-icon></button>`:''}
+        <button class="ba bd" onclick="runItem('${j._id}','del')"><ion-icon name="trash"></ion-icon></button>
+      </div>
+    </div>`;
+  });
+  if(!c.innerHTML) c.innerHTML=`<div style="text-align:center;padding:40px;color:#333">No hay items</div>`;
+}
+function lsI(s){ return s==='online'?'checkmark-circle':s==='revision'?'alert-circle':'close-circle'; }
+
+// ==========================================
+// USUARIOS
+// ==========================================
+function setUF(f,el){ uFilter=f; document.querySelectorAll('#usrFilters .filter-chip').forEach(c=>c.classList.remove('active')); el.classList.add('active'); filtrar(); }
+
+function renderUsers(q){
+  const c=document.getElementById('usrList');
+  document.getElementById('usrQS').style.display='grid';
+  document.getElementById('usrFilters').style.display='flex';
+  const totN=D.users.filter(u=>u.listaNegraAdmin).length;
+  const totV=D.users.filter(u=>u.isVerificado).length;
+  const totS=D.users.filter(u=>u.saldo>0).length;
+  document.getElementById('qTotal').innerText=D.users.length;
+  document.getElementById('qNeg').innerText=totN;
+  document.getElementById('qVer').innerText=totV;
+  document.getElementById('qSal').innerText=totS;
+
+  const sort=document.getElementById('uSort').value;
+  let users=[...D.users];
+  if(sort==='saldo') users.sort((a,b)=>(b.saldo||0)-(a.saldo||0));
+  else if(sort==='descargas') users.sort((a,b)=>(b.descargasTotales||0)-(a.descargasTotales||0));
+  else if(sort==='nombre') users.sort((a,b)=>(a.usuario||'').localeCompare(b.usuario||''));
+  else users.sort((a,b)=>new Date(b.fecha||0)-new Date(a.fecha||0));
+
+  c.innerHTML=""; let cnt=0;
+  users.forEach(u=>{
+    const mq=!q||(u.usuario||'').toLowerCase().includes(q)||(u.email||'').toLowerCase().includes(q)||(u.paypalEmail||'').toLowerCase().includes(q)||(u.registrationIP||'').includes(q);
+    let mf=true;
+    if(uFilter==='verif') mf=!!u.isVerificado;
+    else if(uFilter==='neg') mf=!!u.listaNegraAdmin;
+    else if(uFilter==='saldo') mf=u.saldo>0;
+    else if(uFilter==='sinpp') mf=!u.paypalEmail||u.paypalEmail.trim()==='';
+    if(!mq||!mf) return; cnt++;
+
+    const neg=!!u.listaNegraAdmin;
+    const fecha=u.fecha?new Date(u.fecha).toLocaleDateString('es-ES'):'?';
+    const saldo=(typeof u.saldo==='number'?u.saldo:0).toFixed(2);
+    const notas=(u.notasAdmin||'').replace(/'/g,"&#39;");
+    const em=u.email||'', pp=u.paypalEmail||'', ip=u.registrationIP||'';
+
+    c.innerHTML+=`
+    <div class="uc ${neg?'neg':''}" id="uc-${u._id}">
+      ${neg?`<div class="badge-neg"><ion-icon name="ban-outline"></ion-icon>LISTA NEGRA</div>`:''}
+      <div class="uc-hd">
+        <div class="uc-nr">
+          <ion-icon name="person-circle-outline" style="color:#252525;font-size:1.1rem;flex-shrink:0"></ion-icon>
+          <span class="uc-name">${(u.usuario||'???').toUpperCase()}</span>
+          ${vBadge(u.verificadoNivel)}
+        </div>
+        <div class="uc-date">REGISTRO: ${fecha}</div>
+      </div>
+      <div class="uc-data">
+        <div class="ucf"><span class="ucl">✉️ Email</span>
+          <span class="ucv em ${!em?'mt':''}" onclick="cp('${em}')">${em||'Sin email'}</span></div>
+        <div class="ucf"><span class="ucl">💳 PayPal</span>
+          <span class="ucv pp ${!pp?'mt':''}" onclick="cp('${pp}')">${pp||'No configurado'}</span></div>
+        <div class="ucf"><span class="ucl">🌐 IP Registro</span>
+          <span class="ucv ip ${!ip?'mt':''}" onclick="cp('${ip}')">${ip||'No registrada'}</span></div>
+      </div>
+      <div class="uc-stats">
+        <div class="ucs"><div class="ucs-n">$${saldo}</div><div class="ucs-l">Saldo</div></div>
+        <div class="ucs"><div class="ucs-n">${u.descargasTotales||0}</div><div class="ucs-l">Descargas</div></div>
+        <div class="ucs"><div class="ucs-n" style="color:${['#333','var(--bronce)','var(--oro)','var(--elite)'][u.verificadoNivel||0]||'#333'}">${['—','B','O','E'][u.verificadoNivel||0]||'—'}</div><div class="ucs-l">Nivel</div></div>
+      </div>
+      <div class="uc-notas">
+        <textarea class="nota-inp" placeholder="Notas privadas..."
+          onblur="saveNotas('${u._id}',this.value)">${notas}</textarea>
+      </div>
+      <div class="uc-acts">
+        <button class="ua uv-btn" onclick="omVerif('${u._id}','${u.usuario}')" title="Verificación"><ion-icon name="checkmark-circle-outline"></ion-icon></button>
+        <button class="ua un-btn ${neg?'act':''}" onclick="omNeg('${u._id}','${u.usuario}',${neg})" title="Lista negra"><ion-icon name="ban-outline"></ion-icon></button>
+        <button class="ua us-btn" onclick="omSaldo('${u._id}','${u.usuario}',${u.saldo||0})" title="Ajustar saldo"><ion-icon name="cash-outline"></ion-icon></button>
+        <button class="ua ud-btn" onclick="omDetail('${u._id}')" title="Ver detalle"><ion-icon name="eye-outline"></ion-icon></button>
+        <button class="ua ux-btn" onclick="delUser('${u._id}')" title="Eliminar usuario"><ion-icon name="trash-outline"></ion-icon></button>
+      </div>
+    </div>`;
+  });
+  if(!cnt) c.innerHTML=`<div style="text-align:center;padding:50px;color:#333;grid-column:1/-1"><ion-icon name="people-outline" style="font-size:3rem;opacity:.1;display:block;margin-bottom:10px"></ion-icon><div>Sin usuarios</div></div>`;
+}
+
+function vBadge(n){
+  if(!n||n===0) return '';
+  const ic=n===3?'checkmark-done-circle-sharp':'checkmark-circle';
+  const cl=['','r-b','r-o','r-e'][n]||'';
+  return `<span class="uv ${cl}"><ion-icon name="${ic}"></ion-icon></span>`;
+}
+
+// ==========================================
+// COMENTARIOS
+// ==========================================
+function renderComments(q){
+  const c=document.getElementById('commsList');
+  c.innerHTML="";
+  D.comments.forEach(x=>{
+    if(q!==''&&!(x.texto||'').toLowerCase().includes(q)&&!(x.usuario||'').toLowerCase().includes(q)) return;
+    const f=x.fecha?new Date(x.fecha).toLocaleDateString():'';
+    c.innerHTML+=`<div class="comm-item">
+      <div style="flex:1">
+        <div style="font-size:.65rem;color:#333;margin-bottom:3px">${f}</div>
+        <div style="font-size:.8rem"><strong style="color:var(--neon)">@${x.usuario||'Anon'}:</strong> ${x.texto||'...'}</div>
+      </div>
+      <button onclick="delComm('${x._id}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:18px;padding:5px;flex-shrink:0"><ion-icon name="trash-outline"></ion-icon></button>
+    </div>`;
+  });
+  if(!c.innerHTML) c.innerHTML=`<div style="text-align:center;padding:40px;color:#333">No hay comentarios</div>`;
+}
+
+// ==========================================
+// PAGOS
+// ==========================================
+function setPF(f,el){
+  pFilter=f;
+  document.querySelectorAll('#view-pays .filter-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('pagosList').style.display=f==='pend'?'block':'none';
+  document.getElementById('histPagos').style.display=f==='hist'?'block':'none';
+  if(f==='hist') loadHistorial();
+  else renderPagos('');
+}
+
+async function loadHistorial(){
+  const c=document.getElementById('histPagos');
+  c.innerHTML=`<div style="text-align:center;padding:20px;color:#444">Cargando historial...</div>`;
+  try {
+    const r=await fetch(`${API}/admin/finanzas/historial-completo?limite=100`, {headers: adminHeaders()});
+    const d=await r.json();
+    if(!d.success||!d.historial.length){ c.innerHTML=`<div style="text-align:center;padding:30px;color:#333">Sin historial</div>`; return; }
+    c.innerHTML=d.historial.map(p=>`
+    <div class="hist-item">
+      <div class="hist-estado he-${p.estado}">${p.estado}</div>
+      <div class="hist-data">
+        <div class="hist-u">@${p.usuario}</div>
+        <div class="hist-m">${new Date(p.fecha).toLocaleDateString('es-ES')} · ${p.paypalEmail||'?'}</div>
+        ${p.notas?`<div style="font-size:.6rem;color:#444;margin-top:2px">${p.notas}</div>`:''}
+      </div>
+      <div class="hist-monto">$${(p.monto||0).toFixed(2)}</div>
+    </div>`).join('');
+  } catch(e){ c.innerHTML=`<div style="text-align:center;padding:30px;color:var(--danger)">Error al cargar</div>`; }
+}
+
+function renderPagos(q){
+  const c=document.getElementById('pagosList');
+  c.innerHTML="";
+  D.pagos.forEach(p=>{
+    if(q!==''&&!(p.usuario||'').toLowerCase().includes(q)&&!(p.paypalEmail||'').toLowerCase().includes(q)) return;
+    const du=p.datosUsuario||{};
+    c.innerHTML+=`<div class="pago-card">
+      <div class="pago-hdr">
+        <div class="pago-u"><ion-icon name="person-outline"></ion-icon>@${p.usuario}
+          ${du.verificadoNivel>=1?'<ion-icon name="checkmark-circle" style="color:var(--neon)"></ion-icon>':''}</div>
+        <div class="pago-m">$${(p.monto||0).toFixed(2)}</div>
+      </div>
+      <div class="pago-info">
+        <div class="pi-i"><div class="pi-l">Email cuenta</div><div class="pi-v" style="cursor:pointer" onclick="cp('${du.email||''}')">${du.email||'N/A'}</div></div>
+        <div class="pi-i"><div class="pi-l">Descargas</div><div class="pi-v">${du.descargasTotales||0}</div></div>
+        <div class="pi-i"><div class="pi-l">Juegos +2K</div><div class="pi-v">${du.juegosElegibles||0}</div></div>
+        <div class="pi-i"><div class="pi-l">Verificación</div><div class="pi-v">Nivel ${du.verificadoNivel||0}</div></div>
+      </div>
+      <div class="pago-pp" onclick="cp('${p.paypalEmail||''}')">
+        <div style="font-size:.58rem;color:#3a6a3a;margin-bottom:3px">💳 PAYPAL:</div>
+        ${p.paypalEmail||'Sin configurar'}
+      </div>
+      <div class="pago-btns">
+        <button class="pbtn ok" onclick="doPago('${p._id}','${p.usuario}',${p.monto})"><ion-icon name="checkmark-circle"></ion-icon> PAGADO</button>
+        <button class="pbtn rej" onclick="openRejPago('${p._id}','${p.usuario}')"><ion-icon name="close-circle"></ion-icon> RECHAZAR</button>
+      </div>
+    </div>`;
+  });
+  if(!c.innerHTML) c.innerHTML=`<div style="text-align:center;padding:50px 20px;color:#333">
+    <ion-icon name="wallet-outline" style="font-size:3rem;display:block;margin-bottom:10px;opacity:.15"></ion-icon>
+    <div>No hay pagos pendientes</div></div>`;
+}
+
+// ==========================================
+// REVISIÓN
+// ==========================================
+function renderRevision(q){
+  const c=document.getElementById('revList');
+  c.innerHTML="";
+  D.items.filter(i=>i.linkStatus==='revision').forEach(j=>{
+    if(q!==''&&!(j.title||'').toLowerCase().includes(q)&&!(j.usuario||'').toLowerCase().includes(q)) return;
+    const rep=j.reportes||0, dias=Math.floor((Date.now()-new Date(j.createdAt).getTime())/(1000*60*60*24));
+    c.innerHTML+=`<div class="item-card">
+      <div class="rep-badge"><ion-icon name="flag"></ion-icon>${rep}</div>
+      <div class="lsb revision"><ion-icon name="alert-circle"></ion-icon>REV.</div>
+      ${(()=>{
+        const ytId2 = j.image ? (j.image.match(/(?:youtu\.be\/|youtube\.com\/(?:.*v=|embed\/|shorts\/))([-\w]{11})/i)||[])[1] : null;
+        const thumb2 = ytId2 ? `https://img.youtube.com/vi/${ytId2}/hqdefault.jpg` : (j.image||'https://via.placeholder.com/300x200');
+        return `<div style="position:relative"><img src="${thumb2}" onerror="this.src='https://via.placeholder.com/300x200'">${ytId2?`<div class="vid-badge yt"><ion-icon name="logo-youtube"></ion-icon>YT</div>`:''}</div>`;
+      })()}
+      <div class="card-info">
+        <div class="card-title">${j.title||'Sin título'}</div>
+        <div class="card-user">@${j.usuario||'?'}</div>
+        <div class="card-meta"><span>${j.category||'?'}</span><span>${dias}d · ${j.descargasEfectivas||0}↓</span></div>
+      </div>
+      <div class="item-btns">
+        <button class="ba be" onclick="openEdit('${j._id}')"><ion-icon name="create-outline"></ion-icon></button>
+        <button class="ba bv" onclick="mkOnline('${j._id}')"><ion-icon name="checkmark-circle-outline"></ion-icon></button>
+        <button class="ba bd" onclick="mkCaido('${j._id}')"><ion-icon name="close-circle-outline"></ion-icon></button>
+      </div>
+    </div>`;
+  });
+  if(!c.innerHTML) c.innerHTML=`<div style="text-align:center;padding:50px;color:#333;grid-column:1/-1">
+    <ion-icon name="checkmark-done-circle-outline" style="font-size:3rem;display:block;margin-bottom:10px;opacity:.1"></ion-icon><div>No hay items en revisión</div></div>`;
+}
+
+// ==========================================
+// MODAL EDITAR ITEM
+// ==========================================
+function getYTId(url) {
+  if(!url) return null;
+  const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|v\/))([-\w]{11})/i);
+  return m ? m[1] : null;
+}
+function getYTThumb(url) {
+  const id = getYTId(url);
+  return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : null;
+}
+
+function previewSlot(idx) {
+  const ids = ['eimg','eimg2','eimg3','eimg4','eimg5'];
+  const url = (document.getElementById(ids[idx])?.value || '').trim();
+  const prev = document.getElementById(`slot-prev-${idx}`);
+  const ytIcon = document.getElementById(`slot-yt-${idx}`);
+  if(!prev) return;
+  if(!url) { prev.classList.remove('show'); return; }
+  const img = prev.querySelector('img');
+  const ytId = getYTId(url);
+  if(ytId) {
+    img.src = `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
+    if(ytIcon) ytIcon.style.display='flex';
+  } else if(/\.(mp4|webm|mov)$/i.test(url)) {
+    img.src = 'https://via.placeholder.com/100x50/0a0a0a/5EFF43?text=VIDEO';
+    if(ytIcon) { ytIcon.style.display='flex'; ytIcon.textContent='🎬'; }
+  } else {
+    img.src = url;
+    if(ytIcon) ytIcon.style.display='none';
+  }
+  img.onerror = () => { img.src='https://via.placeholder.com/100x50/0a0a0a/ff3e3e?text=ERR'; };
+  prev.classList.add('show');
+}
+
+function openEdit(id){
+  const item=D.items.find(i=>i._id===id); if(!item) return;
+  document.getElementById('eid').value=item._id;
+  document.getElementById('etitle').value=item.title||'';
+  document.getElementById('edesc').value=item.description||'';
+  document.getElementById('elink').value=item.link||'';
+  document.getElementById('eimg').value=item.image||'';
+  document.getElementById('ecat').value=item.category||'';
+  document.getElementById('erep').value=item.reportes||0;
+  // Cargar images[] en slots 2-5
+  const imgs = item.images || [];
+  ['eimg2','eimg3','eimg4','eimg5'].forEach((elId, i) => {
+    const el = document.getElementById(elId);
+    if(el) el.value = imgs[i] || '';
+  });
+  eSt=item.status||'pendiente'; eLS=item.linkStatus||'online';
+  updSB(); updLSB();
+  // Mostrar previews de todos los slots
+  [0,1,2,3,4].forEach(i => previewSlot(i));
+  om('mEdit');
+}
+function setSt(s){ eSt=s; updSB(); }
+function setLS(s){ eLS=s; updLSB(); }
+function updSB(){ document.querySelectorAll('.sb').forEach(b=>b.classList.toggle('active',b.dataset.s===eSt)); }
+function updLSB(){ document.querySelectorAll('.lsb2').forEach(b=>b.classList.toggle('active',b.dataset.ls===eLS)); }
+
+document.getElementById('editForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const id=document.getElementById('eid').value;
+  const imgsExtra = ['eimg2','eimg3','eimg4','eimg5']
+    .map(id => (document.getElementById(id)?.value||'').trim())
+    .filter(u => u.length > 0);
+  const upd={title:document.getElementById('etitle').value,description:document.getElementById('edesc').value,link:document.getElementById('elink').value,image:document.getElementById('eimg').value,images:imgsExtra,category:document.getElementById('ecat').value,status:eSt,linkStatus:eLS,reportes:parseInt(document.getElementById('erep').value)||0};
+  try {
+    const r=await fetch(`${API}/admin/items/${id}`,{method:'PUT',headers:adminHeaders(),body:JSON.stringify(upd)});
+    if(r.ok){toast("✓ ACTUALIZADO");cm('mEdit');sync();}
+    else{const e2=await r.json();toast("ERROR: "+(e2.error||"Fallo"),"err");}
+  } catch(e){toast("ERROR DE RED","err");}
+});
+
+// ==========================================
+// MODAL VERIFICACIÓN
+// ==========================================
+function omVerif(uid,uname){ verifUid=uid; verifUname=uname; document.getElementById('mVerifT').innerText=`VERIFICAR @${uname.toUpperCase()}`; om('mVerif'); }
+async function doVerif(nivel){
+  if(!verifUname) return; cm('mVerif');
+  try {
+    const r=await fetch(`${API}/auth/admin/verificacion/${verifUname}`,{method:'PUT',headers:adminHeaders(),body:JSON.stringify({nivel})});
+    const labels=['Sin verificar','🥉 Bronce','🥇 Oro','👑 Élite'];
+    if(r.ok){toast(`✓ @${verifUname} → ${labels[nivel]}`);sync();}
+    else toast("Error al verificar","err");
+  } catch(e){toast("Error de red","err");}
+}
+
+// ==========================================
+// MODAL LISTA NEGRA
+// ==========================================
+function omNeg(uid,uname,act){
+  negUid=uid; negUname=uname; negAct=act;
+  const u=D.users.find(x=>x._id===uid);
+  document.getElementById('mNegUser').innerText='@'+uname.toUpperCase();
+  document.getElementById('mNegSub').innerText=act?'Ya está en lista negra. Puedes quitarlo o actualizar notas.':'Solo tú verás esta lista. No afecta al usuario visualmente.';
+  document.getElementById('mNegNotas').value=u?.notasAdmin||'';
+  const btn=document.getElementById('mNegBtn');
+  btn.innerText=act?'QUITAR DE LISTA NEGRA':'AGREGAR A LISTA NEGRA';
+  btn.style.background=act?'#444':'var(--negra)';
+  om('mNeg');
+}
+async function doNeg(){
+  if(!negUid) return;
+  const notas=document.getElementById('mNegNotas').value.trim();
+  const nuevo=!negAct; cm('mNeg');
+  try {
+    const r=await fetch(`${API}/admin/users/lista-negra/${negUid}`,{method:'PUT',headers:adminHeaders(),body:JSON.stringify({listaNegraAdmin:nuevo,notasAdmin:notas})});
+    if(r.ok){toast(nuevo?`🚫 @${negUname} → Lista Negra`:`✓ @${negUname} removido`,nuevo?'warn':'');sync();}
+    else toast("Error","err");
+  } catch(e){toast("Error de red","err");}
+}
+
+// ==========================================
+// MODAL AJUSTAR SALDO
+// ==========================================
+function omSaldo(uid,uname,actual){
+  saldoUid=uid; saldoUname=uname; saldoAct=actual;
+  document.getElementById('mSaldoActual').innerText='$'+(actual||0).toFixed(2);
+  document.getElementById('mSaldoUser').innerText='@'+uname.toUpperCase();
+  document.getElementById('mSaldoVal').value=(actual||0).toFixed(2);
+  document.getElementById('mSaldoMotivo').value='';
+  om('mSaldo');
+}
+function setQuickSaldo(val){
+  const inp=document.getElementById('mSaldoVal');
+  if(val===0) inp.value='0.00';
+  else inp.value=(parseFloat(inp.value||0)+val).toFixed(2);
+}
+async function doAjusteSaldo(){
+  const val=parseFloat(document.getElementById('mSaldoVal').value);
+  const mot=document.getElementById('mSaldoMotivo').value.trim();
+  if(isNaN(val)||val<0){toast("Monto inválido","err");return;}
+  cm('mSaldo');
+  try {
+    const r=await fetch(`${API}/admin/users/ajustar-saldo/${saldoUid}`,{method:'PUT',headers:adminHeaders(),body:JSON.stringify({saldo:val,motivo:mot})});
+    const d=await r.json();
+    if(d.success){toast(`💰 @${saldoUname} → $${val.toFixed(2)}`);sync();}
+    else toast("Error: "+(d.error||"Fallo"),"err");
+  } catch(e){toast("Error de red","err");}
+}
+
+// ==========================================
+// MODAL RECHAZAR PAGO
+// ==========================================
+function openRejPago(pid,pu){ rejPagoId=pid; rejPagoUser=pu; document.getElementById('mRejUser').innerText='@'+pu.toUpperCase(); document.getElementById('mRejMotivo').value=''; om('mRejPago'); }
+async function doRejPago(){
+  const motivo=document.getElementById('mRejMotivo').value.trim(); cm('mRejPago');
+  try {
+    const r=await fetch(`${API}/admin/finanzas/rechazar-pago-admin/${rejPagoId}`,{method:'POST',headers:adminHeaders(),body:JSON.stringify({motivo})});
+    const d=await r.json();
+    if(d.success){toast(`✗ Pago rechazado: @${rejPagoUser}`,"warn");sync();}
+    else toast("Error: "+(d.error||"Fallo"),"err");
+  } catch(e){toast("Error de red","err");}
+}
+
+// ==========================================
+// MODAL DETALLE USUARIO
+// ==========================================
+function omDetail(uid){
+  const u=D.users.find(x=>x._id===uid); if(!u) return;
+  document.getElementById('mDetailT').innerText='@'+(u.usuario||'').toUpperCase();
+  const nivL=['Sin verificar','🥉 Bronce','🥇 Oro','👑 Élite'];
+  let html=`<div class="dg">
+    ${dr('Usuario','@'+(u.usuario||'N/A'))}
+    ${dr('Verificación',nivL[u.verificadoNivel||0])}
+    ${dr('Email',u.email||'Sin email',true)}
+    ${dr('PayPal',u.paypalEmail||'No config.',true)}
+    ${dr('IP Registro',u.registrationIP||'No registrada')}
+    ${dr('Saldo','$'+(u.saldo||0).toFixed(2))}
+    ${dr('Descargas',(u.descargasTotales||0).toString())}
+    ${dr('Sol. Pago',u.solicitudPagoPendiente?'⏳ Pendiente':'No')}
+    ${dr('Registro',u.fecha?new Date(u.fecha).toLocaleString('es-ES'):'N/A')}
+    ${dr('Lista Negra',u.listaNegraAdmin?('🚫 Sí'+(u.fechaListaNegra?' ('+new Date(u.fechaListaNegra).toLocaleDateString('es-ES')+')':'')):'No')}
+  </div>`;
+  if(u.notasAdmin) html+=`<div style="background:#191919;border:1px solid #222;border-radius:9px;padding:11px;margin-bottom:13px">
+    <div style="font-size:.58rem;color:#333;text-transform:uppercase;font-weight:700;margin-bottom:5px">📝 Notas Admin</div>
+    <div style="font-size:.75rem;color:#777">${u.notasAdmin}</div>
+  </div>`;
+  html+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+    <button class="bs" onclick="cm('mDetail');omVerif('${u._id}','${u.usuario}')">Cambiar verificación</button>
+    <button class="bs" style="background:var(--yellow);color:#000" onclick="cm('mDetail');omSaldo('${u._id}','${u.usuario}',${u.saldo||0})">Ajustar saldo</button>
+    <button class="bs-o" onclick="cm('mDetail');omNeg('${u._id}','${u.usuario}',${!!u.listaNegraAdmin})">${u.listaNegraAdmin?'Quitar de negra':'Agregar a negra'}</button>
+    <button class="bc" onclick="cm('mDetail')">CERRAR</button>
+  </div>`;
+  document.getElementById('mDetailBody').innerHTML=html;
+  om('mDetail');
+}
+
+function dr(l,v,copy=false){
+  return `<div class="dc2"><div class="dc2-l">${l}</div><div class="dc2-v" ${copy?`onclick="cp('${v}')"`:''}>${v}</div></div>`;
+}
+
+// ==========================================
+// NOTAS AUTO-SAVE
+// ==========================================
+async function saveNotas(uid,texto){
+  if(notasT[uid]) clearTimeout(notasT[uid]);
+  notasT[uid]=setTimeout(async()=>{
+    try{
+      await fetch(`${API}/admin/users/notas/${uid}`,{method:'PUT',headers:adminHeaders(),body:JSON.stringify({notasAdmin:texto})});
+      const u=D.users.find(x=>x._id===uid); if(u) u.notasAdmin=texto;
+    }catch(e){}
+  },800);
+}
+
+// ==========================================
+// ACCIONES
+// ==========================================
+async function runItem(id,op){
+  if(!confirm("¿Confirmar?")) return;
+  try {
+    const r=await fetch(op==='approve'?`${API}/items/approve/${id}`:`${API}/items/${id}`,{
+      method: op==='approve'?'PUT':'DELETE',
+      headers: adminHeaders()
+    });
+    if(r.ok){toast(op==='approve'?"✓ APROBADO":"✓ ELIMINADO");sync();}
+  } catch(e){toast("ERROR DE RED","err");}
+}
+
+async function delUser(id){
+  if(!confirm("⚠️ ¿ELIMINAR USUARIO PERMANENTEMENTE?\n(Se eliminarán sus datos pero no sus items)")) return;
+  try {
+    const r=await fetch(`${API}/auth/users/${id}`,{method:'DELETE', headers: adminHeaders()});
+    if(r.ok){toast("✓ USUARIO ELIMINADO");sync();}
+  } catch(e){toast("ERROR DE RED","err");}
+}
+
+async function delComm(id){
+  if(!confirm("¿Borrar comentario?")) return;
+  try {
+    const r=await fetch(`${API}/comentarios/${id}`,{method:'DELETE', headers: adminHeaders()});
+    if(r.ok){toast("✓ BORRADO");sync();}
+  } catch(e){toast("ERROR","err");}
+}
+
+async function doPago(pid,pu,pm){
+  if(!confirm(`¿CONFIRMAR PAGO $${pm.toFixed(2)} a @${pu}?`)) return;
+  try {
+    const r=await fetch(`${API}/admin/finanzas/procesar-pago/${pid}`,{method:'POST',headers:adminHeaders(),body:JSON.stringify({notas:`Pagado el ${new Date().toLocaleDateString()}`})});
+    if(r.ok){toast(`✓ PAGO @${pu}`);sync();}
+    else{const e=await r.json();toast("ERROR: "+(e.error||"Fallo"),"err");}
+  } catch(e){toast("ERROR DE RED","err");}
+}
+
+async function mkOnline(id){
+  if(!confirm("¿Marcar ONLINE y resetear reportes?")) return;
+  try {
+    const r=await fetch(`${API}/admin/items/${id}`,{method:'PUT',headers:adminHeaders(),body:JSON.stringify({linkStatus:'online',reportes:0})});
+    if(r.ok){toast("✓ ONLINE");sync();}
+  } catch(e){toast("ERROR","err");}
+}
+
+async function mkCaido(id){
+  if(!confirm("¿Marcar como CAÍDO?")) return;
+  try {
+    const r=await fetch(`${API}/admin/items/${id}`,{method:'PUT',headers:adminHeaders(),body:JSON.stringify({linkStatus:'caido'})});
+    if(r.ok){toast("✓ CAÍDO");sync();}
+  } catch(e){toast("ERROR","err");}
+}
+
+// ==========================================
+// CLIPBOARD
+// ==========================================
+function cp(text){
+  if(!text||!text.trim()) return;
+  navigator.clipboard.writeText(text).then(()=>toast(`📋 ${text.length>25?text.slice(0,25)+'…':text}`)).catch(()=>{
+    const el=document.createElement('input');el.value=text;document.body.appendChild(el);el.select();document.execCommand('copy');document.body.removeChild(el);toast('📋 Copiado');
+  });
+}
+
+// ==========================================
+// MODALES HELPERS
+// ==========================================
+function om(id){ document.getElementById(id).classList.add('active'); document.body.style.overflow='hidden'; }
+function cm(id){ document.getElementById(id).classList.remove('active'); document.body.style.overflow='auto'; }
+
+// ==========================================
+// TOAST
+// ==========================================
+function toast(msg,type=''){
+  const t=document.getElementById("toast");
+  t.className=type; t.innerText=msg; t.style.display="block";
+  setTimeout(()=>{t.style.display="none";},2500);
+}
+
+// ==========================================
+// ⚠️ NUEVO: DETECCIÓN DE FRAUDE
+// ==========================================
+let fraudData = {
+    activities: [],
+    stats: {}
+};
+
+let currentFraudFilter = 'all';
+
+// Sincronizar datos de fraude
+async function syncFraud() {
+    try {
+        const res = await fetch(`${API}/admin/fraud/suspicious-activities`, {headers: adminHeaders()});
+        const data = await res.json();
+        
+        if (data.success) {
+            fraudData.stats = {
+                total: data.total || 0,
+                pendingReview: data.pendingReview || 0,
+                autoFlagged: data.autoFlagged || 0,
+                reviewed: (data.total || 0) - (data.pendingReview || 0),
+                bySeverity: data.bySeverity || {},
+                byType: data.byType || {}
+            };
+            
+            fraudData.activities = data.recentActivity || [];
+            
+            updateFraudStats();
+            renderFraudList();
+            
+            // Actualizar dot si hay pendientes
+            const dot = document.getElementById('dotFraud');
+            if (dot) {
+                if (fraudData.stats.pendingReview > 0) {
+                    dot.classList.add('show');
+                } else {
+                    dot.classList.remove('show');
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Error sincronizando fraude:', error);
+    }
+}
+
+// Actualizar estadísticas
+function updateFraudStats() {
+    document.getElementById('fraudTotal').innerText = fraudData.stats.total;
+    document.getElementById('fraudPending').innerText = fraudData.stats.pendingReview;
+    document.getElementById('fraudAutoFlagged').innerText = fraudData.stats.autoFlagged;
+    document.getElementById('fraudReviewed').innerText = fraudData.stats.reviewed;
+    
+    document.getElementById('fraudLow').innerText = fraudData.stats.bySeverity.low || 0;
+    document.getElementById('fraudMedium').innerText = fraudData.stats.bySeverity.medium || 0;
+    document.getElementById('fraudHigh').innerText = fraudData.stats.bySeverity.high || 0;
+    document.getElementById('fraudCritical').innerText = fraudData.stats.bySeverity.critical || 0;
+}
+
+// Renderizar lista de fraude
+function renderFraudList() {
+    const container = document.getElementById('fraudList');
+    let filtered = fraudData.activities;
+    
+    // Aplicar filtro
+    if (currentFraudFilter === 'pending') {
+        filtered = filtered.filter(a => !a.revisado);
+    } else if (currentFraudFilter === 'auto') {
+        filtered = filtered.filter(a => a.autoMarcado);
+    } else if (currentFraudFilter === 'critical') {
+        filtered = filtered.filter(a => a.severidad === 'critical');
+    } else if (currentFraudFilter === 'reviewed') {
+        filtered = filtered.filter(a => a.revisado);
+    }
+    
+    if (filtered.length === 0) {
+        container.innerHTML = `
+            <div style="text-align:center;padding:40px;color:#555;">
+                <ion-icon name="shield-checkmark-outline" style="font-size:3rem;margin-bottom:10px;"></ion-icon>
+                <p style="font-size:0.9rem;margin:0;">No hay actividades sospechosas ${currentFraudFilter !== 'all' ? 'con este filtro' : ''}</p>
+            </div>
+        `;
+        return;
+    }
+    
+    container.innerHTML = filtered.map(activity => {
+        const typeIcons = {
+            download_velocity: 'flash',
+            ip_hopping: 'swap-horizontal',
+            single_ip_abuse: 'location',
+            bot_pattern: 'bug',
+            earnings_spike: 'trending-up',
+            time_anomaly: 'time'
+        };
+        
+        const typeNames = {
+            download_velocity: 'Velocidad de Descarga',
+            ip_hopping: 'Cambio de IPs (VPN)',
+            single_ip_abuse: 'Abuso desde IP',
+            bot_pattern: 'Patrón de Bot',
+            earnings_spike: 'Spike de Ganancias',
+            time_anomaly: 'Anomalía de Tiempo'
+        };
+        
+        const icon = typeIcons[activity.tipo] || 'alert-circle';
+        const typeName = typeNames[activity.tipo] || activity.tipo;
+        
+        return `
+            <div class="fraud-card ${activity.severidad} ${activity.revisado ? 'reviewed' : ''}">
+                ${activity.autoMarcado ? `
+                    <div class="fraud-auto-flag">
+                        <ion-icon name="ban"></ion-icon> AUTO-MARCADO
+                    </div>
+                ` : ''}
+                
+                <div class="fraud-header">
+                    <div class="fraud-user">@${activity.usuario}</div>
+                    <div class="fraud-severity ${activity.severidad}">${activity.severidad.toUpperCase()}</div>
+                </div>
+                
+                <div class="fraud-type">
+                    <ion-icon name="${icon}"></ion-icon>
+                    ${typeName}
+                </div>
+                
+                <div class="fraud-details">
+                    <div class="fraud-detail-row">
+                        <span class="fraud-detail-label">Mensaje:</span>
+                        <span class="fraud-detail-value">${activity.detalles.mensaje || 'N/A'}</span>
+                    </div>
+                    ${activity.detalles.ip ? `
+                        <div class="fraud-detail-row">
+                            <span class="fraud-detail-label">IP:</span>
+                            <span class="fraud-detail-value">${activity.detalles.ip}</span>
+                        </div>
+                    ` : ''}
+                    <div class="fraud-detail-row">
+                        <span class="fraud-detail-label">Fecha:</span>
+                        <span class="fraud-detail-value">${new Date(activity.fecha).toLocaleString('es-ES')}</span>
+                    </div>
+                </div>
+                
+                ${activity.notasAdmin ? `
+                    <div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:6px;padding:8px;margin-top:8px;">
+                        <div style="font-size:0.55rem;color:#555;margin-bottom:3px;font-weight:700;">NOTAS ADMIN:</div>
+                        <div style="font-size:0.7rem;color:#888;">${activity.notasAdmin}</div>
+                    </div>
+                ` : ''}
+                
+                <div class="fraud-actions">
+                    <button class="fraud-btn fb-view" onclick="viewUserFromFraud('${activity.usuario}')">
+                        <ion-icon name="person"></ion-icon> VER USUARIO
+                    </button>
+                    ${!activity.revisado ? `
+                        <button class="fraud-btn fb-mark" onclick="markFraudReviewed('${activity._id}')">
+                            <ion-icon name="checkmark"></ion-icon> MARCAR REVISADO
+                        </button>
+                    ` : `
+                        <button class="fraud-btn fb-reviewed" disabled>
+                            <ion-icon name="checkmark-done"></ion-icon> REVISADO
+                        </button>
+                    `}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Filtrar fraude
+function filterFraud(filter) {
+    currentFraudFilter = filter;
+    
+    // Actualizar botones activos
+    document.querySelectorAll('[data-fraud-filter]').forEach(btn => {
+        if (btn.dataset.fraudFilter === filter) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+    
+    renderFraudList();
+}
+
+// Ver usuario desde fraude
+function viewUserFromFraud(username) {
+    // Buscar el usuario
+    const user = D.users.find(u => u.usuario === username);
+    if (user) {
+        // Cambiar a la pestaña de usuarios
+        setTab('usrs');
+        
+        // Abrir modal de detalle
+        setTimeout(() => {
+            omDetail(user._id);
+        }, 100);
+    } else {
+        toast('Usuario no encontrado', 'err');
+    }
+}
+
+// Marcar como revisado
+async function markFraudReviewed(activityId) {
+    const notas = prompt('Notas de revisión (opcional):');
+    if (notas === null) return; // Usuario canceló
+    
+    try {
+        const res = await fetch(`${API}/admin/fraud/mark-reviewed/${activityId}`, {
+            method: 'PUT',
+            headers: adminHeaders(),
+            body: JSON.stringify({ notasAdmin: notas || '' })
+        });
+        
+        if (res.ok) {
+            toast('✓ MARCADO COMO REVISADO');
+            syncFraud();
+        } else {
+            toast('ERROR AL MARCAR', 'err');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        toast('ERROR DE RED', 'err');
+    }
+}
+
+// ==========================================
+// INIT
+// ==========================================
+// REPORTES
+// ==========================================
+let reportesData = [];
+
+async function syncReportes() {
+  try {
+    const res = await fetch(`${API}/items`, {headers: adminHeaders()});
+    const items = await res.json();
+    
+    reportesData = items.filter(i => i.reportes > 0).sort((a,b) => b.reportes - a.reportes);
+    
+    const totRep = reportesData.reduce((sum, i) => sum + i.reportes, 0);
+    const totRev = reportesData.filter(i => i.linkStatus === 'revision').length;
+    
+    document.getElementById('totRep').innerText = totRep;
+    document.getElementById('totRev').innerText = totRev;
+    document.getElementById('cReport').innerText = reportesData.length;
+    
+    const dot = document.getElementById('dotReport');
+    if (dot && totRev > 0) dot.classList.add('show');
+    else if (dot) dot.classList.remove('show');
+    
+    renderReportes();
+  } catch (error) {
+    console.error('Error syncReportes:', error);
+  }
+}
+
+function renderReportes(q='') {
+  const out = document.getElementById('outputReportes');
+  if (!out) return;
+  
+  let filtered = reportesData;
+  if (q) filtered = filtered.filter(i => i.title.toLowerCase().includes(q) || i.usuario.toLowerCase().includes(q));
+  
+  if (filtered.length === 0) {
+    out.innerHTML = `<div style="text-align:center;padding:40px;color:#444"><ion-icon name="checkmark-done-outline" style="font-size:3rem;opacity:.3;display:block;margin-bottom:10px"></ion-icon><div style="font-size:.9rem">Sin reportes</div></div>`;
+    return;
+  }
+  
+  out.innerHTML = filtered.map(i => {
+    const d = i.reportesDesglose || {caido:0,viejo:0,malware:0};
+    const sColor = i.linkStatus === 'online' ? 'var(--online)' : i.linkStatus === 'revision' ? 'var(--revision)' : 'var(--caido)';
+    const sText = i.linkStatus === 'online' ? 'Online' : i.linkStatus === 'revision' ? 'Revisión' : 'Caído';
+    
+    return `<div style="background:var(--card);border:1px solid #1e1e1e;border-radius:12px;padding:16px;border-left:3px solid ${sColor}">
+      <div style="display:flex;justify-content:space-between;margin-bottom:12px"><div style="flex:1"><div style="font-size:1rem;font-weight:700;margin-bottom:6px">${i.title}</div><div style="font-size:.75rem;color:#666">Por: <span style="color:var(--neon)">@${i.usuario}</span></div></div><div style="text-align:right"><div style="background:rgba(255,68,68,.1);color:#ff4444;padding:6px 12px;border-radius:20px;font-size:.75rem;font-weight:700;margin-bottom:6px">${i.reportes} Reportes</div><div style="font-size:.7rem;color:${sColor};font-weight:600">${sText}</div></div></div>
+      <div style="display:flex;gap:12px;padding:12px;background:#0a0a0a;border-radius:8px;margin-bottom:12px;flex-wrap:wrap"><div style="display:flex;align-items:center;gap:6px"><ion-icon name="link-outline" style="color:#ff4444;font-size:1rem"></ion-icon><span style="font-weight:700;color:#ff4444;margin-right:4px">${d.caido||0}</span><span style="font-size:.75rem;color:#666">Caído</span></div><div style="display:flex;align-items:center;gap:6px"><ion-icon name="time-outline" style="color:#ffaa00;font-size:1rem"></ion-icon><span style="font-weight:700;color:#ffaa00;margin-right:4px">${d.viejo||0}</span><span style="font-size:.75rem;color:#666">Obsoleto</span></div><div style="display:flex;align-items:center;gap:6px"><ion-icon name="shield-outline" style="color:#ff00ff;font-size:1rem"></ion-icon><span style="font-weight:700;color:#ff00ff;margin-right:4px">${d.malware||0}</span><span style="font-size:.75rem;color:#666">Malware</span></div></div>
+      <div style="display:flex;gap:8px">
+        <button class="hbtn green" style="flex:1" onclick="marcarOnline('${i._id}')"><ion-icon name="checkmark-circle"></ion-icon> Online</button>
+        <button class="hbtn" style="flex:1;background:rgba(255,68,68,.1);border-color:var(--danger);color:var(--danger)" onclick="marcarCaido('${i._id}')"><ion-icon name="close-circle"></ion-icon> Caído</button>
+        <button class="hbtn" style="background:rgba(255,0,0,.2);border-color:#ff4444;color:#ff4444;padding:7px 11px" onclick="eliminarReportes('${i._id}')" title="Eliminar reportes"><ion-icon name="trash-outline"></ion-icon></button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function marcarOnline(id) {
+  if (!confirm('¿Marcar como ONLINE y resetear reportes?')) return;
+  try {
+    // reset-reports hace linkStatus='online' Y reportes=0 en una sola llamada
+    const res = await fetch(`${API}/admin/items/${id}/reset-reports`, {
+      method: 'PUT',
+      headers: adminHeaders()
+    });
+    if (res.ok) {
+      const idx = reportesData.findIndex(i => i._id === id);
+      if (idx !== -1) { reportesData[idx].linkStatus = 'online'; reportesData[idx].reportes = 0; }
+      reportesData = reportesData.filter(i => i.reportes > 0);
+      renderReportes();
+      toast('✓ Marcado como ONLINE y reportes reseteados');
+      sync();
+    } else {
+      const err = await res.json().catch(()=>({}));
+      toast('Error: ' + (err.error||'Fallo al actualizar'), 'err');
+    }
+  } catch (e) { toast('Error de red', 'err'); }
+}
+
+async function marcarCaido(id) {
+  if (!confirm('¿Marcar como CAÍDO?')) return;
+  try {
+    const res = await fetch(`${API}/admin/items/${id}/link-status`, {
+      method: 'PUT',
+      headers: adminHeaders(),
+      body: JSON.stringify({ linkStatus: 'caido' })
+    });
+    if (res.ok) {
+      const idx = reportesData.findIndex(i => i._id === id);
+      if (idx !== -1) reportesData[idx].linkStatus = 'caido';
+      renderReportes();
+      toast('⚠ Marcado como CAÍDO', 'warn');
+      sync();
+    } else {
+      const err = await res.json().catch(()=>({}));
+      toast('Error: ' + (err.error||'Fallo al actualizar'), 'err');
+    }
+  } catch (e) { toast('Error de red', 'err'); }
+}
+
+async function eliminarReportes(id) {
+  if (!confirm('¿Eliminar todos los reportes de este item? Esta acción no se puede deshacer.')) return;
+  try {
+    // reset-reports: pone reportes=0 y linkStatus='online'
+    const res = await fetch(`${API}/admin/items/${id}/reset-reports`, {
+      method: 'PUT',
+      headers: adminHeaders()
+    });
+    if (res.ok) {
+      reportesData = reportesData.filter(i => i._id !== id);
+      document.getElementById('totRep').innerText = reportesData.reduce((s,i) => s+i.reportes, 0);
+      document.getElementById('cReport').innerText = reportesData.length;
+      renderReportes();
+      toast('🗑 Reportes eliminados y link marcado Online');
+      sync();
+    } else {
+      const err = await res.json().catch(()=>({}));
+      toast('Error: ' + (err.error||'Fallo al eliminar'), 'err');
+    }
+  } catch (e) { toast('Error de red', 'err'); }
+}
+
+// ==========================================
+// INIT
+// ==========================================
+document.addEventListener("DOMContentLoaded", async () => {
+  // Verificar si ya hay una sesión admin activa (por si recargó la página)
+  const sessionOk = await checkExistingSession();
+  if (sessionOk) {
+    sync();
+    syncFraud();
+    syncReportes();
+  }
+  // Si no hay sesión, el overlay de login ya está visible — espera el PIN
+  setInterval(sync, 30000);
+  setInterval(syncFraud, 60000);
+  setInterval(syncReportes, 45000);
+});
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){
+    document.querySelectorAll('.modal.active').forEach(m=>m.classList.remove('active'));
+    document.body.style.overflow='auto';
+  }
+});
+</script>
+<!-- ═══════════════════════════════════════════════════
+     ADMIN TOUR — UpGames 2026
+     Mobile-first: panel fijo abajo, texto compacto,
+     sin bullets del navegador, sin scroll innecesario.
+═══════════════════════════════════════════════════ -->
+<div id="tv-bg"></div>
+<div id="tv-card">
+  <div id="tv-bar"><div id="tv-fill"></div></div>
+  <div id="tv-head">
+    <div id="tv-badge">TUTORIAL ADMIN</div>
+    <div id="tv-num">1/15</div>
+    <button id="tv-x" onclick="window._tourEnd()">✕</button>
+  </div>
+  <div id="tv-main">
+    <div id="tv-ico"></div>
+    <div id="tv-title"></div>
+  </div>
+  <div id="tv-body"></div>
+  <div id="tv-foot">
+    <div id="tv-dots"></div>
+    <div id="tv-nav">
+      <button id="tv-prev" onclick="window._tourPrev()">← Atrás</button>
+      <button id="tv-next" onclick="window._tourNext()">Siguiente →</button>
+    </div>
+  </div>
+</div>
+<button id="tv-fab" onclick="window._tourStart()" title="Ver tutorial">?</button>
+
+<style>
+/* Reset base */
+#tv-bg,#tv-card,#tv-head,#tv-main,#tv-body,#tv-foot,#tv-dots,#tv-nav,#tv-badge,#tv-num,#tv-x,#tv-ico,#tv-title,#tv-prev,#tv-next,#tv-fab,#tv-bar,#tv-fill{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+
+/* Overlay */
+#tv-bg{
+  display:none;position:fixed;inset:0;z-index:49000;
+  background:rgba(0,0,0,.85);
+  touch-action:none;
+}
+#tv-bg.on{display:block;}
+
+/* Tarjeta — FIJA EN LA PARTE INFERIOR, altura controlada */
+#tv-card{
+  display:none;
+  position:fixed;
+  bottom:0;left:0;right:0;
+  z-index:49001;
+  background:#111;
+  border-top:2px solid #5EFF43;
+  border-left:none;border-right:none;border-bottom:none;
+  border-radius:18px 18px 0 0;
+  max-height:58svh; /* máximo 58% de la pantalla visible */
+  flex-direction:column;
+  overflow:hidden;
+  /* sombra hacia arriba */
+  box-shadow:0 -6px 40px rgba(0,0,0,.9),0 -1px 0 rgba(94,255,67,.1);
+}
+#tv-card.on{display:flex;}
+
+/* Barra de progreso (la más fina, arriba del todo) */
+#tv-bar{height:2px;background:#1a1a1a;flex-shrink:0;}
+#tv-fill{height:100%;background:linear-gradient(90deg,#5EFF43,#00d4ff);transition:width .3s ease;}
+
+/* Cabecera: badge + número + X */
+#tv-head{
+  display:flex;align-items:center;gap:6px;
+  padding:10px 12px 0;
+  flex-shrink:0;
+}
+#tv-badge{
+  font-size:10px;font-weight:900;letter-spacing:1.5px;
+  color:#5EFF43;background:rgba(94,255,67,.08);
+  border:1px solid rgba(94,255,67,.2);
+  border-radius:20px;padding:3px 8px;
+  text-transform:uppercase;white-space:nowrap;
+}
+#tv-num{
+  font-size:10px;font-weight:700;color:rgba(94,255,67,.4);
+  margin-left:auto;white-space:nowrap;
+}
+#tv-x{
+  width:26px;height:26px;padding:0;
+  background:none;border:1px solid #1e1e1e;border-radius:7px;
+  color:#444;font-size:13px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+#tv-x:active{color:#ff3e3e;background:rgba(255,62,62,.1);}
+
+/* Fila ícono + título */
+#tv-main{
+  display:flex;align-items:center;gap:10px;
+  padding:8px 12px 6px;
+  flex-shrink:0;
+}
+#tv-ico{
+  font-size:22px;
+  width:38px;height:38px;
+  background:rgba(94,255,67,.07);
+  border:1px solid rgba(94,255,67,.15);
+  border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+#tv-title{
+  font-size:15px;font-weight:900;color:#fff;line-height:1.2;flex:1;
+}
+
+/* Cuerpo — scrolleable, texto compacto */
+#tv-body{
+  flex:1;
+  overflow-y:auto;-webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+  padding:0 12px 4px;
+  font-size:13px;color:#888;line-height:1.55;
+}
+#tv-body p{margin:0 0 5px;}
+#tv-body strong,#tv-body b{color:#5EFF43;font-weight:700;}
+/* Colores de acento */
+#tv-body .cw{color:#ffcc00;font-weight:700;}
+#tv-body .cr{color:#ff3e3e;font-weight:700;}
+#tv-body .cb{color:#4388ff;font-weight:700;}
+#tv-body .co{color:#ff6b00;font-weight:700;}
+/* Lista sin bullets del sistema */
+#tv-body ul{list-style:none;padding:0;margin:4px 0;}
+#tv-body ul li{
+  position:relative;padding-left:12px;margin-bottom:3px;
+  font-size:12.5px;color:#888;
+}
+#tv-body ul li::before{
+  content:'›';position:absolute;left:0;
+  color:#5EFF43;font-weight:900;line-height:1.55;
+}
+/* Tip / nota */
+#tv-body .tip{
+  display:block;margin-top:7px;
+  padding:7px 10px;
+  background:rgba(94,255,67,.05);
+  border-left:3px solid #5EFF43;
+  border-radius:0 6px 6px 0;
+  font-size:11.5px;color:#999;line-height:1.5;
+}
+#tv-body .tip strong{color:#5EFF43;}
+
+/* Footer: dots + botones */
+#tv-foot{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:7px 12px;
+  border-top:1px solid #1a1a1a;
+  flex-shrink:0;
+  gap:8px;
+}
+/* Safe area para iPhones con notch abajo */
+@supports(padding-bottom:env(safe-area-inset-bottom)){
+  #tv-foot{padding-bottom:max(7px,env(safe-area-inset-bottom));}
+}
+
+#tv-dots{display:flex;flex-wrap:wrap;gap:3px;align-items:center;max-width:90px;flex-shrink:0;}
+.tvd{width:5px;height:5px;border-radius:50%;background:#1f1f1f;flex-shrink:0;transition:background .2s,transform .2s;}
+.tvd.on{background:#5EFF43;transform:scale(1.5);}
+
+#tv-nav{display:flex;gap:6px;flex-shrink:0;}
+#tv-prev,#tv-next{
+  padding:8px 14px;border:none;border-radius:9px;
+  font-size:12px;font-weight:900;letter-spacing:.3px;
+  cursor:pointer;text-transform:uppercase;
+  min-height:36px;transition:filter .15s,transform .1s;
+}
+#tv-prev:active,#tv-next:active{transform:scale(.95);}
+#tv-prev{background:transparent;color:#444;border:1px solid #222;}
+#tv-prev:active{color:#fff;}
+#tv-next{background:#5EFF43;color:#000;}
+#tv-next:active{filter:brightness(1.1);}
+
+/* FAB "?" */
+#tv-fab{
+  display:none;
+  position:fixed;bottom:22px;left:18px;z-index:9800;
+  width:42px;height:42px;border-radius:50%;
+  background:#111;border:1px solid #1e1e1e;
+  color:#5EFF43;font-size:18px;font-weight:900;
+  font-family:'Segoe UI',system-ui,-apple-system;
+  cursor:pointer;
+  align-items:center;justify-content:center;
+  box-shadow:0 4px 16px rgba(0,0,0,.7);
+}
+#tv-fab:active{border-color:#5EFF43;}
+
+/* Animación entrada */
+@keyframes tvUp{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
+#tv-card.on{animation:tvUp .28s cubic-bezier(.34,1.3,.64,1);}
+</style>
+
+<script>
+(function(){
+'use strict';
+var STEPS=[
+  {e:'👋',t:'Bienvenido al Panel Admin',b:'<p>Este es el <strong>Core Admin Pro de UpGames</strong>, tu centro de control total de la plataforma.</p><p>En 15 pasos rápidos te explico cada sección para que puedas administrar todo sin problemas.</p><span class="tip">💡 Toca <strong>✕</strong> para saltar. El botón <strong>?</strong> abajo a la izquierda lo relanza cuando quieras.</span>'},
+  {e:'📌',t:'La Barra Superior',b:'<p>La barra negra fija tiene <strong>3 zonas clave</strong>:</p><ul><li><strong>Logo ⚡ ADMIN</strong> — identifica el panel</li><li><strong>Barra de búsqueda</strong> — busca en todo el panel a la vez</li><li><strong>Botones derecha</strong> — selección múltiple y sincronizar</li></ul><span class="tip">💡 La búsqueda encuentra items, usuarios y comentarios al mismo tiempo.</span>'},
+  {e:'🔄',t:'Botón Sincronizar (Verde)',b:'<p>Recarga <strong>todos los datos del servidor</strong> en tiempo real. Úsalo tras aprobar o rechazar algo.</p><ul><li>Refresca items, usuarios, pagos y dashboard</li><li>Úsalo cuando veas datos desactualizados</li></ul><span class="tip">⚡ El panel se <strong>auto-sincroniza cada 30 s</strong>. El indicador LIVE arriba confirma la conexión activa.</span>'},
+  {e:'📊',t:'Dashboard — Vista General',b:'<p>Resumen en tiempo real de todo lo que pasa en UpGames:</p><ul><li><strong>Usuarios</strong> — totales, nuevos hoy y esta semana</li><li><strong>Items</strong> — aprobados, pendientes y subidos hoy</li><li><strong>Descargas</strong> efectivas acumuladas</li><li><span class="cw">Saldo</span> en circulación y pendiente de pago</li><li>Top Uploaders e items más descargados</li></ul>'},
+  {e:'⏳',t:'Tab Espera — Items Pendientes',b:'<p>Items subidos por usuarios que <strong>aún no revisaste</strong>. Cada tarjeta muestra imagen, título, usuario, categoría y días desde que fue subido.</p><ul><li>✏️ <strong>Editar</strong> — corregir título, link o imagen</li><li>✓ <strong>Aprobar</strong> — lo pone en producción</li><li>🗑 <span class="cr">Eliminar</span> — borra permanentemente</li></ul><span class="tip">⚠️ El punto <span class="cr">rojo</span> en la pestaña indica items sin revisar. No los dejes acumular.</span>'},
+  {e:'✅',t:'Tab Producción — Items Activos',b:'<p>Todos los items <strong>visibles en la app</strong> para los usuarios. Son los que ya aprobaste.</p><p>Desde aquí edita links caídos, actualiza imágenes o elimina contenido que viole normas.</p><span class="tip">💡 Combina la búsqueda global con esta pestaña para encontrar items por título o usuario rápido.</span>'},
+  {e:'☑️',t:'Selección Múltiple (Bulk)',b:'<p>Activa el modo <strong>selección múltiple</strong>. Aparece una casilla en cada item.</p><ul><li><strong>Aprobar varios</strong> items de golpe</li><li><strong>Rechazar varios</strong> simultáneamente</li><li><span class="cr">Eliminar varios</span> en una sola acción</li></ul><span class="tip">💡 Ahorra mucho tiempo cuando hay muchos items pendientes del mismo usuario.</span>'},
+  {e:'💬',t:'Tab Comentarios',b:'<p>Todos los comentarios dejados en los items de la plataforma.</p><p>Puedes <span class="cr">eliminar</span> los que sean spam, ofensivos o que violen normas de comunidad.</p><span class="tip">⚠️ Un comentario negativo no es razón suficiente. Solo elimina spam claro o insultos directos.</span>'},
+  {e:'👥',t:'Tab Usuarios — La Sección Más Importante',b:'<p>Gestiona cada cuenta registrada. Acciones por usuario:</p><ul><li><strong>Verificar</strong> — asignar nivel Bronce / Oro / Élite</li><li><span class="co">Lista negra</span> — bloquear usuario</li><li><span class="cb">Descargas</span> — ver historial completo</li><li><span class="cw">Ajustar saldo</span> — modificar manualmente</li><li><span class="cr">Eliminar cuenta</span> — acción irreversible</li></ul>'},
+  {e:'💰',t:'Tab Pagos',b:'<p>Solicitudes de cobro de usuarios que superaron el umbral mínimo de ganancias por sus descargas.</p><ul><li><strong>CONFIRMAR</strong> — marcar como pagado tras hacer la transferencia</li><li><span class="cr">RECHAZAR</span> — rechazar con motivo (PayPal inválido, etc.)</li></ul><span class="tip">⚠️ <strong>Nunca marques como pagado sin haber enviado el dinero primero.</strong> El historial registra todo.</span>'},
+  {e:'⚠️',t:'Tab Revisión — Links Reportados',b:'<p>Items cuyos links fueron reportados por usuarios como caídos, obsoletos o con malware.</p><ul><li>✅ <strong>Online</strong> — el link funciona, resetea reportes</li><li>❌ <span class="cr">Caído</span> — confirmar que está caído</li><li>🗑 Eliminar todos los reportes sin cambiar estado</li></ul><span class="tip">💡 Verifica el link manualmente antes de marcarlo Online. Si hay reportes de malware, elimina el item.</span>'},
+  {e:'🚨',t:'Tab Fraude — Detección Automática',b:'<p>Detecta <strong>comportamiento sospechoso 24/7</strong> con patrones estadísticos automáticos.</p><ul><li>⚡ Velocidad de descarga anormal</li><li>🌐 IP hopping / uso de VPN</li><li>🤖 Patrones de bot</li><li>📈 <span class="cw">Spike repentino de ganancias</span></li></ul><span class="tip">⚠️ Los marcados como <strong>AUTO-MARCADO</strong> fueron bloqueados automáticamente. Revísalos primero.</span>'},
+  {e:'📋',t:'Tab Reportes de Contenido',b:'<p>Reportes directos de usuarios desde la app. Muestra desglose por motivo: Caído, Obsoleto, Malware.</p><ul><li>✅ <strong>Online</strong> — funciona bien, resetea los reportes</li><li>❌ <span class="cr">Caído</span> — confirmar el estado</li><li>🗑 Eliminar reportes</li></ul><span class="tip">💡 Atiende primero los que tienen <strong>más reportes</strong> — son los que más usuarios vieron caídos.</span>'},
+  {e:'🔒',t:'Seguridad — Tu Sesión Admin',b:'<p>Tu sesión tiene <strong>duración limitada por seguridad</strong>. El temporizador arriba muestra cuánto queda.</p><ul><li>Nunca compartas el <strong>PIN</strong> con nadie</li><li>Cierra sesión al terminar, especialmente en dispositivos ajenos</li><li>Si ves actividad rara, cambia el PIN en el backend</li><li>El botón <strong>"SALIR"</strong> cierra la sesión de forma segura</li></ul>'},
+  {e:'🚀',t:'¡Listo para administrar!',b:'<p>Ya conoces todo el panel. Los 6 puntos clave:</p><ul><li><strong>Dashboard</strong> → panorámica general</li><li><strong>Espera</strong> → aprobar/rechazar items nuevos</li><li><strong>Usuarios</strong> → gestionar cuentas y moderar</li><li><strong>Pagos</strong> → procesar cobros con prioridad</li><li><strong>Fraude</strong> → revisar alertas automáticas cada día</li><li><strong>Revisión/Reportes</strong> → mantener la calidad del contenido</li></ul><span class="tip">❓ Toca <strong>?</strong> abajo a la izquierda para relanzar este tutorial en cualquier momento.</span>'}
+];
+
+var bg=$('tv-bg'),card=$('tv-card'),fill=$('tv-fill'),num=$('tv-num'),
+    ico=$('tv-ico'),ttl=$('tv-title'),bod=$('tv-body'),
+    dots=$('tv-dots'),prev=$('tv-prev'),next=$('tv-next'),fab=$('tv-fab');
+var idx=0,on=false;
+
+function $(id){return document.getElementById(id);}
+
+function draw(){
+  var s=STEPS[idx],tot=STEPS.length;
+  fill.style.width=Math.round((idx+1)/tot*100)+'%';
+  num.textContent=(idx+1)+'/'+tot;
+  ico.textContent=s.e;
+  ttl.textContent=s.t;
+  bod.innerHTML=s.b;
+  bod.scrollTop=0;
+  prev.style.visibility=idx===0?'hidden':'visible';
+  next.textContent=idx===tot-1?'¡Listo! ✓':'Siguiente →';
+  dots.innerHTML='';
+  for(var i=0;i<tot;i++){
+    var d=document.createElement('span');
+    d.className='tvd'+(i===idx?' on':'');
+    dots.appendChild(d);
+  }
+  /* Re-trigger animation */
+  card.classList.remove('on');
+  void card.offsetWidth;
+  card.classList.add('on');
+}
+
+window._tourStart=function(){
+  idx=0;on=true;
+  bg.classList.add('on');
+  card.classList.add('on');
+  fab.style.display='none';
+  document.body.style.overflow='hidden';
+  draw();
+};
+window._tourEnd=function(){
+  on=false;
+  bg.classList.remove('on');
+  card.classList.remove('on');
+  document.body.style.overflow='';
+  fab.style.display='flex';
+  try{sessionStorage.setItem('tour_v1','1');}catch(e){}
+};
+window._tourNext=function(){
+  if(idx<STEPS.length-1){idx++;draw();}else window._tourEnd();
+};
+window._tourPrev=function(){
+  if(idx>0){idx--;draw();}
+};
+
+/* Bloquear toque fuera */
+bg.addEventListener('touchstart',function(e){e.preventDefault();},{passive:false});
+bg.addEventListener('touchmove',function(e){e.preventDefault();},{passive:false});
+bg.addEventListener('click',function(e){e.stopPropagation();},true);
+
+/* Swipe horizontal en la tarjeta */
+var sx=null;
+card.addEventListener('touchstart',function(e){sx=e.touches[0].clientX;},{passive:true});
+card.addEventListener('touchend',function(e){
+  if(sx===null)return;
+  var dx=e.changedTouches[0].clientX-sx;
+  if(Math.abs(dx)>50){if(dx<0)window._tourNext();else window._tourPrev();}
+  sx=null;
+},{passive:true});
+
+/* Teclado */
+document.addEventListener('keydown',function(e){
+  if(!on)return;
+  if(e.key==='ArrowRight'||e.key==='Enter')window._tourNext();
+  if(e.key==='ArrowLeft')window._tourPrev();
+  if(e.key==='Escape')window._tourEnd();
+});
+
+/* Mostrar FAB si ya hizo el tour antes */
+try{if(sessionStorage.getItem('tour_v1'))fab.style.display='flex';}catch(e){}
+})();
+</script>
+<!-- FIN ADMIN TOUR -->
+
+</body>
+</html>
