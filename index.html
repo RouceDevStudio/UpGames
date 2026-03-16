@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UpGames — La Nube de Contenido</title>
+
+    <!-- ╔══════════════════════════════════════════════╗
+         ║  UpGames · SEO & Social Sharing              ║
+         ╚══════════════════════════════════════════════╝ -->
+    <meta name="description" content="Biblioteca digital inteligente indexada por la comunidad. Juegos, mods, apps y software. Monetiza tus aportes y deja que NEXUS IA personalice tu experiencia.">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230a0a0a'/><text y='.9em' font-size='72' x='50%' dominant-baseline='middle' text-anchor='middle'>🎮</text></svg>">
+    <!-- Open Graph -->
+    <meta property="og:type"        content="website">
+    <meta property="og:site_name"   content="UpGames">
+    <meta property="og:url"         content="https://roucedevstudio.github.io/Up_Games/">
+    <meta property="og:title"       content="UpGames — La Nube de Contenido">
+    <meta property="og:description" content="Biblioteca digital inteligente indexada por la comunidad. Juegos, mods, apps y software. Monetiza tus aportes y deja que NEXUS IA personalice tu experiencia.">
+    <meta property="og:image"       content="https://roucedevstudio.github.io/Up_Games/public/og-cover.png">
+    <meta property="og:image:width"  content="1200">
+    <meta property="og:image:height" content="630">
+    <!-- Twitter Card -->
+    <meta name="twitter:card"        content="summary_large_image">
+    <meta name="twitter:title"       content="UpGames — La Nube de Contenido">
+    <meta name="twitter:description" content="Biblioteca digital inteligente indexada por la comunidad. Juegos, mods, apps y software. Monetiza tus aportes y deja que NEXUS IA personalice tu experiencia.">
+    <meta name="twitter:image"       content="https://roucedevstudio.github.io/Up_Games/public/og-cover.png">
+    <!-- WhatsApp / Telegram usan og: tags ↑ automáticamente -->
+    <link rel="preconnect" href="https://unpkg.com">
+    <link rel="preconnect" href="https://backendapp-037y.onrender.com">
+    <style>
+        :root {
+            --primary: #5EFF43;
+            --bg: #0a0a0a;
+            --card: #161616;
+            --text-dim: #666;
+            --danger: #ff4343;
+            --transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: var(--bg);
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            color: white;
+        }
+
+        .form-card {
+            width: 100%;
+            max-width: 400px;
+            padding: 35px;
+            background: var(--card);
+            border-radius: 20px;
+            border: 1px solid #222;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            transition: transform var(--transition);
+            box-sizing: border-box;
+        }
+
+        header { text-align: center; margin-bottom: 30px; }
+        
+        #main-icon { color: var(--primary); font-size: 3rem; margin-bottom: 10px; }
+
+        h2 { 
+            color: var(--primary); 
+            font-size: 1.6rem; 
+            letter-spacing: 2px; 
+            margin: 0; 
+            text-transform: uppercase; 
+        }
+
+        .subtitle { color: var(--text-dim); font-size: 0.85rem; margin-top: 10px; }
+
+        .input-group { margin-top: 20px; }
+        .input-group:first-child { margin-top: 0; }
+
+        label {
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: white;
+            outline: none;
+            box-sizing: border-box;
+            transition: border-color var(--transition), box-shadow var(--transition);
+        }
+
+        input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 8px rgba(94, 255, 67, 0.2);
+        }
+
+        #btnAction {
+            width: 100%;
+            margin-top: 25px;
+            padding: 15px;
+            background: var(--primary);
+            color: black;
+            border: none;
+            border-radius: 8px;
+            font-weight: 900;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: var(--transition);
+        }
+
+        #btnAction:hover:not(:disabled) {
+            filter: brightness(1.1);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(94, 255, 67, 0.3);
+        }
+
+        #btnAction:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        .toggle-container { text-align: center; margin-top: 25px; font-size: 0.8rem; color: #555; }
+        
+        #toggle-mode { color: var(--primary); text-decoration: none; font-weight: bold; cursor: pointer; }
+
+        #msg {
+            text-align: center;
+            font-size: 11px;
+            margin-top: 20px;
+            font-weight: bold;
+            min-height: 1.2em;
+            transition: color 0.2s;
+        }
+
+        /* ⭐ NUEVO: Ocultar campo email en login */
+        .hidden { display: none !important; }
+
+        /* ============================
+           🎓 SISTEMA DE TUTORIAL
+        ============================ */
+        #tutorial-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 900;
+            pointer-events: none;
+        }
+
+        .tutorial-spotlight {
+            position: fixed;
+            border-radius: 10px;
+            box-shadow: 0 0 0 9999px rgba(0,0,0,0.72);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 901;
+            pointer-events: none;
+        }
+
+        .tutorial-tooltip {
+            position: fixed;
+            z-index: 902;
+            background: #161616;
+            border: 1px solid var(--primary);
+            border-radius: 14px;
+            padding: 18px 20px 16px;
+            width: 280px;
+            box-shadow: 0 8px 32px rgba(94,255,67,0.15), 0 2px 8px rgba(0,0,0,0.6);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            pointer-events: all;
+        }
+
+        .tutorial-tooltip::before {
+            content: '';
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: #161616;
+            border: 1px solid var(--primary);
+            transform: rotate(45deg);
+        }
+
+        .tutorial-tooltip.arrow-top::before {
+            top: -7px;
+            left: 30px;
+            border-right: none;
+            border-bottom: none;
+        }
+
+        .tutorial-tooltip.arrow-bottom::before {
+            bottom: -7px;
+            left: 30px;
+            border-left: none;
+            border-top: none;
+        }
+
+        .tutorial-tooltip.arrow-left::before {
+            left: -7px;
+            top: 20px;
+            border-right: none;
+            border-top: none;
+        }
+
+        .tut-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .tut-badge {
+            font-size: 0.65rem;
+            font-weight: 900;
+            letter-spacing: 1.5px;
+            color: var(--primary);
+            background: rgba(94,255,67,0.1);
+            border: 1px solid rgba(94,255,67,0.3);
+            border-radius: 20px;
+            padding: 2px 10px;
+            text-transform: uppercase;
+        }
+
+        .tut-close {
+            background: none;
+            border: none;
+            color: #555;
+            cursor: pointer;
+            font-size: 1.1rem;
+            line-height: 1;
+            padding: 0;
+            transition: color 0.2s;
+        }
+        .tut-close:hover { color: var(--danger); }
+
+        .tut-title {
+            font-size: 0.9rem;
+            font-weight: 800;
+            color: white;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+        }
+
+        .tut-body {
+            font-size: 0.78rem;
+            color: #aaa;
+            line-height: 1.55;
+            margin-bottom: 14px;
+        }
+
+        .tut-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .tut-steps {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .tut-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #333;
+            transition: background 0.3s;
+        }
+        .tut-dot.active { background: var(--primary); }
+
+        .tut-nav {
+            display: flex;
+            gap: 8px;
+        }
+
+        .tut-btn {
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 0.72rem;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            border: none;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+
+        .tut-btn-prev {
+            background: transparent;
+            color: #555;
+            border: 1px solid #333;
+        }
+        .tut-btn-prev:hover { color: white; border-color: #555; }
+
+        .tut-btn-next {
+            background: var(--primary);
+            color: #000;
+        }
+        .tut-btn-next:hover { filter: brightness(1.1); }
+
+        .tut-btn-skip {
+            background: transparent;
+            color: #555;
+            font-size: 0.7rem;
+            border: none;
+            cursor: pointer;
+            padding: 4px 0;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+            transition: color 0.2s;
+        }
+        .tut-btn-skip:hover { color: var(--danger); }
+
+        /* Botón flotante para reiniciar tutorial */
+        #tut-trigger {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 800;
+            background: var(--card);
+            border: 1px solid #333;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--primary);
+            font-size: 1.2rem;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+            transition: all 0.2s;
+        }
+        #tut-trigger:hover {
+            border-color: var(--primary);
+            box-shadow: 0 4px 16px rgba(94,255,67,0.2);
+            transform: scale(1.05);
+        }
+
+        .tut-fade-enter {
+            animation: tutFade 0.35s ease forwards;
+        }
+        @keyframes tutFade {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+
+    <!-- ╔══════════════════════════════════════════════╗
+         ║  UpGames · Configuración Centralizada        ║
+         ║  Edita SOLO este bloque para cambiar URLs    ║
+         ╚══════════════════════════════════════════════╝ -->
+    <script>
+      window.UG_CONFIG = {
+        API_URL    : "https://backendapp-037y.onrender.com",
+        NEXUS_URL  : "https://backendbuscador.onrender.com",
+        NEXUS_DOMAIN: "backendbuscador.onrender.com"
+      };
+    </script>
+</head>
+<body>
+
+    <div id="login-container" class="form-card">
+        <header>
+            <ion-icon id="main-icon" name="game-controller-outline"></ion-icon>
+            <h2 id="form-title">UpGames</h2>
+            <p id="form-subtitle" class="subtitle">Inicia sesión para acceder a tu librería</p>
+        </header>
+
+        <div id="form-content">
+            <div class="input-group">
+                <label for="user">
+                    <ion-icon name="person-circle-outline"></ion-icon> USUARIO O EMAIL
+                </label>
+                <input id="user" type="text" placeholder="Usuario o Email" autocomplete="username" minlength="3">
+            </div>
+
+            <!-- ⭐ NUEVO: Campo de email (solo visible en modo registro) -->
+            <div class="input-group hidden" id="email-group">
+                <label for="email">
+                    <ion-icon name="mail-outline"></ion-icon> CORREO ELECTRÓNICO
+                </label>
+                <input id="email" type="email" placeholder="tucorreo@ejemplo.com" autocomplete="email">
+            </div>
+
+            <div class="input-group">
+                <label for="pass">
+                    <ion-icon name="shield-keyhole-outline"></ion-icon> CONTRASEÑA
+                </label>
+                <input id="pass" type="password" placeholder="••••••••" autocomplete="current-password" minlength="6">
+            </div>
+
+            <button id="btnAction">INICIAR SESIÓN</button>
+
+            <div class="toggle-container">
+                <p>
+                    <span id="switch-text">¿No tienes cuenta?</span> 
+                    <a href="#" id="toggle-mode">Regístrate aquí</a>
+                </p>
+            </div>
+        </div>
+
+        <p id="msg"></p>
+    </div>
+
+    <!-- 🎓 TUTORIAL OVERLAY -->
+    <div id="tutorial-overlay" style="display:none;">
+        <div class="tutorial-spotlight" id="tut-spotlight"></div>
+        <div class="tutorial-tooltip" id="tut-tooltip">
+            <div class="tut-header">
+                <span class="tut-badge" id="tut-badge">Tutorial</span>
+                <button class="tut-close" id="tut-close" title="Cerrar">✕</button>
+            </div>
+            <div class="tut-title" id="tut-title"></div>
+            <div class="tut-body" id="tut-body"></div>
+            <div class="tut-footer">
+                <div class="tut-steps" id="tut-dots"></div>
+                <div class="tut-nav">
+                    <button class="tut-btn tut-btn-prev" id="tut-prev">← Atrás</button>
+                    <button class="tut-btn tut-btn-next" id="tut-next">Siguiente →</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botón de ayuda flotante -->
+    <button id="tut-trigger" title="Ver tutorial">
+        <ion-icon name="help-circle-outline"></ion-icon>
+    </button>
+
+    <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+    <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+
+    <script>
+        const API_URL = window.UG_CONFIG?.API_URL ?? "https://backendapp-037y.onrender.com";
+        const REDIRECT_URL = "./public/biblioteca.html";
+        let isLoginMode = true;
+
+        // Cache de selectores
+        const els = {
+            title: document.getElementById("form-title"),
+            subtitle: document.getElementById("form-subtitle"),
+            btn: document.getElementById("btnAction"),
+            toggle: document.getElementById("toggle-mode"),
+            msg: document.getElementById("msg"),
+            text: document.getElementById("switch-text"),
+            icon: document.getElementById("main-icon"),
+            user: document.getElementById("user"),
+            email: document.getElementById("email"),
+            emailGroup: document.getElementById("email-group"),
+            pass: document.getElementById("pass")
+        };
+
+        window.onload = () => {
+            if (localStorage.getItem("user_admin")) window.location.replace(REDIRECT_URL);
+        };
+
+        // ⭐ TOGGLE ENTRE LOGIN Y REGISTRO
+        els.toggle.onclick = (e) => {
+            e.preventDefault();
+            isLoginMode = !isLoginMode;
+            
+            if (isLoginMode) {
+                // MODO LOGIN
+                els.title.innerText = "UpGames";
+                els.subtitle.innerText = "Inicia sesión para acceder a tu librería";
+                els.btn.innerText = "INICIAR SESIÓN";
+                els.text.innerText = "¿No tienes cuenta?";
+                els.toggle.innerText = "Regístrate aquí";
+                els.icon.name = "game-controller-outline";
+                els.emailGroup.classList.add("hidden");
+                els.user.placeholder = "Email o nombre de usuario";
+            } else {
+                // MODO REGISTRO
+                els.title.innerText = "Crear Cuenta";
+                els.subtitle.innerText = "Únete a la comunidad UpGames";
+                els.btn.innerText = "REGISTRARME";
+                els.text.innerText = "¿Ya tienes cuenta?";
+                els.toggle.innerText = "Inicia sesión aquí";
+                els.icon.name = "person-add-outline";
+                els.emailGroup.classList.remove("hidden");
+                els.user.placeholder = "Usuario (3-20 caracteres)";
+            }
+            
+            els.msg.innerText = "";
+            els.user.value = "";
+            els.email.value = "";
+            els.pass.value = "";
+        };
+
+        // ⭐ FUNCIÓN PRINCIPAL: LOGIN O REGISTRO
+        els.btn.onclick = async () => {
+            const usuario = els.user.value.trim();
+            const password = els.pass.value.trim();
+            const email = els.email.value.trim();
+
+            // Validaciones
+            if (!usuario || !password) {
+                showMsg("⚠️ Completa todos los campos", "#ff4343");
+                return;
+            }
+
+            if (isLoginMode) {
+                // LOGIN (acepta email o usuario)
+                await loginUsuario(usuario, password);
+            } else {
+                // REGISTRO (requiere email)
+                if (!email) {
+                    showMsg("⚠️ El email es obligatorio para registro", "#ff4343");
+                    return;
+                }
+                
+                if (usuario.length < 3 || usuario.length > 20) {
+                    showMsg("⚠️ Usuario debe tener 3-20 caracteres", "#ff4343");
+                    return;
+                }
+                
+                if (password.length < 6) {
+                    showMsg("⚠️ Contraseña debe tener al menos 6 caracteres", "#ff4343");
+                    return;
+                }
+                
+                if (!email.includes('@') || !email.includes('.')) {
+                    showMsg("⚠️ Email inválido", "#ff4343");
+                    return;
+                }
+                
+                await registrarUsuario(usuario, email, password);
+            }
+        };
+
+        // ⭐ FUNCIÓN: LOGIN
+        async function loginUsuario(identificador, password) {
+            setLoading(true);
+            
+            try {
+                const res = await fetch(`${API_URL}/auth/login`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        usuario: identificador, // Puede ser email o nombre
+                        password 
+                    })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    // Guardar datos en localStorage
+                    localStorage.setItem("token", data.token);
+                    localStorage.setItem("user_admin", data.usuario);
+                    localStorage.setItem("email", data.email);
+                    
+                    showMsg("✅ ACCESO CONCEDIDO", "#5EFF43");
+                    setTimeout(() => window.location.replace(REDIRECT_URL), 500);
+                } else {
+                    showMsg("❌ " + (data.error || "Error de credenciales"), "#ff4343");
+                    setLoading(false);
+                }
+            } catch (error) {
+                console.error("Error de conexión:", error);
+                showMsg("⚠️ Servidor despertando, reintente en 10s.", "#ff4343");
+                setLoading(false);
+            }
+        }
+
+        // ⭐ FUNCIÓN: REGISTRO
+        async function registrarUsuario(usuario, email, password) {
+            setLoading(true);
+            
+            try {
+                const res = await fetch(`${API_URL}/auth/register`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        usuario, 
+                        email, 
+                        password 
+                    })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    // Guardar datos en localStorage
+                    localStorage.setItem("token", data.token);
+                    localStorage.setItem("user_admin", data.usuario);
+                    localStorage.setItem("email", data.email);
+                    
+                    showMsg("✅ REGISTRO EXITOSO", "#5EFF43");
+                    setTimeout(() => window.location.replace(REDIRECT_URL), 500);
+                } else {
+                    showMsg("❌ " + (data.error || "Error al registrar"), "#ff4343");
+                    setLoading(false);
+                }
+            } catch (error) {
+                console.error("Error de conexión:", error);
+                showMsg("⚠️ Error de conexión. Intenta nuevamente.", "#ff4343");
+                setLoading(false);
+            }
+        }
+
+        function showMsg(text, color) {
+            els.msg.innerText = text;
+            els.msg.style.color = color;
+        }
+
+        function setLoading(loading) {
+            els.btn.disabled = loading;
+            if (loading) {
+                els.btn.innerText = "CONECTANDO...";
+                showMsg("⏳ Consultando base de datos...", "#5EFF45");
+            } else {
+                els.btn.innerText = isLoginMode ? "INICIAR SESIÓN" : "REGISTRARME";
+            }
+        }
+
+        document.addEventListener("keypress", (e) => {
+            if(e.key === "Enter") els.btn.click();
+        });
+
+        // ============================
+        // 🎓 SISTEMA DE TUTORIAL
+        // ============================
+        const TUTORIAL_KEY = "metadata_tutorial_done";
+
+        // Pasos para LOGIN
+        const stepsLogin = [
+            {
+                target: "#login-container header",
+                title: "👋 ¡Bienvenido a UpGames!",
+                body: "Tu librería digital de Juegos, Apps y Software. Para entrar solo necesitas tu usuario y contraseña. ¡Es muy fácil! Te guiamos paso a paso.",
+                arrow: "arrow-top",
+                position: "below"
+            },
+            {
+                target: "#user",
+                title: "📝 Paso 1: Tu usuario o email",
+                body: "Escribe aquí el nombre de usuario O el correo con el que te registraste. Los dos funcionan. Ejemplo: \"juan123\" o \"juan@gmail.com\"",
+                arrow: "arrow-top",
+                position: "below"
+            },
+            {
+                target: "#pass",
+                title: "🔒 Paso 2: Tu contraseña",
+                body: "Escribe tu contraseña. Si no la recuerdas, contacta al administrador. ¡Cuidado con las mayúsculas!",
+                arrow: "arrow-top",
+                position: "below"
+            },
+            {
+                target: "#btnAction",
+                title: "✅ Paso 3: ¡Entra!",
+                body: "Cuando hayas llenado los campos de arriba, haz clic en este botón (o presiona Enter en el teclado). ¡Listo, ya estás adentro!",
+                arrow: "arrow-top",
+                position: "above"
+            },
+            {
+                target: ".toggle-container",
+                title: "🆕 ¿No tienes cuenta todavía?",
+                body: "Si nunca te has registrado, haz clic en \"Regístrate aquí\" y te ayudamos a crear tu cuenta en segundos.",
+                arrow: "arrow-bottom",
+                position: "above"
+            }
+        ];
+
+        // Pasos para REGISTRO
+        const stepsRegister = [
+            {
+                target: "#login-container header",
+                title: "🎮 ¡Crea tu cuenta en UpGames!",
+                body: "Solo necesitas 3 datos para unirte: un nombre de usuario, tu correo y una contraseña. ¡En menos de un minuto estás adentro!",
+                arrow: "arrow-top",
+                position: "below"
+            },
+            {
+                target: "#user",
+                title: "👤 Paso 1: Elige tu nombre de usuario",
+                body: "Escribe el nombre con el que te conocerán en la plataforma. Debe tener entre 3 y 20 caracteres. Sin espacios. Ejemplo: \"gamer99\" o \"juan_games\"",
+                arrow: "arrow-top",
+                position: "below"
+            },
+            {
+                target: "#email-group",
+                title: "📧 Paso 2: Tu correo electrónico",
+                body: "Escribe tu email real. Lo necesitas para que puedas iniciar sesión después. Ejemplo: \"tucorreo@gmail.com\"",
+                arrow: "arrow-top",
+                position: "below"
+            },
+            {
+                target: "#pass",
+                title: "🔐 Paso 3: Inventa una contraseña",
+                body: "Elige una contraseña que solo tú sepas. Mínimo 6 caracteres. Consejo: mezcla letras y números. Ejemplo: \"games2024\"",
+                arrow: "arrow-top",
+                position: "below"
+            },
+            {
+                target: "#btnAction",
+                title: "🚀 Paso 4: ¡Crea tu cuenta!",
+                body: "¿Ya llenaste todo? Perfecto. Haz clic aquí y tu cuenta quedará lista al instante. Serás redirigido automáticamente.",
+                arrow: "arrow-top",
+                position: "above"
+            }
+        ];
+
+        let tutStep = 0;
+        let tutActive = false;
+
+        const tutOverlay  = document.getElementById("tutorial-overlay");
+        const tutSpot     = document.getElementById("tut-spotlight");
+        const tutTooltip  = document.getElementById("tut-tooltip");
+        const tutTitle    = document.getElementById("tut-title");
+        const tutBody     = document.getElementById("tut-body");
+        const tutBadge    = document.getElementById("tut-badge");
+        const tutDots     = document.getElementById("tut-dots");
+        const tutPrev     = document.getElementById("tut-prev");
+        const tutNext     = document.getElementById("tut-next");
+        const tutClose    = document.getElementById("tut-close");
+        const tutTrigger  = document.getElementById("tut-trigger");
+
+        function getTutSteps() {
+            return isLoginMode ? stepsLogin : stepsRegister;
+        }
+
+        function startTutorial() {
+            tutStep = 0;
+            tutActive = true;
+            tutOverlay.style.display = "block";
+            document.body.style.overflow = "hidden";
+            showTutStep();
+        }
+
+        function endTutorial() {
+            tutActive = false;
+            tutOverlay.style.display = "none";
+            tutSpot.style.cssText = "";
+            document.body.style.overflow = "";
+            localStorage.setItem(TUTORIAL_KEY, isLoginMode ? "login" : "register");
+        }
+
+        function buildDots(steps, current) {
+            tutDots.innerHTML = "";
+            steps.forEach((_, i) => {
+                const d = document.createElement("span");
+                d.className = "tut-dot" + (i === current ? " active" : "");
+                tutDots.appendChild(d);
+            });
+        }
+
+        function showTutStep() {
+            const steps = getTutSteps();
+            const step  = steps[tutStep];
+            const total = steps.length;
+
+            // Badge con contador
+            tutBadge.textContent = `${isLoginMode ? "Login" : "Registro"} · Paso ${tutStep + 1}/${total}`;
+            tutTitle.textContent  = step.title;
+            tutBody.textContent   = step.body;
+
+            buildDots(steps, tutStep);
+
+            // Botones
+            tutPrev.style.display = tutStep === 0 ? "none" : "inline-block";
+            tutNext.textContent   = tutStep === total - 1 ? "Finalizar ✓" : "Siguiente →";
+
+            // Spotlight en el elemento objetivo
+            const targetEl = document.querySelector(step.target);
+            if (targetEl) {
+                const rect = targetEl.getBoundingClientRect();
+                const pad  = 8;
+                tutSpot.style.cssText = `
+                    top: ${rect.top - pad}px;
+                    left: ${rect.left - pad}px;
+                    width: ${rect.width + pad * 2}px;
+                    height: ${rect.height + pad * 2}px;
+                `;
+
+                // Posición del tooltip
+                positionTooltip(rect, step);
+            }
+
+            // Animar tooltip
+            tutTooltip.classList.remove("tut-fade-enter");
+            void tutTooltip.offsetWidth; // reflow
+            tutTooltip.classList.add("tut-fade-enter");
+        }
+
+        function positionTooltip(rect, step) {
+            const TTW = 280 + 40; // tooltip width + margin
+            const TTH = 200;      // approx height
+            const pad = 14;
+
+            // Limpiar clases de flecha anteriores
+            tutTooltip.classList.remove("arrow-top", "arrow-bottom", "arrow-left");
+
+            let top, left;
+
+            if (step.position === "below") {
+                top  = rect.bottom + pad + 8;
+                left = Math.max(10, rect.left - 10);
+                tutTooltip.classList.add("arrow-top");
+            } else {
+                // above
+                top  = rect.top - TTH - pad - 8;
+                left = Math.max(10, rect.left - 10);
+                tutTooltip.classList.add("arrow-bottom");
+            }
+
+            // No salir por la derecha
+            if (left + TTW > window.innerWidth) {
+                left = window.innerWidth - TTW - 10;
+            }
+            // No salir por arriba
+            if (top < 10) {
+                top = rect.bottom + pad + 8;
+                tutTooltip.classList.remove("arrow-bottom");
+                tutTooltip.classList.add("arrow-top");
+            }
+
+            tutTooltip.style.top  = `${top}px`;
+            tutTooltip.style.left = `${left}px`;
+        }
+
+        tutNext.onclick = () => {
+            const steps = getTutSteps();
+            if (tutStep < steps.length - 1) {
+                tutStep++;
+                showTutStep();
+            } else {
+                endTutorial();
+            }
+        };
+
+        tutPrev.onclick = () => {
+            if (tutStep > 0) {
+                tutStep--;
+                showTutStep();
+            }
+        };
+
+        tutClose.onclick  = endTutorial;
+        tutTrigger.onclick = startTutorial;
+
+        // Cuando cambia de modo, si tutorial activo, reiniciar con pasos nuevos
+        const origToggle = els.toggle.onclick;
+        els.toggle.onclick = (e) => {
+            origToggle(e);
+            if (tutActive) {
+                tutStep = 0;
+                setTimeout(showTutStep, 350); // esperar transición
+            }
+        };
+
+        // Mostrar tutorial automáticamente la primera vez
+        window.addEventListener("load", () => {
+            const done = localStorage.getItem(TUTORIAL_KEY);
+            if (!done) {
+                setTimeout(startTutorial, 600);
+            }
+        });
+    </script>
+</body>
+</html>
