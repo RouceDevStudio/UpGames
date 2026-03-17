@@ -4,7 +4,7 @@
 // Mobile-first · App Store style
 // ═══════════════════════════════════════════════════════════
 
-const API_URL = "https://backendapp-037y.onrender.com";
+const API_URL = "https://upgames-production.up.railway.app";
 
 // ── SAFE LOCALSTORAGE (modo incógnito estricto no rompe la app) ──────────
 const LS = {
@@ -946,7 +946,7 @@ function renderProfile() {
 // ═══════════════════════════════════════════════════════════
 // PERFIL INTEGRADO — FULL LOGIC
 // ═══════════════════════════════════════════════════════════
-const PF_API = "https://backendapp-037y.onrender.com";
+const PF_API = "https://upgames-production.up.railway.app";
 let pfUser = null;
 let pfInitialized = false;
 let pfCurrentEditId = null;
