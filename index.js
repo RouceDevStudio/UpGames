@@ -3170,7 +3170,7 @@ function iniciarJobsAutomaticos() {
                 logger.info(`JOB 2 Comentarios: sin basura encontrada`);
             }
         } catch (err) {
-            logger.error(`JOB 2 Error limpiando comentarios:', err.message);
+            logger.error(`JOB 2 Error limpiando comentarios: ${err.message}`);
         }
     }
 
@@ -3203,7 +3203,7 @@ function iniciarJobsAutomaticos() {
                 logger.info('JOB 3 Reportes: ningún juego necesitaba reset');
             }
         } catch (err) {
-            logger.error(`JOB 3 Error reseteando reportes:', err.message);
+            logger.error(`JOB 3 Error reseteando reportes: ${err.message}`);
         }
     }
 
@@ -3238,7 +3238,7 @@ function iniciarJobsAutomaticos() {
                 logger.info('JOB 4 Pendientes: no hay items expirados');
             }
         } catch (err) {
-            logger.error(`JOB 4 Error en auto-rechazo:', err.message);
+            logger.error(`JOB 4 Error en auto-rechazo: ${err.message}`);
         }
     }
 
@@ -3270,7 +3270,7 @@ function iniciarJobsAutomaticos() {
                 logger.info(`JOB 5 Links: ningún link requirió auto-marcar`);
             }
         } catch (err) {
-            logger.error(`JOB 5 Error marcando links caídos:', err.message);
+            logger.error(`JOB 5 Error marcando links caídos: ${err.message}`);
         }
     }
 
@@ -3340,7 +3340,7 @@ function iniciarJobsAutomaticos() {
                 logger.info(`JOB 6 Verificación: todos los niveles están al día`);
             }
         } catch (err) {
-            logger.error(`JOB 6 Error en auto-verificación:', err.message);
+            logger.error(`JOB 6 Error en auto-verificación: ${err.message}`);
         }
     }
 
@@ -3365,7 +3365,7 @@ function iniciarJobsAutomaticos() {
             
             logger.info(`JOB 7 Scores: ${procesados} publicaciones recalculadas`);
         } catch (err) {
-            logger.error(`JOB 7 Error recalculando scores:', err.message);
+            logger.error(`JOB 7 Error recalculando scores: ${err.message}`);
         }
     }
 
