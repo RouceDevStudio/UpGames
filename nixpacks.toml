@@ -1,8 +1,12 @@
 [setup]
-pkgs = ["nodejs_20", "python311"]
+# Aquí obligamos a instalar Node, Python y Pip explícitamente
+pkgs = ["nodejs_22", "python311", "python311Packages.pip"]
 
 [install]
-cmds = ["npm install"] # Eliminamos la parte de pip porque ya no hay requirements.txt
+# Instalamos Node normalmente. 
+# Si no tienes requirements.txt, este comando no fallará.
+cmds = ["npm install"]
 
 [start]
+# Tu comando para iniciar el servidor
 cmd = "node index.js"
