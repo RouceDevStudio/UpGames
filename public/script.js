@@ -47,7 +47,7 @@ let currentObserver = null;
   setTimeout(() => { if(!closed) fill.style.width='75%'; }, 700);
 
   function afterPreloader() {
-    if(LS.get('upgames_terms_version')==='2026.C' && !LS.get('upgames_onboarding_done')) {
+    if(LS.getJSON('upgames_terms_seen_ts') && !LS.get('upgames_onboarding_done')) {
       setTimeout(startTutorial, 600);
     }
   }
@@ -1663,8 +1663,9 @@ document.addEventListener('keydown', e => {
 
 // ── ONBOARDING MODAL — 5 slides + términos ───────────────
 (function initOnboarding() {
-  const TERMS_VER = '2026.C';
-  if (LS.get('upgames_terms_version') === TERMS_VER) return; // ya visto
+  const WEEK_MS = 7 * 24 * 60 * 60 * 1000; // 1 semana en ms
+  const lastSeen = LS.getJSON('upgames_terms_seen_ts');
+  if (lastSeen && (Date.now() - lastSeen) < WEEK_MS) return; // visto hace menos de 1 semana
 
   const modal   = document.getElementById('onboarding-modal');
   const track   = document.getElementById('ob-track');
@@ -1744,7 +1745,7 @@ document.addEventListener('keydown', e => {
 
   // Botón Aceptar (slide 5)
   btnAccept.addEventListener('click', () => {
-    LS.set('upgames_terms_version', TERMS_VER);
+    LS.setJSON('upgames_terms_seen_ts', Date.now());
     modal.classList.remove('show');
     document.body.style.overflow = '';
     if (!LS.get('upgames_onboarding_done')) setTimeout(startTutorial, 600);
