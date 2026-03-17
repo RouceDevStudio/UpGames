@@ -2278,7 +2278,7 @@ if(document.readyState==='loading'){
 //  NEXUS puede ver lo que el usuario hace y actuar sobre el feed
 // ══════════════════════════════════════════════════════════════════
 
-const NEXUS_URL = 'https://backendbuscador.onrender.com';
+const NEXUS_URL = 'https://nexus-production-781b.up.railway.app';
 
 // ── 1. TRACKER DE EVENTOS ────────────────────────────────
 // Envía eventos de comportamiento a NEXUS silenciosamente
@@ -2439,7 +2439,7 @@ function nexusAplicarPerfil(perfil) {
 // NEXUS puede mandar instrucciones desde el widget al feed
 window.addEventListener('message', function(event) {
   // Solo aceptar mensajes del iframe de NEXUS
-  if (!event.origin.includes('backendbuscador.onrender.com')) return;
+  if (!event.origin.includes('nexus-production-781b.up.railway.app')) return;
   const msg = event.data;
   if (!msg || typeof msg !== 'object') return;
 
@@ -2527,7 +2527,7 @@ window.nxToggle = function() {
           })),
           categoriaActiva: activeCategory || null,
           busquedaActiva:  document.getElementById('buscador')?.value?.trim() || null
-        }, 'https://backendbuscador.onrender.com');
+        }, 'https://nexus-production-781b.up.railway.app');
 
         // (2) Pedir mensaje proactivo — solo la primera vez en esta pestaña
         if (!_nxSessionGreeted) {
@@ -2536,7 +2536,7 @@ window.nxToggle = function() {
             try {
               frame.contentWindow.postMessage(
                 { type: 'NX_REQUEST_PROACTIVE' },
-                'https://backendbuscador.onrender.com'
+                'https://nexus-production-781b.up.railway.app'
               );
             } catch(_) {}
           }, 600);
@@ -2554,7 +2554,7 @@ window.nxToggle = function() {
 
 // ── Escuchar respuesta proactiva de NEXUS y mostrar badge en el FAB ─
 window.addEventListener('message', function _nxProactiveReceiver(event) {
-  if (!event.origin.includes('backendbuscador.onrender.com')) return;
+  if (!event.origin.includes('nexus-production-781b.up.railway.app')) return;
   const msg = event.data;
   if (!msg || typeof msg !== 'object') return;
   if (msg.type === 'NX_PROACTIVE_SENT' && msg.message) {
