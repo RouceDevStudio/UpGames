@@ -141,6 +141,9 @@ app.use(helmet({
 // CORS - DOMINIOS PERMITIDOS (desde config centralizado)
 const allowedOrigins = config.ALLOWED_ORIGINS;
 
+// Preflight CORS: responder OPTIONS en todas las rutas
+app.options('*', cors());
+
 app.use(cors({
     origin: (origin, callback) => {
         // Permitir requests sin origin siempre (GitHub Pages, apps móviles, Postman)
@@ -3079,7 +3082,6 @@ app.get('/', (req, res) => {
             'Detección automática de fraude',
             'Auto-marcación en lista negra',
             'Análisis de comportamiento en tiempo real',
-            '⚙️ NUEVO: Auto-ping anti-sleep (cada 14 min)',
             '⚙️ NUEVO: Limpieza de comentarios (cada 24h)',
             '⚙️ NUEVO: Reset de reportes confirmados (cada 12h)',
             '⚙️ NUEVO: Auto-rechazo de pendientes +7 días (cada 24h)',
@@ -3107,24 +3109,6 @@ app.use((err, req, res, next) => {
 // ============================================================
 
 function iniciarJobsAutomaticos() {
-
-    // ----------------------------------------------------------
-    // JOB 1: AUTO-PING (cada 14 minutos)
-    // Evita que Render duerma el servidor.
-    // Se hace al propio endpoint / del servidor.
-    // ----------------------------------------------------------
-    const SELF_URL = process.env.RENDER_EXTERNAL_URL || `http://localhost:${process.env.PORT || 10000}`;
-
-    setInterval(async () => {
-        try {
-            const res = await fetch(`${SELF_URL}/`);
-            logger.info(`Auto-ping OK [${new Date().toLocaleTimeString('es-ES')}] - Status: ${res.status}`);
-        } catch (err) {
-            logger.warn(`Auto-ping falló: ${err.message}`);
-        }
-    }, 14 * 60 * 1000); // 14 minutos
-
-    logger.info('JOB 1: Auto-ping activo (cada 14 min)');
 
     // ----------------------------------------------------------
     // JOB 2: LIMPIAR COMENTARIOS VACÍOS Y DUPLICADOS (cada 24h)
