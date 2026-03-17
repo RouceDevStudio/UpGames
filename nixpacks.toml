@@ -1,8 +1,8 @@
-[phases.setup]
-nixPkgs = ["nodejs_20", "python311"]
+[setup]
+pkgs = ["nodejs_20", "python311"]
 
-[phases.install]
-cmds = ["npm install", "pip install -r requirements.txt --break-system-packages"]
+[install]
+cmds = ["npm install"] # Eliminamos la parte de pip porque ya no hay requirements.txt
 
 [start]
 cmd = "node index.js"
