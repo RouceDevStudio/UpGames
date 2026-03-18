@@ -525,6 +525,75 @@
             }
             // Reset de contraseña
             if (_resetToken) _showResetPanel();
+
+            // ── Asignar eventos de forgot/reset DENTRO de onload (DOM garantizado) ──
+            const forgotLink = document.getElementById('forgot-link');
+            const backToLogin = document.getElementById('back-to-login');
+            const forgotBtn = document.getElementById('forgot-btn');
+            const resetBtn = document.getElementById('reset-btn');
+
+            if (forgotLink) forgotLink.onclick = (e) => {
+                e.preventDefault();
+                _mainForm.style.display = 'none';
+                _forgotLinkWrap.style.display = 'none';
+                _forgotPanel.style.display = 'block';
+                els.msg.innerText = '';
+            };
+            if (backToLogin) backToLogin.onclick = (e) => {
+                e.preventDefault();
+                _mainForm.style.display = 'block';
+                _forgotLinkWrap.style.display = 'block';
+                _forgotPanel.style.display = 'none';
+                els.msg.innerText = '';
+            };
+            if (forgotBtn) forgotBtn.onclick = async () => {
+                const email = document.getElementById('forgot-email').value.trim();
+                if (!email) { showMsg('⚠️ Ingresa tu email', '#ff4343'); return; }
+                forgotBtn.disabled = true; forgotBtn.innerText = 'ENVIANDO...';
+                showMsg('⏳ Procesando...', '#a0a0b8');
+                try {
+                    await fetch(`${API_URL}/auth/forgot-password`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email })
+                    });
+                    showMsg('📧 Si el email está registrado, recibirás el link en tu correo.', '#5EFF43');
+                } catch (_) { showMsg('⚠️ Error de conexión. Intenta nuevamente.', '#ff4343'); }
+                forgotBtn.disabled = false; forgotBtn.innerText = 'ENVIAR LINK DE RECUPERACIÓN';
+            };
+            if (resetBtn) resetBtn.onclick = async () => {
+                const p1 = document.getElementById('new-pass').value.trim();
+                const p2 = document.getElementById('new-pass2').value.trim();
+                if (!p1 || p1.length < 6) { showMsg('⚠️ Mínimo 6 caracteres', '#ff4343'); return; }
+                if (p1 !== p2) { showMsg('⚠️ Las contraseñas no coinciden', '#ff4343'); return; }
+                resetBtn.disabled = true; resetBtn.innerText = 'ACTUALIZANDO...';
+                showMsg('⏳ Procesando...', '#a0a0b8');
+                try {
+                    const res = await fetch(`${API_URL}/auth/reset-password`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ token: _resetToken, password: p1 })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        showMsg('✅ Contraseña actualizada. Ya puedes iniciar sesión.', '#5EFF43');
+                        setTimeout(() => {
+                            _resetPanel.style.display = 'none';
+                            _mainForm.style.display = 'block';
+                            _forgotLinkWrap.style.display = 'block';
+                            els.title.innerText = 'UpGames';
+                            els.subtitle.innerText = 'Inicia sesión para acceder a tu librería';
+                            showMsg('', '');
+                        }, 2500);
+                    } else {
+                        showMsg('❌ ' + (data.error || 'Link inválido o expirado.'), '#ff4343');
+                        resetBtn.disabled = false; resetBtn.innerText = 'ACTUALIZAR CONTRASEÑA';
+                    }
+                } catch (_) {
+                    showMsg('⚠️ Error de conexión. Intenta nuevamente.', '#ff4343');
+                    resetBtn.disabled = false; resetBtn.innerText = 'ACTUALIZAR CONTRASEÑA';
+                }
+            };
         };
 
         // ⭐ TOGGLE ENTRE LOGIN Y REGISTRO
@@ -698,36 +767,7 @@
         });
 
         // ── OLVIDÉ MI CONTRASEÑA ──────────────────────────
-        document.getElementById('forgot-link').onclick = (e) => {
-            e.preventDefault();
-            _mainForm.style.display = 'none';
-            _forgotLinkWrap.style.display = 'none';
-            _forgotPanel.style.display = 'block';
-            els.msg.innerText = '';
-        };
-        document.getElementById('back-to-login').onclick = (e) => {
-            e.preventDefault();
-            _mainForm.style.display = 'block';
-            _forgotLinkWrap.style.display = 'block';
-            _forgotPanel.style.display = 'none';
-            els.msg.innerText = '';
-        };
-        document.getElementById('forgot-btn').onclick = async () => {
-            const email = document.getElementById('forgot-email').value.trim();
-            if (!email) { showMsg('⚠️ Ingresa tu email', '#ff4343'); return; }
-            const btn = document.getElementById('forgot-btn');
-            btn.disabled = true; btn.innerText = 'ENVIANDO...';
-            showMsg('⏳ Procesando...', '#a0a0b8');
-            try {
-                await fetch(`${API_URL}/auth/forgot-password`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email })
-                });
-                showMsg('📧 Si el email está registrado, recibirás el link en tu correo.', '#5EFF43');
-            } catch (_) { showMsg('⚠️ Error de conexión. Intenta nuevamente.', '#ff4343'); }
-            btn.disabled = false; btn.innerText = 'ENVIAR LINK DE RECUPERACIÓN';
-        };
+        // Eventos asignados dentro de window.onload
 
         // ── RESET DE CONTRASEÑA (desde link del email) ─────
         function _showResetPanel() {
@@ -738,40 +778,7 @@
             els.title.innerText = 'Nueva contraseña';
             els.subtitle.innerText = 'Crea una contraseña nueva para tu cuenta';
         }
-        document.getElementById('reset-btn').onclick = async () => {
-            const p1 = document.getElementById('new-pass').value.trim();
-            const p2 = document.getElementById('new-pass2').value.trim();
-            if (!p1 || p1.length < 6) { showMsg('⚠️ Mínimo 6 caracteres', '#ff4343'); return; }
-            if (p1 !== p2) { showMsg('⚠️ Las contraseñas no coinciden', '#ff4343'); return; }
-            const btn = document.getElementById('reset-btn');
-            btn.disabled = true; btn.innerText = 'ACTUALIZANDO...';
-            showMsg('⏳ Procesando...', '#a0a0b8');
-            try {
-                const res = await fetch(`${API_URL}/auth/reset-password`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ token: _resetToken, password: p1 })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    showMsg('✅ Contraseña actualizada. Ya puedes iniciar sesión.', '#5EFF43');
-                    setTimeout(() => {
-                        _resetPanel.style.display = 'none';
-                        _mainForm.style.display = 'block';
-                        _forgotLinkWrap.style.display = 'block';
-                        els.title.innerText = 'UpGames';
-                        els.subtitle.innerText = 'Inicia sesión para acceder a tu librería';
-                        showMsg('', '');
-                    }, 2500);
-                } else {
-                    showMsg('❌ ' + (data.error || 'Link inválido o expirado.'), '#ff4343');
-                    btn.disabled = false; btn.innerText = 'ACTUALIZAR CONTRASEÑA';
-                }
-            } catch (_) {
-                showMsg('⚠️ Error de conexión. Intenta nuevamente.', '#ff4343');
-                btn.disabled = false; btn.innerText = 'ACTUALIZAR CONTRASEÑA';
-            }
-        };
+
 
         // ── REGISTRO: mostrar aviso de verificación ─────────
         async function registrarUsuario(usuario, email, password) {
