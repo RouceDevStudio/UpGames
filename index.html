@@ -424,28 +424,30 @@
                 </p>
             </div>
 
-            <!-- Panel: olvidé contraseña -->
-            <div id="forgot-panel" style="display:none">
-                <div class="input-group">
-                    <label for="forgot-email"><ion-icon name="mail-outline"></ion-icon> TU EMAIL REGISTRADO</label>
-                    <input id="forgot-email" type="email" placeholder="tucorreo@ejemplo.com" autocomplete="email">
-                </div>
-                <button id="forgot-btn" style="width:100%;padding:12px;background:rgba(94,255,67,.12);border:1px solid rgba(94,255,67,.3);border-radius:8px;color:#5EFF43;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;letter-spacing:.05em;margin-bottom:8px">ENVIAR LINK DE RECUPERACIÓN</button>
-                <p style="text-align:center"><a href="#" id="back-to-login" style="font-size:12px;color:#a0a0b8;text-decoration:none">← Volver al login</a></p>
-            </div>
 
-            <!-- Panel: nueva contraseña (desde link de email) -->
-            <div id="reset-panel" style="display:none">
-                <div class="input-group">
-                    <label for="new-pass"><ion-icon name="shield-keyhole-outline"></ion-icon> NUEVA CONTRASEÑA</label>
-                    <input id="new-pass" type="password" placeholder="Mínimo 6 caracteres" minlength="6">
-                </div>
-                <div class="input-group">
-                    <label for="new-pass2"><ion-icon name="shield-checkmark-outline"></ion-icon> CONFIRMAR CONTRASEÑA</label>
-                    <input id="new-pass2" type="password" placeholder="Repite la contraseña" minlength="6">
-                </div>
-                <button id="reset-btn" style="width:100%;padding:12px;background:rgba(94,255,67,.12);border:1px solid rgba(94,255,67,.3);border-radius:8px;color:#5EFF43;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;letter-spacing:.05em">ACTUALIZAR CONTRASEÑA</button>
+        </div>
+
+        <!-- Panel: olvidé contraseña — FUERA de form-content para no quedar oculto -->
+        <div id="forgot-panel" style="display:none">
+            <div class="input-group">
+                <label for="forgot-email"><ion-icon name="mail-outline"></ion-icon> TU EMAIL REGISTRADO</label>
+                <input id="forgot-email" type="email" placeholder="tucorreo@ejemplo.com" autocomplete="email">
             </div>
+            <button id="forgot-btn" style="width:100%;padding:12px;background:rgba(94,255,67,.12);border:1px solid rgba(94,255,67,.3);border-radius:8px;color:#5EFF43;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;letter-spacing:.05em;margin-bottom:8px">ENVIAR LINK DE RECUPERACIÓN</button>
+            <p style="text-align:center"><a href="#" id="back-to-login" style="font-size:12px;color:#a0a0b8;text-decoration:none">← Volver al login</a></p>
+        </div>
+
+        <!-- Panel: nueva contraseña — FUERA de form-content -->
+        <div id="reset-panel" style="display:none">
+            <div class="input-group">
+                <label for="new-pass"><ion-icon name="shield-keyhole-outline"></ion-icon> NUEVA CONTRASEÑA</label>
+                <input id="new-pass" type="password" placeholder="Mínimo 6 caracteres" minlength="6">
+            </div>
+            <div class="input-group">
+                <label for="new-pass2"><ion-icon name="shield-checkmark-outline"></ion-icon> CONFIRMAR CONTRASEÑA</label>
+                <input id="new-pass2" type="password" placeholder="Repite la contraseña" minlength="6">
+            </div>
+            <button id="reset-btn" style="width:100%;padding:12px;background:rgba(94,255,67,.12);border:1px solid rgba(94,255,67,.3);border-radius:8px;color:#5EFF43;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;letter-spacing:.05em">ACTUALIZAR CONTRASEÑA</button>
         </div>
 
         <p id="msg"></p>
