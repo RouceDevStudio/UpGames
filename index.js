@@ -1215,7 +1215,12 @@ app.post('/economia/validar-descarga', [
             descargaContada: true,
             link: juego.link,
             descargasEfectivas: juego.descargasEfectivas,
-            mensaje: "Descarga válida y contada"
+            mensaje: "Descarga válida y contada",
+            // Metadata del juego para que puente.html notifique a NEXUS con datos completos
+            title:    juego.title    || '',
+            category: juego.category || '',
+            tags:     juego.tags     || [],
+            usuario:  juego.usuario  || ''
         });
 
     } catch (error) {
@@ -1400,45 +1405,7 @@ app.put('/economia/actualizar-paypal', [
 });
 
 // ⭐ RUTA LEGACY: Mantener compatibilidad con tu código anterior
-app.put('/usuarios/configurar-paypal', verificarToken, async (req, res) => {
-    try {
-        const { paypalEmail } = req.body;
-        const usuarioLogueado = req.userTokenData.usuario;
 
-        if (!paypalEmail || !paypalEmail.includes('@')) {
-            return res.status(400).json({ success: false, error: "Email de PayPal inválido" });
-        }
-
-        const user = await Usuario.findOneAndUpdate(
-            { usuario: usuarioLogueado.toLowerCase() },
-            { $set: { paypalEmail: paypalEmail.toLowerCase().trim() } },
-            { new: true }
-        );
-
-        if (!user) {
-            return res.status(404).json({ success: false, error: "Usuario no encontrado" });
-        }
-
-        logger.info(`PayPal actualizado para: @${usuarioLogueado} -> ${paypalEmail}`);
-
-        res.json({ 
-            success: true, 
-            msg: "PayPal actualizado correctamente",
-            paypalEmail: user.paypalEmail 
-        });
-    } catch (error) {
-        logger.error();
-        res.status(500).json({ success: false, error: "Error de servidor al guardar PayPal" });
-    }
-});
-
-// ==========================================
-// ⭐⭐⭐ RUTAS DE ADMIN - FINANZAS
-// ==========================================
-
-/**
- * ⭐ Obtener todas las solicitudes de pago pendientes (ADMIN)
- */
 app.get('/admin/finanzas/solicitudes-pendientes', verificarAdmin, async (req, res) => {
     try {
         const solicitudes = await Pago.find({ estado: 'pendiente' })
@@ -3352,6 +3319,60 @@ app.get('/notificaciones/count/:usuario', verificarToken, async (req, res) => {
         res.json({ success: true, noLeidas });
     } catch (err) {
         res.status(500).json({ success: false, error: 'Error' });
+    }
+});
+
+// ========== POST /notificaciones — Crear notificación social ==========
+/**
+ * POST /notificaciones
+ * Crea una notificación para un usuario (favorito, comentario, etc.)
+ * No requiere auth — fire & forget desde el frontend
+ */
+app.post('/notificaciones', async (req, res) => {
+    try {
+        const { usuario, tipo, emisor, itemId, itemTitle, itemImage, mensaje } = req.body;
+        if (!usuario || !tipo) {
+            return res.status(400).json({ success: false, error: 'usuario y tipo requeridos' });
+        }
+        const notif = new Notificacion({
+            destinatario: usuario,
+            tipo:         tipo || 'sistema',
+            emisor:       emisor || '',
+            itemId:       itemId || '',
+            itemTitle:    itemTitle || '',
+            itemImage:    itemImage || '',
+            leida:        false,
+            fecha:        new Date()
+        });
+        await notif.save();
+        res.json({ success: true });
+    } catch (err) {
+        logger.error(`Error creando notificación: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error interno' });
+    }
+});
+
+// ========== GET /usuarios/stats-seguimiento ==========
+/**
+ * GET /usuarios/stats-seguimiento/:usuario
+ * Devuelve conteo de seguidores y siguiendo de forma eficiente
+ */
+app.get('/usuarios/stats-seguimiento/:usuario', async (req, res) => {
+    try {
+        const { usuario } = req.params;
+        const user = await Usuario.findOne({ usuario })
+            .select('listaSeguidores siguiendo').lean();
+        if (!user) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+        res.json({
+            success: true,
+            stats: {
+                seguidores: user.listaSeguidores ? user.listaSeguidores.length : 0,
+                siguiendo:  user.siguiendo       ? user.siguiendo.length       : 0
+            }
+        });
+    } catch (err) {
+        logger.error(`Error en stats-seguimiento: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error interno' });
     }
 });
 
