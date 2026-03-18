@@ -1639,9 +1639,13 @@ async function pfLogout() {
     okDanger: true
   });
   if(!ok) return;
-  ['user_admin','token','RefreshToken','user_avatar','user_verified','user_rol'].forEach(k => LS.remove(k));
+  ['user_admin','token','RefreshToken','user_avatar','user_verified','user_rol',
+   'upgames_items_cache','upgames_users_cache'].forEach(k => LS.remove(k));
+  // Limpiar caché del navegador para esta página
+  try { localStorage.clear(); } catch(_) {}
   toast('👋 Sesión cerrada');
-  setTimeout(()=>{ location.href='./index.html'; }, 800);
+  // replace() elimina biblioteca.html del historial — el botón "atrás" no puede regresar
+  setTimeout(()=>{ location.replace('../index.html'); }, 800);
 }
 
 // Close modals on overlay click

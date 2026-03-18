@@ -1,6 +1,21 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    <!-- No cachear esta página — fuerza re-validación de sesión en cada visita -->
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <script>
+      // Guardia de autenticación — ejecuta ANTES de que cargue cualquier otra cosa
+      (function() {
+        var user  = localStorage.getItem('user_admin');
+        var token = localStorage.getItem('token');
+        if (!user || !token) {
+          // Redirigir SIN dejar biblioteca en el historial
+          location.replace('../index.html');
+        }
+      })();
+    </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#07070f">
