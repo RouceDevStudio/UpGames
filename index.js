@@ -707,7 +707,7 @@ const NotificacionSchema = new mongoose.Schema({
     destinatario: { type: String, required: true, index: true }, // usuario que recibe
     tipo: {
         type: String,
-        enum: ['nueva_publicacion'],
+        enum: ['nueva_publicacion', 'favorito', 'descarga', 'sistema', 'comentario'],
         required: true
     },
     emisor: { type: String, required: true },         // usuario que publicó
@@ -1702,7 +1702,7 @@ app.put('/admin/links/marcar-caido/:id', verificarAdmin, [
         });
 
     } catch (error) {
-        logger.error();
+        logger.error(`Error: ${error?.message || err?.message || "unknown"}`);
         res.status(500).json({ success: false, error: "Error al marcar link como caído" });
     }
 });
@@ -1822,7 +1822,7 @@ app.post('/auth/register', [
         });
 
     } catch (error) {
-        logger.error();
+        logger.error(`Error: ${error?.message || err?.message || "unknown"}`);
         res.status(500).json({ success: false, error: "Error al registrar usuario" });
     }
 });
@@ -1896,7 +1896,7 @@ app.post('/auth/login', [
         });
 
     } catch (error) {
-        logger.error();
+        logger.error(`Error: ${error?.message || err?.message || "unknown"}`);
         res.status(500).json({ success: false, error: "Error al iniciar sesión" });
     }
 });
@@ -1979,7 +1979,7 @@ app.get('/admin/stats/dashboard', verificarAdmin, async (req, res) => {
             }
         });
     } catch (error) {
-        logger.error();
+        logger.error(`Error: ${error?.message || err?.message || "unknown"}`);
         res.status(500).json({ success: false, error: "Error al cargar dashboard" });
     }
 });
@@ -2217,7 +2217,7 @@ app.put("/admin/items/:id", verificarAdmin, [
         logger.info(`ADMIN: Item ${item._id} actualizado`);
         res.json({ success: true, item });
     } catch (error) {
-        logger.error();
+        logger.error(`Error: ${error?.message || err?.message || "unknown"}`);
         res.status(500).json({ success: false, error: "Error al actualizar item" });
     }
 });
@@ -2240,7 +2240,7 @@ app.get("/admin/items", verificarAdmin, async (req, res) => {
             items: itemsWithInfo
         });
     } catch (error) {
-        logger.error();
+        logger.error(`Error: ${error?.message || err?.message || "unknown"}`);
         res.status(500).json({ success: false, error: "Error al obtener items" });
     }
 });
@@ -2371,7 +2371,7 @@ app.put("/items/report/:id", [
             motivoReportado: motivo
         });
     } catch (error) { 
-        logger.error();
+        logger.error(`Error: ${error?.message || err?.message || "unknown"}`);
         res.status(500).json({ 
             success: false,
             error: "Error al reportar" 
@@ -2408,7 +2408,7 @@ app.get("/items/reportes/:id", async (req, res) => {
             reportes: reportesDetallados
         });
     } catch (error) {
-        logger.error();
+        logger.error(`Error: ${error?.message || err?.message || "unknown"}`);
         res.status(500).json({ success: false, error: "Error al obtener reportes" });
     }
 });
@@ -2429,7 +2429,7 @@ app.get("/items/mis-reportes/:usuario", async (req, res) => {
             publicaciones: juegosConReportes
         });
     } catch (error) {
-        logger.error();
+        logger.error(`Error: ${error?.message || err?.message || "unknown"}`);
         res.status(500).json({ success: false, error: "Error" });
     }
 });
@@ -2479,9 +2479,9 @@ app.get("/items/user/:usuario", async (req, res) => {
 });
 
 app.post("/items/add", [
+    verificarToken,
     body('title').notEmpty().trim().isLength({ max: 200 }),
-    body('link').notEmpty().trim(),
-    body('usuario').optional().trim()
+    body('link').notEmpty().trim()
 ], async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -2492,8 +2492,10 @@ app.post("/items/add", [
             });
         }
 
+        // Usar el usuario del token — no confiar en el body
         const nuevoJuego = new Juego({ 
-            ...req.body, 
+            ...req.body,
+            usuario: req.usuario,  // sobreescribir con el token
             status: "pendiente",
             linkStatus: "online"
         });
@@ -2535,7 +2537,7 @@ app.post("/items/add", [
             id: nuevoJuego._id
         });
     } catch (error) { 
-        logger.error();
+        logger.error(`Error: ${error?.message || err?.message || "unknown"}`);
         res.status(500).json({ 
             success: false,
             error: "Error al guardar aporte" 
@@ -2589,7 +2591,7 @@ app.put("/items/:id", verificarToken, [
         res.json({ success: true, item: updated });
 
     } catch (error) {
-        logger.error();
+        logger.error(`Error: ${error?.message || err?.message || "unknown"}`);
         res.status(500).json({ success: false, error: "Error al actualizar publicación" });
     }
 });
@@ -2770,7 +2772,7 @@ app.get('/items/recomendados/:usuario', async (req, res) => {
         });
 
     } catch (error) {
-        logger.error();
+        logger.error(`Error: ${error?.message || err?.message || "unknown"}`);
         res.status(500).json({ success: false, error: 'Error al obtener recomendaciones' });
     }
 });
@@ -2981,7 +2983,7 @@ app.get('/usuarios/verifica-seguimiento/:actual/:viendo', async (req, res) => {
     }
 });
 
-app.put('/usuarios/toggle-seguir/:actual/:objetivo', async (req, res) => {
+app.put('/usuarios/toggle-seguir/:actual/:objetivo', verificarToken, async (req, res) => {
     try {
         const actual = req.params.actual.toLowerCase();
         const objetivo = req.params.objetivo.toLowerCase();
@@ -3022,34 +3024,39 @@ app.put('/usuarios/toggle-seguir/:actual/:objetivo', async (req, res) => {
 });
 
 app.put('/usuarios/update-avatar', [
-    body('usuario').notEmpty(),
-    body('avatarUrl').notEmpty()
+    verificarToken,
+    body('avatarUrl').optional(),
+    body('nuevaFoto').optional()
 ], async (req, res) => {
     try {
-        const { usuario, avatarUrl } = req.body;
+        // Acepta tanto 'avatarUrl' como 'nuevaFoto' para compatibilidad
+        const avatarUrl = req.body.avatarUrl || req.body.nuevaFoto;
+        if (!avatarUrl) return res.status(400).json({ success: false, error: 'URL de avatar requerida' });
         await Usuario.updateOne(
-            { usuario: usuario.toLowerCase() },
+            { usuario: req.usuario.toLowerCase() },
             { $set: { avatar: avatarUrl } }
         );
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ success: false, error: "Error al actualizar avatar" });
+        logger.error(`Error en update-avatar: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error al actualizar avatar' });
     }
 });
 
 app.put('/usuarios/update-bio', [
-    body('usuario').notEmpty(),
+    verificarToken,
     body('bio').isLength({ max: 200 })
 ], async (req, res) => {
     try {
-        const { usuario, bio } = req.body;
+        const { bio } = req.body;
         await Usuario.updateOne(
-            { usuario: usuario.toLowerCase() },
-            { $set: { bio } }
+            { usuario: req.usuario.toLowerCase() },
+            { $set: { bio: bio || '' } }
         );
         res.json({ success: true });
     } catch (err) {
-        res.status(500).json({ success: false, error: "Error al actualizar bio" });
+        logger.error(`Error en update-bio: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error al actualizar bio' });
     }
 });
 
@@ -3075,21 +3082,24 @@ app.get('/comentarios/:itemId', async (req, res) => {
 });
 
 app.post('/comentarios', [
+    verificarToken,
     body('itemId').notEmpty(),
-    body('usuario').notEmpty(),
     body('texto').notEmpty().isLength({ max: 500 })
 ], async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
-            return res.status(400).json({ success: false, error: "Datos inválidos" });
+            return res.status(400).json({ success: false, error: 'Datos inválidos' });
         }
-
-        const nuevo = new Comentario(req.body);
+        const nuevo = new Comentario({
+            ...req.body,
+            usuario: req.usuario  // usuario desde token, no desde body
+        });
         await nuevo.save();
         res.status(201).json({ success: true, comentario: nuevo });
     } catch (error) {
-        res.status(500).json({ success: false, error: "Error al guardar comentario" });
+        logger.error(`Error en POST /comentarios: ${error.message}`);
+        res.status(500).json({ success: false, error: 'Error al guardar comentario' });
     }
 });
 
@@ -3104,28 +3114,27 @@ app.delete('/comentarios/:id', verificarAdmin, async (req, res) => {
 
 // ========== RUTAS DE FAVORITOS ==========
 app.post('/favoritos/add', [
-    body('usuario').notEmpty(),
+    verificarToken,
     body('itemId').isMongoId()
 ], async (req, res) => {
     try {
-        const { usuario, itemId } = req.body;
-        
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'Datos inválidos' });
+        const usuario = req.usuario;
+        const { itemId } = req.body;
         const existe = await Favorito.findOne({ usuario, itemId });
-        if (existe) {
-            return res.status(400).json({ success: false, error: "Ya está en favoritos" });
-        }
-
+        if (existe) return res.status(400).json({ success: false, error: 'Ya está en favoritos' });
         const fav = new Favorito({ usuario, itemId });
         await fav.save();
-        
         res.json({ success: true, ok: true });
     } catch (error) {
-        res.status(500).json({ success: false, error: "Error al guardar favorito" });
+        logger.error(`Error en favoritos/add: ${error.message}`);
+        res.status(500).json({ success: false, error: 'Error al guardar favorito' });
     }
 });
 
 app.delete('/favoritos/remove', [
-    body('usuario').notEmpty(),
+    verificarToken,
     body('itemId').isMongoId()
 ], async (req, res) => {
     try {
@@ -3181,7 +3190,7 @@ app.get('/admin/fraud/suspicious-activities', verificarAdmin, async (req, res) =
             ...stats
         });
     } catch (error) {
-        logger.error();
+        logger.error(`Error: ${error?.message || err?.message || "unknown"}`);
         res.status(500).json({
             success: false,
             error: 'Error al obtener actividades sospechosas'
@@ -3227,7 +3236,7 @@ app.put('/admin/fraud/mark-reviewed/:activityId', verificarAdmin, [
             mensaje: 'Actividad marcada como revisada'
         });
     } catch (error) {
-        logger.error();
+        logger.error(`Error: ${error?.message || err?.message || "unknown"}`);
         res.status(500).json({
             success: false,
             error: 'Error al marcar actividad'
@@ -3252,7 +3261,7 @@ app.get('/admin/fraud/user-history/:usuario', verificarAdmin, async (req, res) =
             activities
         });
     } catch (error) {
-        logger.error();
+        logger.error(`Error: ${error?.message || err?.message || "unknown"}`);
         res.status(500).json({
             success: false,
             error: 'Error al obtener historial'
@@ -3408,7 +3417,7 @@ app.use((req, res) => {
 });
 
 app.use((err, req, res, next) => {
-    logger.error();
+    logger.error(`Error: ${error?.message || err?.message || "unknown"}`);
     res.status(500).json({ error: "Error interno del servidor" });
 });
 
