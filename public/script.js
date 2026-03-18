@@ -1588,10 +1588,11 @@ async function pfSaveAvatar() {
   const url = document.getElementById('pf-input-avatar-url').value.trim();
   if(!url) { toast('⚠️ Ingresa una URL de avatar'); return; }
   try {
+    const _avatarToken = LS.get('token');
     const res = await fetch(`${PF_API}/usuarios/update-avatar`,{
       method:'PUT',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ usuario:pfUser, nuevaFoto:url })
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${_avatarToken}`},
+      body: JSON.stringify({ nuevaFoto:url })
     });
     if(res.ok) {
       toast('✅ Avatar actualizado');
@@ -1606,9 +1607,10 @@ async function pfSaveBio() {
   const bio = document.getElementById('pf-input-bio').value.trim();
   if(!bio) { toast('⚠️ La bio no puede estar vacía'); return; }
   try {
+    const _bioToken = LS.get('token');
     const res = await fetch(`${PF_API}/usuarios/update-bio`,{
       method:'PUT',
-      headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${_bioToken}`},
       body: JSON.stringify({ bio })
     });
     if(res.ok) {
