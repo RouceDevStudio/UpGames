@@ -5,10 +5,12 @@
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <script>
-      // Si ya hay sesión activa, redirigir directamente
       (function() {
-        if (localStorage.getItem('user_admin') && localStorage.getItem('token')) {
-          location.replace('./public/biblioteca.html');
+        var p = new URLSearchParams(window.location.search);
+        if (!p.get('reset_token') && !p.get('verif')) {
+          if (localStorage.getItem('user_admin') && localStorage.getItem('token')) {
+            location.replace('./public/biblioteca.html');
+          }
         }
       })();
     </script>
@@ -417,6 +419,32 @@
                     <span id="switch-text">¿No tienes cuenta?</span> 
                     <a href="#" id="toggle-mode">Regístrate aquí</a>
                 </p>
+                <p id="forgot-link-wrap" style="margin-top:6px">
+                    <a href="#" id="forgot-link" style="font-size:12px;color:#a0a0b8;text-decoration:none">¿Olvidaste tu contraseña?</a>
+                </p>
+            </div>
+
+            <!-- Panel: olvidé contraseña -->
+            <div id="forgot-panel" style="display:none">
+                <div class="input-group">
+                    <label for="forgot-email"><ion-icon name="mail-outline"></ion-icon> TU EMAIL REGISTRADO</label>
+                    <input id="forgot-email" type="email" placeholder="tucorreo@ejemplo.com" autocomplete="email">
+                </div>
+                <button id="forgot-btn" style="width:100%;padding:12px;background:rgba(94,255,67,.12);border:1px solid rgba(94,255,67,.3);border-radius:8px;color:#5EFF43;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;letter-spacing:.05em;margin-bottom:8px">ENVIAR LINK DE RECUPERACIÓN</button>
+                <p style="text-align:center"><a href="#" id="back-to-login" style="font-size:12px;color:#a0a0b8;text-decoration:none">← Volver al login</a></p>
+            </div>
+
+            <!-- Panel: nueva contraseña (desde link de email) -->
+            <div id="reset-panel" style="display:none">
+                <div class="input-group">
+                    <label for="new-pass"><ion-icon name="shield-keyhole-outline"></ion-icon> NUEVA CONTRASEÑA</label>
+                    <input id="new-pass" type="password" placeholder="Mínimo 6 caracteres" minlength="6">
+                </div>
+                <div class="input-group">
+                    <label for="new-pass2"><ion-icon name="shield-checkmark-outline"></ion-icon> CONFIRMAR CONTRASEÑA</label>
+                    <input id="new-pass2" type="password" placeholder="Repite la contraseña" minlength="6">
+                </div>
+                <button id="reset-btn" style="width:100%;padding:12px;background:rgba(94,255,67,.12);border:1px solid rgba(94,255,67,.3);border-radius:8px;color:#5EFF43;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;letter-spacing:.05em">ACTUALIZAR CONTRASEÑA</button>
             </div>
         </div>
 
@@ -471,8 +499,32 @@
             pass: document.getElementById("pass")
         };
 
+        // ── Leer parámetros de URL ─────────────────────────
+        const _urlP       = new URLSearchParams(window.location.search);
+        const _resetToken = _urlP.get('reset_token');
+        const _verifStatus= _urlP.get('verif');
+        const _verifUser  = _urlP.get('u');
+        // Limpiar URL
+        if (_resetToken || _verifStatus) history.replaceState({}, '', window.location.pathname);
+
+        const _mainForm       = document.getElementById('form-content');
+        const _forgotPanel    = document.getElementById('forgot-panel');
+        const _resetPanel     = document.getElementById('reset-panel');
+        const _forgotLinkWrap = document.getElementById('forgot-link-wrap');
+
         window.onload = () => {
-            if (localStorage.getItem("user_admin")) window.location.replace(REDIRECT_URL);
+            // Solo redirigir si NO viene de link de reset/verif
+            if (!_resetToken && !_verifStatus) {
+                if (localStorage.getItem("user_admin")) window.location.replace(REDIRECT_URL);
+            }
+            // Email verificado
+            if (_verifStatus === 'ok') {
+                showMsg('✅ Email verificado' + (_verifUser ? ', @'+_verifUser : '') + '. Ya puedes iniciar sesión.', '#5EFF43');
+            } else if (_verifStatus === 'error') {
+                showMsg('❌ El link de verificación es inválido o expiró.', '#ff4343');
+            }
+            // Reset de contraseña
+            if (_resetToken) _showResetPanel();
         };
 
         // ⭐ TOGGLE ENTRE LOGIN Y REGISTRO
@@ -636,8 +688,116 @@
         }
 
         document.addEventListener("keypress", (e) => {
-            if(e.key === "Enter") els.btn.click();
+            if (e.key === "Enter") {
+                const fp = document.getElementById('forgot-panel');
+                const rp = document.getElementById('reset-panel');
+                if (fp && fp.style.display !== 'none') { document.getElementById('forgot-btn').click(); }
+                else if (rp && rp.style.display !== 'none') { document.getElementById('reset-btn').click(); }
+                else { els.btn.click(); }
+            }
         });
+
+        // ── OLVIDÉ MI CONTRASEÑA ──────────────────────────
+        document.getElementById('forgot-link').onclick = (e) => {
+            e.preventDefault();
+            _mainForm.style.display = 'none';
+            _forgotLinkWrap.style.display = 'none';
+            _forgotPanel.style.display = 'block';
+            els.msg.innerText = '';
+        };
+        document.getElementById('back-to-login').onclick = (e) => {
+            e.preventDefault();
+            _mainForm.style.display = 'block';
+            _forgotLinkWrap.style.display = 'block';
+            _forgotPanel.style.display = 'none';
+            els.msg.innerText = '';
+        };
+        document.getElementById('forgot-btn').onclick = async () => {
+            const email = document.getElementById('forgot-email').value.trim();
+            if (!email) { showMsg('⚠️ Ingresa tu email', '#ff4343'); return; }
+            const btn = document.getElementById('forgot-btn');
+            btn.disabled = true; btn.innerText = 'ENVIANDO...';
+            showMsg('⏳ Procesando...', '#a0a0b8');
+            try {
+                await fetch(`${API_URL}/auth/forgot-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                showMsg('📧 Si el email está registrado, recibirás el link en tu correo.', '#5EFF43');
+            } catch (_) { showMsg('⚠️ Error de conexión. Intenta nuevamente.', '#ff4343'); }
+            btn.disabled = false; btn.innerText = 'ENVIAR LINK DE RECUPERACIÓN';
+        };
+
+        // ── RESET DE CONTRASEÑA (desde link del email) ─────
+        function _showResetPanel() {
+            _mainForm.style.display = 'none';
+            _forgotPanel.style.display = 'none';
+            _forgotLinkWrap.style.display = 'none';
+            _resetPanel.style.display = 'block';
+            els.title.innerText = 'Nueva contraseña';
+            els.subtitle.innerText = 'Crea una contraseña nueva para tu cuenta';
+        }
+        document.getElementById('reset-btn').onclick = async () => {
+            const p1 = document.getElementById('new-pass').value.trim();
+            const p2 = document.getElementById('new-pass2').value.trim();
+            if (!p1 || p1.length < 6) { showMsg('⚠️ Mínimo 6 caracteres', '#ff4343'); return; }
+            if (p1 !== p2) { showMsg('⚠️ Las contraseñas no coinciden', '#ff4343'); return; }
+            const btn = document.getElementById('reset-btn');
+            btn.disabled = true; btn.innerText = 'ACTUALIZANDO...';
+            showMsg('⏳ Procesando...', '#a0a0b8');
+            try {
+                const res = await fetch(`${API_URL}/auth/reset-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: _resetToken, password: p1 })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showMsg('✅ Contraseña actualizada. Ya puedes iniciar sesión.', '#5EFF43');
+                    setTimeout(() => {
+                        _resetPanel.style.display = 'none';
+                        _mainForm.style.display = 'block';
+                        _forgotLinkWrap.style.display = 'block';
+                        els.title.innerText = 'UpGames';
+                        els.subtitle.innerText = 'Inicia sesión para acceder a tu librería';
+                        showMsg('', '');
+                    }, 2500);
+                } else {
+                    showMsg('❌ ' + (data.error || 'Link inválido o expirado.'), '#ff4343');
+                    btn.disabled = false; btn.innerText = 'ACTUALIZAR CONTRASEÑA';
+                }
+            } catch (_) {
+                showMsg('⚠️ Error de conexión. Intenta nuevamente.', '#ff4343');
+                btn.disabled = false; btn.innerText = 'ACTUALIZAR CONTRASEÑA';
+            }
+        };
+
+        // ── REGISTRO: mostrar aviso de verificación ─────────
+        async function registrarUsuario(usuario, email, password) {
+            setLoading(true);
+            try {
+                const res = await fetch(`${API_URL}/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ usuario, email, password })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user_admin', data.usuario);
+                    localStorage.setItem('email', data.email);
+                    showMsg('✅ Cuenta creada. Revisa tu email para verificarla.', '#5EFF43');
+                    setTimeout(() => window.location.replace(REDIRECT_URL), 2500);
+                } else {
+                    showMsg('❌ ' + (data.error || 'Error al registrar'), '#ff4343');
+                    setLoading(false);
+                }
+            } catch (_) {
+                showMsg('⚠️ Error de conexión. Intenta nuevamente.', '#ff4343');
+                setLoading(false);
+            }
+        }
 
         // ============================
         // 🎓 SISTEMA DE TUTORIAL
