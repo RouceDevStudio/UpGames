@@ -875,9 +875,10 @@ display:block;
             btnSeguir.innerHTML = `<ion-icon name="hourglass-outline"></ion-icon> Procesando...`;
 
             try {
+                const _tkn = localStorage.getItem('token');
                 const response = await fetch(`${API_URL}/usuarios/toggle-seguir/${usuarioActual}/${usuarioViendo}`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_tkn}` }
                 });
 
                 const data = await response.json();
@@ -908,9 +909,10 @@ display:block;
             btnSeguir.innerHTML = `<ion-icon name="hourglass-outline"></ion-icon> Procesando...`;
 
             try {
+                const _tkn2 = localStorage.getItem('token');
                 const response = await fetch(`${API_URL}/usuarios/toggle-seguir/${usuarioActual}/${usuarioViendo}`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${_tkn2}` }
                 });
 
                 const data = await response.json();

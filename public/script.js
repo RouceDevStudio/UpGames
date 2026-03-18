@@ -747,8 +747,8 @@ async function postComment(id) {
   try {
     const r = await fetch(`${API_URL}/comentarios`,{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({itemId:id,usuario:user,texto})
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${LS.get('token')}`},
+      body:JSON.stringify({itemId:id,texto})
     });
     if(r.ok) {
       input.value='';
@@ -769,8 +769,8 @@ async function fav(id) {
     if(isFav) {
       await fetch(`${API_URL}/favoritos/remove`,{
         method:'DELETE',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({usuario:user,itemId:id})
+        headers:{'Content-Type':'application/json','Authorization':`Bearer ${LS.get('token')}`},
+        body:JSON.stringify({itemId:id})
       });
       toast('💔 Eliminado de favoritos');
       let local=LS.getJSON('favoritos', []);
@@ -779,8 +779,8 @@ async function fav(id) {
     } else {
       await fetch(`${API_URL}/favoritos/add`,{
         method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({usuario:user,itemId:id})
+        headers:{'Content-Type':'application/json','Authorization':`Bearer ${LS.get('token')}`},
+        body:JSON.stringify({itemId:id})
       });
       toast('❤️ Añadido a favoritos');
       let local=LS.getJSON('favoritos', []);
@@ -1441,10 +1441,11 @@ async function pfRemoveFav(itemId) {
   });
   if(!ok) return;
   try {
+    const token = LS.get('token');
     const res = await fetch(`${PF_API}/favoritos/remove`,{
       method:'DELETE',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ usuario:pfUser, itemId })
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},
+      body: JSON.stringify({ itemId })
     });
     const d = await res.json();
     if(d.success||d.ok) { toast('💔 Eliminado de favoritos'); pfLoadBoveda(); }
@@ -1607,8 +1608,8 @@ async function pfSaveBio() {
   try {
     const res = await fetch(`${PF_API}/usuarios/update-bio`,{
       method:'PUT',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ usuario:pfUser, bio })
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},
+      body: JSON.stringify({ bio })
     });
     if(res.ok) {
       toast('✅ Bio actualizada');
