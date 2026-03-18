@@ -7,6 +7,8 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult, param } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
 
 // ========== MÓDULOS CENTRALIZADOS ==========
 const config = require('./modulos/config');
@@ -222,9 +224,110 @@ app.use((req, res, next) => {
 // ========== CONEXIÓN MONGODB (variables desde config centralizado) ==========
 const MONGODB_URI = config.MONGODB_URI;
 const JWT_SECRET  = config.JWT_SECRET;
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 
 // La validación de estas variables ya ocurre en config.js al arrancar.
 // Si falta alguna, config.js hace process.exit(1) antes de llegar aquí.
+
+// ── VALIDAR JWT_REFRESH_SECRET independiente en producción ──
+if (process.env.NODE_ENV === 'production' && (!JWT_REFRESH_SECRET || JWT_REFRESH_SECRET === JWT_SECRET)) {
+    logger.error('❌ JWT_REFRESH_SECRET debe ser un secreto INDEPENDIENTE en producción');
+    process.exit(1);
+}
+
+// ── APP URL (para links en emails) ──────────────────────────────────
+const APP_URL = process.env.APP_URL || 'https://roucedevstudio.github.io/UpGames';
+const API_URL_SELF = process.env.RAILWAY_PUBLIC_DOMAIN
+    ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+    : `http://localhost:${process.env.PORT || 10000}`;
+
+// ── NODEMAILER — Gmail ───────────────────────────────────────────────
+let emailTransporter = null;
+try {
+    emailTransporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+            user: process.env.GMAIL_USER,
+            pass: process.env.GMAIL_APP_PASSWORD,
+        },
+    });
+    logger.info('📧 Transporter de email configurado (Gmail)');
+} catch (e) {
+    logger.warn('⚠️ Email no configurado — GMAIL_USER o GMAIL_APP_PASSWORD faltantes');
+}
+
+async function sendEmail({ to, subject, html }) {
+    if (!emailTransporter) {
+        logger.warn(`[Email] No configurado — no se envió a ${to}`);
+        return false;
+    }
+    try {
+        await emailTransporter.sendMail({
+            from: `"UpGames" <${process.env.GMAIL_USER}>`,
+            to,
+            subject,
+            html,
+        });
+        logger.info(`[Email] Enviado a ${to} — ${subject}`);
+        return true;
+    } catch (e) {
+        logger.error(`[Email] Error enviando a ${to}: ${e.message}`);
+        return false;
+    }
+}
+
+// ── TEMPLATES DE EMAIL ────────────────────────────────────────────────
+function emailVerifTemplate(usuario, link) {
+    return `
+    <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#0a0a0f;color:#f0f0f8;border-radius:12px;overflow:hidden">
+      <div style="background:linear-gradient(135deg,#1a1a24,#0f0f18);padding:32px 28px;text-align:center;border-bottom:1px solid rgba(94,255,67,.15)">
+        <div style="font-size:32px;font-weight:900;letter-spacing:-.5px">
+          <span style="color:#5EFF43">UP</span><span>GAMES</span>
+        </div>
+        <div style="color:#60607a;font-size:12px;margin-top:4px;letter-spacing:.1em">VERIFICACIÓN DE CUENTA</div>
+      </div>
+      <div style="padding:32px 28px">
+        <h2 style="font-size:20px;margin:0 0 12px;font-weight:700">Hola, @${usuario} 👋</h2>
+        <p style="color:#a0a0b8;line-height:1.6;margin:0 0 24px">
+          Gracias por registrarte en UpGames. Confirma tu email para activar tu cuenta y empezar a publicar, descargar y ganar dinero.
+        </p>
+        <div style="text-align:center;margin:28px 0">
+          <a href="${link}" style="display:inline-block;padding:14px 32px;background:#5EFF43;color:#000;font-weight:800;font-size:15px;border-radius:8px;text-decoration:none;letter-spacing:.02em">
+            ✅ Verificar mi email
+          </a>
+        </div>
+        <p style="color:#60607a;font-size:12px;text-align:center;margin:0">
+          Este link expira en <strong>24 horas</strong>. Si no creaste esta cuenta, ignora este mensaje.
+        </p>
+      </div>
+    </div>`;
+}
+
+function emailResetTemplate(usuario, link) {
+    return `
+    <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#0a0a0f;color:#f0f0f8;border-radius:12px;overflow:hidden">
+      <div style="background:linear-gradient(135deg,#1a1a24,#0f0f18);padding:32px 28px;text-align:center;border-bottom:1px solid rgba(94,255,67,.15)">
+        <div style="font-size:32px;font-weight:900;letter-spacing:-.5px">
+          <span style="color:#5EFF43">UP</span><span>GAMES</span>
+        </div>
+        <div style="color:#60607a;font-size:12px;margin-top:4px;letter-spacing:.1em">RECUPERACIÓN DE CONTRASEÑA</div>
+      </div>
+      <div style="padding:32px 28px">
+        <h2 style="font-size:20px;margin:0 0 12px;font-weight:700">Hola, @${usuario} 🔐</h2>
+        <p style="color:#a0a0b8;line-height:1.6;margin:0 0 24px">
+          Recibimos una solicitud para restablecer tu contraseña. Haz clic en el botón de abajo para crear una nueva.
+        </p>
+        <div style="text-align:center;margin:28px 0">
+          <a href="${link}" style="display:inline-block;padding:14px 32px;background:#5EFF43;color:#000;font-weight:800;font-size:15px;border-radius:8px;text-decoration:none;letter-spacing:.02em">
+            🔑 Restablecer contraseña
+          </a>
+        </div>
+        <p style="color:#60607a;font-size:12px;text-align:center;margin:0">
+          Este link expira en <strong>1 hora</strong>. Si no solicitaste esto, ignora este mensaje.
+        </p>
+      </div>
+    </div>`;
+}
 
 mongoose.connect(MONGODB_URI, config.MONGODB_OPTIONS)
 .then(() => logger.info('MONGODB CONECTADO EXITOSAMENTE'))
@@ -508,6 +611,29 @@ const UsuarioSchema = new mongoose.Schema({
         type: Date,
         default: Date.now,
         index: true
+    },
+    // ── EMAIL VERIFICACIÓN ──────────────────────────────
+    emailVerificado: {
+        type: Boolean,
+        default: false,
+        index: true
+    },
+    emailVerifToken: {
+        type: String,
+        default: null
+    },
+    emailVerifExpires: {
+        type: Date,
+        default: null
+    },
+    // ── RECUPERACIÓN DE CONTRASEÑA ──────────────────────
+    resetPasswordToken: {
+        type: String,
+        default: null
+    },
+    resetPasswordExpires: {
+        type: Date,
+        default: null
     }
 }, { 
     collection: 'usuarios',
@@ -629,6 +755,154 @@ setInterval(() => {
         }
     }
 }, 60 * 60 * 1000);
+
+// ══════════════════════════════════════════════════════════════
+//  EMAIL VERIFICACIÓN
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * GET /auth/verify-email/:token
+ * El usuario hace clic en el link del email → se activa la cuenta
+ * Redirige al frontend con mensaje de éxito o error
+ */
+app.get('/auth/verify-email/:token', async (req, res) => {
+    try {
+        const { token } = req.params;
+        const usuario = await Usuario.findOne({
+            emailVerifToken: token,
+            emailVerifExpires: { $gt: new Date() }
+        });
+
+        if (!usuario) {
+            // Link inválido o expirado — redirigir al frontend con error
+            return res.redirect(`${APP_URL}?verif=error`);
+        }
+
+        usuario.emailVerificado   = true;
+        usuario.emailVerifToken   = null;
+        usuario.emailVerifExpires = null;
+        await usuario.save();
+
+        logger.info(`Email verificado: @${usuario.usuario}`);
+        // Redirigir al frontend con éxito — el frontend muestra mensaje y permite login
+        res.redirect(`${APP_URL}?verif=ok&u=${encodeURIComponent(usuario.usuario)}`);
+    } catch (err) {
+        logger.error(`Error verificando email: ${err.message}`);
+        res.redirect(`${APP_URL}?verif=error`);
+    }
+});
+
+/**
+ * POST /auth/resend-verification
+ * Reenviar email de verificación si el token expiró
+ */
+app.post('/auth/resend-verification', [
+    body('email').isEmail().normalizeEmail()
+], async (req, res) => {
+    try {
+        const { email } = req.body;
+        const usuario = await Usuario.findOne({ email: email.toLowerCase() });
+
+        // Responder siempre OK para no revelar si el email existe
+        if (!usuario || usuario.emailVerificado) {
+            return res.json({ success: true, mensaje: 'Si el email existe y no está verificado, recibirás el link.' });
+        }
+
+        const verifToken = crypto.randomBytes(32).toString('hex');
+        usuario.emailVerifToken   = verifToken;
+        usuario.emailVerifExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        await usuario.save();
+
+        const verifLink = `${API_URL_SELF}/auth/verify-email/${verifToken}`;
+        await sendEmail({
+            to: email,
+            subject: '✅ Verifica tu email en UpGames',
+            html: emailVerifTemplate(usuario.usuario, verifLink),
+        });
+
+        res.json({ success: true, mensaje: 'Si el email existe y no está verificado, recibirás el link.' });
+    } catch (err) {
+        logger.error(`Error reenviando verificación: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error interno' });
+    }
+});
+
+// ══════════════════════════════════════════════════════════════
+//  RECUPERACIÓN DE CONTRASEÑA
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * POST /auth/forgot-password
+ * El usuario ingresa su email → recibe link de restablecimiento
+ */
+app.post('/auth/forgot-password', [
+    body('email').isEmail().normalizeEmail()
+], async (req, res) => {
+    try {
+        const { email } = req.body;
+        const usuario = await Usuario.findOne({ email: email.toLowerCase() });
+
+        // Siempre responder OK (no revelar si el email existe)
+        if (!usuario) {
+            return res.json({ success: true, mensaje: 'Si el email está registrado, recibirás un link para restablecer tu contraseña.' });
+        }
+
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        usuario.resetPasswordToken   = resetToken;
+        usuario.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000); // 1h
+        await usuario.save();
+
+        const resetLink = `${APP_URL}?reset_token=${resetToken}`;
+        await sendEmail({
+            to: email,
+            subject: '🔑 Restablece tu contraseña de UpGames',
+            html: emailResetTemplate(usuario.usuario, resetLink),
+        });
+
+        logger.info(`Reset de contraseña solicitado: @${usuario.usuario}`);
+        res.json({ success: true, mensaje: 'Si el email está registrado, recibirás un link para restablecer tu contraseña.' });
+    } catch (err) {
+        logger.error(`Error en forgot-password: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error interno' });
+    }
+});
+
+/**
+ * POST /auth/reset-password
+ * El usuario abre el link, ingresa nueva contraseña → se actualiza
+ */
+app.post('/auth/reset-password', [
+    body('token').notEmpty(),
+    body('password').isLength({ min: 6 })
+], async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ success: false, error: 'Token o contraseña inválidos' });
+        }
+
+        const { token, password } = req.body;
+        const usuario = await Usuario.findOne({
+            resetPasswordToken: token,
+            resetPasswordExpires: { $gt: new Date() }
+        });
+
+        if (!usuario) {
+            return res.status(400).json({ success: false, error: 'El link es inválido o ya expiró. Solicita uno nuevo.' });
+        }
+
+        usuario.password             = await bcrypt.hash(password, 10);
+        usuario.resetPasswordToken   = null;
+        usuario.resetPasswordExpires = null;
+        await usuario.save();
+
+        logger.info(`Contraseña restablecida: @${usuario.usuario}`);
+        res.json({ success: true, mensaje: 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.' });
+    } catch (err) {
+        logger.error(`Error en reset-password: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error interno' });
+    }
+});
 
 // POST /admin/auth/login — El panel envía el JWT_SECRET como PIN
 app.post('/admin/auth/login', (req, res) => {
@@ -1543,11 +1817,24 @@ app.post('/auth/register', [
             registrationIP: registrationIP
         });
 
-        await nuevoUsuario.save();
+        // Generar token de verificación de email
+        const verifToken = crypto.randomBytes(32).toString('hex');
+        nuevoUsuario.emailVerifToken   = verifToken;
+        nuevoUsuario.emailVerifExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
+        nuevoUsuario.emailVerificado   = false;
 
+        await nuevoUsuario.save();
         logger.info(`Nuevo usuario registrado: @${usuario} (${email})`);
 
-        // Generar token
+        // Enviar email de verificación (fire & forget — no bloquea el registro)
+        const verifLink = `${API_URL_SELF}/auth/verify-email/${verifToken}`;
+        sendEmail({
+            to: email,
+            subject: '✅ Verifica tu email en UpGames',
+            html: emailVerifTemplate(usuario, verifLink),
+        }).catch(() => {});
+
+        // Generar token de sesión (puede usar la app, pero con emailVerificado=false)
         const token = jwt.sign({ usuario: nuevoUsuario.usuario, email: nuevoUsuario.email }, JWT_SECRET, { expiresIn: '30d' });
 
         res.status(201).json({
@@ -1556,11 +1843,14 @@ app.post('/auth/register', [
             token,
             usuario: nuevoUsuario.usuario,
             email: nuevoUsuario.email,
+            emailVerificado: false,
+            mensaje: 'Cuenta creada. Revisa tu email para verificar tu cuenta.',
             datosUsuario: {
                 usuario: nuevoUsuario.usuario,
                 email: nuevoUsuario.email,
                 verificadoNivel: nuevoUsuario.verificadoNivel,
-                isVerificado: nuevoUsuario.isVerificado
+                isVerificado: nuevoUsuario.isVerificado,
+                emailVerificado: false
             }
         });
 
