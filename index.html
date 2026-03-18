@@ -512,25 +512,31 @@
         const _resetPanel     = document.getElementById('reset-panel');
         const _forgotLinkWrap = document.getElementById('forgot-link-wrap');
 
-        window.onload = () => {
-            // Solo redirigir si NO viene de link de reset/verif
+        // ── INIT inmediato — script está al final del body, DOM ya existe ──
+        (function initLogin() {
+            // 1. Redirigir si hay sesión activa (solo si NO es reset/verif)
             if (!_resetToken && !_verifStatus) {
-                if (localStorage.getItem("user_admin")) window.location.replace(REDIRECT_URL);
+                if (localStorage.getItem("user_admin")) {
+                    window.location.replace(REDIRECT_URL);
+                    return;
+                }
             }
-            // Email verificado
+
+            // 2. Mensajes de verificación de email
             if (_verifStatus === 'ok') {
                 showMsg('✅ Email verificado' + (_verifUser ? ', @'+_verifUser : '') + '. Ya puedes iniciar sesión.', '#5EFF43');
             } else if (_verifStatus === 'error') {
                 showMsg('❌ El link de verificación es inválido o expiró.', '#ff4343');
             }
-            // Reset de contraseña
+
+            // 3. Reset de contraseña — mostrar panel
             if (_resetToken) _showResetPanel();
 
-            // ── Asignar eventos de forgot/reset DENTRO de onload (DOM garantizado) ──
-            const forgotLink = document.getElementById('forgot-link');
+            // 4. Eventos del panel forgot/reset
+            const forgotLink  = document.getElementById('forgot-link');
             const backToLogin = document.getElementById('back-to-login');
-            const forgotBtn = document.getElementById('forgot-btn');
-            const resetBtn = document.getElementById('reset-btn');
+            const forgotBtn   = document.getElementById('forgot-btn');
+            const resetBtn    = document.getElementById('reset-btn');
 
             if (forgotLink) forgotLink.onclick = (e) => {
                 e.preventDefault();
@@ -594,7 +600,7 @@
                     resetBtn.disabled = false; resetBtn.innerText = 'ACTUALIZAR CONTRASEÑA';
                 }
             };
-        };
+        })();
 
         // ⭐ TOGGLE ENTRE LOGIN Y REGISTRO
         els.toggle.onclick = (e) => {
@@ -767,7 +773,6 @@
         });
 
         // ── OLVIDÉ MI CONTRASEÑA ──────────────────────────
-        // Eventos asignados dentro de window.onload
 
         // ── RESET DE CONTRASEÑA (desde link del email) ─────
         function _showResetPanel() {
@@ -780,31 +785,7 @@
         }
 
 
-        // ── REGISTRO: mostrar aviso de verificación ─────────
-        async function registrarUsuario(usuario, email, password) {
-            setLoading(true);
-            try {
-                const res = await fetch(`${API_URL}/auth/register`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ usuario, email, password })
-                });
-                const data = await res.json();
-                if (data.success) {
-                    localStorage.setItem('token', data.token);
-                    localStorage.setItem('user_admin', data.usuario);
-                    localStorage.setItem('email', data.email);
-                    showMsg('✅ Cuenta creada. Revisa tu email para verificarla.', '#5EFF43');
-                    setTimeout(() => window.location.replace(REDIRECT_URL), 2500);
-                } else {
-                    showMsg('❌ ' + (data.error || 'Error al registrar'), '#ff4343');
-                    setLoading(false);
-                }
-            } catch (_) {
-                showMsg('⚠️ Error de conexión. Intenta nuevamente.', '#ff4343');
-                setLoading(false);
-            }
-        }
+
 
         // ============================
         // 🎓 SISTEMA DE TUTORIAL
