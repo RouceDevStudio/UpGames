@@ -785,13 +785,21 @@ async function fav(id) {
       toast('❤️ Añadido a favoritos');
       let local=LS.getJSON('favoritos', []);
       if(!local.includes(id)){local.push(id); LS.setJSON('favoritos', local);}
-      // Notify author
+      // Notify author — usa el endpoint real
       const item=todosLosItems.find(i=>i._id===id);
       if(item&&item.usuario!==user) {
         fetch(`${API_URL}/notificaciones`,{
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({usuario:item.usuario,tipo:'sistema',mensaje:`@${user} guardó tu contenido: "${item.title}"`})
+          body:JSON.stringify({
+            usuario:   item.usuario,
+            tipo:      'favorito',
+            emisor:    user,
+            itemId:    item._id,
+            itemTitle: item.title,
+            itemImage: item.image||'',
+            mensaje:   `@${user} guardó tu contenido: "${item.title}"`
+          })
         }).catch(()=>{});
       }
     }
@@ -1579,7 +1587,7 @@ async function pfSaveAvatar() {
   const url = document.getElementById('pf-input-avatar-url').value.trim();
   if(!url) { toast('⚠️ Ingresa una URL de avatar'); return; }
   try {
-    const res = await fetch(`${PF_API}/auth/update-avatar`,{
+    const res = await fetch(`${PF_API}/usuarios/update-avatar`,{
       method:'PUT',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ usuario:pfUser, nuevaFoto:url })

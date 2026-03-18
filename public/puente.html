@@ -98,25 +98,49 @@
         const NEXUS_URL = "https://nexus-production-781b.up.railway.app";
         const DEBUG_MODE = false; // Cambiar a true para ver logs detallados
 
-        // ── Notifica la descarga a NEXUS (fire & forget, no bloquea al usuario) ──
+        // ── Notifica la descarga a NEXUS y al backend de UpGames ──────────────
         function notificarDescargaANexus(itemId, itemData) {
+            const usuario = localStorage.getItem('user_admin');
+
+            // 1. Notificar a NEXUS — actualiza el perfil de comportamiento del usuario
             try {
-                const usuario = localStorage.getItem('user_admin');
-                if (!usuario) return; // usuario no logueado, no hay perfil que actualizar
-                fetch(`${NEXUS_URL}/api/upgames/evento`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        usuario,
-                        tipo: 'download',
-                        datos: {
-                            itemId,
-                            title:    itemData?.title    || '',
-                            category: itemData?.category || '',
-                            tags:     itemData?.tags     || []
-                        }
-                    })
-                }).catch(() => {}); // silenciar errores — nunca bloquear la descarga
+                if (usuario) {
+                    fetch(`${NEXUS_URL}/api/upgames/evento`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            usuario,
+                            tipo: 'download',
+                            datos: {
+                                itemId,
+                                title:    itemData?.title    || '',
+                                category: itemData?.category || '',
+                                tags:     itemData?.tags     || [],
+                                autor:    itemData?.usuario  || ''
+                            }
+                        })
+                    }).catch(() => {});
+                }
+            } catch(_) {}
+
+            // 2. Notificar al autor del item — crea notificación en UpGames
+            try {
+                const autorItem = itemData?.usuario;
+                if (usuario && autorItem && autorItem !== usuario) {
+                    fetch(`${API_URL}/notificaciones`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            usuario:   autorItem,
+                            tipo:      'descarga',
+                            emisor:    usuario,
+                            itemId:    itemId,
+                            itemTitle: itemData?.title    || '',
+                            itemImage: itemData?.image    || '',
+                            mensaje:   `@${usuario} descargó tu contenido: "${itemData?.title || ''}"`
+                        })
+                    }).catch(() => {});
+                }
             } catch(_) {}
         }
         
@@ -313,11 +337,13 @@
                     // ⭐ CRÍTICO: Asignar el enlace primero
                     enlaceFinal = data.link;
 
-                    // Guardar metadata del item para notificar a NEXUS al hacer clic
+                    // Guardar metadata del item para notificar a NEXUS y al autor al hacer clic
                     window._itemData = {
                         title:    data.title    || data.juego?.title    || '',
                         category: data.category || data.juego?.category || '',
-                        tags:     data.tags     || data.juego?.tags     || []
+                        tags:     data.tags     || data.juego?.tags     || [],
+                        usuario:  data.usuario  || data.juego?.usuario  || '',
+                        image:    data.image    || data.juego?.image    || ''
                     };
 
                     // ⭐ VALIDAR que el enlace existe Y es una URL válida
