@@ -2614,7 +2614,47 @@ window.nxToggle = function() {
 
 // ── 9. INIT: cargar perfil al arrancar (500ms de delay para no
 //    interferir con la carga inicial del feed)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  NEXUS MASCOT — Activar widget al cargar UpGames
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 setTimeout(nexusCargarPerfil, 2000);
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  NEXUS MASCOT — Activar widget al cargar UpGames
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+(function notifyNexusMascot() {
+  function doNotify() {
+    const frame = document.getElementById('nxFrame');
+    if (!frame) return;
+    function send() {
+      try {
+        frame.contentWindow.postMessage(
+          { type: 'upgames_active', context: 'biblioteca' },
+          'https://nexus-production-781b.up.railway.app'
+        );
+      } catch(_) {}
+    }
+    if (frame.contentDocument && frame.contentDocument.readyState === 'complete') {
+      send();
+    } else {
+      frame.addEventListener('load', send, { once: true });
+    }
+  }
+  // Ejecutar al cargar la página
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', doNotify);
+  } else {
+    doNotify();
+  }
+  // También disparar cuando el usuario abre el panel de NEXUS
+  const _origNxToggle = window.nxToggle;
+  if (typeof _origNxToggle === 'function') {
+    window.nxToggle = function() {
+      _origNxToggle.apply(this, arguments);
+      setTimeout(doNotify, 800);
+    };
+  }
+})();
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  SISTEMA DE NOTIFICACIONES
