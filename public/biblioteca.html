@@ -98,20 +98,6 @@
 </main>
 
 <!-- ══════════════════════════════════
-  FAVORITES VIEW
-══════════════════════════════════ -->
-<div id="favs-view">
-  <div class="favs-header"><ion-icon name="heart"></ion-icon> Mis Favoritos</div>
-  <div id="favs-grid">
-    <div class="empty-state">
-      <ion-icon name="heart-outline"></ion-icon>
-      <h3>Sin favoritos aún</h3>
-      <p>Guarda contenido que te guste pulsando ❤️</p>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════
   PROFILE VIEW — FULL PERFIL INTEGRADO
 ══════════════════════════════════ -->
 <div id="profile-view">
@@ -182,14 +168,8 @@
       <button class="perfil-tab" data-pftab="historial" onclick="pfSwitchTab('historial',this)">
         <ion-icon name="time"></ion-icon> Historial
       </button>
-      <button class="perfil-tab" data-pftab="boveda" onclick="pfSwitchTab('boveda',this)">
-        <ion-icon name="shield-checkmark"></ion-icon> Bóveda
-      </button>
       <button class="perfil-tab" data-pftab="reportes" onclick="pfSwitchTab('reportes',this)">
         <ion-icon name="flag"></ion-icon> Reportes
-      </button>
-      <button class="perfil-tab" data-pftab="economia" onclick="pfSwitchTab('economia',this)">
-        <ion-icon name="cash"></ion-icon> Economía
       </button>
     </div>
 
@@ -293,14 +273,6 @@
       </div>
     </div>
 
-    <!-- ══ TAB: BÓVEDA ══ -->
-    <div id="pf-tab-boveda" class="perfil-tab-content">
-      <div class="pf-section-title"><ion-icon name="shield-checkmark"></ion-icon> FAVORITOS GUARDADOS</div>
-      <div class="pf-items-grid" id="pf-vaultContent">
-        <div class="pf-empty"><ion-icon name="sync-outline"></ion-icon><p>Cargando...</p></div>
-      </div>
-    </div>
-
     <!-- ══ TAB: REPORTES ══ -->
     <div id="pf-tab-reportes" class="perfil-tab-content">
       <div class="pf-section-title"><ion-icon name="flag"></ion-icon> MIS PUBLICACIONES REPORTADAS</div>
@@ -316,69 +288,81 @@
       </div>
     </div>
 
-    <!-- ══ TAB: ECONOMÍA ══ -->
-    <div id="pf-tab-economia" class="perfil-tab-content">
-      <div class="pf-economia">
-        <div class="pf-economia-title"><ion-icon name="cash-outline"></ion-icon> MI ECONOMÍA</div>
+  </div><!-- /#pf-logged -->
+</div><!-- /#profile-view -->
 
-        <!-- Saldo -->
-        <div class="pf-saldo-box">
-          <div class="pf-saldo-lbl">SALDO DISPONIBLE</div>
-          <div class="pf-saldo-val" id="pf-saldo-display">$0.00</div>
-          <div class="pf-saldo-cur">USD</div>
-        </div>
+<!-- ══════════════════════════════════
+  FAVORITES VIEW (vista independiente)
+══════════════════════════════════ -->
+<div id="favs-view">
+  <div class="favs-header"><ion-icon name="heart"></ion-icon> Mis Favoritos</div>
+  <div id="pf-vaultContent" class="pf-items-grid">
+    <div class="pf-empty"><ion-icon name="sync-outline"></ion-icon><p>Cargando...</p></div>
+  </div>
+</div>
 
-        <!-- Stats eco -->
-        <div class="pf-eco-stats">
-          <div class="pf-eco-stat">
-            <div class="pf-eco-stat-val" id="pf-descargas-totales">0</div>
-            <div class="pf-eco-stat-lbl">Descargas Totales</div>
-          </div>
-          <div class="pf-eco-stat">
-            <div class="pf-eco-stat-val" id="pf-juegos-elegibles">0</div>
-            <div class="pf-eco-stat-lbl">Juegos +2K Vistas</div>
-          </div>
-        </div>
+<!-- ══════════════════════════════════
+  ECONOMIA VIEW (vista independiente)
+══════════════════════════════════ -->
+<div id="economia-view">
+  <div class="favs-header"><ion-icon name="cash-outline"></ion-icon> Mi Economía</div>
+  <div class="pf-economia">
 
-        <!-- Verificación warning -->
-        <div class="pf-eco-warn" id="pf-estado-verificacion" style="display:none">
-          <ion-icon name="alert-circle"></ion-icon>
-          <span>Necesitas verificación nivel 1+ para monetizar</span>
-        </div>
+    <!-- Saldo -->
+    <div class="pf-saldo-box">
+      <div class="pf-saldo-lbl">SALDO DISPONIBLE</div>
+      <div class="pf-saldo-val" id="pf-saldo-display">$0.00</div>
+      <div class="pf-saldo-cur">USD</div>
+    </div>
 
-        <!-- PayPal -->
-        <label class="pf-label" style="margin-bottom:8px">
-          <ion-icon name="logo-paypal" style="color:var(--cy)"></ion-icon> EMAIL DE PAYPAL
-        </label>
-        <div class="pf-paypal-row">
-          <input type="email" id="pf-paypal-email-input" class="pf-paypal-input" placeholder="tucorreo@paypal.com">
-          <button class="pf-paypal-save" id="pf-btn-guardar-paypal">GUARDAR</button>
-        </div>
-
-        <!-- Solicitar pago -->
-        <button class="pf-solicitar-btn" id="pf-btn-solicitar-pago" disabled>
-          SOLICITAR PAGO (Mínimo $10 USD)
-        </button>
-
-        <!-- Solicitud pendiente -->
-        <div class="pf-eco-pending" id="pf-solicitud-pendiente" style="display:none">
-          <ion-icon name="checkmark-circle"></ion-icon>
-          <span>Tienes una solicitud de pago pendiente de revisión</span>
-        </div>
-
-        <!-- Info requisitos -->
-        <div class="pf-eco-info">
-          <strong style="color:var(--g)">💡 Requisitos para cobrar:</strong><br>
-          • Saldo mínimo: $10 USD<br>
-          • Verificación nivel 1+<br>
-          • Al menos 1 juego con +2,000 descargas<br>
-          • Email de PayPal configurado
-        </div>
+    <!-- Stats eco -->
+    <div class="pf-eco-stats">
+      <div class="pf-eco-stat">
+        <div class="pf-eco-stat-val" id="pf-descargas-totales">0</div>
+        <div class="pf-eco-stat-lbl">Descargas Totales</div>
+      </div>
+      <div class="pf-eco-stat">
+        <div class="pf-eco-stat-val" id="pf-juegos-elegibles">0</div>
+        <div class="pf-eco-stat-lbl">Juegos +2K Vistas</div>
       </div>
     </div>
 
-  </div><!-- /#pf-logged -->
-</div><!-- /#profile-view -->
+    <!-- Verificación warning -->
+    <div class="pf-eco-warn" id="pf-estado-verificacion" style="display:none">
+      <ion-icon name="alert-circle"></ion-icon>
+      <span>Necesitas verificación nivel 1+ para monetizar</span>
+    </div>
+
+    <!-- PayPal -->
+    <label class="pf-label" style="margin-bottom:8px">
+      <ion-icon name="logo-paypal" style="color:var(--cy)"></ion-icon> EMAIL DE PAYPAL
+    </label>
+    <div class="pf-paypal-row">
+      <input type="email" id="pf-paypal-email-input" class="pf-paypal-input" placeholder="tucorreo@paypal.com">
+      <button class="pf-paypal-save" id="pf-btn-guardar-paypal">GUARDAR</button>
+    </div>
+
+    <!-- Solicitar pago -->
+    <button class="pf-solicitar-btn" id="pf-btn-solicitar-pago" disabled>
+      SOLICITAR PAGO (Mínimo $10 USD)
+    </button>
+
+    <!-- Solicitud pendiente -->
+    <div class="pf-eco-pending" id="pf-solicitud-pendiente" style="display:none">
+      <ion-icon name="checkmark-circle"></ion-icon>
+      <span>Tienes una solicitud de pago pendiente de revisión</span>
+    </div>
+
+    <!-- Info requisitos -->
+    <div class="pf-eco-info">
+      <strong style="color:var(--g)">💡 Requisitos para cobrar:</strong><br>
+      • Saldo mínimo: $10 USD<br>
+      • Verificación nivel 1+<br>
+      • Al menos 1 juego con +2,000 descargas<br>
+      • Email de PayPal configurado
+    </div>
+  </div>
+</div>
 
 <!-- ══ Modal: Configuración (Avatar/Bio) ══ -->
 <div class="pf-modal-overlay" id="pf-settingsModal">
@@ -1038,9 +1022,10 @@
     <ion-icon name="heart"></ion-icon>
     <span>Favoritos</span>
   </button>
-  <button class="nav-tab" data-tab="upload" aria-label="Subir contenido">
-    <ion-icon name="add-circle"></ion-icon>
-    <span>Subir</span>
+  <button class="nav-tab" data-tab="economia" aria-label="Mi economía">
+    <div class="nav-dot"></div>
+    <ion-icon name="cash-outline"></ion-icon>
+    <span>Economía</span>
   </button>
   <button class="nav-tab" data-tab="profile" aria-label="Mi perfil">
     <div class="nav-dot"></div>

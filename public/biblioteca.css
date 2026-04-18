@@ -2473,7 +2473,8 @@ body.nx-open #nxFab {
 ═══════════════════════════════════════════ */
 #favs-view {
   display:none;
-  padding:20px 12px calc(var(--nav-h) + 20px);
+  padding:12px 12px calc(var(--nav-h) + 20px);
+  min-height:100vh;
 }
 #favs-view.active { display:block; }
 .favs-header {
@@ -2546,3 +2547,20 @@ body.nx-open #nxFab {
   #output { grid-template-columns:1fr 1fr 1fr; }
   #favs-grid { grid-template-columns:1fr 1fr 1fr; }
 }
+/* ═══════════════════════════════════════════
+   ECONOMIA VIEW — vista independiente
+═══════════════════════════════════════════ */
+#economia-view {
+  display: none;
+  position: fixed;
+  inset: var(--hdr-h) 0 var(--nav-h) 0;
+  overflow-y: auto;
+  background: var(--bg);
+  z-index: 10;
+  padding-bottom: 24px;
+}
+#economia-view.active { display: block; }
+#economia-view .pf-economia {
+  padding: 12px 14px 24px;
+}
+#economia-view .pf-economia-title { display: none; }

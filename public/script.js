@@ -901,41 +901,99 @@ document.querySelectorAll('.nav-tab[data-tab]').forEach(tab=>{
 });
 
 function switchTab(t) {
-  if(t==='upload') t='profile';
-  currentTab=t;
+  if(t==='upload') t='favs'; // upload ya no existe, redirect por si acaso
+  currentTab = t;
+
+  // Marcar activo en nav
   document.querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active'));
   const navBtn = document.querySelector(`.nav-tab[data-tab="${t}"]`);
   if(navBtn) navBtn.classList.add('active');
-  document.getElementById('main-view').style.display=t==='main'?'':'none';
-  document.getElementById('category-row').style.display=t==='main'?'':'none';
-  // Carousel: reanudar en main, pausar en otros tabs
+
+  // Controlar visibilidad de vistas
+  document.getElementById('main-view').style.display       = t==='main'      ? '' : 'none';
+  document.getElementById('category-row').style.display    = t==='main'      ? '' : 'none';
+
+  const favsView     = document.getElementById('favs-view');
+  const economiaView = document.getElementById('economia-view');
+  const profileView  = document.getElementById('profile-view');
+
+  favsView.classList.toggle('active',     t==='favs');
+  economiaView.classList.toggle('active', t==='economia');
+  profileView.classList.toggle('active',  t==='profile');
+
+  // Carousel
   if(t==='main') heroStartAutoplay && heroStartAutoplay();
   else heroStop && heroStop();
-  const favsView=document.getElementById('favs-view');
-  const profileView=document.getElementById('profile-view');
-  favsView.classList.toggle('active',t==='favs');
-  profileView.classList.toggle('active',t==='profile');
-  if(t==='favs') renderFavs();
-  if(t==='profile') renderProfile();
+
+  // Callbacks de datos
+  if(t==='favs')     renderFavs();
+  if(t==='economia') renderEconomia();
+  if(t==='profile')  renderProfile();
 }
 
-// ── FAVORITES TAB ─────────────────────────────────────────
-function renderFavs() {
-  const grid=document.getElementById('favs-grid');
-  const local=LS.getJSON('favoritos', []);
-  const favItems=todosLosItems.filter(i=>local.includes(i._id));
-  if(!favItems.length) {
-    grid.innerHTML=`<div class="empty-state">
-      <ion-icon name="heart-outline"></ion-icon>
-      <h3>Sin favoritos aún</h3>
-      <p>Guarda contenido que te guste pulsando ❤️</p>
+// ── FAVORITES VIEW ────────────────────────────────────────
+async function renderFavs() {
+  const user = LS.get('user_admin');
+  const cont = document.getElementById('pf-vaultContent');
+  if(!cont) return;
+  if(!user) {
+    cont.innerHTML=`<div class="empty-state">
+      <ion-icon name="person-circle-outline"></ion-icon>
+      <h3>Inicia sesión</h3>
+      <p>Necesitas una cuenta para guardar favoritos</p>
     </div>`;
     return;
   }
-  grid.innerHTML='';
-  const frag=document.createDocumentFragment();
-  favItems.forEach(item=>frag.appendChild(createTile(item,false)));
-  grid.appendChild(frag);
+  cont.innerHTML='<div class="pf-empty"><ion-icon name="sync-outline"></ion-icon><p>Cargando...</p></div>';
+  try {
+    const res = await fetch(`${API_URL}/favoritos/${user}`);
+    const data = await res.json();
+    const favs = Array.isArray(data) ? data : [];
+    if(!favs.length) {
+      cont.innerHTML='<div class="pf-empty"><ion-icon name="heart-dislike-outline"></ion-icon><p>Sin favoritos aún.<br>Pulsa ❤️ en cualquier contenido para guardarlo.</p></div>';
+      return;
+    }
+    cont.innerHTML='';
+    favs.forEach(item => {
+      if(!item) return;
+      const card = document.createElement('div');
+      card.className='pf-vault-card';
+      card.innerHTML=`
+        <img src="${item.image||'https://via.placeholder.com/300x170?text=Sin+Imagen'}" alt="${item.title||''}" onerror="this.src='https://via.placeholder.com/300x170?text=Sin+Imagen'">
+        <div class="pf-vault-info">
+          <div class="pf-vault-title">${(item.title||'Sin título').substring(0,40)}</div>
+          <div class="pf-vault-user">@${item.usuario||'Anónimo'}</div>
+          <div class="pf-vault-actions">
+            <button class="pf-vault-btn access" onclick="window.open('puente.html?id=${item._id}','_blank')"><ion-icon name="cloud-download"></ion-icon> Acceder</button>
+            <button class="pf-vault-btn remove" onclick="pfRemoveFav('${item._id}')"><ion-icon name="trash"></ion-icon> Quitar</button>
+          </div>
+        </div>`;
+      cont.appendChild(card);
+    });
+  } catch(e) {
+    cont.innerHTML='<div class="pf-empty" style="color:#ff4343"><p>Error al cargar favoritos</p></div>';
+  }
+}
+
+// ── ECONOMIA VIEW ──────────────────────────────────────────
+async function renderEconomia() {
+  const user = LS.get('user_admin');
+  if(!user) {
+    // Mostrar estado no logueado en economia-view
+    const eco = document.getElementById('economia-view');
+    if(eco) eco.innerHTML=`
+      <div class="favs-header"><ion-icon name="cash-outline"></ion-icon> Mi Economía</div>
+      <div class="empty-state" style="padding:40px 20px">
+        <ion-icon name="person-circle-outline"></ion-icon>
+        <h3>Inicia sesión</h3>
+        <p>Necesitas una cuenta para ver tu economía</p>
+      </div>`;
+    return;
+  }
+  // Asegurar que pfUser esté seteado y cargar datos
+  if(!pfUser) pfUser = user;
+  pfLoadEconomia();
+  pfInitForm();
 }
 
 // ── PROFILE TAB ──────────────────────────────────────────
@@ -1053,9 +1111,7 @@ function pfSwitchTab(tabName, el) {
   const tc = document.getElementById(`pf-tab-${tabName}`);
   if(tc) tc.classList.add('active');
   if(tabName === 'historial') pfLoadHistorial();
-  if(tabName === 'boveda') pfLoadBoveda();
   if(tabName === 'reportes') pfLoadReportes();
-  if(tabName === 'economia') pfLoadEconomia();
 }
 
 // ── Form: upload ──
@@ -2069,17 +2125,16 @@ const TUT_STEPS = [
     body: 'En cada tarjeta del historial encontrarás:<br><br>• Botón <strong style="color:var(--cy)">✏️ Editar</strong> — abre un modal donde puedes actualizar el título, descripción, enlace, imagen y categoría. Las mismas reglas de palabras prohibidas y plataformas permitidas aplican exactamente igual que al publicar.<br><br>• Botón <strong style="color:#ff4343">🗑️ Borrar</strong> — elimina la publicación permanentemente (pide confirmación). No se puede deshacer.'
   },
 
-  // ── TAB: BÓVEDA ─────────────────────────────────────────
+  // ── SECCIÓN: FAVORITOS ──────────────────────────────────
   {
-    sel: '[data-pftab="boveda"]',
-    title: '🛡️ Pestaña: Bóveda (Favoritos)',
-    body: 'Tu <strong>biblioteca personal</strong> de contenido guardado. Aquí aparecen todos los ítems que marcaste con ❤️ desde la biblioteca principal.',
-    onEnter: function() { pfSwitchTab('boveda', document.querySelector('[data-pftab="boveda"]')); }
+    sel: '#pf-section-favoritos',
+    title: '❤️ Favoritos',
+    body: 'Tu <strong>biblioteca personal</strong> de contenido guardado. Aquí aparecen todos los ítems que marcaste con ❤️ desde la biblioteca principal. Los favoritos se sincronizan con el servidor y están disponibles en cualquier dispositivo.'
   },
   {
     sel: '#pf-vaultContent',
-    title: '💎 Contenido de tu Bóveda',
-    body: 'Cada ítem guardado muestra imagen, título y usuario creador. Tienes dos botones:<br>• <strong>Acceder</strong> (verde) — te lleva directamente al link de descarga<br>• <strong>Quitar</strong> (rojo) — elimina el ítem de tu bóveda<br><br>Los favoritos se sincronizan con el servidor, así que están disponibles en cualquier dispositivo donde inicies sesión.'
+    title: '💎 Tus Favoritos Guardados',
+    body: 'Cada ítem guardado muestra imagen, título y usuario creador. Tienes dos botones:<br>• <strong>Acceder</strong> (verde) — te lleva directamente al link de descarga<br>• <strong>Quitar</strong> (rojo) — elimina el ítem de tus favoritos'
   },
 
   // ── TAB: REPORTES ────────────────────────────────────────
@@ -2095,12 +2150,11 @@ const TUT_STEPS = [
     body: 'Cada tarjeta de reporte muestra:<br>• Nombre de la publicación<br>• Total de reportes y desglose: <strong style="color:#ff4343">Link caído</strong> · <strong style="color:#ffaa00">Obsoleto</strong> · <strong style="color:#ff00ff">Malware</strong><br>• Estado actual del link (Online / Revisión / Caído)<br><br>Si tienes reportes, actualiza el link desde <strong>Historial → Editar</strong>. Más de 3 reportes ponen el contenido en revisión automáticamente.'
   },
 
-  // ── TAB: ECONOMÍA ────────────────────────────────────────
+  // ── SECCIÓN: ECONOMÍA ───────────────────────────────────
   {
-    sel: '[data-pftab="economia"]',
-    title: '💰 Pestaña: Economía (Ganancias)',
-    body: 'Aquí gestionas tus <strong>ganancias en UpGames</strong>. Por cada 1,000 descargas efectivas de tus aportes ganas $1.00 USD.',
-    onEnter: function() { pfSwitchTab('economia', document.querySelector('[data-pftab="economia"]')); }
+    sel: '#pf-section-economia',
+    title: '💰 Mi Economía (Ganancias)',
+    body: 'Aquí gestionas tus <strong>ganancias en UpGames</strong>. Por cada 1,000 descargas efectivas de tus aportes ganas $1.00 USD.'
   },
   {
     sel: '.pf-saldo-box',
