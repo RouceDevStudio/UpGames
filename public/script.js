@@ -185,32 +185,76 @@ function getYouTubeEmbed(url, autoplay=0) {
   return id ? `https://www.youtube.com/embed/${id}?autoplay=${autoplay}&mute=1&loop=1&playlist=${id}&controls=1&rel=0&playsinline=1` : null;
 }
 
+// ── TILE EXTRA BADGES — info por categoría ───────────────
+function getTileExtras(item) {
+  const ex = item.extraData || {};
+  const cat = item.category || '';
+  const badges = [];
+
+  if(cat === 'Juego') {
+    if(ex.plataforma) badges.push({ icon:'desktop-outline', text: ex.plataforma });
+    if(ex.size)       badges.push({ icon:'archive-outline',  text: ex.size });
+  } else if(cat === 'Mod') {
+    if(ex['juego-base']) badges.push({ icon:'game-controller-outline', text: ex['juego-base'] });
+    if(ex.version)       badges.push({ icon:'git-branch-outline', text: 'v' + ex.version });
+  } else if(cat === 'Apps') {
+    if(ex.so)      badges.push({ icon:'phone-portrait-outline', text: ex.so });
+    if(ex.version) badges.push({ icon:'code-working-outline',   text: 'v' + ex.version });
+    if(ex.size)    badges.push({ icon:'archive-outline',         text: ex.size });
+  } else if(cat === 'Software') {
+    if(ex.licencia) badges.push({ icon:'document-text-outline', text: ex.licencia });
+    if(ex.so)       badges.push({ icon:'desktop-outline',        text: ex.so });
+  } else if(cat === 'Ajustes') {
+    if(ex['tipo-herramienta']) badges.push({ icon:'construct-outline', text: ex['tipo-herramienta'] });
+    if(ex.compatible)          badges.push({ icon:'checkmark-circle-outline', text: ex.compatible });
+  } else if(cat === 'Optimizacion') {
+    if(ex['tipo-opt'])  badges.push({ icon:'speedometer-outline', text: ex['tipo-opt'] });
+    if(ex.compatible)   badges.push({ icon:'checkmark-circle-outline', text: ex.compatible });
+  } else if(cat === 'Video') {
+    if(item.videoType) badges.push({ icon:'film-outline', text: item.videoType });
+  }
+
+  if(!badges.length) return '';
+  return `<div class="tile-extras">
+    ${badges.slice(0,2).map(b =>
+      `<span class="tile-extra-badge"><ion-icon name="${b.icon}"></ion-icon>${b.text}</span>`
+    ).join('')}
+  </div>`;
+}
+
 // ── CREATE TILE ───────────────────────────────────────────
 function createTile(item, isFeatured=false) {
   const ls = item.linkStatus || (item.reportes>=3?'revision':'online');
   const isOnline = ls==='online';
   const statusLabel = ls==='online'?'Online':ls==='revision'?'Revisión':'Caído';
-  const isVid = /\.(mp4|webm|mov)$/i.test(item.image);
-  // Videos: no autoplay directo, se activan al entrar al viewport
+  const cat = item.category || 'General';
+  const isVideo = cat === 'Video';
+
+  // Para video: la imagen es la miniatura, el link es el video real
+  const imgSrc = item.image || '';
+  const isVid = !isVideo && /\.(mp4|webm|mov)$/i.test(imgSrc);
   const media = isVid
-    ? `<video data-src="${item.image}" muted loop playsinline preload="none" class="lazy-vid"></video>`
-    : `<img src="${item.image}" alt="${item.title}" loading="lazy" onerror="this.src='https://via.placeholder.com/300x170/12121f/555570?text=Sin+imagen'">`;
+    ? `<video data-src="${imgSrc}" muted loop playsinline preload="none" class="lazy-vid"></video>`
+    : `<img src="${imgSrc}" alt="${item.title}" loading="lazy" onerror="this.src='https://via.placeholder.com/300x170/12121f/555570?text=Sin+imagen'">`;
 
   const favIds = LS.getJSON('favoritos', []);
   const isFav = favIds.includes(item._id);
   const dl = item.descargasEfectivas||0;
+  const extraBadges = getTileExtras(item);
 
   if(isFeatured) {
     const el = document.createElement('div');
     el.className='featured-tile';
     el.dataset.id=item._id;
     const ftMedia = isVid
-      ? `<video data-src="${item.image}" muted loop playsinline preload="none" class="lazy-vid"></video>`
-      : `<img src="${item.image}" alt="${item.title}" loading="lazy" onerror="this.src='https://via.placeholder.com/600x260/12121f/555570?text=Sin+imagen'">`;
+      ? `<video data-src="${imgSrc}" muted loop playsinline preload="none" class="lazy-vid"></video>`
+      : `<img src="${imgSrc}" alt="${item.title}" loading="lazy" onerror="this.src='https://via.placeholder.com/600x260/12121f/555570?text=Sin+imagen'">`;
     el.innerHTML=`
-      <div class="thumb-wrap">${ftMedia}</div>
+      <div class="thumb-wrap">${ftMedia}
+        ${isVideo?'<div class="tile-video-overlay"><ion-icon name="play-circle"></ion-icon></div>':''}
+      </div>
       <div class="ft-info">
-        <div class="ft-badge">⭐ Destacado</div>
+        <div class="ft-badge">${isVideo?'▶ '+( item.videoType||'Video'):'⭐ Destacado'}</div>
         <div class="ft-title">${item.title}</div>
         <div class="ft-meta">
           <div class="ft-user">@${item.usuario||'Cloud'}${getBadge(item.usuario)}</div>
@@ -222,20 +266,24 @@ function createTile(item, isFeatured=false) {
   }
 
   const el = document.createElement('div');
-  el.className='game-tile';
+  const catClass = cat.toLowerCase().replace('ó','o').replace('ó','o').replace(/[^a-z]/g,'');
+  el.className = 'game-tile game-tile--' + catClass + (isVideo?' game-tile--video':'');
   el.dataset.id=item._id;
   el.innerHTML=`
     <div class="thumb-wrap">
       ${media}
+      ${isVideo?'<div class="tile-video-overlay"><ion-icon name="play-circle"></ion-icon></div>':''}
       <div class="tile-status ${ls}">
         <span class="tile-status-dot"></span>${statusLabel}
       </div>
       <button class="tile-fav-quick ${isFav?'active':''}" data-id="${item._id}" title="Favorito" aria-label="${isFav?'Quitar de favoritos':'Añadir a favoritos'}">
         <ion-icon name="${isFav?'heart':'heart-outline'}"></ion-icon>
       </button>
+      ${isVideo?`<div class="tile-video-badge">${item.videoType||'Video'}</div>`:''}
     </div>
     <div class="tile-info">
-      <div class="tile-cat">${item.category||'General'}</div>
+      <div class="tile-cat ${isVideo?'tile-cat--video':''}">${cat}</div>
+      ${extraBadges}
       <div class="tile-title">${item.title}</div>
       <div class="tile-meta">
         <div class="tile-avatar">${avatarLetter(item.usuario)}</div>
@@ -463,7 +511,7 @@ async function loadContent() {
     todosLosItems = data;
     filteredItems = activeCategory
       ? data.filter(i=>i.category===activeCategory)
-      : data;
+      : data.filter(i=>i.category!=='Video');
 
     window.closePreloader && window.closePreloader();
     if(changed || !cachedItems) render(filteredItems);
@@ -520,7 +568,7 @@ document.getElementById('buscador').addEventListener('input', function(e) {
     } else {
       filteredItems = activeCategory
         ? todosLosItems.filter(i=>i.category===activeCategory)
-        : todosLosItems;
+        : todosLosItems.filter(i=>i.category!=='Video');
     }
     render(filteredItems);
   }, 280);
@@ -537,7 +585,7 @@ document.querySelectorAll('.chip').forEach(c=>{
     buscEl.value = '';
     filteredItems = activeCategory
       ? todosLosItems.filter(i=>i.category===activeCategory)
-      : todosLosItems;
+      : todosLosItems.filter(i=>i.category!=='Video');
     render(filteredItems);
   });
 });
@@ -901,31 +949,22 @@ document.querySelectorAll('.nav-tab[data-tab]').forEach(tab=>{
 });
 
 function switchTab(t) {
-  if(t==='upload') t='favs'; // upload ya no existe, redirect por si acaso
-  currentTab = t;
-
-  // Marcar activo en nav
+  if(t==='upload') t='profile';
+  currentTab=t;
   document.querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active'));
   const navBtn = document.querySelector(`.nav-tab[data-tab="${t}"]`);
   if(navBtn) navBtn.classList.add('active');
-
-  // Controlar visibilidad de vistas
-  document.getElementById('main-view').style.display       = t==='main'      ? '' : 'none';
-  document.getElementById('category-row').style.display    = t==='main'      ? '' : 'none';
-
+  document.getElementById('main-view').style.display=t==='main'?'':'none';
+  document.getElementById('category-row').style.display=t==='main'?'':'none';
+  // Carousel: reanudar en main, pausar en otros tabs
+  if(t==='main') heroStartAutoplay && heroStartAutoplay();
+  else heroStop && heroStop();
   const favsView     = document.getElementById('favs-view');
   const economiaView = document.getElementById('economia-view');
   const profileView  = document.getElementById('profile-view');
-
   favsView.classList.toggle('active',     t==='favs');
   economiaView.classList.toggle('active', t==='economia');
   profileView.classList.toggle('active',  t==='profile');
-
-  // Carousel
-  if(t==='main') heroStartAutoplay && heroStartAutoplay();
-  else heroStop && heroStop();
-
-  // Callbacks de datos
   if(t==='favs')     renderFavs();
   if(t==='economia') renderEconomia();
   if(t==='profile')  renderProfile();
@@ -934,7 +973,7 @@ function switchTab(t) {
 // ── FAVORITES VIEW ────────────────────────────────────────
 async function renderFavs() {
   const user = LS.get('user_admin');
-  const cont = document.getElementById('pf-vaultContent');
+  const cont = document.getElementById('favs-grid');
   if(!cont) return;
   if(!user) {
     cont.innerHTML=`<div class="empty-state">
@@ -950,7 +989,11 @@ async function renderFavs() {
     const data = await res.json();
     const favs = Array.isArray(data) ? data : [];
     if(!favs.length) {
-      cont.innerHTML='<div class="pf-empty"><ion-icon name="heart-dislike-outline"></ion-icon><p>Sin favoritos aún.<br>Pulsa ❤️ en cualquier contenido para guardarlo.</p></div>';
+      cont.innerHTML=`<div class="empty-state">
+        <ion-icon name="heart-outline"></ion-icon>
+        <h3>Sin favoritos aún</h3>
+        <p>Guarda contenido que te guste pulsando ❤️</p>
+      </div>`;
       return;
     }
     cont.innerHTML='';
@@ -979,9 +1022,8 @@ async function renderFavs() {
 async function renderEconomia() {
   const user = LS.get('user_admin');
   if(!user) {
-    // Mostrar estado no logueado en economia-view
-    const eco = document.getElementById('economia-view');
-    if(eco) eco.innerHTML=`
+    const cont = document.getElementById('economia-view');
+    if(cont) cont.innerHTML=`
       <div class="favs-header"><ion-icon name="cash-outline"></ion-icon> Mi Economía</div>
       <div class="empty-state" style="padding:40px 20px">
         <ion-icon name="person-circle-outline"></ion-icon>
@@ -990,10 +1032,20 @@ async function renderEconomia() {
       </div>`;
     return;
   }
-  // Asegurar que pfUser esté seteado y cargar datos
+  // Setear pfUser si aún no está seteado
   if(!pfUser) pfUser = user;
+  // Registrar listeners de botones (por si es la primera vez que se abre esta vista)
+  const btnPaypal = document.getElementById('pf-btn-guardar-paypal');
+  const btnPago   = document.getElementById('pf-btn-solicitar-pago');
+  if(btnPaypal && !btnPaypal._listenerAdded) {
+    btnPaypal.addEventListener('click', pfGuardarPaypal);
+    btnPaypal._listenerAdded = true;
+  }
+  if(btnPago && !btnPago._listenerAdded) {
+    btnPago.addEventListener('click', pfSolicitarPago);
+    btnPago._listenerAdded = true;
+  }
   pfLoadEconomia();
-  pfInitForm();
 }
 
 // ── PROFILE TAB ──────────────────────────────────────────
@@ -1111,18 +1163,25 @@ function pfSwitchTab(tabName, el) {
   const tc = document.getElementById(`pf-tab-${tabName}`);
   if(tc) tc.classList.add('active');
   if(tabName === 'historial') pfLoadHistorial();
+  if(tabName === 'boveda') pfLoadBoveda();
   if(tabName === 'reportes') pfLoadReportes();
+  if(tabName === 'economia') pfLoadEconomia();
 }
 
 // ── Form: upload ──
 function pfInitForm() {
-  ['pf-addTitle','pf-addDescription','pf-addLink','pf-addImage','pf-addCategory'].forEach(id => {
+  ['pf-addTitle','pf-addDescription','pf-addLink','pf-addImage'].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.addEventListener('input', pfUpdatePreview);
     if(id === 'pf-addTitle' && el) el.addEventListener('input', pfValidateTitle);
   });
   const btn = document.getElementById('pf-subirBtn');
   if(btn) btn.addEventListener('click', pfSubirJuego);
+  const btnV = document.getElementById('pf-subirVideoBtn');
+  if(btnV) btnV.addEventListener('click', pfSubirVideo);
+  // Video preview live update
+  const vidTitle = document.getElementById('pf-vid-title');
+  if(vidTitle) vidTitle.addEventListener('input', pfUpdateVideoPreview);
   document.addEventListener('click', e => {
     if(!e.target.closest('.pf-info-icon') && !e.target.closest('.pf-tooltip')) {
       document.querySelectorAll('.pf-tooltip').forEach(t => t.classList.remove('active'));
@@ -1133,6 +1192,8 @@ function pfInitForm() {
   document.getElementById('pf-btn-solicitar-pago')?.addEventListener('click', pfSolicitarPago);
   // Edit save
   document.getElementById('pf-edit-save-btn')?.addEventListener('click', pfSaveEdit);
+  // Init category form state
+  pfOnCategoryChange('Juego', document.querySelector('.pf-cat-btn[data-cat="Juego"]'));
 }
 
 const PF_BANNED = ['crack','cracked','crackeado','crackeo','pirata','pirateado','piratear',
@@ -1193,6 +1254,295 @@ function pfValidateTitle() {
   if(bad && txt.length > 0) el.classList.remove('valid');
 }
 
+// ══════════════════════════════════════════════════════
+// FORMULARIO DINÁMICO POR CATEGORÍA
+// ══════════════════════════════════════════════════════
+
+const CLOUDINARY_CLOUD_NAME = 'dd4w2plxn';
+const CLOUDINARY_UPLOAD_PRESET = 'upgames_videos';
+
+// Config por categoría: icono, label, campos extra
+const CAT_CONFIG = {
+  Juego: {
+    icon: 'game-controller', label: 'SUBIR JUEGO',
+    extras: [
+      { id:'pf-ex-plataforma', label:'Plataforma', type:'select',
+        options:['PC','Android','iOS','PlayStation','Xbox','Nintendo Switch','Multi-plataforma'] },
+      { id:'pf-ex-size', label:'Tamaño del archivo', type:'text', placeholder:'Ej: 25 GB' },
+      { id:'pf-ex-requisitos', label:'Requisitos mínimos (opcional)', type:'textarea', placeholder:'CPU, RAM, GPU...' },
+    ]
+  },
+  Mod: {
+    icon: 'construct', label: 'SUBIR MOD',
+    extras: [
+      { id:'pf-ex-juego-base', label:'Juego base', type:'text', placeholder:'Ej: GTA V, Minecraft...' },
+      { id:'pf-ex-version', label:'Versión compatible', type:'text', placeholder:'Ej: v1.0.3' },
+    ]
+  },
+  Apps: {
+    icon: 'phone-portrait', label: 'SUBIR APP',
+    extras: [
+      { id:'pf-ex-so', label:'Sistema Operativo', type:'select',
+        options:['Android','iOS','Windows','macOS','Linux','Multi-plataforma'] },
+      { id:'pf-ex-version', label:'Versión de la app', type:'text', placeholder:'Ej: 2.4.1' },
+      { id:'pf-ex-size', label:'Tamaño', type:'text', placeholder:'Ej: 120 MB' },
+    ]
+  },
+  Software: {
+    icon: 'code-slash', label: 'SUBIR SOFTWARE',
+    extras: [
+      { id:'pf-ex-licencia', label:'Licencia', type:'select',
+        options:['Open Source','Freeware','Shareware','MIT','GPL','Apache 2.0','Otro'] },
+      { id:'pf-ex-so', label:'Sistema Operativo', type:'select',
+        options:['Windows','macOS','Linux','Multi-plataforma'] },
+      { id:'pf-ex-version', label:'Versión', type:'text', placeholder:'Ej: 3.2.0' },
+    ]
+  },
+  Ajustes: {
+    icon: 'settings', label: 'SUBIR HERRAMIENTA',
+    extras: [
+      { id:'pf-ex-tipo-herramienta', label:'Tipo de herramienta', type:'select',
+        options:['Config / CFG','Script','Plugin','Extension','Pack de texturas','Otro'] },
+      { id:'pf-ex-compatible', label:'Compatible con', type:'text', placeholder:'Ej: Windows 10/11, GTA V...' },
+    ]
+  },
+  Optimizacion: {
+    icon: 'speedometer', label: 'SUBIR OPTIMIZACIÓN',
+    extras: [
+      { id:'pf-ex-tipo-opt', label:'Tipo de mejora', type:'select',
+        options:['Mejora de FPS','Reducción de lag','Visual/Gráficos','Audio','Red / Latencia','Otro'] },
+      { id:'pf-ex-compatible', label:'Compatible con', type:'text', placeholder:'Ej: Windows 10/11...' },
+    ]
+  }
+};
+
+let pfCurrentCategory = 'Juego';
+let pfCloudinaryWidget = null;
+let pfVideoUrl = '';
+let pfVideoSelectedType = 'Tutorial';
+
+function pfOnCategoryChange(cat, btnEl) {
+  pfCurrentCategory = cat;
+  // Update hidden input
+  const catInput = document.getElementById('pf-addCategory');
+  if(catInput) catInput.value = cat;
+
+  // Update category button styles
+  document.querySelectorAll('.pf-cat-btn').forEach(b => b.classList.remove('active'));
+  if(btnEl) btnEl.classList.add('active');
+
+  const formStd = document.getElementById('pf-form-standard');
+  const formVid = document.getElementById('pf-form-video');
+
+  if(cat === 'Video') {
+    if(formStd) formStd.style.display = 'none';
+    if(formVid) formVid.style.display = 'block';
+    return;
+  }
+
+  if(formStd) formStd.style.display = 'block';
+  if(formVid) formVid.style.display = 'none';
+
+  const cfg = CAT_CONFIG[cat] || CAT_CONFIG['Juego'];
+
+  // Update header icon + label
+  const icon  = document.getElementById('pf-form-icon');
+  const label = document.getElementById('pf-form-cat-label');
+  if(icon)  icon.setAttribute('name', cfg.icon);
+  if(label) label.textContent = cfg.label;
+
+  // Render extra fields
+  const extraZone = document.getElementById('pf-extra-fields');
+  if(!extraZone) return;
+  extraZone.innerHTML = '';
+  (cfg.extras || []).forEach(field => {
+    const group = document.createElement('div');
+    group.className = 'pf-form-group';
+    let inputHTML = '';
+    if(field.type === 'select') {
+      inputHTML = `<select id="${field.id}" class="pf-select">
+        ${field.options.map(o=>`<option value="${o}">${o}</option>`).join('')}
+      </select>`;
+    } else if(field.type === 'textarea') {
+      inputHTML = `<textarea id="${field.id}" class="pf-textarea" placeholder="${field.placeholder||''}"></textarea>`;
+    } else {
+      inputHTML = `<input type="text" id="${field.id}" class="pf-input" placeholder="${field.placeholder||''}">`;
+    }
+    group.innerHTML = `<label class="pf-label">${field.label}</label>${inputHTML}`;
+    extraZone.appendChild(group);
+  });
+}
+
+// ── Video type selector ──
+function pfSelectVidType(type, btnEl) {
+  pfVideoSelectedType = type;
+  document.querySelectorAll('.pf-vid-type-btn').forEach(b => b.classList.remove('active'));
+  if(btnEl) btnEl.classList.add('active');
+  document.getElementById('pf-vid-type').value = type;
+  pfUpdateVideoPreview();
+}
+
+// ── Cloudinary Widget ──
+function pfOpenCloudinaryWidget() {
+  if(!pfCloudinaryWidget) {
+    pfCloudinaryWidget = cloudinary.createUploadWidget({
+      cloudName: CLOUDINARY_CLOUD_NAME,
+      uploadPreset: CLOUDINARY_UPLOAD_PRESET,
+      sources: ['local','url'],
+      resourceType: 'video',
+      maxFileSize: 524288000, // 500MB
+      clientAllowedFormats: ['mp4','webm','mov','avi'],
+      showAdvancedOptions: false,
+      cropping: false,
+      multiple: false,
+      showSkipCropButton: false,
+      styles: {
+        palette: {
+          window: '#07070f',
+          windowBorder: '#5EFF43',
+          tabIcon: '#5EFF43',
+          menuIcons: '#9090aa',
+          textDark: '#f0f0f8',
+          textLight: '#f0f0f8',
+          link: '#5EFF43',
+          action: '#5EFF43',
+          inactiveTabIcon: '#555570',
+          error: '#ff4343',
+          inProgress: '#00f2ff',
+          complete: '#5EFF43',
+          sourceBg: '#0d0d1a'
+        },
+        fonts: { default: null, "'Manrope', sans-serif": { url: 'https://fonts.googleapis.com/css2?family=Manrope:wght@400;700&display=swap', active: true } }
+      }
+    }, (error, result) => {
+      if(error) {
+        toast('❌ Error al subir video: ' + (error.message || error.statusText || 'Error'));
+        pfCldShowIdle();
+        return;
+      }
+      if(result.event === 'upload-added') {
+        pfCldShowUploading();
+      }
+      if(result.event === 'progress') {
+        const pct = Math.round(result.info.progress || 0);
+        const fill = document.getElementById('pf-cld-progress-fill');
+        if(fill) fill.style.width = pct + '%';
+      }
+      if(result.event === 'success') {
+        pfVideoUrl = result.info.secure_url;
+        document.getElementById('pf-vid-url').value = pfVideoUrl;
+        pfCldShowDone(pfVideoUrl);
+        toast('✅ Video subido a la nube');
+      }
+    });
+  }
+  pfCloudinaryWidget.open();
+}
+
+function pfCldShowIdle() {
+  document.getElementById('pf-cld-idle').style.display = '';
+  document.getElementById('pf-cld-uploading').style.display = 'none';
+  document.getElementById('pf-cld-done').style.display = 'none';
+}
+function pfCldShowUploading() {
+  document.getElementById('pf-cld-idle').style.display = 'none';
+  document.getElementById('pf-cld-uploading').style.display = '';
+  document.getElementById('pf-cld-done').style.display = 'none';
+}
+function pfCldShowDone(url) {
+  document.getElementById('pf-cld-idle').style.display = 'none';
+  document.getElementById('pf-cld-uploading').style.display = 'none';
+  document.getElementById('pf-cld-done').style.display = '';
+  const vid = document.getElementById('pf-vid-preview');
+  if(vid) { vid.src = url; }
+  pfUpdateVideoPreview();
+}
+
+// ── Video card preview update ──
+function pfUpdateVideoPreview() {
+  const title = document.getElementById('pf-vid-title')?.value || 'Título del Video';
+  const thumb = document.getElementById('pf-vid-thumbnail')?.value || '';
+  const type  = pfVideoSelectedType || 'Tutorial';
+
+  document.getElementById('pf-vpc-title').textContent = title;
+  document.getElementById('pf-vpc-type').textContent  = type;
+
+  const img = document.getElementById('pf-vpc-img');
+  if(thumb) {
+    img.src = thumb;
+    const prev = document.getElementById('pf-vid-thumb-prev');
+    if(prev) { prev.querySelector('img').src = thumb; prev.classList.add('show'); }
+  } else if(pfVideoUrl) {
+    // Auto-generate thumbnail from Cloudinary (replace extension with .jpg)
+    img.src = pfVideoUrl.replace(/\.(mp4|webm|mov|avi)/i, '.jpg');
+  }
+}
+
+// ── Upload Video to backend ──
+async function pfSubirVideo() {
+  if(!pfUser) return toast('⚠️ Debes iniciar sesión.');
+  const ahora = Date.now();
+  const ult = LS.get('ultima_publicacion');
+  if(ult && ahora - parseInt(ult) < 30000) {
+    const s = Math.ceil((30000-(ahora-parseInt(ult)))/1000);
+    return toast(`⏱️ Anti-spam: Espera ${s}s antes de publicar.`);
+  }
+
+  const titulo = document.getElementById('pf-vid-title')?.value.trim();
+  const desc   = document.getElementById('pf-vid-description')?.value.trim();
+  const vidUrl = document.getElementById('pf-vid-url')?.value.trim();
+  const thumb  = document.getElementById('pf-vid-thumbnail')?.value.trim();
+  const type   = document.getElementById('pf-vid-type')?.value || 'Tutorial';
+
+  if(!titulo)  return toast('⚠️ El título es obligatorio.');
+  if(!vidUrl)  return toast('⚠️ Debes subir un video primero.');
+
+  // Auto-thumb desde Cloudinary si no hay manual
+  const thumbFinal = thumb || vidUrl.replace(/\.(mp4|webm|mov|avi)/i, '.jpg');
+
+  const token = LS.get('token');
+  if(!token) { alert('⚠️ Sesión expirada.'); location.href='./index.html'; return; }
+
+  const btn = document.getElementById('pf-subirVideoBtn');
+  btn.textContent = 'Publicando...'; btn.disabled = true;
+  try {
+    const res = await fetch(`${PF_API}/items/add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({
+        title:    titulo,
+        description: desc,
+        link:     vidUrl,       // El link ES el video de Cloudinary
+        image:    thumbFinal,   // Miniatura como portada
+        images:   [],
+        category: 'Video',
+        videoType: type,
+        usuario:  pfUser,
+        status:   'pendiente'
+      })
+    });
+    if(res.ok) {
+      LS.set('ultima_publicacion', Date.now().toString());
+      toast('✅ Video publicado. Esperando aprobación.');
+      // Reset form
+      document.getElementById('pf-vid-title').value = '';
+      document.getElementById('pf-vid-description').value = '';
+      document.getElementById('pf-vid-thumbnail').value = '';
+      document.getElementById('pf-vid-url').value = '';
+      pfVideoUrl = '';
+      pfCldShowIdle();
+      pfCloudinaryWidget = null;
+      pfUpdateVideoPreview();
+      pfLoadHistorial();
+      pfLoadUserData();
+    } else {
+      const err = await res.json();
+      toast('❌ ' + (err.error || err.message || 'Error al publicar'));
+    }
+  } catch(e) { toast('❌ Error de conexión'); }
+  finally { btn.innerHTML='<ion-icon name="cloud-upload"></ion-icon> PUBLICAR VIDEO'; btn.disabled=false; }
+}
+
 async function pfSubirJuego() {
   if(!pfUser) return alert('Debes iniciar sesión.');
   const ahora = Date.now();
@@ -1205,7 +1555,16 @@ async function pfSubirJuego() {
   const desc = document.getElementById('pf-addDescription').value.trim();
   const link = document.getElementById('pf-addLink').value.trim();
   const imagen = document.getElementById('pf-addImage').value.trim();
-  const cat = document.getElementById('pf-addCategory').value;
+  const cat = document.getElementById('pf-addCategory')?.value || pfCurrentCategory;
+  // Recoger campos extra dinámicos
+  const extraData = {};
+  const cfg = CAT_CONFIG[cat];
+  if(cfg && cfg.extras) {
+    cfg.extras.forEach(f => {
+      const el = document.getElementById(f.id);
+      if(el && el.value.trim()) extraData[f.id.replace('pf-ex-','')] = el.value.trim();
+    });
+  }
   // Recoger medias adicionales slots 2-4 (opcionales)
   const imagesExtra = [
     document.getElementById('pf-addImage2')?.value.trim() || '',
@@ -1253,7 +1612,7 @@ async function pfSubirJuego() {
     const res = await fetch(`${PF_API}/items/add`, {
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},
-      body: JSON.stringify({ title:titulo, description:desc, link, image:imagen, images:imagesExtra, category:cat, usuario:pfUser, status:'pendiente' })
+      body: JSON.stringify({ title:titulo, description:desc, link, image:imagen, images:imagesExtra, category:cat, extraData, usuario:pfUser, status:'pendiente' })
     });
     if(res.ok) {
       LS.set('ultima_publicacion', Date.now().toString());
@@ -2125,16 +2484,17 @@ const TUT_STEPS = [
     body: 'En cada tarjeta del historial encontrarás:<br><br>• Botón <strong style="color:var(--cy)">✏️ Editar</strong> — abre un modal donde puedes actualizar el título, descripción, enlace, imagen y categoría. Las mismas reglas de palabras prohibidas y plataformas permitidas aplican exactamente igual que al publicar.<br><br>• Botón <strong style="color:#ff4343">🗑️ Borrar</strong> — elimina la publicación permanentemente (pide confirmación). No se puede deshacer.'
   },
 
-  // ── SECCIÓN: FAVORITOS ──────────────────────────────────
+  // ── TAB: BÓVEDA ─────────────────────────────────────────
   {
-    sel: '#pf-section-favoritos',
-    title: '❤️ Favoritos',
-    body: 'Tu <strong>biblioteca personal</strong> de contenido guardado. Aquí aparecen todos los ítems que marcaste con ❤️ desde la biblioteca principal. Los favoritos se sincronizan con el servidor y están disponibles en cualquier dispositivo.'
+    sel: '[data-pftab="boveda"]',
+    title: '🛡️ Pestaña: Bóveda (Favoritos)',
+    body: 'Tu <strong>biblioteca personal</strong> de contenido guardado. Aquí aparecen todos los ítems que marcaste con ❤️ desde la biblioteca principal.',
+    onEnter: function() { pfSwitchTab('boveda', document.querySelector('[data-pftab="boveda"]')); }
   },
   {
     sel: '#pf-vaultContent',
-    title: '💎 Tus Favoritos Guardados',
-    body: 'Cada ítem guardado muestra imagen, título y usuario creador. Tienes dos botones:<br>• <strong>Acceder</strong> (verde) — te lleva directamente al link de descarga<br>• <strong>Quitar</strong> (rojo) — elimina el ítem de tus favoritos'
+    title: '💎 Contenido de tu Bóveda',
+    body: 'Cada ítem guardado muestra imagen, título y usuario creador. Tienes dos botones:<br>• <strong>Acceder</strong> (verde) — te lleva directamente al link de descarga<br>• <strong>Quitar</strong> (rojo) — elimina el ítem de tu bóveda<br><br>Los favoritos se sincronizan con el servidor, así que están disponibles en cualquier dispositivo donde inicies sesión.'
   },
 
   // ── TAB: REPORTES ────────────────────────────────────────
@@ -2150,11 +2510,12 @@ const TUT_STEPS = [
     body: 'Cada tarjeta de reporte muestra:<br>• Nombre de la publicación<br>• Total de reportes y desglose: <strong style="color:#ff4343">Link caído</strong> · <strong style="color:#ffaa00">Obsoleto</strong> · <strong style="color:#ff00ff">Malware</strong><br>• Estado actual del link (Online / Revisión / Caído)<br><br>Si tienes reportes, actualiza el link desde <strong>Historial → Editar</strong>. Más de 3 reportes ponen el contenido en revisión automáticamente.'
   },
 
-  // ── SECCIÓN: ECONOMÍA ───────────────────────────────────
+  // ── TAB: ECONOMÍA ────────────────────────────────────────
   {
-    sel: '#pf-section-economia',
-    title: '💰 Mi Economía (Ganancias)',
-    body: 'Aquí gestionas tus <strong>ganancias en UpGames</strong>. Por cada 1,000 descargas efectivas de tus aportes ganas $1.00 USD.'
+    sel: '[data-pftab="economia"]',
+    title: '💰 Pestaña: Economía (Ganancias)',
+    body: 'Aquí gestionas tus <strong>ganancias en UpGames</strong>. Por cada 1,000 descargas efectivas de tus aportes ganas $1.00 USD.',
+    onEnter: function() { pfSwitchTab('economia', document.querySelector('[data-pftab="economia"]')); }
   },
   {
     sel: '.pf-saldo-box',

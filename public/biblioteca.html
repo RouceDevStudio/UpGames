@@ -26,6 +26,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
 <link rel="stylesheet" href="biblioteca.css">
+<script src="https://upload-widget.cloudinary.com/global/all.js" type="text/javascript"></script>
 
 </head>
 <body>
@@ -98,6 +99,20 @@
 </main>
 
 <!-- ══════════════════════════════════
+  FAVORITES VIEW
+══════════════════════════════════ -->
+<div id="favs-view">
+  <div class="favs-header"><ion-icon name="heart"></ion-icon> Mis Favoritos</div>
+  <div id="favs-grid">
+    <div class="empty-state">
+      <ion-icon name="heart-outline"></ion-icon>
+      <h3>Sin favoritos aún</h3>
+      <p>Guarda contenido que te guste pulsando ❤️</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
   PROFILE VIEW — FULL PERFIL INTEGRADO
 ══════════════════════════════════ -->
 <div id="profile-view">
@@ -168,107 +183,228 @@
       <button class="perfil-tab" data-pftab="historial" onclick="pfSwitchTab('historial',this)">
         <ion-icon name="time"></ion-icon> Historial
       </button>
-      <button class="perfil-tab" data-pftab="reportes" onclick="pfSwitchTab('reportes',this)">
+<button class="perfil-tab" data-pftab="reportes" onclick="pfSwitchTab('reportes',this)">
         <ion-icon name="flag"></ion-icon> Reportes
       </button>
+
     </div>
 
     <!-- ══ TAB: PUBLICAR ══ -->
     <div id="pf-tab-publicar" class="perfil-tab-content active">
-      <div class="pf-section-title"><ion-icon name="cloud-upload"></ion-icon> SUBIR NUEVO PROYECTO</div>
 
-      <!-- Título -->
-      <div class="pf-form-group">
-        <label class="pf-label">
-          Título del Proyecto
-          <span class="pf-info-icon" onclick="pfToggleTooltip('pf-tooltip-title')">?</span>
-        </label>
-        <input type="text" id="pf-addTitle" class="pf-input" placeholder="Ej: GTA V Optimizado">
-      </div>
-
-      <!-- Descripción -->
-      <div class="pf-form-group">
-        <label class="pf-label">Descripción (opcional)</label>
-        <textarea id="pf-addDescription" class="pf-textarea" placeholder="Breve descripción..."></textarea>
-      </div>
-
-      <!-- Link -->
-      <div class="pf-form-group">
-        <label class="pf-label">
-          Link de Descarga
-          <span class="pf-info-icon" onclick="pfToggleTooltip('pf-tooltip-link')">?</span>
-        </label>
-        <input type="url" id="pf-addLink" class="pf-input" placeholder="https://mediafire.com/...">
-      </div>
-
-      <!-- Medias (hasta 4: imagen principal + 3 adicionales) -->
-      <div class="pf-form-group">
-        <label class="pf-label">
-          Medias (hasta 4 imágenes o videos)
-          <span class="pf-info-icon" onclick="pfToggleTooltip('pf-tooltip-image')">?</span>
-        </label>
-        <div class="pf-images-grid">
-          <div class="pf-image-slot">
-            <div class="pf-image-slot-label"><ion-icon name="image"></ion-icon> Portada principal</div>
-            <input type="url" id="pf-addImage" class="pf-input" placeholder="URL imagen o YouTube..." oninput="pfUpdatePreview();pfPreviewSlot(0)">
-            <div class="pf-img-preview-mini" id="pf-slot-prev-0"><img src="" alt=""></div>
-          </div>
-          <div class="pf-image-slot">
-            <div class="pf-image-slot-label"><ion-icon name="images"></ion-icon> Media 2</div>
-            <input type="url" id="pf-addImage2" class="pf-input" placeholder="URL imagen o YouTube..." oninput="pfPreviewSlot(1)">
-            <div class="pf-img-preview-mini" id="pf-slot-prev-1"><img src="" alt=""></div>
-          </div>
-          <div class="pf-image-slot">
-            <div class="pf-image-slot-label"><ion-icon name="images"></ion-icon> Media 3</div>
-            <input type="url" id="pf-addImage3" class="pf-input" placeholder="URL imagen o YouTube..." oninput="pfPreviewSlot(2)">
-            <div class="pf-img-preview-mini" id="pf-slot-prev-2"><img src="" alt=""></div>
-          </div>
-          <div class="pf-image-slot">
-            <div class="pf-image-slot-label"><ion-icon name="images"></ion-icon> Media 4</div>
-            <input type="url" id="pf-addImage4" class="pf-input" placeholder="URL imagen o YouTube..." oninput="pfPreviewSlot(3)">
-            <div class="pf-img-preview-mini" id="pf-slot-prev-3"><img src="" alt=""></div>
-          </div>
+      <!-- ── SELECTOR DE CATEGORÍA — SIEMPRE VISIBLE PRIMERO ── -->
+      <div class="pf-cat-selector">
+        <div class="pf-cat-selector-title"><ion-icon name="apps"></ion-icon> ¿QUÉ VAS A PUBLICAR?</div>
+        <div class="pf-cat-grid" id="pf-cat-grid">
+          <button class="pf-cat-btn active" data-cat="Juego" onclick="pfOnCategoryChange('Juego',this)">
+            <ion-icon name="game-controller"></ion-icon>
+            <span>Juego</span>
+          </button>
+          <button class="pf-cat-btn" data-cat="Mod" onclick="pfOnCategoryChange('Mod',this)">
+            <ion-icon name="construct"></ion-icon>
+            <span>Mod</span>
+          </button>
+          <button class="pf-cat-btn" data-cat="Apps" onclick="pfOnCategoryChange('Apps',this)">
+            <ion-icon name="phone-portrait"></ion-icon>
+            <span>Apps</span>
+          </button>
+          <button class="pf-cat-btn" data-cat="Software" onclick="pfOnCategoryChange('Software',this)">
+            <ion-icon name="code-slash"></ion-icon>
+            <span>Software</span>
+          </button>
+          <button class="pf-cat-btn" data-cat="Ajustes" onclick="pfOnCategoryChange('Ajustes',this)">
+            <ion-icon name="settings"></ion-icon>
+            <span>Herramientas</span>
+          </button>
+          <button class="pf-cat-btn" data-cat="Optimizacion" onclick="pfOnCategoryChange('Optimizacion',this)">
+            <ion-icon name="speedometer"></ion-icon>
+            <span>Optimización</span>
+          </button>
+          <button class="pf-cat-btn pf-cat-btn-video" data-cat="Video" onclick="pfOnCategoryChange('Video',this)">
+            <ion-icon name="videocam"></ion-icon>
+            <span>Video</span>
+          </button>
         </div>
       </div>
 
-      <!-- Categoría -->
-      <div class="pf-form-group">
-        <label class="pf-label">
-          Categoría
-          <span class="pf-cat-badge" onclick="pfOpenCatInfo()">
-            <ion-icon name="help-circle"></ion-icon> VER INFO
-          </span>
-        </label>
-        <select id="pf-addCategory" class="pf-select">
-          <option value="Juego">Juego</option>
-          <option value="Mod">Mod</option>
-          <option value="Optimizacion">Optimización</option>
-          <option value="Ajustes">Ajustes (Herramientas)</option>
-          <option value="Apps">Apps</option>
-          <option value="Software">Software Open Source</option>
-        </select>
-      </div>
+      <!-- Input oculto que guarda la categoría seleccionada -->
+      <input type="hidden" id="pf-addCategory" value="Juego">
 
-      <!-- Vista previa -->
-      <div class="pf-section-title" style="font-size:.62rem"><ion-icon name="eye"></ion-icon> VISTA PREVIA</div>
-      <div class="pf-preview-card">
-        <img id="pf-prev-img" src="https://via.placeholder.com/300x150?text=Esperando+Imagen" alt="Preview">
-        <div class="pf-preview-info">
-          <span id="pf-prev-tag" class="pf-preview-tag">CATEGORÍA</span>
-          <div id="pf-prev-title" class="pf-preview-title">Título del Proyecto</div>
+      <!-- ══════════════════════════════════════
+        FORMULARIO ESTÁNDAR (Juego/Mod/Apps/Software/Ajustes/Optimización)
+      ══════════════════════════════════════ -->
+      <div id="pf-form-standard">
+        <div class="pf-form-section-hdr" id="pf-form-standard-hdr">
+          <ion-icon name="game-controller" id="pf-form-icon"></ion-icon>
+          <span id="pf-form-cat-label">SUBIR JUEGO</span>
         </div>
+
+        <!-- Título -->
+        <div class="pf-form-group">
+          <label class="pf-label">Título <span class="pf-info-icon" onclick="pfToggleTooltip('pf-tooltip-title')">?</span></label>
+          <input type="text" id="pf-addTitle" class="pf-input" placeholder="Ej: GTA V Optimizado">
+        </div>
+
+        <!-- Descripción -->
+        <div class="pf-form-group">
+          <label class="pf-label">Descripción (opcional)</label>
+          <textarea id="pf-addDescription" class="pf-textarea" placeholder="Breve descripción..."></textarea>
+        </div>
+
+        <!-- Campos extra dinámicos por categoría -->
+        <div id="pf-extra-fields"></div>
+
+        <!-- Link de descarga -->
+        <div class="pf-form-group">
+          <label class="pf-label">Link de Descarga <span class="pf-info-icon" onclick="pfToggleTooltip('pf-tooltip-link')">?</span></label>
+          <input type="url" id="pf-addLink" class="pf-input" placeholder="https://mediafire.com/...">
+        </div>
+
+        <!-- Medias -->
+        <div class="pf-form-group">
+          <label class="pf-label">Medias (hasta 4 imágenes/videos) <span class="pf-info-icon" onclick="pfToggleTooltip('pf-tooltip-image')">?</span></label>
+          <div class="pf-images-grid">
+            <div class="pf-image-slot">
+              <div class="pf-image-slot-label"><ion-icon name="image"></ion-icon> Portada</div>
+              <input type="url" id="pf-addImage" class="pf-input" placeholder="URL imagen o YouTube..." oninput="pfUpdatePreview();pfPreviewSlot(0)">
+              <div class="pf-img-preview-mini" id="pf-slot-prev-0"><img src="" alt=""></div>
+            </div>
+            <div class="pf-image-slot">
+              <div class="pf-image-slot-label"><ion-icon name="images"></ion-icon> Media 2</div>
+              <input type="url" id="pf-addImage2" class="pf-input" placeholder="URL imagen o YouTube..." oninput="pfPreviewSlot(1)">
+              <div class="pf-img-preview-mini" id="pf-slot-prev-1"><img src="" alt=""></div>
+            </div>
+            <div class="pf-image-slot">
+              <div class="pf-image-slot-label"><ion-icon name="images"></ion-icon> Media 3</div>
+              <input type="url" id="pf-addImage3" class="pf-input" placeholder="URL imagen o YouTube..." oninput="pfPreviewSlot(2)">
+              <div class="pf-img-preview-mini" id="pf-slot-prev-2"><img src="" alt=""></div>
+            </div>
+            <div class="pf-image-slot">
+              <div class="pf-image-slot-label"><ion-icon name="images"></ion-icon> Media 4</div>
+              <input type="url" id="pf-addImage4" class="pf-input" placeholder="URL imagen o YouTube..." oninput="pfPreviewSlot(3)">
+              <div class="pf-img-preview-mini" id="pf-slot-prev-3"><img src="" alt=""></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vista previa -->
+        <div class="pf-section-title" style="font-size:.62rem"><ion-icon name="eye"></ion-icon> VISTA PREVIA</div>
+        <div class="pf-preview-card">
+          <img id="pf-prev-img" src="https://via.placeholder.com/300x150?text=Esperando+Imagen" alt="Preview">
+          <div class="pf-preview-info">
+            <span id="pf-prev-tag" class="pf-preview-tag">CATEGORÍA</span>
+            <div id="pf-prev-title" class="pf-preview-title">Título del Proyecto</div>
+          </div>
+        </div>
+
+        <button class="pf-btn-submit" id="pf-subirBtn">
+          <ion-icon name="cloud-upload"></ion-icon> ENVIAR A REVISIÓN
+        </button>
       </div>
 
-      <button class="pf-btn-submit" id="pf-subirBtn">
-        <ion-icon name="cloud-upload"></ion-icon>
-        ENVIAR A REVISIÓN
-      </button>
+      <!-- ══════════════════════════════════════
+        FORMULARIO VIDEO (Cloudinary)
+      ══════════════════════════════════════ -->
+      <div id="pf-form-video" style="display:none">
+        <div class="pf-form-section-hdr pf-form-section-hdr--video">
+          <ion-icon name="videocam"></ion-icon>
+          <span>SUBIR VIDEO</span>
+        </div>
+
+        <!-- Título del video -->
+        <div class="pf-form-group">
+          <label class="pf-label">Título del Video</label>
+          <input type="text" id="pf-vid-title" class="pf-input" placeholder="Ej: Tutorial de instalación GTA V">
+        </div>
+
+        <!-- Descripción -->
+        <div class="pf-form-group">
+          <label class="pf-label">Descripción</label>
+          <textarea id="pf-vid-description" class="pf-textarea" style="height:100px" placeholder="¿De qué trata el video?..."></textarea>
+        </div>
+
+        <!-- Subgénero del video -->
+        <div class="pf-form-group">
+          <label class="pf-label"><ion-icon name="pricetag"></ion-icon> Tipo de Video</label>
+          <div class="pf-vid-type-grid" id="pf-vid-type-grid">
+            <button class="pf-vid-type-btn active" data-type="Tutorial" onclick="pfSelectVidType('Tutorial',this)"><ion-icon name="school"></ion-icon> Tutorial</button>
+            <button class="pf-vid-type-btn" data-type="Gameplay" onclick="pfSelectVidType('Gameplay',this)"><ion-icon name="game-controller"></ion-icon> Gameplay</button>
+            <button class="pf-vid-type-btn" data-type="Review" onclick="pfSelectVidType('Review',this)"><ion-icon name="star"></ion-icon> Review</button>
+            <button class="pf-vid-type-btn" data-type="Showcase" onclick="pfSelectVidType('Showcase',this)"><ion-icon name="eye"></ion-icon> Showcase</button>
+            <button class="pf-vid-type-btn" data-type="Otro" onclick="pfSelectVidType('Otro',this)"><ion-icon name="ellipsis-horizontal"></ion-icon> Otro</button>
+          </div>
+          <input type="hidden" id="pf-vid-type" value="Tutorial">
+        </div>
+
+        <!-- Upload Cloudinary -->
+        <div class="pf-form-group">
+          <label class="pf-label"><ion-icon name="cloud-upload" style="color:var(--cy)"></ion-icon> Subir Video</label>
+          <div class="pf-cloudinary-zone" id="pf-cloudinary-zone">
+            <div class="pf-cld-idle" id="pf-cld-idle">
+              <ion-icon name="cloud-upload-outline"></ion-icon>
+              <p>Sube tu video directamente a la nube</p>
+              <span>MP4, WebM, MOV — máx. 500MB</span>
+              <button class="pf-cld-btn" id="pf-cld-open-btn" onclick="pfOpenCloudinaryWidget()">
+                <ion-icon name="videocam"></ion-icon> SELECCIONAR VIDEO
+              </button>
+            </div>
+            <div class="pf-cld-uploading" id="pf-cld-uploading" style="display:none">
+              <div class="pf-cld-spinner"></div>
+              <p>Subiendo video...</p>
+              <div class="pf-cld-progress-bar"><div class="pf-cld-progress-fill" id="pf-cld-progress-fill"></div></div>
+            </div>
+            <div class="pf-cld-done" id="pf-cld-done" style="display:none">
+              <ion-icon name="checkmark-circle" style="color:var(--g);font-size:2rem"></ion-icon>
+              <p class="pf-cld-done-label">¡Video subido!</p>
+              <video id="pf-vid-preview" controls playsinline muted style="width:100%;border-radius:10px;margin-top:8px;max-height:200px;object-fit:cover"></video>
+              <button class="pf-cld-change-btn" onclick="pfOpenCloudinaryWidget()">
+                <ion-icon name="refresh"></ion-icon> Cambiar video
+              </button>
+            </div>
+          </div>
+          <input type="hidden" id="pf-vid-url" value="">
+        </div>
+
+        <!-- Miniatura personalizada -->
+        <div class="pf-form-group">
+          <label class="pf-label"><ion-icon name="image"></ion-icon> Miniatura (opcional)</label>
+          <input type="url" id="pf-vid-thumbnail" class="pf-input" placeholder="URL de imagen o déjalo vacío para auto-generar" oninput="pfUpdateVideoPreview()">
+          <div class="pf-img-preview-mini" id="pf-vid-thumb-prev"><img src="" alt=""></div>
+        </div>
+
+        <!-- Vista previa del video card -->
+        <div class="pf-section-title" style="font-size:.62rem"><ion-icon name="eye"></ion-icon> VISTA PREVIA</div>
+        <div class="pf-video-preview-card" id="pf-video-preview-card">
+          <div class="pf-vpc-thumb">
+            <img id="pf-vpc-img" src="https://via.placeholder.com/300x170/07070f/5EFF43?text=▶+VIDEO" alt="">
+            <div class="pf-vpc-play"><ion-icon name="play-circle"></ion-icon></div>
+            <div class="pf-vpc-badge">VIDEO</div>
+          </div>
+          <div class="pf-vpc-info">
+            <div class="pf-vpc-type" id="pf-vpc-type">Tutorial</div>
+            <div class="pf-vpc-title" id="pf-vpc-title">Título del Video</div>
+          </div>
+        </div>
+
+        <button class="pf-btn-submit pf-btn-submit--video" id="pf-subirVideoBtn">
+          <ion-icon name="cloud-upload"></ion-icon> PUBLICAR VIDEO
+        </button>
+      </div>
+
     </div>
 
     <!-- ══ TAB: HISTORIAL ══ -->
     <div id="pf-tab-historial" class="perfil-tab-content">
       <div class="pf-section-title"><ion-icon name="time"></ion-icon> TUS PUBLICACIONES</div>
       <div class="pf-items-grid" id="pf-showContent">
+        <div class="pf-empty"><ion-icon name="sync-outline"></ion-icon><p>Cargando...</p></div>
+      </div>
+    </div>
+
+    <!-- ══ TAB: BÓVEDA ══ -->
+    <div id="pf-tab-boveda" class="perfil-tab-content">
+      <div class="pf-section-title"><ion-icon name="shield-checkmark"></ion-icon> FAVORITOS GUARDADOS</div>
+      <div class="pf-items-grid" id="pf-vaultContent">
         <div class="pf-empty"><ion-icon name="sync-outline"></ion-icon><p>Cargando...</p></div>
       </div>
     </div>
@@ -288,18 +424,9 @@
       </div>
     </div>
 
+    <!-- ══ TAB: ECONOMÍA ══ -->
   </div><!-- /#pf-logged -->
 </div><!-- /#profile-view -->
-
-<!-- ══════════════════════════════════
-  FAVORITES VIEW (vista independiente)
-══════════════════════════════════ -->
-<div id="favs-view">
-  <div class="favs-header"><ion-icon name="heart"></ion-icon> Mis Favoritos</div>
-  <div id="pf-vaultContent" class="pf-items-grid">
-    <div class="pf-empty"><ion-icon name="sync-outline"></ion-icon><p>Cargando...</p></div>
-  </div>
-</div>
 
 <!-- ══════════════════════════════════
   ECONOMIA VIEW (vista independiente)
