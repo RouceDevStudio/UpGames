@@ -481,6 +481,13 @@ const JuegoSchema = new mongoose.Schema({
         default: 0,
         min: 0
     },
+
+    // ⭐ LIKES: Cantidad de usuarios que han guardado este item como favorito
+    likesCount: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
     
     // ⭐ NUEVO: Score de recomendación (calculado automáticamente)
     scoreRecomendacion: {
@@ -509,8 +516,9 @@ JuegoSchema.index({ usuario: 1, status: 1 });
 JuegoSchema.index({ createdAt: -1 });
 JuegoSchema.index({ linkStatus: 1 });
 JuegoSchema.index({ descargasEfectivas: -1 });
+JuegoSchema.index({ likesCount: -1 });
 JuegoSchema.index({ status: 1 });
-JuegoSchema.index({ scoreRecomendacion: -1 }); // ⭐ NUEVO: Índice para ordenamiento rápido
+JuegoSchema.index({ scoreRecomendacion: -1 }); // ⭐ Índice para ordenamiento rápido
 
 // Middleware para actualizar linkStatus automáticamente
 JuegoSchema.pre('save', function(next) {
@@ -1021,14 +1029,14 @@ async function calcularScoreRecomendacion(juegoId) {
         else if (nivelVerificacion === 2) scoreBase = 100000;
         else if (nivelVerificacion === 1) scoreBase = 10000;
         
-        const scoreDescargas = juego.descargasEfectivas || 0;
-        const scoreFinal = scoreBase + scoreDescargas;
+        const scoreLikes = juego.likesCount || 0;
+        const scoreFinal = scoreBase + scoreLikes;
         
         await Juego.findByIdAndUpdate(juegoId, {
             scoreRecomendacion: scoreFinal
         });
         
-        logger.info(`Score actualizado - Item: ${juego.title} | Nivel: ${nivelVerificacion} | Descargas: ${scoreDescargas} | Score: ${scoreFinal}`);
+        logger.info(`Score actualizado - Item: ${juego.title} | Nivel: ${nivelVerificacion} | Likes: ${scoreLikes} | Score: ${scoreFinal}`);
         
     } catch (err) {
         logger.error(`Error calculando score: ${err.message}`);
@@ -1966,7 +1974,7 @@ app.get('/admin/stats/dashboard', verificarAdmin, async (req, res) => {
                 { $limit: 5 }
             ]),
             Usuario.countDocuments({ listaNegraAdmin: true }),
-            Juego.find({ status: 'aprobado' }).sort({ descargasEfectivas: -1 }).limit(5).select('title usuario descargasEfectivas').lean()
+            Juego.find({ status: 'aprobado' }).sort({ likesCount: -1 }).limit(5).select('title usuario likesCount descargasEfectivas').lean()
         ]);
 
         res.json({
@@ -2320,6 +2328,32 @@ app.put("/admin/items/:id/link-status", verificarAdmin, [
     }
 });
 
+// ── REGISTRAR VISTA DE VIDEO ─────────────────────────────
+// Llamado desde el frontend tras 60 seg de permanencia en un video.
+// Incrementa descargasEfectivas SIN generar earnings al autor.
+app.put('/items/download/:id', [param('id').isMongoId()], async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'ID inválido' });
+
+        const { tipo } = req.body;
+        if (tipo !== 'vista') return res.status(400).json({ success: false, error: 'Tipo inválido' });
+
+        const juego = await Juego.findByIdAndUpdate(
+            req.params.id,
+            { $inc: { descargasEfectivas: 1 } },
+            { new: true, select: 'descargasEfectivas likesCount' }
+        );
+        if (!juego) return res.status(404).json({ success: false, error: 'Item no encontrado' });
+
+        logger.info(`Vista registrada — ID: ${req.params.id}, Total: ${juego.descargasEfectivas}`);
+        res.json({ success: true, descargasEfectivas: juego.descargasEfectivas });
+    } catch (error) {
+        logger.error(`Error registrando vista: ${error.message}`);
+        res.status(500).json({ success: false });
+    }
+});
+
 app.put("/items/report/:id", [
     param('id').isMongoId(),
     body('motivo').isIn(['caido', 'viejo', 'malware'])
@@ -2475,8 +2509,8 @@ app.get("/items", async (req, res) => {
         }
 
         const items = await Juego.find(filtro)
-            .select('_id title description image images link category usuario reportes linkStatus descargasEfectivas extraData videoType scoreRecomendacion')
-            .sort({ scoreRecomendacion: -1, createdAt: -1 }) // ⭐ NUEVO: Ordenar por score primero, luego por fecha
+            .select('_id title description image images link category usuario reportes linkStatus descargasEfectivas likesCount extraData videoType scoreRecomendacion')
+            .sort({ scoreRecomendacion: -1, createdAt: -1 }) // Ordenar por score (verificación+likes) luego fecha
             .limit(100)
             .lean();
 
@@ -2491,7 +2525,7 @@ app.get("/items/user/:usuario", async (req, res) => {
         const aportes = await Juego.find({ 
             usuario: req.params.usuario 
         })
-            .select('_id title description image images link category usuario reportes reportesDesglose linkStatus descargasEfectivas status createdAt scoreRecomendacion extraData videoType')
+            .select('_id title description image images link category usuario reportes reportesDesglose linkStatus descargasEfectivas likesCount status createdAt scoreRecomendacion extraData videoType')
             .sort({ scoreRecomendacion: -1, createdAt: -1 })
             .lean();
         res.json(aportes);
@@ -2789,7 +2823,7 @@ app.get('/items/recomendados/:usuario', async (req, res) => {
 
         // Obtener candidatos ordenados por score de recomendación
         let items = await Juego.find(query)
-            .sort({ scoreRecomendacion: -1, descargasEfectivas: -1 })
+            .sort({ scoreRecomendacion: -1, likesCount: -1 })
             .limit(lim * 3) // traer más para poder ponderar
             .lean();
 
@@ -2890,7 +2924,7 @@ app.get('/admin/users/detalle/:id', verificarAdmin, async (req, res) => {
 
         // Obtener juegos del usuario
         const juegos = await Juego.find({ usuario: user.usuario })
-            .select('title status descargasEfectivas linkStatus createdAt')
+            .select('title status descargasEfectivas likesCount linkStatus createdAt')
             .lean();
 
         res.json({ success: true, user, juegos });
@@ -3182,6 +3216,9 @@ app.post('/favoritos/add', [
         if (existe) return res.status(400).json({ success: false, error: 'Ya está en favoritos' });
         const fav = new Favorito({ usuario, itemId });
         await fav.save();
+        // Incrementar likesCount del item y recalcular score
+        await Juego.findByIdAndUpdate(itemId, { $inc: { likesCount: 1 } });
+        await calcularScoreRecomendacion(itemId);
         res.json({ success: true, ok: true });
     } catch (error) {
         logger.error(`Error en favoritos/add: ${error.message}`);
@@ -3194,10 +3231,18 @@ app.delete('/favoritos/remove', [
     body('itemId').isMongoId()
 ], async (req, res) => {
     try {
-        const { usuario, itemId } = req.body;
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'Datos inválidos' });
+        const usuario = req.usuario;          // ← viene del token JWT, no del body
+        const { itemId } = req.body;
         await Favorito.deleteOne({ usuario, itemId });
+        // Decrementar likesCount (sin bajar de 0) y recalcular score
+        await Juego.findByIdAndUpdate(itemId, { $inc: { likesCount: -1 } });
+        await Juego.updateOne({ _id: itemId, likesCount: { $lt: 0 } }, { $set: { likesCount: 0 } });
+        await calcularScoreRecomendacion(itemId);
         res.json({ success: true, ok: true });
     } catch (error) {
+        logger.error(`Error en favoritos/remove: ${error.message}`);
         res.status(500).json({ success: false, error: "Error al eliminar favorito" });
     }
 });
@@ -3207,7 +3252,7 @@ app.get('/favoritos/:usuario', async (req, res) => {
         const favs = await Favorito.find({ usuario: req.params.usuario })
             .populate({
                 path: 'itemId',
-                select: '_id title description image link category usuario status reportes linkStatus descargasEfectivas'
+                select: '_id title description image link category usuario status reportes linkStatus descargasEfectivas likesCount'
             })
             .lean();
 
@@ -3224,7 +3269,8 @@ app.get('/favoritos/:usuario', async (req, res) => {
                 status: fav.itemId.status,
                 reportes: fav.itemId.reportes,
                 linkStatus: fav.itemId.linkStatus,
-                descargasEfectivas: fav.itemId.descargasEfectivas
+                descargasEfectivas: fav.itemId.descargasEfectivas,
+                likesCount: fav.itemId.likesCount || 0
             }));
 
         res.json(items);
