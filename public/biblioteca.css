@@ -196,6 +196,16 @@ input, textarea { font-family:inherit; }
   border-color:var(--g);
   color:var(--g);
 }
+.chip--video {
+  border-color:rgba(0,242,255,.3);
+  color:var(--cy);
+  background:rgba(0,242,255,.07);
+}
+.chip--video.active, .chip--video:active {
+  background:rgba(0,242,255,.18);
+  border-color:var(--cy);
+  color:var(--cy);
+}
 
 /* ═══════════════════════════════════════════
    MAIN CONTENT AREA
@@ -2894,3 +2904,23 @@ body.nx-open #nxFab {
   color: #b2bec3;
 }
 .game-tile--ajustes .tile-extra-badge ion-icon { color: #b2bec3; }
+
+/* ── Historial: header sección videos ── */
+.pf-hist-vid-hdr {
+  display:flex; align-items:center; gap:7px;
+  font-size:.68rem; font-weight:800; letter-spacing:2px;
+  text-transform:uppercase; color:var(--cy);
+  padding:10px 12px; margin:14px 0 10px;
+  background:rgba(0,242,255,.08);
+  border:1px solid rgba(0,242,255,.2);
+  border-radius:12px;
+}
+.pf-hist-vid-hdr ion-icon { font-size:1rem; }
+.pf-hist-vid-count {
+  margin-left:auto;
+  background:rgba(0,242,255,.15);
+  color:var(--cy);
+  font-size:.6rem; font-weight:800;
+  padding:2px 8px; border-radius:999px;
+}
+.pf-item-card--video { border-color:rgba(0,242,255,.15); }

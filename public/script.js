@@ -1640,7 +1640,10 @@ async function pfSubirJuego() {
 
 // ── Historial ──
 async function pfLoadHistorial() {
-  const cont = document.getElementById('pf-showContent');
+  const cont      = document.getElementById('pf-showContent');
+  const vidCont   = document.getElementById('pf-showVideos');
+  const vidHdr    = document.getElementById('pf-hist-vid-hdr');
+  const vidCount  = document.getElementById('pf-hist-vid-count');
   if(!cont || !pfUser) return;
   cont.innerHTML = '<div class="pf-empty"><ion-icon name="sync-outline"></ion-icon><p>Cargando...</p></div>';
   try {
@@ -1650,38 +1653,166 @@ async function pfLoadHistorial() {
     });
     const data = await res.json();
     const items = Array.isArray(data) ? data.reverse() : [];
-    if(!items.length) {
+
+    const juegos = items.filter(i => i.category !== 'Video');
+    const videos = items.filter(i => i.category === 'Video');
+
+    // ── Publicaciones (no video) ──
+    cont.innerHTML = '';
+    if(!juegos.length) {
       cont.innerHTML='<div class="pf-empty"><ion-icon name="cloud-offline-outline"></ion-icon><p>Aún no has publicado nada.</p></div>';
+    } else {
+      juegos.forEach(item => {
+        const isPending = item.status==='pendiente'||item.status==='pending';
+        const ls = item.linkStatus||'online';
+        const lsText = ls==='online'?'🟢 Online':ls==='revision'?'🟡 Rev.':'🔴 Caído';
+        const card = document.createElement('div');
+        card.className = 'pf-item-card';
+        card.innerHTML = `
+          <div class="pf-item-badge ${isPending?'pending':'approved'}">${isPending?'Pendiente':'Aprobado'}</div>
+          <img src="${item.image||'https://via.placeholder.com/300x170?text=Sin+Imagen'}" alt="${item.title}" onerror="this.src='https://via.placeholder.com/300x170?text=Sin+Imagen'">
+          <div class="pf-item-info">
+            <div class="pf-item-title">${item.title||'Sin título'}</div>
+            <div class="pf-item-cat">${item.category||'General'}</div>
+            <div class="pf-item-stats">
+              <div class="pf-item-stat"><div class="pf-item-stat-val">${item.descargasEfectivas||0}</div><div class="pf-item-stat-lbl">DL</div></div>
+              <div class="pf-item-stat"><div class="pf-item-stat-val" style="font-size:.62rem">${lsText}</div><div class="pf-item-stat-lbl">LINK</div></div>
+              <div class="pf-item-stat"><div class="pf-item-stat-val" style="color:${(item.reportes||0)>=3?'#ff4343':'var(--txt)'}">${item.reportes||0}</div><div class="pf-item-stat-lbl">REP</div></div>
+            </div>
+            <div class="pf-item-actions">
+              <button class="pf-btn-action edit" onclick="pfOpenEditModal('${item._id}')"><ion-icon name="create"></ion-icon> Editar</button>
+              <button class="pf-btn-action del" onclick="pfEliminar('${item._id}')"><ion-icon name="trash"></ion-icon> Borrar</button>
+            </div>
+          </div>`;
+        cont.appendChild(card);
+      });
+    }
+
+    // ── Videos ──
+    if(!vidCont || !vidHdr) return;
+    if(!videos.length) {
+      vidHdr.style.display = 'none';
+      vidCont.style.display = 'none';
       return;
     }
-    cont.innerHTML='';
-    items.forEach(item => {
+    vidHdr.style.display = 'flex';
+    vidCont.style.display = 'grid';
+    if(vidCount) vidCount.textContent = videos.length;
+    vidCont.innerHTML = '';
+    videos.forEach(item => {
       const isPending = item.status==='pendiente'||item.status==='pending';
       const ls = item.linkStatus||'online';
       const lsText = ls==='online'?'🟢 Online':ls==='revision'?'🟡 Rev.':'🔴 Caído';
       const card = document.createElement('div');
-      card.className = 'pf-item-card';
+      card.className = 'pf-item-card pf-item-card--video';
       card.innerHTML = `
         <div class="pf-item-badge ${isPending?'pending':'approved'}">${isPending?'Pendiente':'Aprobado'}</div>
-        <img src="${item.image||'https://via.placeholder.com/300x170?text=Sin+Imagen'}" alt="${item.title}" onerror="this.src='https://via.placeholder.com/300x170?text=Sin+Imagen'">
+        <div style="position:relative">
+          <img src="${item.image||'https://via.placeholder.com/300x170/07070f/00f2ff?text=VIDEO'}" alt="${item.title}" style="width:100%;height:100px;object-fit:cover;display:block" onerror="this.src='https://via.placeholder.com/300x170/07070f/00f2ff?text=VIDEO'">
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.3)"><ion-icon name="play-circle" style="font-size:2rem;color:rgba(255,255,255,.9)"></ion-icon></div>
+          ${item.videoType?`<div style="position:absolute;bottom:5px;left:5px;background:rgba(0,242,255,.85);color:#000;font-size:.55rem;font-weight:800;padding:2px 7px;border-radius:999px;text-transform:uppercase">${item.videoType}</div>`:''}
+        </div>
         <div class="pf-item-info">
           <div class="pf-item-title">${item.title||'Sin título'}</div>
-          <div class="pf-item-cat">${item.category||'General'}</div>
+          <div class="pf-item-cat" style="color:var(--cy)">Video</div>
           <div class="pf-item-stats">
             <div class="pf-item-stat"><div class="pf-item-stat-val">${item.descargasEfectivas||0}</div><div class="pf-item-stat-lbl">DL</div></div>
             <div class="pf-item-stat"><div class="pf-item-stat-val" style="font-size:.62rem">${lsText}</div><div class="pf-item-stat-lbl">LINK</div></div>
             <div class="pf-item-stat"><div class="pf-item-stat-val" style="color:${(item.reportes||0)>=3?'#ff4343':'var(--txt)'}">${item.reportes||0}</div><div class="pf-item-stat-lbl">REP</div></div>
           </div>
           <div class="pf-item-actions">
-            <button class="pf-btn-action edit" onclick="pfOpenEditModal('${item._id}')"><ion-icon name="create"></ion-icon> Editar</button>
-            <button class="pf-btn-action del" onclick="pfEliminar('${item._id}')"><ion-icon name="trash"></ion-icon> Borrar</button>
+            <button class="pf-btn-action edit" style="background:rgba(0,242,255,.12);border-color:rgba(0,242,255,.3);color:var(--cy)" onclick="pfOpenEditVideoModal('${item._id}')"><ion-icon name="create"></ion-icon> Editar</button>
+            <button class="pf-btn-action del" onclick="pfEliminarVideo('${item._id}')"><ion-icon name="trash"></ion-icon> Borrar</button>
           </div>
         </div>`;
-      cont.appendChild(card);
+      vidCont.appendChild(card);
     });
+
   } catch(e) {
     cont.innerHTML='<div class="pf-empty" style="color:#ff4343"><p>Error al cargar historial</p></div>';
   }
+}
+
+// ── Eliminar Video ──
+async function pfEliminarVideo(id) {
+  const ok = await customConfirm({
+    icon: '🎬',
+    title: '¿Eliminar este video?',
+    msg: 'Se eliminará de la plataforma y de Cloudinary. No se puede deshacer.',
+    okText: 'Eliminar',
+    okDanger: true
+  });
+  if(!ok) return;
+  const token = LS.get('token');
+  if(!token) { toast('⚠️ Sesión expirada'); location.href='./index.html'; return; }
+  try {
+    const res = await fetch(`${PF_API}/items/${id}/video`, {
+      method: 'DELETE',
+      headers: { Authorization:`Bearer ${token}` }
+    });
+    if(res.ok) { toast('✅ Video eliminado.'); pfLoadHistorial(); pfLoadUserData(); }
+    else { const e = await res.json(); toast('❌ '+(e.error||'Error al eliminar')); }
+  } catch(e) { toast('❌ Error de conexión'); }
+}
+
+// ── Abrir modal editar video ──
+let pfCurrentEditVideoId = null;
+async function pfOpenEditVideoModal(itemId) {
+  pfCurrentEditVideoId = itemId;
+  try {
+    const token = LS.get('token');
+    const res = await fetch(`${PF_API}/items/user/${pfUser}`, {
+      headers: token ? { Authorization:`Bearer ${token}` } : {}
+    });
+    const data = await res.json();
+    const item = data.find(i => i._id === itemId);
+    if(!item) { toast('❌ Video no encontrado'); return; }
+    document.getElementById('pf-edit-vid-id').value    = item._id;
+    document.getElementById('pf-edit-vid-title').value = item.title||'';
+    document.getElementById('pf-edit-vid-desc').value  = item.description||'';
+    document.getElementById('pf-edit-vid-thumb').value = item.image||'';
+    const prevImg = document.getElementById('pf-edit-vid-thumb-prev');
+    if(prevImg && item.image) { prevImg.src=item.image; prevImg.style.display='block'; }
+    const currentType = item.videoType||'Tutorial';
+    document.querySelectorAll('.pf-edit-vid-type-btn').forEach(b=>{
+      b.classList.toggle('active', b.dataset.type===currentType);
+    });
+    document.getElementById('pf-edit-vid-type').value = currentType;
+    document.getElementById('pf-editVideoModal').classList.add('show');
+    document.body.style.overflow='hidden';
+  } catch(e) { toast('❌ Error al cargar video'); }
+}
+function pfCloseEditVideoModal() {
+  document.getElementById('pf-editVideoModal').classList.remove('show');
+  document.body.style.overflow='';
+  pfCurrentEditVideoId = null;
+}
+function pfEditVidSelectType(type, btn) {
+  document.querySelectorAll('.pf-edit-vid-type-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('pf-edit-vid-type').value = type;
+}
+async function pfSaveEditVideo() {
+  if(!pfCurrentEditVideoId) return;
+  const title = document.getElementById('pf-edit-vid-title').value.trim();
+  const desc  = document.getElementById('pf-edit-vid-desc').value.trim();
+  const thumb = document.getElementById('pf-edit-vid-thumb').value.trim();
+  const type  = document.getElementById('pf-edit-vid-type').value;
+  if(!title) { toast('⚠️ El título es obligatorio'); return; }
+  const token = LS.get('token');
+  if(!token) { toast('⚠️ Sesión expirada'); return; }
+  const btn = document.getElementById('pf-edit-vid-save-btn');
+  btn.textContent = 'Guardando...'; btn.disabled = true;
+  try {
+    const res = await fetch(`${PF_API}/items/${pfCurrentEditVideoId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
+      body: JSON.stringify({ title, description:desc, image:thumb, videoType:type, category:'Video' })
+    });
+    if(res.ok) { toast('✅ Video actualizado'); pfCloseEditVideoModal(); pfLoadHistorial(); }
+    else { const e=await res.json(); toast('❌ '+(e.error||'Error al guardar')); }
+  } catch(e) { toast('❌ Error de conexión'); }
+  finally { btn.innerHTML='<ion-icon name="checkmark-circle"></ion-icon> GUARDAR CAMBIOS'; btn.disabled=false; }
 }
 
 async function pfEliminar(id) {

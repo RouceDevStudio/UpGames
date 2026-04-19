@@ -67,12 +67,12 @@
 ══════════════════════════════════ -->
 <div id="category-row">
   <button class="chip active" data-cat="">Todos</button>
+  <button class="chip chip--video" data-cat="Video">▶ Video</button>
   <button class="chip" data-cat="Juego">Juegos</button>
   <button class="chip" data-cat="Mod">Mod</button>
   <button class="chip" data-cat="Apps">Apps</button>
   <button class="chip" data-cat="Ajustes">Herramientas</button>
   <button class="chip" data-cat="Software">Software</button>
-  <button class="chip" data-cat="Video">Video</button>
 </div>
 
 <!-- ══════════════════════════════════
@@ -399,6 +399,14 @@
       <div class="pf-items-grid" id="pf-showContent">
         <div class="pf-empty"><ion-icon name="sync-outline"></ion-icon><p>Cargando...</p></div>
       </div>
+      <!-- ── Sección videos ── -->
+      <div class="pf-hist-vid-hdr" id="pf-hist-vid-hdr" style="display:none">
+        <ion-icon name="videocam"></ion-icon> MIS VIDEOS
+        <span class="pf-hist-vid-count" id="pf-hist-vid-count"></span>
+      </div>
+      <div class="pf-items-grid" id="pf-showVideos" style="display:none">
+        <div class="pf-empty"><ion-icon name="sync-outline"></ion-icon><p>Cargando...</p></div>
+      </div>
     </div>
 
     <!-- ══ TAB: BÓVEDA ══ -->
@@ -599,6 +607,48 @@
           <option value="Software">Software Open Source</option>
         </select></div>
       <button class="pf-btn-save" id="pf-edit-save-btn">
+        <ion-icon name="checkmark-circle"></ion-icon> GUARDAR CAMBIOS
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Modal: Editar Video ══ -->
+<div class="pf-modal-overlay" id="pf-editVideoModal">
+  <div class="pf-modal-sheet">
+    <div class="pf-modal-handle"></div>
+    <div class="pf-modal-hdr">
+      <div class="pf-modal-hdr-title" style="color:var(--cy)"><ion-icon name="videocam"></ion-icon> EDITAR VIDEO</div>
+      <button class="pf-modal-close" onclick="pfCloseEditVideoModal()"><ion-icon name="close-outline"></ion-icon></button>
+    </div>
+    <div class="pf-modal-body">
+      <input type="hidden" id="pf-edit-vid-id">
+      <input type="hidden" id="pf-edit-vid-type" value="Tutorial">
+      <div class="pf-form-group">
+        <label class="pf-label">Título del Video</label>
+        <input type="text" id="pf-edit-vid-title" class="pf-input" maxlength="200" placeholder="Título...">
+      </div>
+      <div class="pf-form-group">
+        <label class="pf-label">Descripción</label>
+        <textarea id="pf-edit-vid-desc" class="pf-textarea" maxlength="500" placeholder="Descripción..."></textarea>
+      </div>
+      <div class="pf-form-group">
+        <label class="pf-label">Tipo de Video</label>
+        <div class="pf-vid-type-grid">
+          <button class="pf-vid-type-btn pf-edit-vid-type-btn active" data-type="Tutorial" onclick="pfEditVidSelectType('Tutorial',this)"><ion-icon name="school"></ion-icon> Tutorial</button>
+          <button class="pf-vid-type-btn pf-edit-vid-type-btn" data-type="Gameplay" onclick="pfEditVidSelectType('Gameplay',this)"><ion-icon name="game-controller"></ion-icon> Gameplay</button>
+          <button class="pf-vid-type-btn pf-edit-vid-type-btn" data-type="Review" onclick="pfEditVidSelectType('Review',this)"><ion-icon name="star"></ion-icon> Review</button>
+          <button class="pf-vid-type-btn pf-edit-vid-type-btn" data-type="Showcase" onclick="pfEditVidSelectType('Showcase',this)"><ion-icon name="eye"></ion-icon> Showcase</button>
+          <button class="pf-vid-type-btn pf-edit-vid-type-btn" data-type="Otro" onclick="pfEditVidSelectType('Otro',this)"><ion-icon name="ellipsis-horizontal"></ion-icon> Otro</button>
+        </div>
+      </div>
+      <div class="pf-form-group">
+        <label class="pf-label">Miniatura</label>
+        <input type="url" id="pf-edit-vid-thumb" class="pf-input" placeholder="URL de miniatura..."
+          oninput="var p=document.getElementById('pf-edit-vid-thumb-prev');p.src=this.value;p.style.display=this.value?'block':'none'">
+        <img id="pf-edit-vid-thumb-prev" src="" alt="preview" style="display:none;width:100%;border-radius:10px;margin-top:8px;max-height:140px;object-fit:cover">
+      </div>
+      <button class="pf-btn-save" id="pf-edit-vid-save-btn" style="background:linear-gradient(135deg,var(--cy),#0084ff);color:#fff" onclick="pfSaveEditVideo()">
         <ion-icon name="checkmark-circle"></ion-icon> GUARDAR CAMBIOS
       </button>
     </div>
