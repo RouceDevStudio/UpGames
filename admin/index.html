@@ -52,7 +52,7 @@ body{background:var(--bg);color:#fff;font-family:'Segoe UI',system-ui,-apple-sys
 .hbtn.bulk-active{background:rgba(255,204,0,.1);border-color:var(--yellow);color:var(--yellow);}
 
 /* ── TABS ── */
-.tabs{display:grid;grid-template-columns:repeat(9,1fr);padding:0 4px 8px;gap:2px;}
+.tabs{display:grid;grid-template-columns:repeat(10,1fr);padding:0 4px 8px;gap:2px;}
 .tab{padding:9px 1px;text-align:center;cursor:pointer;border-bottom:2px solid transparent;transition:var(--tx);opacity:.4;border-radius:6px 6px 0 0;position:relative;}
 .tab.active{opacity:1;border-bottom:2px solid var(--neon);background:rgba(94,255,67,.04);}
 .tab-n{font-size:.85rem;font-weight:800;display:block;}
@@ -365,6 +365,31 @@ body{background:var(--bg);color:#fff;font-family:'Segoe UI',system-ui,-apple-sys
   display:flex; align-items:center; justify-content:center;
   font-size:.9rem; color:#fff;
 }
+
+/* ── VIDEO TAB CARDS ── */
+.vtype-badge {
+  position:absolute; top:7px; left:7px;
+  background:rgba(67,136,255,.85); backdrop-filter:blur(4px);
+  border:1px solid rgba(67,136,255,.4);
+  color:#fff; padding:2px 7px; border-radius:7px;
+  font-size:.58rem; font-weight:900;
+  display:flex; align-items:center; gap:3px;
+  text-transform:uppercase; letter-spacing:.3px;
+}
+.vtype-badge.gameplay { background:rgba(155,89,255,.85); border-color:rgba(155,89,255,.4); }
+.vtype-badge.tutorial { background:rgba(0,212,255,.85); border-color:rgba(0,212,255,.4); }
+.vtype-badge.review   { background:rgba(255,204,0,.85); border-color:rgba(255,204,0,.4); color:#000; }
+.vtype-badge.showcase { background:rgba(94,255,67,.85); border-color:rgba(94,255,67,.4); color:#000; }
+.vtype-badge.otro     { background:rgba(80,80,80,.85); border-color:rgba(80,80,80,.4); }
+
+.vid-play-overlay {
+  position:absolute; inset:0; display:flex;
+  align-items:center; justify-content:center;
+  background:rgba(0,0,0,.35); opacity:0;
+  transition:opacity .2s; pointer-events:none;
+}
+.item-card:hover .vid-play-overlay { opacity:1; }
+.vid-play-overlay ion-icon { font-size:2rem; color:#fff; drop-shadow(0 2px 6px rgba(0,0,0,.9)); }
 </style>
 </head>
 <body>
@@ -411,7 +436,7 @@ body{background:var(--bg);color:#fff;font-family:'Segoe UI',system-ui,-apple-sys
     </div>
     <div class="tab" id="tabP" onclick="setTab('pend')">
       <span class="tab-n" id="cP">0</span>
-      <span class="tab-l">Espera</span>
+      <span class="tab-l">Legacy</span>
       <div class="tab-dot" id="dotP"></div>
     </div>
     <div class="tab" id="tabA" onclick="setTab('apro')">
@@ -445,6 +470,11 @@ body{background:var(--bg);color:#fff;font-family:'Segoe UI',system-ui,-apple-sys
       <span class="tab-n" id="cReport">0</span>
       <span class="tab-l">📋 Reportes</span>
       <div class="tab-dot" id="dotReport"></div>
+    </div>
+    <div class="tab" id="tabVid" onclick="setTab('vids')">
+      <span class="tab-n" id="cVid">0</span>
+      <span class="tab-l">📹 Videos</span>
+      <div class="tab-dot" id="dotVid"></div>
     </div>
   </nav>
 </div>
@@ -588,7 +618,6 @@ body{background:var(--bg);color:#fff;font-family:'Segoe UI',system-ui,-apple-sys
 <div class="bulk-bar" id="bulkBar">
   <span class="bulk-count" id="bulkCount">0 sel.</span>
   <div class="bulk-actions">
-    <button class="bulk-btn bb-ok" onclick="doBulk('aprobar')">✓ Aprobar</button>
     <button class="bulk-btn bb-rej" onclick="doBulk('rechazar')">✗ Rechazar</button>
     <button class="bulk-btn bb-del" onclick="doBulk('eliminar')">🗑 Eliminar</button>
     <button class="bulk-btn bb-cancel" onclick="clearSel()">Cancelar</button>
@@ -621,6 +650,99 @@ body{background:var(--bg);color:#fff;font-family:'Segoe UI',system-ui,-apple-sys
   </div>
 
   <div id="outputReportes" style="display:grid;gap:14px;"></div>
+</div>
+
+<!-- VIEW: VIDEOS -->
+<div id="view-vids" class="view">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <div>
+      <h2 style="margin:0;font-size:1.5rem;font-weight:900;letter-spacing:-0.5px;">📹 GESTIÓN DE VIDEOS</h2>
+      <p style="margin:4px 0 0;font-size:.7rem;color:#555;">Videos estilo YouTube subidos por los usuarios</p>
+    </div>
+    <button class="hbtn green" onclick="syncVids()">
+      <ion-icon name="refresh"></ion-icon> ACTUALIZAR
+    </button>
+  </div>
+
+  <!-- Métricas rápidas de videos -->
+  <div class="dash-grid" style="margin-bottom:14px;">
+    <div class="dash-card blue">
+      <ion-icon name="videocam" class="dc-ico"></ion-icon>
+      <div class="dc-main" id="vidTotal">0</div>
+      <div class="dc-sub">Total Videos</div>
+    </div>
+    <div class="dash-card yellow">
+      <ion-icon name="alert-circle" class="dc-ico"></ion-icon>
+      <div class="dc-main" id="vidRevision">0</div>
+      <div class="dc-sub">En Revisión</div>
+    </div>
+    <div class="dash-card green">
+      <ion-icon name="checkmark-circle" class="dc-ico"></ion-icon>
+      <div class="dc-main" id="vidAprobados">0</div>
+      <div class="dc-sub">Aprobados</div>
+    </div>
+    <div class="dash-card red">
+      <ion-icon name="close-circle" class="dc-ico"></ion-icon>
+      <div class="dc-main" id="vidCaidos">0</div>
+      <div class="dc-sub">Caídos</div>
+    </div>
+  </div>
+
+  <!-- Filtros por tipo de video -->
+  <div class="u-toolbar" style="margin-bottom:12px;">
+    <div class="filter-chip active" onclick="setVF('all',this)">Todos</div>
+    <div class="filter-chip" onclick="setVF('Tutorial',this)">🎓 Tutorial</div>
+    <div class="filter-chip" onclick="setVF('Gameplay',this)">🎮 Gameplay</div>
+    <div class="filter-chip" onclick="setVF('Review',this)">⭐ Review</div>
+    <div class="filter-chip" onclick="setVF('Showcase',this)">✨ Showcase</div>
+    <div class="filter-chip" onclick="setVF('Otro',this)">📌 Otro</div>
+    <div class="filter-chip" onclick="setVF('revision',this)" style="border-color:#ffcc00;color:#ffcc00">⚠️ Revisión</div>
+  </div>
+
+  <div id="vidsGrid" class="items-grid"></div>
+</div>
+
+<!-- MODAL VER VIDEO (reproductión inline) -->
+<div id="mVideo" class="modal">
+  <div class="mc" style="max-width:540px;">
+    <div class="mhdr">
+      <div class="mtitle" id="mVideoTitle" style="color:var(--blue)">VIDEO</div>
+      <button class="mclose" onclick="cm('mVideo')">×</button>
+    </div>
+    <!-- Preview embed -->
+    <div id="mVideoEmbed" style="width:100%;aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden;margin-bottom:14px;position:relative;">
+      <iframe id="mVideoFrame" style="width:100%;height:100%;border:none;" allowfullscreen></iframe>
+      <div id="mVideoPlayer" style="display:none;width:100%;height:100%;position:absolute;inset:0;">
+        <video id="mVideoEl" style="width:100%;height:100%;background:#000;" controls></video>
+      </div>
+      <div id="mVideoNoPreview" style="display:none;position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;">
+        <ion-icon name="play-circle-outline" style="font-size:3rem;color:#333;"></ion-icon>
+        <div style="font-size:.7rem;color:#444;">Sin preview disponible</div>
+      </div>
+    </div>
+    <!-- Info del video -->
+    <div style="background:#191919;border-radius:10px;padding:12px;margin-bottom:14px;">
+      <div style="font-size:.58rem;color:#444;text-transform:uppercase;font-weight:700;margin-bottom:8px;">Información del Video</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.72rem;">
+        <div><span style="color:#444;">Autor:</span> <span style="color:var(--neon);" id="mVidAuthor">—</span></div>
+        <div><span style="color:#444;">Tipo:</span> <span id="mVidType" style="color:var(--blue)">—</span></div>
+        <div><span style="color:#444;">Categoría:</span> <span id="mVidCat" style="color:#aaa">—</span></div>
+        <div><span style="color:#444;">Descargas:</span> <span id="mVidDl" style="color:var(--yellow)">0</span></div>
+        <div><span style="color:#444;">Estado:</span> <span id="mVidStatus">—</span></div>
+        <div><span style="color:#444;">Reportes:</span> <span id="mVidRep" style="color:var(--danger)">0</span></div>
+      </div>
+      <div style="margin-top:8px;"><span style="font-size:.58rem;color:#444;text-transform:uppercase;font-weight:700;">Link directo:</span><br>
+        <span id="mVidLink" style="font-size:.65rem;color:#555;word-break:break-all;cursor:pointer;" onclick="cp(this.innerText)"></span>
+      </div>
+    </div>
+    <!-- Acciones -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <button class="bs" onclick="openEditFromVideo()" style="background:var(--blue)">✏️ EDITAR</button>
+      <button class="bs" id="mVidAprBtn" onclick="aprobarVideo()">✓ APROBAR</button>
+      <button class="bs" id="mVidRevBtn" onclick="revisionVideo()" style="background:rgba(255,204,0,.15);color:var(--yellow);border:1px solid rgba(255,204,0,.3);">⚠ REVISIÓN</button>
+      <button class="bs-r" id="mVidDelBtn" onclick="delVideo()">🗑 ELIMINAR</button>
+    </div>
+  </div>
 </div>
 
 <!-- MODAL EDITAR ITEM -->
@@ -805,6 +927,7 @@ async function doAdminLogin() {
       // Cargar datos del panel
       sync();
       syncFraud();
+      syncVids();
       // Tutorial automatico al primer login
       setTimeout(function(){if(!sessionStorage.getItem("tour_v1")&&typeof window._tourStart==="function")window._tourStart();},800);
     } else {
@@ -957,25 +1080,30 @@ function updCounters(){
   const pend = D.items.filter(i=>i.status==='pendiente'||i.status==='pending').length;
   const aprob = D.items.filter(i=>i.status==='aprobado').length;
   const rev = D.items.filter(i=>i.linkStatus==='revision').length;
+  const vids = D.items.filter(i=>i.videoType && i.videoType.trim()!=='').length;
+  const vidRev = D.items.filter(i=>i.videoType && i.videoType.trim()!=='' && i.linkStatus==='revision').length;
   document.getElementById('cP').innerText=pend;
   document.getElementById('cA').innerText=aprob;
   document.getElementById('cC').innerText=D.comments.length;
   document.getElementById('cU').innerText=D.users.length;
   document.getElementById('cPay').innerText=D.pagos.length;
   document.getElementById('cRev').innerText=rev;
+  document.getElementById('cVid').innerText=vids;
   // dots
   document.getElementById('dotP').classList.toggle('show',pend>0);
   document.getElementById('dotPay').classList.toggle('show',D.pagos.length>0);
   document.getElementById('dotRev').classList.toggle('show',rev>0);
+  document.getElementById('dotVid').classList.toggle('show',vidRev>0);
 }
 
 function setTab(t){
   document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
-  const map={dash:'tabDB',pend:'tabP',apro:'tabA',comt:'tabC',usrs:'tabU',pays:'tabPay',revn:'tabRev',fraud:'tabFraud',reportes:'tabReport'};
+  const map={dash:'tabDB',pend:'tabP',apro:'tabA',comt:'tabC',usrs:'tabU',pays:'tabPay',revn:'tabRev',fraud:'tabFraud',reportes:'tabReport',vids:'tabVid'};
   if(map[t]) document.getElementById(map[t]).classList.add('active');
   document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
   document.getElementById(`view-${t}`).classList.add('active');
-  filtrar();
+  if(t==='vids') syncVids();
+  else filtrar();
 }
 
 function debF(){ clearTimeout(fT); fT=setTimeout(filtrar,200); }
@@ -992,6 +1120,7 @@ function filtrar(){
   else if(tab==='tabRev') renderRevision(q);
   else if(tab==='tabFraud') renderFraudList();
   else if(tab==='tabReport') renderReportes(q);
+  else if(tab==='tabVid') renderVideos();
 }
 
 // ==========================================
@@ -1085,7 +1214,7 @@ function clearSel(){ selIds.clear(); bulkMode=false; document.getElementById('bu
 
 async function doBulk(action){
   if(!selIds.size) return;
-  const labels={aprobar:'APROBAR',rechazar:'RECHAZAR',eliminar:'ELIMINAR'};
+  const labels={rechazar:'RECHAZAR',eliminar:'ELIMINAR'};
   if(!confirm(`¿${labels[action]} ${selIds.size} items?`)) return;
   try {
     const r=await fetch(`${API}/admin/items/bulk-action`,{method:'PUT',headers:adminHeaders(),body:JSON.stringify({ids:[...selIds],action})});
@@ -1126,7 +1255,6 @@ function renderItems(tab,q,cid){
       </div>
       <div class="item-btns">
         <button class="ba be" onclick="openEdit('${j._id}')"><ion-icon name="create-outline"></ion-icon></button>
-        ${tab==='pend'?`<button class="ba bv" onclick="runItem('${j._id}','approve')"><ion-icon name="checkmark"></ion-icon></button>`:''}
         <button class="ba bd" onclick="runItem('${j._id}','del')"><ion-icon name="trash"></ion-icon></button>
       </div>
     </div>`;
@@ -1555,11 +1683,11 @@ async function saveNotas(uid,texto){
 async function runItem(id,op){
   if(!confirm("¿Confirmar?")) return;
   try {
-    const r=await fetch(op==='approve'?`${API}/items/approve/${id}`:`${API}/items/${id}`,{
-      method: op==='approve'?'PUT':'DELETE',
+    const r=await fetch(`${API}/items/${id}`,{
+      method:'DELETE',
       headers: adminHeaders()
     });
-    if(r.ok){toast(op==='approve'?"✓ APROBADO":"✓ ELIMINADO");sync();}
+    if(r.ok){toast("✓ ELIMINADO");sync();}
   } catch(e){toast("ERROR DE RED","err");}
 }
 
@@ -1855,6 +1983,227 @@ async function markFraudReviewed(activityId) {
 }
 
 // ==========================================
+// 📹 VIDEOS
+// ==========================================
+let vFilter = 'all';
+let currentVid = null; // item actual en modal de video
+
+function setVF(f, el) {
+  vFilter = f;
+  document.querySelectorAll('#view-vids .filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  renderVideos();
+}
+
+function isVideo(item) {
+  return item.videoType && item.videoType.trim() !== '';
+}
+
+function getVidThumb(item) {
+  // Si image es YouTube, extraer thumbnail
+  const ytId = item.image ? (item.image.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|v\/))([-\w]{11})/i)||[])[1] : null;
+  if (ytId) return `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
+  if (item.image) return item.image;
+  return 'https://via.placeholder.com/300x170/0a0a0a/4388ff?text=VIDEO';
+}
+
+function vtypeCls(vt) {
+  if (!vt) return '';
+  const v = vt.toLowerCase();
+  if (v === 'gameplay') return 'gameplay';
+  if (v === 'tutorial') return 'tutorial';
+  if (v === 'review')   return 'review';
+  if (v === 'showcase') return 'showcase';
+  return 'otro';
+}
+
+function syncVids() {
+  const vids = D.items.filter(isVideo);
+  // Actualizar métricas
+  document.getElementById('vidTotal').innerText = vids.length;
+  document.getElementById('vidAprobados').innerText = vids.filter(v => v.linkStatus === 'online').length;
+  document.getElementById('vidRevision').innerText = vids.filter(v => v.linkStatus === 'revision').length;
+  document.getElementById('vidCaidos').innerText = vids.filter(v => v.linkStatus === 'caido').length;
+  // Dot
+  const dot = document.getElementById('dotVid');
+  const enRev = vids.filter(v => v.linkStatus === 'revision').length;
+  if (dot) dot.classList.toggle('show', enRev > 0);
+  renderVideos();
+}
+
+function renderVideos() {
+  const q = document.getElementById('gSearch').value.toLowerCase().trim();
+  const c = document.getElementById('vidsGrid');
+  if (!c) return;
+  c.innerHTML = '';
+
+  let vids = D.items.filter(isVideo);
+
+  // Filtro por tipo o estado
+  if (vFilter === 'revision') {
+    vids = vids.filter(v => v.linkStatus === 'revision');
+  } else if (vFilter !== 'all') {
+    vids = vids.filter(v => (v.videoType||'').toLowerCase() === vFilter.toLowerCase());
+  }
+
+  // Filtro de búsqueda
+  if (q) vids = vids.filter(v =>
+    (v.title||'').toLowerCase().includes(q) ||
+    (v.usuario||'').toLowerCase().includes(q) ||
+    (v.videoType||'').toLowerCase().includes(q)
+  );
+
+  if (!vids.length) {
+    c.innerHTML = `<div style="text-align:center;padding:50px;color:#333;grid-column:1/-1">
+      <ion-icon name="videocam-outline" style="font-size:3rem;display:block;margin-bottom:10px;opacity:.1"></ion-icon>
+      <div>No hay videos${vFilter !== 'all' ? ' con este filtro' : ''}</div>
+    </div>`;
+    return;
+  }
+
+  vids.forEach(j => {
+    const ls = j.linkStatus || 'online';
+    const rep = j.reportes || 0;
+    const dias = Math.floor((Date.now() - new Date(j.createdAt||Date.now()).getTime()) / (1000*60*60*24));
+    const thumb = getVidThumb(j);
+    const vtCls = vtypeCls(j.videoType);
+    const isSel = selIds.has(j._id);
+    const isYT = j.image && /(?:youtu\.be\/|youtube\.com)/i.test(j.image);
+    const isCld = j.link && j.link.includes('cloudinary.com');
+
+    c.innerHTML += `
+    <div class="item-card ${isSel?'selected':''}" id="ic-${j._id}">
+      ${rep > 0 ? `<div class="rep-badge"><ion-icon name="flag"></ion-icon>${rep}</div>` : ''}
+      <div class="lsb ${ls}"><ion-icon name="${lsI(ls)}"></ion-icon>${ls}</div>
+      ${bulkMode ? `<div class="sel-check ${isSel?'checked':''}" onclick="toggleSel('${j._id}')"><ion-icon name="checkmark"></ion-icon></div>` : ''}
+      <div style="position:relative;">
+        <img src="${thumb}" onerror="this.src='https://via.placeholder.com/300x170/0a0a0a/4388ff?text=VIDEO'" style="width:100%;height:105px;object-fit:cover;background:#090909;">
+        <div class="vtype-badge ${vtCls}">
+          <ion-icon name="${vtCls === 'gameplay' ? 'game-controller' : vtCls === 'tutorial' ? 'school' : vtCls === 'review' ? 'star' : vtCls === 'showcase' ? 'sparkles' : 'film'}"></ion-icon>
+          ${j.videoType||'Video'}
+        </div>
+        <div class="vid-play-overlay"><ion-icon name="play-circle-outline"></ion-icon></div>
+        ${isYT ? `<div class="vid-badge yt" style="bottom:7px;left:auto;right:7px"><ion-icon name="logo-youtube"></ion-icon>YT</div>` :
+          isCld ? `<div class="vid-badge mp4" style="bottom:7px;left:auto;right:7px"><ion-icon name="cloud-outline"></ion-icon>CLD</div>` : ''}
+      </div>
+      <div class="card-info">
+        <div class="card-title">${j.title||'Sin título'}</div>
+        <div class="card-user">@${j.usuario||'?'}</div>
+        <div class="card-meta"><span>${j.category||'General'}</span><span>${dias}d · ${j.descargasEfectivas||0}↓</span></div>
+      </div>
+      <div class="item-btns">
+        <button class="ba be" onclick="openEdit('${j._id}')" title="Editar"><ion-icon name="create-outline"></ion-icon></button>
+        <button class="ba bv" onclick="openVideo('${j._id}')" title="Ver video" style="color:var(--blue)"><ion-icon name="play-circle-outline"></ion-icon></button>
+        <button class="ba bd" onclick="delVideo('${j._id}')" title="Eliminar"><ion-icon name="trash-outline"></ion-icon></button>
+      </div>
+    </div>`;
+  });
+}
+
+function openVideo(id) {
+  const item = D.items.find(i => i._id === id);
+  if (!item) return;
+  currentVid = item;
+
+  document.getElementById('mVideoTitle').innerText = item.title || 'VIDEO';
+  document.getElementById('mVidAuthor').innerText = '@' + (item.usuario||'?');
+  document.getElementById('mVidType').innerText = item.videoType || '—';
+  document.getElementById('mVidCat').innerText = item.category || '—';
+  document.getElementById('mVidDl').innerText = item.descargasEfectivas || 0;
+  document.getElementById('mVidRep').innerText = item.reportes || 0;
+  document.getElementById('mVidLink').innerText = item.link || '';
+
+  const ls = item.linkStatus || 'online';
+  const sEl = document.getElementById('mVidStatus');
+  sEl.innerText = ls.toUpperCase();
+  sEl.style.color = ls === 'online' ? 'var(--online)' : ls === 'revision' ? 'var(--revision)' : 'var(--caido)';
+
+  // Botón aprobar
+  const aprBtn = document.getElementById('mVidAprBtn');
+  aprBtn.style.display = ls !== 'online' ? 'block' : 'none';
+
+  // Embed del video
+  const frame = document.getElementById('mVideoFrame');
+  const player = document.getElementById('mVideoPlayer');
+  const noPreview = document.getElementById('mVideoNoPreview');
+  frame.src = '';
+  frame.style.display = 'none';
+  player.style.display = 'none';
+  noPreview.style.display = 'none';
+
+  const link = item.link || '';
+  const ytId = link.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|v\/))([-\w]{11})/i);
+
+  if (ytId) {
+    frame.src = `https://www.youtube.com/embed/${ytId[1]}?rel=0`;
+    frame.style.display = 'block';
+  } else if (/\.mp4|\.webm|cloudinary\.com/i.test(link)) {
+    const vidEl = document.getElementById('mVideoEl');
+    vidEl.src = link;
+    player.style.display = 'block';
+  } else if (link) {
+    // Link externo — abrir en nueva pestaña
+    noPreview.style.display = 'flex';
+    noPreview.innerHTML = `<ion-icon name="open-outline" style="font-size:2rem;color:#4388ff;"></ion-icon>
+      <a href="${link}" target="_blank" style="color:var(--blue);font-size:.75rem;margin-top:4px;">Abrir enlace externo</a>`;
+  } else {
+    noPreview.style.display = 'flex';
+  }
+
+  om('mVideo');
+}
+
+function openEditFromVideo() {
+  if (!currentVid) return;
+  cm('mVideo');
+  setTimeout(() => openEdit(currentVid._id), 120);
+}
+
+async function aprobarVideo() {
+  if (!currentVid) return;
+  try {
+    const r = await fetch(`${API}/admin/items/${currentVid._id}`, {
+      method: 'PUT', headers: adminHeaders(),
+      body: JSON.stringify({ linkStatus: 'online', reportes: 0 })
+    });
+    if (r.ok) { toast('✓ VIDEO ONLINE'); cm('mVideo'); sync(); syncVids(); }
+    else toast('Error al aprobar', 'err');
+  } catch(e) { toast('Error de red', 'err'); }
+}
+
+async function revisionVideo() {
+  if (!currentVid) return;
+  try {
+    const r = await fetch(`${API}/admin/items/${currentVid._id}`, {
+      method: 'PUT', headers: adminHeaders(),
+      body: JSON.stringify({ linkStatus: 'revision' })
+    });
+    if (r.ok) { toast('⚠ VIDEO EN REVISIÓN', 'warn'); cm('mVideo'); sync(); syncVids(); }
+    else toast('Error', 'err');
+  } catch(e) { toast('Error de red', 'err'); }
+}
+
+async function delVideo(id) {
+  const vid = id ? D.items.find(i => i._id === id) : currentVid;
+  if (!vid) return;
+  if (!confirm(`⚠️ ¿ELIMINAR "${vid.title}"?\n\nEsta acción es permanente.`)) return;
+  try {
+    const r = await fetch(`${API}/items/${vid._id}`, {
+      method: 'DELETE', headers: adminHeaders()
+    });
+    if (r.ok) {
+      toast('🗑 VIDEO ELIMINADO');
+      if (!id) cm('mVideo');
+      currentVid = null;
+      sync();
+    } else {
+      const e = await r.json().catch(()=>({}));
+      toast('Error: ' + (e.error||'Fallo'), 'err');
+    }
+  } catch(e) { toast('Error de red', 'err'); }
+}
+
+// ==========================================
 // INIT
 // ==========================================
 // REPORTES
@@ -1989,11 +2338,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     sync();
     syncFraud();
     syncReportes();
+    syncVids();
   }
   // Si no hay sesión, el overlay de login ya está visible — espera el PIN
   setInterval(sync, 30000);
   setInterval(syncFraud, 60000);
   setInterval(syncReportes, 45000);
+  setInterval(syncVids, 30000);
 });
 
 document.addEventListener('keydown',e=>{
@@ -2203,9 +2554,9 @@ var STEPS=[
   {e:'📌',t:'La Barra Superior',b:'<p>La barra negra fija tiene <strong>3 zonas clave</strong>:</p><ul><li><strong>Logo ⚡ ADMIN</strong> — identifica el panel</li><li><strong>Barra de búsqueda</strong> — busca en todo el panel a la vez</li><li><strong>Botones derecha</strong> — selección múltiple y sincronizar</li></ul><span class="tip">💡 La búsqueda encuentra items, usuarios y comentarios al mismo tiempo.</span>'},
   {e:'🔄',t:'Botón Sincronizar (Verde)',b:'<p>Recarga <strong>todos los datos del servidor</strong> en tiempo real. Úsalo tras aprobar o rechazar algo.</p><ul><li>Refresca items, usuarios, pagos y dashboard</li><li>Úsalo cuando veas datos desactualizados</li></ul><span class="tip">⚡ El panel se <strong>auto-sincroniza cada 30 s</strong>. El indicador LIVE arriba confirma la conexión activa.</span>'},
   {e:'📊',t:'Dashboard — Vista General',b:'<p>Resumen en tiempo real de todo lo que pasa en UpGames:</p><ul><li><strong>Usuarios</strong> — totales, nuevos hoy y esta semana</li><li><strong>Items</strong> — aprobados, pendientes y subidos hoy</li><li><strong>Descargas</strong> efectivas acumuladas</li><li><span class="cw">Saldo</span> en circulación y pendiente de pago</li><li>Top Uploaders e items más descargados</li></ul>'},
-  {e:'⏳',t:'Tab Espera — Items Pendientes',b:'<p>Items subidos por usuarios que <strong>aún no revisaste</strong>. Cada tarjeta muestra imagen, título, usuario, categoría y días desde que fue subido.</p><ul><li>✏️ <strong>Editar</strong> — corregir título, link o imagen</li><li>✓ <strong>Aprobar</strong> — lo pone en producción</li><li>🗑 <span class="cr">Eliminar</span> — borra permanentemente</li></ul><span class="tip">⚠️ El punto <span class="cr">rojo</span> en la pestaña indica items sin revisar. No los dejes acumular.</span>'},
+  {e:'⏳',t:'Tab Legacy — Pendientes Viejos',b:'<p>Items en estado <strong>pendiente</strong> de versiones anteriores. El backend ahora <strong>aprueba automáticamente</strong> todo al subir.</p><ul><li>✏️ <strong>Editar</strong> — corregir datos</li><li>🗑 <span class="cr">Eliminar</span> — borrar permanentemente</li></ul><span class="tip">💡 Si ves items aquí son datos legacy. Usa Producción para gestionar el contenido activo.</span>'},
   {e:'✅',t:'Tab Producción — Items Activos',b:'<p>Todos los items <strong>visibles en la app</strong> para los usuarios. Son los que ya aprobaste.</p><p>Desde aquí edita links caídos, actualiza imágenes o elimina contenido que viole normas.</p><span class="tip">💡 Combina la búsqueda global con esta pestaña para encontrar items por título o usuario rápido.</span>'},
-  {e:'☑️',t:'Selección Múltiple (Bulk)',b:'<p>Activa el modo <strong>selección múltiple</strong>. Aparece una casilla en cada item.</p><ul><li><strong>Aprobar varios</strong> items de golpe</li><li><strong>Rechazar varios</strong> simultáneamente</li><li><span class="cr">Eliminar varios</span> en una sola acción</li></ul><span class="tip">💡 Ahorra mucho tiempo cuando hay muchos items pendientes del mismo usuario.</span>'},
+  {e:'☑️',t:'Selección Múltiple (Bulk)',b:'<p>Activa el modo <strong>selección múltiple</strong>. Aparece una casilla en cada item.</p><ul><li><strong>Rechazar varios</strong> simultáneamente</li><li><span class="cr">Eliminar varios</span> en una sola acción</li></ul><span class="tip">💡 Útil cuando hay contenido de un mismo usuario que necesitas limpiar rápido.</span>'},
   {e:'💬',t:'Tab Comentarios',b:'<p>Todos los comentarios dejados en los items de la plataforma.</p><p>Puedes <span class="cr">eliminar</span> los que sean spam, ofensivos o que violen normas de comunidad.</p><span class="tip">⚠️ Un comentario negativo no es razón suficiente. Solo elimina spam claro o insultos directos.</span>'},
   {e:'👥',t:'Tab Usuarios — La Sección Más Importante',b:'<p>Gestiona cada cuenta registrada. Acciones por usuario:</p><ul><li><strong>Verificar</strong> — asignar nivel Bronce / Oro / Élite</li><li><span class="co">Lista negra</span> — bloquear usuario</li><li><span class="cb">Descargas</span> — ver historial completo</li><li><span class="cw">Ajustar saldo</span> — modificar manualmente</li><li><span class="cr">Eliminar cuenta</span> — acción irreversible</li></ul>'},
   {e:'💰',t:'Tab Pagos',b:'<p>Solicitudes de cobro de usuarios que superaron el umbral mínimo de ganancias por sus descargas.</p><ul><li><strong>CONFIRMAR</strong> — marcar como pagado tras hacer la transferencia</li><li><span class="cr">RECHAZAR</span> — rechazar con motivo (PayPal inválido, etc.)</li></ul><span class="tip">⚠️ <strong>Nunca marques como pagado sin haber enviado el dinero primero.</strong> El historial registra todo.</span>'},
@@ -2213,7 +2564,7 @@ var STEPS=[
   {e:'🚨',t:'Tab Fraude — Detección Automática',b:'<p>Detecta <strong>comportamiento sospechoso 24/7</strong> con patrones estadísticos automáticos.</p><ul><li>⚡ Velocidad de descarga anormal</li><li>🌐 IP hopping / uso de VPN</li><li>🤖 Patrones de bot</li><li>📈 <span class="cw">Spike repentino de ganancias</span></li></ul><span class="tip">⚠️ Los marcados como <strong>AUTO-MARCADO</strong> fueron bloqueados automáticamente. Revísalos primero.</span>'},
   {e:'📋',t:'Tab Reportes de Contenido',b:'<p>Reportes directos de usuarios desde la app. Muestra desglose por motivo: Caído, Obsoleto, Malware.</p><ul><li>✅ <strong>Online</strong> — funciona bien, resetea los reportes</li><li>❌ <span class="cr">Caído</span> — confirmar el estado</li><li>🗑 Eliminar reportes</li></ul><span class="tip">💡 Atiende primero los que tienen <strong>más reportes</strong> — son los que más usuarios vieron caídos.</span>'},
   {e:'🔒',t:'Seguridad — Tu Sesión Admin',b:'<p>Tu sesión tiene <strong>duración limitada por seguridad</strong>. El temporizador arriba muestra cuánto queda.</p><ul><li>Nunca compartas el <strong>PIN</strong> con nadie</li><li>Cierra sesión al terminar, especialmente en dispositivos ajenos</li><li>Si ves actividad rara, cambia el PIN en el backend</li><li>El botón <strong>"SALIR"</strong> cierra la sesión de forma segura</li></ul>'},
-  {e:'🚀',t:'¡Listo para administrar!',b:'<p>Ya conoces todo el panel. Los 6 puntos clave:</p><ul><li><strong>Dashboard</strong> → panorámica general</li><li><strong>Espera</strong> → aprobar/rechazar items nuevos</li><li><strong>Usuarios</strong> → gestionar cuentas y moderar</li><li><strong>Pagos</strong> → procesar cobros con prioridad</li><li><strong>Fraude</strong> → revisar alertas automáticas cada día</li><li><strong>Revisión/Reportes</strong> → mantener la calidad del contenido</li></ul><span class="tip">❓ Toca <strong>?</strong> abajo a la izquierda para relanzar este tutorial en cualquier momento.</span>'}
+  {e:'🚀',t:'¡Listo para administrar!',b:'<p>Ya conoces todo el panel. Los puntos clave:</p><ul><li><strong>Dashboard</strong> → panorámica general</li><li><strong>Producción</strong> → gestionar contenido activo (el backend auto-aprueba)</li><li><strong>Revisión</strong> → aprobar links reportados como online</li><li><strong>Usuarios</strong> → gestionar cuentas y moderar</li><li><strong>Pagos</strong> → procesar cobros</li><li><strong>📹 Videos</strong> → gestionar contenido en video</li><li><strong>Fraude</strong> → revisar alertas automáticas</li></ul><span class="tip">❓ Toca <strong>?</strong> abajo a la izquierda para relanzar este tutorial.</span>'}
 ];
 
 var bg=$('tv-bg'),card=$('tv-card'),fill=$('tv-fill'),num=$('tv-num'),
