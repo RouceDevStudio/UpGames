@@ -556,7 +556,10 @@ async function loadContent() {
   const cachedItems = cacheGet(CACHE_KEY_ITEMS);
   if(cachedItems && cachedItems.length) {
     todosLosItems = cachedItems;
-    filteredItems = cachedItems;
+    // ← FIX: nunca mostrar videos en "Todos" — filtrar igual que la red
+    filteredItems = activeCategory
+      ? cachedItems.filter(i=>i.category===activeCategory)
+      : cachedItems.filter(i=>i.category!=='Video');
     // Mostrar caché y cerrar preloader de inmediato — no esperar la red
     render(filteredItems);
     window.closePreloader && window.closePreloader();
@@ -883,6 +886,19 @@ function openDetail(item) {
   document.getElementById('ds-dl').textContent=fmt(item.descargasEfectivas||0);
   document.getElementById('ds-rep').textContent=item.reportes||0;
   document.getElementById('ds-desc').textContent=item.description||'Sin descripción.';
+
+  // ← FIX bug 2: actualizar el stat-box de FAVS/likes con el número real
+  const dsLikesEl = document.getElementById('ds-likes');
+  if(dsLikesEl) {
+    dsLikesEl.textContent = fmt(item.likesCount||0);
+  } else {
+    // Fallback: buscar el tercer stat-box y rellenar su stat-val
+    const statBoxes = document.querySelectorAll('.sheet-stats .stat-box');
+    if(statBoxes[2]) {
+      const val = statBoxes[2].querySelector('.stat-val');
+      if(val) val.textContent = fmt(item.likesCount||0);
+    }
+  }
 
   // Etiquetas adaptadas por tipo
   const dlStatLbl = document.querySelector('#ds-dl')?.closest?.('.stat-box')?.querySelector?.('.stat-lbl');
@@ -2025,8 +2041,8 @@ async function pfLoadHistorial() {
           <div class="pf-item-title">${item.title||'Sin título'}</div>
           <div class="pf-item-cat" style="color:var(--cy)">Video</div>
           <div class="pf-item-stats">
-            <div class="pf-item-stat"><div class="pf-item-stat-val">${item.descargasEfectivas||0}</div><div class="pf-item-stat-lbl">DL</div></div>
-            <div class="pf-item-stat"><div class="pf-item-stat-val" style="font-size:.62rem">${lsText}</div><div class="pf-item-stat-lbl">LINK</div></div>
+            <div class="pf-item-stat"><div class="pf-item-stat-val">${item.descargasEfectivas||0}</div><div class="pf-item-stat-lbl">VISTAS</div></div>
+            <div class="pf-item-stat"><div class="pf-item-stat-val" style="color:#ff4d6a">${item.likesCount||0}</div><div class="pf-item-stat-lbl">LIKES</div></div>
             <div class="pf-item-stat"><div class="pf-item-stat-val" style="color:${(item.reportes||0)>=3?'#ff4343':'var(--txt)'}">${item.reportes||0}</div><div class="pf-item-stat-lbl">REP</div></div>
           </div>
           <div class="pf-item-actions">
