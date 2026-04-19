@@ -2964,6 +2964,12 @@ body.nx-open #nxFab {
   display: flex; align-items: center; gap: 3px;
 }
 .tile-yt-views ion-icon { font-size: .75rem; }
+.tile-yt-likes {
+  font-size: .69rem;
+  color: #ff4d6a;
+  display: flex; align-items: center; gap: 3px;
+}
+.tile-yt-likes ion-icon { font-size: .75rem; }
 
 /* Badge de tipo (Tutorial, Gameplay, etc.) */
 .tile-vid-type-badge {
@@ -3138,3 +3144,245 @@ body.nx-open #nxFab {
   padding:2px 8px; border-radius:999px;
 }
 .pf-item-card--video { border-color:rgba(0,242,255,.15); }
+
+/* ═══════════════════════════════════════════════════════════
+   BADGE DE DURACIÓN EN THUMBNAIL (punto 11)
+═══════════════════════════════════════════════════════════ */
+.tile-duration-badge {
+  position: absolute;
+  bottom: 6px; right: 6px;
+  background: rgba(0,0,0,.82);
+  color: #fff;
+  font-size: .58rem;
+  font-weight: 800;
+  font-family: var(--ff-mono);
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: .3px;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+  z-index: 3;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MODO TEATRO (punto 12)
+═══════════════════════════════════════════════════════════ */
+#theater-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.96);
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .3s var(--ease), visibility .3s;
+}
+#theater-overlay.open {
+  opacity: 1;
+  visibility: visible;
+}
+#theater-player-wrap {
+  width: 100%;
+  max-width: 900px;
+  aspect-ratio: 16/9;
+  background: #000;
+  position: relative;
+  margin-top: env(safe-area-inset-top);
+}
+#theater-player-wrap iframe,
+#theater-player-wrap video {
+  width: 100%; height: 100%;
+  border: none;
+  display: block;
+}
+#theater-info {
+  width: 100%;
+  max-width: 900px;
+  padding: 14px 16px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+#theater-title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--txt);
+  margin-bottom: 4px;
+}
+#theater-meta {
+  font-size: .75rem;
+  color: var(--txt3);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+#theater-close {
+  position: absolute;
+  top: 12px; right: 12px;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.2);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff;
+  font-size: 1.1rem;
+  z-index: 10;
+  transition: background .2s;
+}
+#theater-close:active { background: rgba(255,255,255,.25); }
+
+/* Botón teatro en el sheet — se agrega junto al de fullscreen */
+#ds-btn-theater {
+  position: absolute;
+  bottom: 10px; left: 10px;
+  z-index: 20;
+  background: rgba(0,0,0,.6);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(0,242,255,.35);
+  border-radius: 8px;
+  color: var(--cy);
+  font-size: 1.05rem;
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+#ds-btn-theater:active { opacity: .7; }
+
+/* ═══════════════════════════════════════════════════════════
+   AUTOPLAY PANEL — siguiente video (punto 6)
+═══════════════════════════════════════════════════════════ */
+#autoplay-panel {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,.82);
+  backdrop-filter: blur(4px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  z-index: 15;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .35s var(--ease), visibility .35s;
+  border-radius: 16px;
+}
+#autoplay-panel.show {
+  opacity: 1;
+  visibility: visible;
+}
+.autoplay-countdown {
+  font-family: var(--ff-disp);
+  font-size: 2.2rem;
+  color: var(--cy);
+  letter-spacing: 2px;
+  line-height: 1;
+}
+.autoplay-label {
+  font-size: .72rem;
+  color: rgba(255,255,255,.65);
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+.autoplay-next-title {
+  font-size: .85rem;
+  font-weight: 700;
+  color: #fff;
+  text-align: center;
+  max-width: 80%;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.autoplay-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+.autoplay-btn {
+  padding: 8px 18px;
+  border-radius: 10px;
+  font-size: .78rem;
+  font-weight: 700;
+  border: 1.5px solid;
+  transition: opacity .15s;
+}
+.autoplay-btn:active { opacity: .75; }
+.autoplay-btn--play {
+  background: var(--cy);
+  border-color: var(--cy);
+  color: #000;
+}
+.autoplay-btn--cancel {
+  background: transparent;
+  border-color: rgba(255,255,255,.3);
+  color: rgba(255,255,255,.7);
+}
+/* Miniaturas de videos relacionados */
+.autoplay-related {
+  display: flex;
+  gap: 8px;
+  padding: 0 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  max-width: 100%;
+}
+.autoplay-related::-webkit-scrollbar { display: none; }
+.autoplay-rel-thumb {
+  flex-shrink: 0;
+  width: 88px;
+  cursor: pointer;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  transition: border-color .15s;
+}
+.autoplay-rel-thumb:first-child { border-color: var(--cy); }
+.autoplay-rel-thumb img {
+  width: 100%; height: 50px;
+  object-fit: cover;
+  display: block;
+}
+.autoplay-rel-thumb span {
+  display: block;
+  font-size: .58rem;
+  font-weight: 700;
+  color: rgba(255,255,255,.75);
+  padding: 2px 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: rgba(0,0,0,.6);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TOAST VISTA REGISTRADA (punto 10)
+═══════════════════════════════════════════════════════════ */
+.toast-vista {
+  position: fixed;
+  bottom: calc(var(--nav-h) + 12px);
+  left: 50%;
+  transform: translateX(-50%) translateY(10px);
+  background: rgba(0,242,255,.15);
+  border: 1px solid rgba(0,242,255,.35);
+  color: var(--cy);
+  font-size: .75rem;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: 999px;
+  backdrop-filter: blur(12px);
+  white-space: nowrap;
+  z-index: 2000;
+  opacity: 0;
+  transition: opacity .3s var(--ease), transform .3s var(--ease);
+  pointer-events: none;
+}
+.toast-vista.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}

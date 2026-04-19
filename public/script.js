@@ -272,6 +272,8 @@ function createTile(item, isFeatured=false) {
   el.dataset.id=item._id;
 
   if(isVideo) {
+    // Badge de duración — se guarda en extraData.duracion (formato "12:34")
+    const duracion = item.extraData?.duracion || '';
     // YouTube-style card: thumbnail arriba, info abajo con avatar a la izquierda
     el.innerHTML=`
       <div class="thumb-wrap">
@@ -282,6 +284,7 @@ function createTile(item, isFeatured=false) {
           <ion-icon name="${isFav?'heart':'heart-outline'}"></ion-icon>
         </button>
         ${item.videoType?`<div class="tile-vid-type-badge">${item.videoType}</div>`:''}
+        ${duracion?`<div class="tile-duration-badge">${duracion}</div>`:''}
       </div>
       <div class="tile-info tile-info--yt">
         <div class="tile-yt-avatar">${avatarLetter(item.usuario)}</div>
@@ -346,7 +349,12 @@ let heroAutoplayPaused = false;
 function initHeroCarousel(items, isVideoMode) {
   // En modo video: top 10 más vistos. En modo normal: primeros 6
   heroItems = items.slice(0, isVideoMode ? 10 : 6);
-  if(heroItems.length < 2) return; // Con 1 o 0 no tiene sentido
+  if(heroItems.length < 2) {
+    // Ocultar carousel cuando no hay suficientes items
+    const carousel = document.getElementById('hero-carousel');
+    if(carousel) carousel.style.display = 'none';
+    return;
+  }
   
   const carousel = document.getElementById('hero-carousel');
   const track    = document.getElementById('hero-track');
@@ -368,7 +376,8 @@ function initHeroCarousel(items, isVideoMode) {
     let mediaSrc = item.image;
     if(isYT) mediaSrc = getYouTubeThumbnail(item.image);
 
-    const dl = item.descargasEfectivas || 0;
+    const lk = item.likesCount || 0;
+    const vistas = item.descargasEfectivas || 0;
 
     // Badge: video mode usa icono play + cyan, normal usa estrella
     const badgeHTML = isVideoMode
@@ -390,7 +399,8 @@ function initHeroCarousel(items, isVideoMode) {
         <div class="hero-title">${item.title}</div>
         <div class="hero-meta">
           <span class="hero-user">@${item.usuario||'Cloud'}${getBadge(item.usuario)}</span>
-          ${dl ? `<span class="hero-dl"><ion-icon name="${isVideoMode?'eye-outline':'download-outline'}"></ion-icon>${fmt(dl)}</span>` : ''}
+          ${isVideoMode && vistas ? `<span class="hero-dl"><ion-icon name="eye-outline"></ion-icon>${fmt(vistas)}</span>` : ''}
+          ${lk ? `<span class="hero-dl"><ion-icon name="heart"></ion-icon>${fmt(lk)}</span>` : ''}
         </div>
       </div>`;
 
@@ -499,9 +509,9 @@ function render(list, reset=true) {
   if(list.length>0 && typeof initHeroCarousel==='function') {
     const isVideoMode = activeCategory === 'Video';
     const carouselSource = isVideoMode
-      ? [...list].sort((a,b) => (b.likesCount||0) - (a.likesCount||0))
-      : list;
-    initHeroCarousel(carouselSource, isVideoMode);
+      ? [...list].filter(i=>i.category==='Video').sort((a,b)=>(b.likesCount||0)-(a.likesCount||0))
+      : [...list].filter(i=>i.category!=='Video').sort((a,b)=>(b.likesCount||0)-(a.likesCount||0));
+    if(carouselSource.length) initHeroCarousel(carouselSource, isVideoMode);
   }
   if(!list.length) {
     out.innerHTML=`<div class="empty-state">
@@ -655,44 +665,55 @@ document.querySelectorAll('.chip').forEach(c=>{
 });
 
 // ── REGISTRAR VISTA (videos) ──────────────────────────────
-// Reutiliza el campo descargasEfectivas como contador de vistas.
-// El flag tipo:'vista' sirve para que el backend pueda distinguirlo
-// y omitir la lógica de monetización hasta que este lista.
-// Backend: PUT /items/download/:id con { tipo:'vista' }
-//          incrementa descargasEfectivas pero NO suma earnings al autor.
-// La vista solo se registra si el usuario permanece 60 segundos en el video.
+// Usa PUT /items/vistas/:id — backend deduplica por IP (1/día, TTL 24h).
+// Frontend deduplica por sessionStorage para no volver a llamar en la misma sesión.
+// La vista se registra si el usuario permanece 60 segundos en el video.
 let _vistaTimer = null;
+const _vistasRegistradas = new Set(); // deduplicación en sesión
+
+function toastVista(msg) {
+  let el = document.getElementById('toast-vista-el');
+  if(!el) {
+    el = document.createElement('div');
+    el.id = 'toast-vista-el';
+    el.className = 'toast-vista';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
 
 function registrarVista(item) {
   if(!item || !item._id) return;
-  // Cancelar timer anterior si el usuario abrio otro video sin cerrar
   if(_vistaTimer) { clearTimeout(_vistaTimer); _vistaTimer = null; }
 
   _vistaTimer = setTimeout(async () => {
     _vistaTimer = null;
+    // Deduplicación en sesión — no llamar si ya se registró en este tab
+    if(_vistasRegistradas.has(item._id)) return;
+    _vistasRegistradas.add(item._id);
     try {
-      const r = await fetch(`${API_URL}/items/download/${item._id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tipo: 'vista' })
-      });
+      const r = await fetch(`${API_URL}/items/vistas/${item._id}`, { method: 'PUT' });
       if(r.ok) {
         const data = await r.json();
-        // Actualizar el numero en la UI sin recargar todo
+        if(data.duplicada) return; // IP ya contada hoy, no actualizar UI
         const newCount = data.descargasEfectivas ?? ((item.descargasEfectivas||0) + 1);
         item.descargasEfectivas = newCount;
-        // Reflejar en el stat del detail sheet (si sigue abierto)
+        // Reflejar en stat del detail sheet
         const dlEl = document.getElementById('ds-dl');
         if(dlEl) dlEl.textContent = fmt(newCount);
-        // Reflejar en la tile de la lista (si esta visible)
+        // Reflejar en tile de la lista
         const tile = document.querySelector(`.game-tile--video[data-id="${item._id}"]`);
         if(tile) {
           const viewsEl = tile.querySelector('.tile-yt-views');
           if(viewsEl) viewsEl.innerHTML = `<ion-icon name="eye-outline"></ion-icon>${fmt(newCount)}`;
         }
+        // Toast feedback (punto 10)
+        toastVista(`👁 +1 vista registrada`);
       }
-    } catch(_) {} // silencioso - no interrumpir la experiencia
-  }, 60000); // 60 segundos de permanencia para contar vista
+    } catch(_) {}
+  }, 60000);
 }
 
 // ── OPEN DETAIL SHEET ─────────────────────────────────────
@@ -823,9 +844,32 @@ function openDetail(item) {
       th.className='gallery-thumb'+(m===primaryMedia?' active':'');
       const isYTt=isYouTubeUrl(m);
       const isMp4t=/\.(mp4|webm|mov|avi)(\?.*)?$/i.test(m);
-      const tSrc=isYTt?getYouTubeThumbnail(m):(isMp4t?'https://via.placeholder.com/72x52/12121f/5EFF43?text=▶':m);
-      th.innerHTML=`<img src="${tSrc}" alt="media ${i+1}" onerror="this.src='https://via.placeholder.com/72x52/12121f/555570?text=?'">
-        ${(isYTt||isMp4t)?'<div class="gallery-yt-icon"><ion-icon name="play-circle"></ion-icon></div>':''}`;
+
+      if(isMp4t) {
+        // Punto 9: auto-capturar frame del video via canvas
+        th.innerHTML=`<img src="https://via.placeholder.com/72x52/12121f/5EFF43?text=▶" alt="media ${i+1}">
+          <div class="gallery-yt-icon"><ion-icon name="play-circle"></ion-icon></div>`;
+        // Intentar captura de frame en segundo plano
+        const tmpVid = document.createElement('video');
+        tmpVid.src = m; tmpVid.crossOrigin = 'anonymous';
+        tmpVid.muted = true; tmpVid.preload = 'metadata';
+        tmpVid.currentTime = 1;
+        tmpVid.addEventListener('loadeddata', () => {
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 144; canvas.height = 104;
+            canvas.getContext('2d').drawImage(tmpVid, 0, 0, 144, 104);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+            const imgEl = th.querySelector('img');
+            if(imgEl) imgEl.src = dataUrl;
+            tmpVid.src = '';
+          } catch(_) { tmpVid.src = ''; }
+        }, { once: true });
+      } else {
+        const tSrc=isYTt?getYouTubeThumbnail(m):m;
+        th.innerHTML=`<img src="${tSrc}" alt="media ${i+1}" onerror="this.src='https://via.placeholder.com/72x52/12121f/555570?text=?'">
+          ${isYTt?'<div class="gallery-yt-icon"><ion-icon name="play-circle"></ion-icon></div>':''}`;
+      }
       th.onclick=()=>{
         document.querySelectorAll('.gallery-thumb').forEach(t2=>t2.classList.remove('active'));
         th.classList.add('active'); loadSheetMedia(m);
@@ -904,8 +948,23 @@ function openDetail(item) {
   document.getElementById('detail-sheet').classList.add('open');
   document.body.style.overflow='hidden';
 
-  // Registrar vista si es un video (reutiliza descargasEfectivas con flag tipo=vista)
-  if(isVideoItem) registrarVista(item);
+  // Registrar vista si es un video (usa ruta dedicada /items/vistas/:id con dedup IP)
+  if(isVideoItem) {
+    registrarVista(item);
+    // Punto 12: inyectar botón teatro en .sheet-media
+    const sheetMediaEl = document.querySelector('.sheet-media');
+    if(sheetMediaEl && !document.getElementById('ds-btn-theater')) {
+      const theatBtn = document.createElement('button');
+      theatBtn.id = 'ds-btn-theater';
+      theatBtn.setAttribute('aria-label', 'Modo teatro');
+      theatBtn.title = 'Modo teatro';
+      theatBtn.innerHTML = '<ion-icon name="tv-outline"></ion-icon>';
+      theatBtn.onclick = (e) => { e.stopPropagation(); openTheater(item); };
+      sheetMediaEl.appendChild(theatBtn);
+    }
+    // Punto 6: escuchar evento ended en el video inyectado o iframe
+    setTimeout(() => { attachAutoplayListener(item); }, 800);
+  }
 }
 
 function closeDetail() {
@@ -920,6 +979,9 @@ function closeDetail() {
   const injVid=document.getElementById('ds-injected-vid');
   if(injVid){ if(injVid._fsCleanup) injVid._fsCleanup(); injVid.remove(); }
   const fsBtn=document.getElementById('ds-vid-fs-btn'); if(fsBtn) fsBtn.remove();
+  const theatBtn2=document.getElementById('ds-btn-theater'); if(theatBtn2) theatBtn2.remove();
+  const apPanel=document.getElementById('autoplay-panel'); if(apPanel) apPanel.remove();
+  if(_autoplayTimer){ clearTimeout(_autoplayTimer); _autoplayTimer=null; }
   // Restaurar overlay
   const overlay = document.querySelector('.sheet-media .sheet-media-overlay');
   if(overlay) overlay.style.display = '';
@@ -1735,6 +1797,7 @@ async function pfSubirVideo() {
   const vidUrl = document.getElementById('pf-vid-url')?.value.trim();
   const thumb  = document.getElementById('pf-vid-thumbnail')?.value.trim();
   const type   = document.getElementById('pf-vid-type')?.value || 'Tutorial';
+  const duracion = document.getElementById('pf-vid-duracion')?.value.trim() || '';
 
   if(!titulo)  return toast('⚠️ El título es obligatorio.');
   if(!vidUrl)  return toast('⚠️ Debes subir un video primero.');
@@ -1754,11 +1817,12 @@ async function pfSubirVideo() {
       body: JSON.stringify({
         title:    titulo,
         description: desc,
-        link:     vidUrl,       // El link ES el video de Cloudinary
-        image:    thumbFinal,   // Miniatura como portada
+        link:     vidUrl,
+        image:    thumbFinal,
         images:   [],
         category: 'Video',
         videoType: type,
+        extraData: duracion ? { duracion } : {},
         usuario:  pfUser,
         status:   'pendiente'
       })
@@ -2016,6 +2080,8 @@ async function pfOpenEditVideoModal(itemId) {
     document.getElementById('pf-edit-vid-title').value = item.title||'';
     document.getElementById('pf-edit-vid-desc').value  = item.description||'';
     document.getElementById('pf-edit-vid-thumb').value = item.image||'';
+    const durEl = document.getElementById('pf-edit-vid-duracion');
+    if(durEl) durEl.value = item.extraData?.duracion || '';
     const prevImg = document.getElementById('pf-edit-vid-thumb-prev');
     if(prevImg && item.image) { prevImg.src=item.image; prevImg.style.display='block'; }
     const currentType = item.videoType||'Tutorial';
@@ -2039,10 +2105,11 @@ function pfEditVidSelectType(type, btn) {
 }
 async function pfSaveEditVideo() {
   if(!pfCurrentEditVideoId) return;
-  const title = document.getElementById('pf-edit-vid-title').value.trim();
-  const desc  = document.getElementById('pf-edit-vid-desc').value.trim();
-  const thumb = document.getElementById('pf-edit-vid-thumb').value.trim();
-  const type  = document.getElementById('pf-edit-vid-type').value;
+  const title    = document.getElementById('pf-edit-vid-title').value.trim();
+  const desc     = document.getElementById('pf-edit-vid-desc').value.trim();
+  const thumb    = document.getElementById('pf-edit-vid-thumb').value.trim();
+  const type     = document.getElementById('pf-edit-vid-type').value;
+  const duracion = document.getElementById('pf-edit-vid-duracion')?.value.trim() || '';
   if(!title) { toast('⚠️ El título es obligatorio'); return; }
   const token = LS.get('token');
   if(!token) { toast('⚠️ Sesión expirada'); return; }
@@ -2052,7 +2119,10 @@ async function pfSaveEditVideo() {
     const res = await fetch(`${PF_API}/items/${pfCurrentEditVideoId}`, {
       method: 'PUT',
       headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
-      body: JSON.stringify({ title, description:desc, image:thumb, videoType:type, category:'Video' })
+      body: JSON.stringify({
+        title, description:desc, image:thumb, videoType:type, category:'Video',
+        extraData: duracion ? { duracion } : {}
+      })
     });
     if(res.ok) { toast('✅ Video actualizado'); pfCloseEditVideoModal(); pfLoadHistorial(); }
     else { const e=await res.json(); toast('❌ '+(e.error||'Error al guardar')); }
@@ -3237,7 +3307,7 @@ function nexusAplicarPerfil(perfil) {
   if (currentTab === 'main' && !query) {
     filteredItems = activeCategory
       ? todosLosItems.filter(i => i.category === activeCategory)
-      : todosLosItems;
+      : todosLosItems.filter(i => i.category !== 'Video');
     render(filteredItems);
   }
 }
@@ -3272,7 +3342,7 @@ window.addEventListener('message', function(event) {
       document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
       activeCategory = '';
       document.getElementById('buscador').value = '';
-      filteredItems = todosLosItems;
+      filteredItems = todosLosItems.filter(i => i.category !== 'Video');
       render(filteredItems);
       break;
     }
@@ -3282,8 +3352,11 @@ window.addEventListener('message', function(event) {
       const ids = msg.itemIds;
       if (!Array.isArray(ids) || !ids.length) return;
       const idSet = new Set(ids);
-      const destacados = todosLosItems.filter(i => idSet.has(i._id));
-      const resto       = todosLosItems.filter(i => !idSet.has(i._id));
+      const pool = activeCategory === 'Video'
+        ? todosLosItems
+        : todosLosItems.filter(i => i.category !== 'Video');
+      const destacados = pool.filter(i => idSet.has(i._id));
+      const resto       = pool.filter(i => !idSet.has(i._id));
       filteredItems = [...destacados, ...resto];
       render(filteredItems);
       // Toast sutil para el usuario
@@ -3446,6 +3519,187 @@ setTimeout(nexusCargarPerfil, 2000);
     };
   }
 })();
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  AUTOPLAY — SIGUIENTE VIDEO (punto 6)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+let _autoplayTimer = null;
+
+/**
+ * Obtiene hasta 3 videos relacionados (misma categoría Video, excluyendo el actual)
+ */
+function getRelatedVideos(currentItem, count=3) {
+  return todosLosItems
+    .filter(i => i.category === 'Video' && i._id !== currentItem._id)
+    .sort((a,b) => (b.likesCount||0) - (a.likesCount||0))
+    .slice(0, count);
+}
+
+/**
+ * Adjunta listener al video MP4 inyectado para disparar autoplay al terminar
+ */
+function attachAutoplayListener(item) {
+  const injVid = document.getElementById('ds-injected-vid');
+  if(!injVid) return;
+  injVid.addEventListener('ended', () => { triggerAutoplay(item); }, { once: true });
+}
+
+/**
+ * Muestra el panel de autoplay con countdown de 5s
+ */
+function triggerAutoplay(currentItem) {
+  const sheetMedia = document.querySelector('.sheet-media');
+  if(!sheetMedia) return;
+
+  const related = getRelatedVideos(currentItem, 3);
+  if(!related.length) return;
+
+  const nextItem = related[0];
+  let countdown = 5;
+
+  // Crear panel
+  const panel = document.createElement('div');
+  panel.id = 'autoplay-panel';
+  panel.innerHTML = `
+    <div class="autoplay-label">A CONTINUACIÓN</div>
+    <div class="autoplay-next-title">${nextItem.title}</div>
+    <div class="autoplay-related">
+      ${related.map((v,i) => {
+        const thumb = v.image || 'https://via.placeholder.com/88x50/07070f/00f2ff?text=▶';
+        return `<div class="autoplay-rel-thumb" data-id="${v._id}">
+          <img src="${thumb}" alt="${v.title}" onerror="this.src='https://via.placeholder.com/88x50/07070f/00f2ff?text=▶'">
+          <span>${v.title}</span>
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="autoplay-countdown" id="ap-countdown">${countdown}</div>
+    <div class="autoplay-actions">
+      <button class="autoplay-btn autoplay-btn--play" id="ap-btn-play">▶ Ver ahora</button>
+      <button class="autoplay-btn autoplay-btn--cancel" id="ap-btn-cancel">Cancelar</button>
+    </div>
+  `;
+  sheetMedia.appendChild(panel);
+  // forzar reflow para que la transición funcione
+  panel.offsetHeight;
+  panel.classList.add('show');
+
+  // Clicks en miniaturas relacionadas
+  panel.querySelectorAll('.autoplay-rel-thumb').forEach(th => {
+    th.onclick = () => {
+      if(_autoplayTimer){ clearTimeout(_autoplayTimer); _autoplayTimer=null; }
+      panel.remove();
+      const v = todosLosItems.find(i => i._id === th.dataset.id);
+      if(v) openDetail(v);
+    };
+  });
+
+  // Botón "Ver ahora"
+  document.getElementById('ap-btn-play').onclick = () => {
+    if(_autoplayTimer){ clearTimeout(_autoplayTimer); _autoplayTimer=null; }
+    panel.remove();
+    openDetail(nextItem);
+  };
+
+  // Botón cancelar
+  document.getElementById('ap-btn-cancel').onclick = () => {
+    if(_autoplayTimer){ clearTimeout(_autoplayTimer); _autoplayTimer=null; }
+    panel.classList.remove('show');
+    setTimeout(() => panel.remove(), 350);
+  };
+
+  // Countdown automático
+  _autoplayTimer = setInterval(() => {
+    countdown--;
+    const cdEl = document.getElementById('ap-countdown');
+    if(cdEl) cdEl.textContent = countdown;
+    if(countdown <= 0) {
+      clearInterval(_autoplayTimer); _autoplayTimer = null;
+      panel.remove();
+      openDetail(nextItem);
+    }
+  }, 1000);
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//  MODO TEATRO (punto 12)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// Crear el overlay de teatro en el DOM (una sola vez)
+(function initTheaterOverlay() {
+  if(document.getElementById('theater-overlay')) return;
+  const ov = document.createElement('div');
+  ov.id = 'theater-overlay';
+  ov.innerHTML = `
+    <div id="theater-player-wrap"></div>
+    <div id="theater-info">
+      <div id="theater-title"></div>
+      <div id="theater-meta"></div>
+    </div>
+    <button id="theater-close" aria-label="Cerrar modo teatro">
+      <ion-icon name="close"></ion-icon>
+    </button>
+  `;
+  document.body.appendChild(ov);
+  document.getElementById('theater-close').onclick = closeTheater;
+  ov.addEventListener('keydown', e => { if(e.key==='Escape') closeTheater(); });
+})();
+
+function openTheater(item) {
+  if(!item) return;
+  const ov = document.getElementById('theater-overlay');
+  const wrap = document.getElementById('theater-player-wrap');
+  const titleEl = document.getElementById('theater-title');
+  const metaEl  = document.getElementById('theater-meta');
+  if(!ov || !wrap) return;
+
+  // Limpiar player anterior
+  wrap.innerHTML = '';
+
+  const isYT2  = isYouTubeUrl(item.link);
+  const isMp42 = /\.(mp4|webm|mov|avi)(\?.*)?$/i.test(item.link);
+
+  if(isYT2) {
+    const ytId = getYouTubeId(item.link);
+    const iframe = document.createElement('iframe');
+    iframe.src = `https://www.youtube.com/embed/${ytId}?autoplay=1&controls=1&rel=0&playsinline=1`;
+    iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+    iframe.allowFullscreen = true;
+    wrap.appendChild(iframe);
+  } else if(isMp42) {
+    const nv = document.createElement('video');
+    nv.src = item.link;
+    nv.controls = true;
+    nv.autoplay = true;
+    nv.playsInline = true;
+    nv.style.cssText = 'width:100%;height:100%;object-fit:contain;background:#000;';
+    wrap.appendChild(nv);
+    // Autoplay siguiente al terminar
+    nv.addEventListener('ended', () => { triggerAutoplay(item); }, { once: true });
+  }
+
+  titleEl.textContent = item.title;
+  metaEl.innerHTML = `
+    <span>@${item.usuario||'Cloud'}</span>
+    ${item.videoType ? `<span>· ${item.videoType}</span>` : ''}
+    <span>· ${fmt(item.descargasEfectivas||0)} vistas</span>
+    <span>· ${fmt(item.likesCount||0)} likes</span>
+  `;
+
+  ov.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeTheater() {
+  const ov = document.getElementById('theater-overlay');
+  if(!ov) return;
+  ov.classList.remove('open');
+  document.body.style.overflow = '';
+  // Detener video / iframe
+  const wrap = document.getElementById('theater-player-wrap');
+  if(wrap) wrap.innerHTML = '';
+  if(_autoplayTimer){ clearInterval(_autoplayTimer); _autoplayTimer=null; }
+}
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  SISTEMA DE NOTIFICACIONES
