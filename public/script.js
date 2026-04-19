@@ -240,6 +240,7 @@ function createTile(item, isFeatured=false) {
   const favIds = LS.getJSON('favoritos', []);
   const isFav = favIds.includes(item._id);
   const dl = item.descargasEfectivas||0;
+  const lk = item.likesCount||0;
   const extraBadges = getTileExtras(item);
 
   if(isFeatured) {
@@ -258,7 +259,7 @@ function createTile(item, isFeatured=false) {
         <div class="ft-title">${item.title}</div>
         <div class="ft-meta">
           <div class="ft-user">@${item.usuario||'Cloud'}${getBadge(item.usuario)}</div>
-          ${dl?`<div class="ft-dl"><ion-icon name="download-outline"></ion-icon>${fmt(dl)}</div>`:''}
+          ${lk?`<div class="ft-dl"><ion-icon name="heart"></ion-icon>${fmt(lk)}</div>`:''}
         </div>
       </div>`;
     el.addEventListener('click',()=>openDetail(item));
@@ -289,6 +290,7 @@ function createTile(item, isFeatured=false) {
           <div class="tile-yt-meta">
             <span class="tile-user">@${item.usuario||'Cloud'}${getBadge(item.usuario)}</span>
             ${dl?`<span class="tile-yt-dot">·</span><span class="tile-yt-views"><ion-icon name="eye-outline"></ion-icon>${fmt(dl)}</span>`:''}
+            ${lk?`<span class="tile-yt-dot">·</span><span class="tile-yt-likes"><ion-icon name="heart"></ion-icon>${fmt(lk)}</span>`:''}
           </div>
         </div>
       </div>`;
@@ -310,7 +312,7 @@ function createTile(item, isFeatured=false) {
         <div class="tile-meta">
           <div class="tile-avatar">${avatarLetter(item.usuario)}</div>
           <div class="tile-user">@${item.usuario||'Cloud'}</div>
-          ${dl?`<div class="tile-downloads"><ion-icon name="download-outline"></ion-icon>${fmt(dl)}</div>`:''}
+          ${lk?`<div class="tile-downloads"><ion-icon name="heart"></ion-icon>${fmt(lk)}</div>`:''}
         </div>
       </div>`;
   }
@@ -497,7 +499,7 @@ function render(list, reset=true) {
   if(list.length>0 && typeof initHeroCarousel==='function') {
     const isVideoMode = activeCategory === 'Video';
     const carouselSource = isVideoMode
-      ? [...list].sort((a,b) => (b.descargasEfectivas||0) - (a.descargasEfectivas||0))
+      ? [...list].sort((a,b) => (b.likesCount||0) - (a.likesCount||0))
       : list;
     initHeroCarousel(carouselSource, isVideoMode);
   }
@@ -655,33 +657,42 @@ document.querySelectorAll('.chip').forEach(c=>{
 // ── REGISTRAR VISTA (videos) ──────────────────────────────
 // Reutiliza el campo descargasEfectivas como contador de vistas.
 // El flag tipo:'vista' sirve para que el backend pueda distinguirlo
-// y omitir la lógica de monetización hasta que esté lista.
-// Backend: en PUT /items/download/:id, si req.body.tipo==='vista'
-//          incrementar descargasEfectivas pero NO sumar earnings al autor.
-async function registrarVista(item) {
+// y omitir la lógica de monetización hasta que este lista.
+// Backend: PUT /items/download/:id con { tipo:'vista' }
+//          incrementa descargasEfectivas pero NO suma earnings al autor.
+// La vista solo se registra si el usuario permanece 60 segundos en el video.
+let _vistaTimer = null;
+
+function registrarVista(item) {
   if(!item || !item._id) return;
-  try {
-    const r = await fetch(`${API_URL}/items/download/${item._id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tipo: 'vista' })
-    });
-    if(r.ok) {
-      const data = await r.json();
-      // Actualizar el número en la UI sin recargar todo
-      const newCount = data.descargasEfectivas ?? ((item.descargasEfectivas||0) + 1);
-      item.descargasEfectivas = newCount;
-      // Reflejar en el stat del detail sheet
-      const dlEl = document.getElementById('ds-dl');
-      if(dlEl) dlEl.textContent = fmt(newCount);
-      // Reflejar en la tile de la lista (si está visible)
-      const tile = document.querySelector(`.game-tile--video[data-id="${item._id}"]`);
-      if(tile) {
-        const viewsEl = tile.querySelector('.tile-yt-views');
-        if(viewsEl) viewsEl.innerHTML = `<ion-icon name="eye-outline"></ion-icon>${fmt(newCount)}`;
+  // Cancelar timer anterior si el usuario abrio otro video sin cerrar
+  if(_vistaTimer) { clearTimeout(_vistaTimer); _vistaTimer = null; }
+
+  _vistaTimer = setTimeout(async () => {
+    _vistaTimer = null;
+    try {
+      const r = await fetch(`${API_URL}/items/download/${item._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipo: 'vista' })
+      });
+      if(r.ok) {
+        const data = await r.json();
+        // Actualizar el numero en la UI sin recargar todo
+        const newCount = data.descargasEfectivas ?? ((item.descargasEfectivas||0) + 1);
+        item.descargasEfectivas = newCount;
+        // Reflejar en el stat del detail sheet (si sigue abierto)
+        const dlEl = document.getElementById('ds-dl');
+        if(dlEl) dlEl.textContent = fmt(newCount);
+        // Reflejar en la tile de la lista (si esta visible)
+        const tile = document.querySelector(`.game-tile--video[data-id="${item._id}"]`);
+        if(tile) {
+          const viewsEl = tile.querySelector('.tile-yt-views');
+          if(viewsEl) viewsEl.innerHTML = `<ion-icon name="eye-outline"></ion-icon>${fmt(newCount)}`;
+        }
       }
-    }
-  } catch(_) {} // silencioso — no interrumpir la experiencia
+    } catch(_) {} // silencioso - no interrumpir la experiencia
+  }, 60000); // 60 segundos de permanencia para contar vista
 }
 
 // ── OPEN DETAIL SHEET ─────────────────────────────────────
@@ -898,6 +909,8 @@ function openDetail(item) {
 }
 
 function closeDetail() {
+  // Cancelar vista pendiente si el usuario cierra antes del minuto
+  if(_vistaTimer) { clearTimeout(_vistaTimer); _vistaTimer = null; }
   document.getElementById('detail-overlay').classList.remove('show');
   document.getElementById('detail-sheet').classList.remove('open');
   if(!tutActive && !nxOpen) document.body.style.overflow='';
@@ -1055,6 +1068,27 @@ async function fav(id) {
       b.className='tile-fav-quick'+(newFav?' active':'');
       b.innerHTML=`<ion-icon name="${newFav?'heart':'heart-outline'}"></ion-icon>`;
     });
+    // Actualizar likesCount en el item local y reflejar en todas las tiles
+    const newFavGlobal = !isFav;
+    const localItem = todosLosItems.find(i => i._id === id);
+    if(localItem) {
+      localItem.likesCount = Math.max(0, (localItem.likesCount||0) + (newFavGlobal ? 1 : -1));
+      // Reflejar el contador en tiles normales y featured
+      document.querySelectorAll(`[data-id="${id}"] .tile-downloads, [data-id="${id}"] .ft-dl`).forEach(el => {
+        el.innerHTML = `<ion-icon name="heart"></ion-icon>${fmt(localItem.likesCount)}`;
+        el.style.display = localItem.likesCount > 0 ? '' : 'none';
+      });
+      // Reflejar en tile-yt-likes (video tiles)
+      document.querySelectorAll(`[data-id="${id}"] .tile-yt-likes`).forEach(el => {
+        el.innerHTML = `<ion-icon name="heart"></ion-icon>${fmt(localItem.likesCount)}`;
+      });
+    }
+    // Actualizar tambien el boton del detail sheet si el item abierto es este
+    const btnFav = document.getElementById('ds-btn-fav');
+    if(btnFav && currentItem && currentItem._id === id) {
+      btnFav.className = 'action-pill' + (newFavGlobal ? ' fav-active' : '');
+      btnFav.innerHTML = `<ion-icon name="${newFavGlobal?'heart':'heart-outline'}"></ion-icon> ${newFavGlobal?'Guardado':'Favorito'}`;
+    }
   } catch(e) { toast('❌ Error al guardar'); }
 }
 
