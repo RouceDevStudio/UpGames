@@ -226,6 +226,7 @@ app.use((req, res, next) => {
 const MONGODB_URI = config.MONGODB_URI;
 const JWT_SECRET  = config.JWT_SECRET;
 
+// ── Cloudinary ──
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key:    process.env.CLOUDINARY_API_KEY,
@@ -499,7 +500,8 @@ const JuegoSchema = new mongoose.Schema({
         default: {}
     }
 }, { 
-    timestamps: true
+    timestamps: true,
+    strict: false
 });
 
 // Todos los índices declarados en un solo lugar (evita duplicados)
@@ -2473,7 +2475,7 @@ app.get("/items", async (req, res) => {
         }
 
         const items = await Juego.find(filtro)
-            .select('_id title description image images link category usuario reportes linkStatus descargasEfectivas')
+            .select('_id title description image images link category usuario reportes linkStatus descargasEfectivas extraData videoType scoreRecomendacion')
             .sort({ scoreRecomendacion: -1, createdAt: -1 }) // ⭐ NUEVO: Ordenar por score primero, luego por fecha
             .limit(100)
             .lean();
@@ -2489,7 +2491,7 @@ app.get("/items/user/:usuario", async (req, res) => {
         const aportes = await Juego.find({ 
             usuario: req.params.usuario 
         })
-            .select('_id title description image images link category usuario reportes reportesDesglose linkStatus descargasEfectivas status createdAt scoreRecomendacion')
+            .select('_id title description image images link category usuario reportes reportesDesglose linkStatus descargasEfectivas status createdAt scoreRecomendacion extraData videoType')
             .sort({ scoreRecomendacion: -1, createdAt: -1 })
             .lean();
         res.json(aportes);
@@ -2516,8 +2518,8 @@ app.post("/items/add", [
         const nuevoJuego = new Juego({ 
             ...req.body,
             usuario: req.usuario,  // sobreescribir con el token
-            status: "pendiente",
-            linkStatus: "online"
+            status: "aprobado",    // Auto-aprobado — visible de inmediato
+            linkStatus: "revision" // En revisión hasta confirmar que el link funciona
         });
         
         await nuevoJuego.save();
@@ -2642,6 +2644,7 @@ app.put("/items/approve/:id", verificarAdmin, [
     }
 });
 
+// ── DELETE /items/:id/video — elimina video + Cloudinary ──
 app.delete("/items/:id/video", verificarToken, [
     param('id').isMongoId()
 ], async (req, res) => {
@@ -2657,7 +2660,7 @@ app.delete("/items/:id/video", verificarToken, [
                 const idx = parts.indexOf("upload");
                 if (idx !== -1) {
                     let pub = parts.slice(idx + 1).join("/");
-                    if (/^v\d+\//.test(pub)) pub = pub.replace(/^v\d+\//, "");
+                    pub = pub.replace(/^v\d+\//, "");
                     pub = pub.replace(/\.[^.]+$/, "");
                     await cloudinary.uploader.destroy(pub, { resource_type: "video" });
                     logger.info("Cloudinary video eliminado: " + pub);
@@ -3568,40 +3571,34 @@ function iniciarJobsAutomaticos() {
     logger.info('JOB 3: Reset de reportes activo (cada 12h)');
 
     // ----------------------------------------------------------
-    // JOB 4: AUTO-RECHAZAR ITEMS PENDIENTES VIEJOS (cada 24h)
-    // Items con status 'pendiente' o 'pending' de más de 7 días
-    // se rechazan automáticamente para no saturar la cola de admin.
+    // JOB 4: AUTO-MARCAR CAÍDO links en revisión +2 días (cada 12h)
+    // Si un item aprobado lleva más de 2 días con linkStatus='revision'
+    // se marca como 'caido' automáticamente.
     // ----------------------------------------------------------
-    async function autoRechazarPendientes() {
+    async function autoMarcarRevisionCaido() {
         try {
-            const hace7dias = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-
+            const hace2dias = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
             const resultado = await Juego.updateMany(
                 {
-                    status: { $in: ['pendiente', 'pending'] },
-                    createdAt: { $lte: hace7dias }
+                    status: 'aprobado',
+                    linkStatus: 'revision',
+                    updatedAt: { $lte: hace2dias }
                 },
-                {
-                    $set: {
-                        status: 'rechazado',
-                        linkStatus: 'caido'
-                    }
-                }
+                { $set: { linkStatus: 'caido' } }
             );
-
             if (resultado.modifiedCount > 0) {
-                logger.info(`JOB 4 Pendientes: ${resultado.modifiedCount} items auto-rechazados`);
+                logger.info(`JOB 4: ${resultado.modifiedCount} items marcados como caídos (2+ días en revisión)`);
             } else {
-                logger.info('JOB 4 Pendientes: no hay items expirados');
+                logger.info('JOB 4: ningún item en revisión expirado');
             }
         } catch (err) {
-            logger.error(`JOB 4 Error en auto-rechazo: ${err.message}`);
+            logger.error(`JOB 4 Error marcando caídos: ${err.message}`);
         }
     }
 
-    autoRechazarPendientes(); // Correr al arrancar
-    setInterval(autoRechazarPendientes, 24 * 60 * 60 * 1000); // Cada 24h
-    logger.info('JOB 4: Auto-rechazo de pendientes activo (cada 24h)');
+    autoMarcarRevisionCaido();
+    setInterval(autoMarcarRevisionCaido, 12 * 60 * 60 * 1000);
+    logger.info('JOB 4: Auto-marcado revisión→caído activo (cada 12h)');
 
     // ----------------------------------------------------------
     // JOB 5: AUTO-MARCAR LINKS CAÍDOS POR REPORTES (cada 6h)

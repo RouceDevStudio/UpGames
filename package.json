@@ -1,7 +1,7 @@
 {
   "name": "upgames-backend",
   "version": "3.1.0",
-  "description": "Backend API para UpGames - Plataforma de juegos con economía CPM",
+  "description": "Backend API para UpGames - Plataforma de juegos con econom\u00eda CPM",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
@@ -30,7 +30,8 @@
     "mongoose": "^8.0.3",
     "winston": "^3.11.0",
     "node-cron": "^3.0.3",
-    "nodemailer": "^6.9.13"
+    "nodemailer": "^6.9.13",
+    "cloudinary": "^2.2.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
