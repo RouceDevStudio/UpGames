@@ -224,6 +224,14 @@ app.use((req, res, next) => {
 // ========== CONEXIÓN MONGODB (variables desde config centralizado) ==========
 const MONGODB_URI = config.MONGODB_URI;
 const JWT_SECRET  = config.JWT_SECRET;
+
+// ── Cloudinary config ──
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key:    process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+    secure: true
+});
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 
 // La validación de estas variables ya ocurre en config.js al arrancar.
@@ -477,9 +485,18 @@ const JuegoSchema = new mongoose.Schema({
     scoreRecomendacion: {
         type: Number,
         default: 0
+    },
+    videoType: {
+        type: String,
+        default: ''
+    },
+    extraData: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {}
     }
 }, { 
-    timestamps: true
+    timestamps: true,
+    strict: false
 });
 
 // Todos los índices declarados en un solo lugar (evita duplicados)
@@ -2453,7 +2470,7 @@ app.get("/items", async (req, res) => {
         }
 
         const items = await Juego.find(filtro)
-            .select('_id title description image images link category usuario reportes linkStatus descargasEfectivas')
+            .select('_id title description image images link category usuario reportes linkStatus descargasEfectivas extraData videoType scoreRecomendacion')
             .sort({ scoreRecomendacion: -1, createdAt: -1 }) // ⭐ NUEVO: Ordenar por score primero, luego por fecha
             .limit(100)
             .lean();
@@ -2469,7 +2486,7 @@ app.get("/items/user/:usuario", async (req, res) => {
         const aportes = await Juego.find({ 
             usuario: req.params.usuario 
         })
-            .select('_id title description image images link category usuario reportes reportesDesglose linkStatus descargasEfectivas status createdAt scoreRecomendacion')
+            .select('_id title description image images link category usuario reportes reportesDesglose linkStatus descargasEfectivas status createdAt scoreRecomendacion extraData videoType')
             .sort({ scoreRecomendacion: -1, createdAt: -1 })
             .lean();
         res.json(aportes);
@@ -2571,7 +2588,7 @@ app.put("/items/:id", verificarToken, [
         }
 
         // Solo se permiten editar estos campos — nunca status, linkStatus ni reportes
-        const allowedFields = ['title', 'description', 'link', 'image', 'images', 'category'];
+        const allowedFields = ['title', 'description', 'link', 'image', 'images', 'category', 'videoType', 'extraData'];
         const updates = {};
         allowedFields.forEach(field => {
             if (req.body[field] !== undefined) updates[field] = req.body[field];
@@ -2619,6 +2636,57 @@ app.put("/items/approve/:id", verificarAdmin, [
             success: false,
             error: "Error de aprobación" 
         }); 
+    }
+});
+
+// ═══════════════════════════════════════════════════
+// DELETE /items/:id/video — Elimina video + Cloudinary
+// ═══════════════════════════════════════════════════
+app.delete("/items/:id/video", verificarToken, [
+    param('id').isMongoId()
+], async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) return res.status(400).json({ success: false, error: "ID inválido" });
+
+        const item = await Juego.findById(req.params.id);
+        if (!item) return res.status(404).json({ success: false, error: "Video no encontrado" });
+
+        // Solo el dueño puede eliminar
+        if (item.usuario !== req.usuario) {
+            return res.status(403).json({ success: false, error: "No tienes permiso para eliminar este video" });
+        }
+
+        // Extraer public_id de Cloudinary desde la URL del video
+        // URL: https://res.cloudinary.com/cloud_name/video/upload/v.../public_id.ext
+        if (item.link && item.link.includes('cloudinary.com')) {
+            try {
+                const urlParts = item.link.split('/');
+                const uploadIdx = urlParts.indexOf('upload');
+                if (uploadIdx !== -1) {
+                    // Saltar versión (v1234...) si existe
+                    let publicIdWithExt = urlParts.slice(uploadIdx + 1).join('/');
+                    if (/^v\d+\//.test(publicIdWithExt)) {
+                        publicIdWithExt = publicIdWithExt.replace(/^v\d+\//, '');
+                    }
+                    // Quitar extensión
+                    const publicId = publicIdWithExt.replace(/\.[^.]+$/, '');
+                    await cloudinary.uploader.destroy(publicId, { resource_type: 'video' });
+                    logger.info(`Cloudinary: video eliminado ${publicId}`);
+                }
+            } catch (cldErr) {
+                logger.error(`Cloudinary delete error: ${cldErr.message}`);
+                // No bloqueamos — igual eliminamos de MongoDB
+            }
+        }
+
+        await Juego.findByIdAndDelete(req.params.id);
+        logger.info(`Video eliminado: "${item.title}" por @${req.usuario}`);
+        res.json({ success: true, ok: true });
+
+    } catch (error) {
+        logger.error(`Error al eliminar video: ${error.message}`);
+        res.status(500).json({ success: false, error: "Error al eliminar video" });
     }
 });
 
