@@ -2495,6 +2495,68 @@ app.get("/items/mis-reportes/:usuario", async (req, res) => {
 // RUTAS DE JUEGOS (CON FILTRO DE LINKS CAÍDOS)
 // ==========================================
 
+/**
+ * ⭐ PUT /items/vistas/:id
+ * Registra una vista de video con deduplicación por IP (1 vista/IP/día).
+ * Reutiliza el schema DescargaIP (TTL 24h) igual que las descargas.
+ * NO suma earnings al autor — solo incrementa descargasEfectivas como contador de vistas.
+ */
+app.put('/items/vistas/:id', [
+    param('id').isMongoId()
+], async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ success: false, error: 'ID inválido' });
+        }
+
+        const juegoId = req.params.id;
+        const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() ||
+                   req.headers['x-real-ip'] ||
+                   req.connection.remoteAddress ||
+                   req.socket.remoteAddress;
+
+        // Verificar que el item existe y es un video
+        const juego = await Juego.findById(juegoId).select('title category descargasEfectivas');
+        if (!juego) {
+            return res.status(404).json({ success: false, error: 'Item no encontrado' });
+        }
+
+        // Deduplicación: buscar si esta IP ya vio este video hoy
+        const vistaExistente = await DescargaIP.findOne({ juegoId, ip });
+        if (vistaExistente) {
+            // Ya vio hoy — devolver el conteo actual sin incrementar
+            return res.json({
+                success: true,
+                duplicada: true,
+                descargasEfectivas: juego.descargasEfectivas || 0
+            });
+        }
+
+        // Registrar la IP (TTL 24h automático por el schema)
+        await new DescargaIP({ juegoId, ip }).save();
+
+        // Incrementar contador de vistas
+        const updated = await Juego.findByIdAndUpdate(
+            juegoId,
+            { $inc: { descargasEfectivas: 1 } },
+            { new: true }
+        ).select('descargasEfectivas');
+
+        logger.info(`Vista registrada — Video: ${juego.title} | IP: ${ip} | Total: ${updated.descargasEfectivas}`);
+
+        res.json({
+            success: true,
+            duplicada: false,
+            descargasEfectivas: updated.descargasEfectivas
+        });
+
+    } catch (error) {
+        logger.error(`Error en PUT /items/vistas: ${error.message}`);
+        res.status(500).json({ success: false, error: 'Error al registrar vista' });
+    }
+});
+
 app.get("/items", async (req, res) => {
     try {
         const { categoria } = req.query;
@@ -2627,7 +2689,7 @@ app.put("/items/:id", verificarToken, [
         }
 
         // Solo se permiten editar estos campos — nunca status, linkStatus ni reportes
-        const allowedFields = ['title', 'description', 'link', 'image', 'images', 'category', 'videoType'];
+        const allowedFields = ['title', 'description', 'link', 'image', 'images', 'category', 'videoType', 'extraData'];
         const updates = {};
         allowedFields.forEach(field => {
             if (req.body[field] !== undefined) updates[field] = req.body[field];
