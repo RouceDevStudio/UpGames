@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const cloudinary = require('cloudinary').v2;
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
@@ -224,6 +225,13 @@ app.use((req, res, next) => {
 // ========== CONEXIÓN MONGODB (variables desde config centralizado) ==========
 const MONGODB_URI = config.MONGODB_URI;
 const JWT_SECRET  = config.JWT_SECRET;
+
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key:    process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+    secure: true
+});
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 
 // La validación de estas variables ya ocurre en config.js al arrancar.
@@ -2583,7 +2591,7 @@ app.put("/items/:id", verificarToken, [
         }
 
         // Solo se permiten editar estos campos — nunca status, linkStatus ni reportes
-        const allowedFields = ['title', 'description', 'link', 'image', 'images', 'category'];
+        const allowedFields = ['title', 'description', 'link', 'image', 'images', 'category', 'videoType'];
         const updates = {};
         allowedFields.forEach(field => {
             if (req.body[field] !== undefined) updates[field] = req.body[field];
@@ -2631,6 +2639,39 @@ app.put("/items/approve/:id", verificarAdmin, [
             success: false,
             error: "Error de aprobación" 
         }); 
+    }
+});
+
+app.delete("/items/:id/video", verificarToken, [
+    param('id').isMongoId()
+], async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) return res.status(400).json({ success:false, error:"ID inválido" });
+        const item = await Juego.findById(req.params.id);
+        if (!item) return res.status(404).json({ success:false, error:"Video no encontrado" });
+        if (item.usuario !== req.usuario) return res.status(403).json({ success:false, error:"Sin permiso" });
+        if (item.link && item.link.includes("cloudinary.com")) {
+            try {
+                const parts = item.link.split("/");
+                const idx = parts.indexOf("upload");
+                if (idx !== -1) {
+                    let pub = parts.slice(idx + 1).join("/");
+                    if (/^v\d+\//.test(pub)) pub = pub.replace(/^v\d+\//, "");
+                    pub = pub.replace(/\.[^.]+$/, "");
+                    await cloudinary.uploader.destroy(pub, { resource_type: "video" });
+                    logger.info("Cloudinary video eliminado: " + pub);
+                }
+            } catch(cldErr) {
+                logger.error("Cloudinary delete error: " + cldErr.message);
+            }
+        }
+        await Juego.findByIdAndDelete(req.params.id);
+        logger.info("Video eliminado: \"" + item.title + "\" por @" + req.usuario);
+        res.json({ success:true, ok:true });
+    } catch (error) {
+        logger.error("Error al eliminar video: " + error.message);
+        res.status(500).json({ success:false, error:"Error al eliminar video" });
     }
 });
 
