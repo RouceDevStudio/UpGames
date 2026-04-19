@@ -52,7 +52,7 @@ body{background:var(--bg);color:#fff;font-family:'Segoe UI',system-ui,-apple-sys
 .hbtn.bulk-active{background:rgba(255,204,0,.1);border-color:var(--yellow);color:var(--yellow);}
 
 /* ── TABS ── */
-.tabs{display:grid;grid-template-columns:repeat(10,1fr);padding:0 4px 8px;gap:2px;}
+.tabs{display:grid;grid-template-columns:repeat(8,1fr);padding:0 4px 8px;gap:2px;}
 .tab{padding:9px 1px;text-align:center;cursor:pointer;border-bottom:2px solid transparent;transition:var(--tx);opacity:.4;border-radius:6px 6px 0 0;position:relative;}
 .tab.active{opacity:1;border-bottom:2px solid var(--neon);background:rgba(94,255,67,.04);}
 .tab-n{font-size:.85rem;font-weight:800;display:block;}
@@ -434,14 +434,14 @@ body{background:var(--bg);color:#fff;font-family:'Segoe UI',system-ui,-apple-sys
       <span class="tab-n">📊</span>
       <span class="tab-l">Dashboard</span>
     </div>
-    <div class="tab" id="tabP" onclick="setTab('pend')">
-      <span class="tab-n" id="cP">0</span>
-      <span class="tab-l">Legacy</span>
-      <div class="tab-dot" id="dotP"></div>
+    <div class="tab" id="tabRev" onclick="setTab('revn')">
+      <span class="tab-n" id="cRev">0</span>
+      <span class="tab-l">⚠️ Revisión</span>
+      <div class="tab-dot" id="dotRev"></div>
     </div>
     <div class="tab" id="tabA" onclick="setTab('apro')">
       <span class="tab-n" id="cA">0</span>
-      <span class="tab-l">Prod</span>
+      <span class="tab-l">Entradas</span>
     </div>
     <div class="tab" id="tabC" onclick="setTab('comt')">
       <span class="tab-n" id="cC">0</span>
@@ -449,26 +449,16 @@ body{background:var(--bg);color:#fff;font-family:'Segoe UI',system-ui,-apple-sys
     </div>
     <div class="tab" id="tabU" onclick="setTab('usrs')">
       <span class="tab-n" id="cU">0</span>
-      <span class="tab-l">Users</span>
+      <span class="tab-l">Usuarios</span>
     </div>
     <div class="tab" id="tabPay" onclick="setTab('pays')">
       <span class="tab-n" id="cPay">0</span>
       <span class="tab-l">💰 Pagos</span>
       <div class="tab-dot" id="dotPay"></div>
     </div>
-    <div class="tab" id="tabRev" onclick="setTab('revn')">
-      <span class="tab-n" id="cRev">0</span>
-      <span class="tab-l">⚠️ Rev.</span>
-      <div class="tab-dot" id="dotRev"></div>
-    </div>
-    <div class="tab" id="tabFraud" onclick="setTab('fraud')">
-      <span class="tab-n">🚨</span>
-      <span class="tab-l">Fraude</span>
-      <div class="tab-dot" id="dotFraud"></div>
-    </div>
     <div class="tab" id="tabReport" onclick="setTab('reportes')">
       <span class="tab-n" id="cReport">0</span>
-      <span class="tab-l">📋 Reportes</span>
+      <span class="tab-l">Reportes</span>
       <div class="tab-dot" id="dotReport"></div>
     </div>
     <div class="tab" id="tabVid" onclick="setTab('vids')">
@@ -493,12 +483,7 @@ body{background:var(--bg);color:#fff;font-family:'Segoe UI',system-ui,-apple-sys
     </div>
   </div>
 
-  <!-- PENDIENTES -->
-  <div id="view-pend" class="view">
-    <div id="itemsPend" class="items-grid"></div>
-  </div>
-
-  <!-- APROBADOS -->
+  <!-- APROBADOS / TODAS LAS ENTRADAS -->
   <div id="view-apro" class="view">
     <div id="itemsApro" class="items-grid"></div>
   </div>
@@ -547,70 +532,6 @@ body{background:var(--bg);color:#fff;font-family:'Segoe UI',system-ui,-apple-sys
     <div id="revList" class="items-grid"></div>
   </div>
 
-  <!-- ⚠️ NUEVA VISTA: FRAUDE -->
-  <div id="view-fraud" class="view">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-      <div>
-        <h2 style="margin:0;font-size:1.5rem;font-weight:900;letter-spacing:-0.5px;">🚨 DETECCIÓN DE FRAUDE</h2>
-        <p style="margin:4px 0 0;font-size:.7rem;color:#555;">Sistema automático de detección de comportamiento sospechoso</p>
-      </div>
-      <button class="hbtn green" onclick="syncFraud()">
-        <ion-icon name="refresh"></ion-icon> ACTUALIZAR
-      </button>
-    </div>
-
-    <div class="dash-grid" style="margin-bottom:16px;">
-      <div class="dash-card red">
-        <ion-icon name="alert-circle" class="dc-ico"></ion-icon>
-        <div class="dc-main" id="fraudTotal">0</div>
-        <div class="dc-sub">Total Alertas</div>
-      </div>
-      <div class="dash-card yellow">
-        <ion-icon name="time" class="dc-ico"></ion-icon>
-        <div class="dc-main" id="fraudPending">0</div>
-        <div class="dc-sub">Sin Revisar</div>
-      </div>
-      <div class="dash-card purple">
-        <ion-icon name="ban" class="dc-ico"></ion-icon>
-        <div class="dc-main" id="fraudAutoFlagged">0</div>
-        <div class="dc-sub">Auto-Marcados</div>
-      </div>
-      <div class="dash-card cyan">
-        <ion-icon name="shield-checkmark" class="dc-ico"></ion-icon>
-        <div class="dc-main" id="fraudReviewed">0</div>
-        <div class="dc-sub">Revisados</div>
-      </div>
-    </div>
-
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;">
-      <div class="qsc">
-        <div class="qsn" style="color:#888;" id="fraudLow">0</div>
-        <div class="qsl">Low</div>
-      </div>
-      <div class="qsc">
-        <div class="qsn" style="color:var(--yellow);" id="fraudMedium">0</div>
-        <div class="qsl">Medium</div>
-      </div>
-      <div class="qsc">
-        <div class="qsn" style="color:var(--negra);" id="fraudHigh">0</div>
-        <div class="qsl">High</div>
-      </div>
-      <div class="qsc">
-        <div class="qsn" style="color:var(--danger);" id="fraudCritical">0</div>
-        <div class="qsl">Critical</div>
-      </div>
-    </div>
-
-    <div class="u-toolbar">
-      <div class="filter-chip active" data-fraud-filter="all" onclick="filterFraud('all')">TODOS</div>
-      <div class="filter-chip" data-fraud-filter="pending" onclick="filterFraud('pending')">PENDIENTES</div>
-      <div class="filter-chip" data-fraud-filter="auto" onclick="filterFraud('auto')">AUTO-MARCADOS</div>
-      <div class="filter-chip" data-fraud-filter="critical" onclick="filterFraud('critical')">CRÍTICOS</div>
-      <div class="filter-chip" data-fraud-filter="reviewed" onclick="filterFraud('reviewed')">REVISADOS</div>
-    </div>
-
-    <div id="fraudList" style="display:grid;gap:12px;"></div>
-  </div>
 
 </div>
 
@@ -926,8 +847,8 @@ async function doAdminLogin() {
       
       // Cargar datos del panel
       sync();
-      syncFraud();
       syncVids();
+      syncReportes();
       // Tutorial automatico al primer login
       setTimeout(function(){if(!sessionStorage.getItem("tour_v1")&&typeof window._tourStart==="function")window._tourStart();},800);
     } else {
@@ -1077,28 +998,27 @@ async function sync() {
 }
 
 function updCounters(){
-  const pend = D.items.filter(i=>i.status==='pendiente'||i.status==='pending').length;
   const aprob = D.items.filter(i=>i.status==='aprobado').length;
-  const rev = D.items.filter(i=>i.linkStatus==='revision').length;
-  const vids = D.items.filter(i=>i.videoType && i.videoType.trim()!=='').length;
-  const vidRev = D.items.filter(i=>i.videoType && i.videoType.trim()!=='' && i.linkStatus==='revision').length;
-  document.getElementById('cP').innerText=pend;
-  document.getElementById('cA').innerText=aprob;
-  document.getElementById('cC').innerText=D.comments.length;
-  document.getElementById('cU').innerText=D.users.length;
-  document.getElementById('cPay').innerText=D.pagos.length;
-  document.getElementById('cRev').innerText=rev;
-  document.getElementById('cVid').innerText=vids;
+  const rev   = D.items.filter(i=>i.linkStatus==='revision').length;
+  const vids  = D.items.filter(i=>i.videoType && i.videoType.trim()!=='').length;
+  const vidRev= D.items.filter(i=>i.videoType && i.videoType.trim()!=='' && i.linkStatus==='revision').length;
+  document.getElementById('cA').innerText   = aprob;
+  document.getElementById('cC').innerText   = D.comments.length;
+  document.getElementById('cU').innerText   = D.users.length;
+  document.getElementById('cPay').innerText = D.pagos.length;
+  document.getElementById('cRev').innerText = rev;
+  document.getElementById('cVid').innerText = vids;
+  document.getElementById('cReport').innerText = D.items.filter(i=>i.reportes>0).length;
   // dots
-  document.getElementById('dotP').classList.toggle('show',pend>0);
-  document.getElementById('dotPay').classList.toggle('show',D.pagos.length>0);
-  document.getElementById('dotRev').classList.toggle('show',rev>0);
-  document.getElementById('dotVid').classList.toggle('show',vidRev>0);
+  document.getElementById('dotPay').classList.toggle('show', D.pagos.length > 0);
+  document.getElementById('dotRev').classList.toggle('show', rev > 0);
+  document.getElementById('dotVid').classList.toggle('show', vidRev > 0);
+  document.getElementById('dotReport').classList.toggle('show', D.items.filter(i=>i.reportes>0).length > 0);
 }
 
 function setTab(t){
   document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
-  const map={dash:'tabDB',pend:'tabP',apro:'tabA',comt:'tabC',usrs:'tabU',pays:'tabPay',revn:'tabRev',fraud:'tabFraud',reportes:'tabReport',vids:'tabVid'};
+  const map={dash:'tabDB',apro:'tabA',comt:'tabC',usrs:'tabU',pays:'tabPay',revn:'tabRev',reportes:'tabReport',vids:'tabVid'};
   if(map[t]) document.getElementById(map[t]).classList.add('active');
   document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
   document.getElementById(`view-${t}`).classList.add('active');
@@ -1111,14 +1031,12 @@ function debF(){ clearTimeout(fT); fT=setTimeout(filtrar,200); }
 function filtrar(){
   const q=document.getElementById('gSearch').value.toLowerCase().trim();
   const tab=document.querySelector('.tab.active')?.id;
-  if(tab==='tabDB') renderDash();
-  else if(tab==='tabP') renderItems('pend',q,'itemsPend');
+  if(tab==='tabDB')     renderDash();
   else if(tab==='tabA') renderItems('apro',q,'itemsApro');
   else if(tab==='tabC') renderComments(q);
   else if(tab==='tabU') renderUsers(q);
   else if(tab==='tabPay') renderPagos(q);
   else if(tab==='tabRev') renderRevision(q);
-  else if(tab==='tabFraud') renderFraudList();
   else if(tab==='tabReport') renderReportes(q);
   else if(tab==='tabVid') renderVideos();
 }
@@ -1692,11 +1610,23 @@ async function runItem(id,op){
 }
 
 async function delUser(id){
-  if(!confirm("⚠️ ¿ELIMINAR USUARIO PERMANENTEMENTE?\n(Se eliminarán sus datos pero no sus items)")) return;
+  const u = D.users.find(x=>x._id===id);
+  const nombre = u ? `@${u.usuario}` : 'este usuario';
+  if(!confirm(`⚠️ ¿ELIMINAR ${nombre.toUpperCase()} PERMANENTEMENTE?\n\nSe eliminará la cuenta Y TODAS sus publicaciones.\nEsta acción NO se puede deshacer.`)) return;
   try {
-    const r=await fetch(`${API}/auth/users/${id}`,{method:'DELETE', headers: adminHeaders()});
-    if(r.ok){toast("✓ USUARIO ELIMINADO");sync();}
-  } catch(e){toast("ERROR DE RED","err");}
+    // 1. Eliminar todas sus publicaciones primero
+    const rItems = await fetch(`${API}/admin/users/${id}/items`, {method:'DELETE', headers: adminHeaders()});
+    const dItems = await rItems.json().catch(()=>({}));
+    const eliminados = dItems.eliminados || 0;
+    // 2. Eliminar la cuenta
+    const rUser = await fetch(`${API}/auth/users/${id}`, {method:'DELETE', headers: adminHeaders()});
+    if(rUser.ok){
+      toast(`✓ ${nombre} eliminado · ${eliminados} publicacion${eliminados===1?'':'es'} borrada${eliminados===1?'':'s'}`);
+      sync();
+    } else {
+      toast('Error al eliminar cuenta', 'err');
+    }
+  } catch(e){ toast('ERROR DE RED','err'); }
 }
 
 async function delComm(id){
@@ -1755,231 +1685,6 @@ function toast(msg,type=''){
   const t=document.getElementById("toast");
   t.className=type; t.innerText=msg; t.style.display="block";
   setTimeout(()=>{t.style.display="none";},2500);
-}
-
-// ==========================================
-// ⚠️ NUEVO: DETECCIÓN DE FRAUDE
-// ==========================================
-let fraudData = {
-    activities: [],
-    stats: {}
-};
-
-let currentFraudFilter = 'all';
-
-// Sincronizar datos de fraude
-async function syncFraud() {
-    try {
-        const res = await fetch(`${API}/admin/fraud/suspicious-activities`, {headers: adminHeaders()});
-        const data = await res.json();
-        
-        if (data.success) {
-            fraudData.stats = {
-                total: data.total || 0,
-                pendingReview: data.pendingReview || 0,
-                autoFlagged: data.autoFlagged || 0,
-                reviewed: (data.total || 0) - (data.pendingReview || 0),
-                bySeverity: data.bySeverity || {},
-                byType: data.byType || {}
-            };
-            
-            fraudData.activities = data.recentActivity || [];
-            
-            updateFraudStats();
-            renderFraudList();
-            
-            // Actualizar dot si hay pendientes
-            const dot = document.getElementById('dotFraud');
-            if (dot) {
-                if (fraudData.stats.pendingReview > 0) {
-                    dot.classList.add('show');
-                } else {
-                    dot.classList.remove('show');
-                }
-            }
-        }
-    } catch (error) {
-        console.error('Error sincronizando fraude:', error);
-    }
-}
-
-// Actualizar estadísticas
-function updateFraudStats() {
-    document.getElementById('fraudTotal').innerText = fraudData.stats.total;
-    document.getElementById('fraudPending').innerText = fraudData.stats.pendingReview;
-    document.getElementById('fraudAutoFlagged').innerText = fraudData.stats.autoFlagged;
-    document.getElementById('fraudReviewed').innerText = fraudData.stats.reviewed;
-    
-    document.getElementById('fraudLow').innerText = fraudData.stats.bySeverity.low || 0;
-    document.getElementById('fraudMedium').innerText = fraudData.stats.bySeverity.medium || 0;
-    document.getElementById('fraudHigh').innerText = fraudData.stats.bySeverity.high || 0;
-    document.getElementById('fraudCritical').innerText = fraudData.stats.bySeverity.critical || 0;
-}
-
-// Renderizar lista de fraude
-function renderFraudList() {
-    const container = document.getElementById('fraudList');
-    let filtered = fraudData.activities;
-    
-    // Aplicar filtro
-    if (currentFraudFilter === 'pending') {
-        filtered = filtered.filter(a => !a.revisado);
-    } else if (currentFraudFilter === 'auto') {
-        filtered = filtered.filter(a => a.autoMarcado);
-    } else if (currentFraudFilter === 'critical') {
-        filtered = filtered.filter(a => a.severidad === 'critical');
-    } else if (currentFraudFilter === 'reviewed') {
-        filtered = filtered.filter(a => a.revisado);
-    }
-    
-    if (filtered.length === 0) {
-        container.innerHTML = `
-            <div style="text-align:center;padding:40px;color:#555;">
-                <ion-icon name="shield-checkmark-outline" style="font-size:3rem;margin-bottom:10px;"></ion-icon>
-                <p style="font-size:0.9rem;margin:0;">No hay actividades sospechosas ${currentFraudFilter !== 'all' ? 'con este filtro' : ''}</p>
-            </div>
-        `;
-        return;
-    }
-    
-    container.innerHTML = filtered.map(activity => {
-        const typeIcons = {
-            download_velocity: 'flash',
-            ip_hopping: 'swap-horizontal',
-            single_ip_abuse: 'location',
-            bot_pattern: 'bug',
-            earnings_spike: 'trending-up',
-            time_anomaly: 'time'
-        };
-        
-        const typeNames = {
-            download_velocity: 'Velocidad de Descarga',
-            ip_hopping: 'Cambio de IPs (VPN)',
-            single_ip_abuse: 'Abuso desde IP',
-            bot_pattern: 'Patrón de Bot',
-            earnings_spike: 'Spike de Ganancias',
-            time_anomaly: 'Anomalía de Tiempo'
-        };
-        
-        const icon = typeIcons[activity.tipo] || 'alert-circle';
-        const typeName = typeNames[activity.tipo] || activity.tipo;
-        
-        return `
-            <div class="fraud-card ${activity.severidad} ${activity.revisado ? 'reviewed' : ''}">
-                ${activity.autoMarcado ? `
-                    <div class="fraud-auto-flag">
-                        <ion-icon name="ban"></ion-icon> AUTO-MARCADO
-                    </div>
-                ` : ''}
-                
-                <div class="fraud-header">
-                    <div class="fraud-user">@${activity.usuario}</div>
-                    <div class="fraud-severity ${activity.severidad}">${activity.severidad.toUpperCase()}</div>
-                </div>
-                
-                <div class="fraud-type">
-                    <ion-icon name="${icon}"></ion-icon>
-                    ${typeName}
-                </div>
-                
-                <div class="fraud-details">
-                    <div class="fraud-detail-row">
-                        <span class="fraud-detail-label">Mensaje:</span>
-                        <span class="fraud-detail-value">${activity.detalles.mensaje || 'N/A'}</span>
-                    </div>
-                    ${activity.detalles.ip ? `
-                        <div class="fraud-detail-row">
-                            <span class="fraud-detail-label">IP:</span>
-                            <span class="fraud-detail-value">${activity.detalles.ip}</span>
-                        </div>
-                    ` : ''}
-                    <div class="fraud-detail-row">
-                        <span class="fraud-detail-label">Fecha:</span>
-                        <span class="fraud-detail-value">${new Date(activity.fecha).toLocaleString('es-ES')}</span>
-                    </div>
-                </div>
-                
-                ${activity.notasAdmin ? `
-                    <div style="background:#0f0f0f;border:1px solid #1a1a1a;border-radius:6px;padding:8px;margin-top:8px;">
-                        <div style="font-size:0.55rem;color:#555;margin-bottom:3px;font-weight:700;">NOTAS ADMIN:</div>
-                        <div style="font-size:0.7rem;color:#888;">${activity.notasAdmin}</div>
-                    </div>
-                ` : ''}
-                
-                <div class="fraud-actions">
-                    <button class="fraud-btn fb-view" onclick="viewUserFromFraud('${activity.usuario}')">
-                        <ion-icon name="person"></ion-icon> VER USUARIO
-                    </button>
-                    ${!activity.revisado ? `
-                        <button class="fraud-btn fb-mark" onclick="markFraudReviewed('${activity._id}')">
-                            <ion-icon name="checkmark"></ion-icon> MARCAR REVISADO
-                        </button>
-                    ` : `
-                        <button class="fraud-btn fb-reviewed" disabled>
-                            <ion-icon name="checkmark-done"></ion-icon> REVISADO
-                        </button>
-                    `}
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-// Filtrar fraude
-function filterFraud(filter) {
-    currentFraudFilter = filter;
-    
-    // Actualizar botones activos
-    document.querySelectorAll('[data-fraud-filter]').forEach(btn => {
-        if (btn.dataset.fraudFilter === filter) {
-            btn.classList.add('active');
-        } else {
-            btn.classList.remove('active');
-        }
-    });
-    
-    renderFraudList();
-}
-
-// Ver usuario desde fraude
-function viewUserFromFraud(username) {
-    // Buscar el usuario
-    const user = D.users.find(u => u.usuario === username);
-    if (user) {
-        // Cambiar a la pestaña de usuarios
-        setTab('usrs');
-        
-        // Abrir modal de detalle
-        setTimeout(() => {
-            omDetail(user._id);
-        }, 100);
-    } else {
-        toast('Usuario no encontrado', 'err');
-    }
-}
-
-// Marcar como revisado
-async function markFraudReviewed(activityId) {
-    const notas = prompt('Notas de revisión (opcional):');
-    if (notas === null) return; // Usuario canceló
-    
-    try {
-        const res = await fetch(`${API}/admin/fraud/mark-reviewed/${activityId}`, {
-            method: 'PUT',
-            headers: adminHeaders(),
-            body: JSON.stringify({ notasAdmin: notas || '' })
-        });
-        
-        if (res.ok) {
-            toast('✓ MARCADO COMO REVISADO');
-            syncFraud();
-        } else {
-            toast('ERROR AL MARCAR', 'err');
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        toast('ERROR DE RED', 'err');
-    }
 }
 
 // ==========================================
@@ -2332,17 +2037,13 @@ async function eliminarReportes(id) {
 // INIT
 // ==========================================
 document.addEventListener("DOMContentLoaded", async () => {
-  // Verificar si ya hay una sesión admin activa (por si recargó la página)
   const sessionOk = await checkExistingSession();
   if (sessionOk) {
     sync();
-    syncFraud();
     syncReportes();
     syncVids();
   }
-  // Si no hay sesión, el overlay de login ya está visible — espera el PIN
   setInterval(sync, 30000);
-  setInterval(syncFraud, 60000);
   setInterval(syncReportes, 45000);
   setInterval(syncVids, 30000);
 });
@@ -2550,21 +2251,18 @@ document.addEventListener('keydown',e=>{
 (function(){
 'use strict';
 var STEPS=[
-  {e:'👋',t:'Bienvenido al Panel Admin',b:'<p>Este es el <strong>Core Admin Pro de UpGames</strong>, tu centro de control total de la plataforma.</p><p>En 15 pasos rápidos te explico cada sección para que puedas administrar todo sin problemas.</p><span class="tip">💡 Toca <strong>✕</strong> para saltar. El botón <strong>?</strong> abajo a la izquierda lo relanza cuando quieras.</span>'},
-  {e:'📌',t:'La Barra Superior',b:'<p>La barra negra fija tiene <strong>3 zonas clave</strong>:</p><ul><li><strong>Logo ⚡ ADMIN</strong> — identifica el panel</li><li><strong>Barra de búsqueda</strong> — busca en todo el panel a la vez</li><li><strong>Botones derecha</strong> — selección múltiple y sincronizar</li></ul><span class="tip">💡 La búsqueda encuentra items, usuarios y comentarios al mismo tiempo.</span>'},
-  {e:'🔄',t:'Botón Sincronizar (Verde)',b:'<p>Recarga <strong>todos los datos del servidor</strong> en tiempo real. Úsalo tras aprobar o rechazar algo.</p><ul><li>Refresca items, usuarios, pagos y dashboard</li><li>Úsalo cuando veas datos desactualizados</li></ul><span class="tip">⚡ El panel se <strong>auto-sincroniza cada 30 s</strong>. El indicador LIVE arriba confirma la conexión activa.</span>'},
-  {e:'📊',t:'Dashboard — Vista General',b:'<p>Resumen en tiempo real de todo lo que pasa en UpGames:</p><ul><li><strong>Usuarios</strong> — totales, nuevos hoy y esta semana</li><li><strong>Items</strong> — aprobados, pendientes y subidos hoy</li><li><strong>Descargas</strong> efectivas acumuladas</li><li><span class="cw">Saldo</span> en circulación y pendiente de pago</li><li>Top Uploaders e items más descargados</li></ul>'},
-  {e:'⏳',t:'Tab Legacy — Pendientes Viejos',b:'<p>Items en estado <strong>pendiente</strong> de versiones anteriores. El backend ahora <strong>aprueba automáticamente</strong> todo al subir.</p><ul><li>✏️ <strong>Editar</strong> — corregir datos</li><li>🗑 <span class="cr">Eliminar</span> — borrar permanentemente</li></ul><span class="tip">💡 Si ves items aquí son datos legacy. Usa Producción para gestionar el contenido activo.</span>'},
-  {e:'✅',t:'Tab Producción — Items Activos',b:'<p>Todos los items <strong>visibles en la app</strong> para los usuarios. Son los que ya aprobaste.</p><p>Desde aquí edita links caídos, actualiza imágenes o elimina contenido que viole normas.</p><span class="tip">💡 Combina la búsqueda global con esta pestaña para encontrar items por título o usuario rápido.</span>'},
-  {e:'☑️',t:'Selección Múltiple (Bulk)',b:'<p>Activa el modo <strong>selección múltiple</strong>. Aparece una casilla en cada item.</p><ul><li><strong>Rechazar varios</strong> simultáneamente</li><li><span class="cr">Eliminar varios</span> en una sola acción</li></ul><span class="tip">💡 Útil cuando hay contenido de un mismo usuario que necesitas limpiar rápido.</span>'},
-  {e:'💬',t:'Tab Comentarios',b:'<p>Todos los comentarios dejados en los items de la plataforma.</p><p>Puedes <span class="cr">eliminar</span> los que sean spam, ofensivos o que violen normas de comunidad.</p><span class="tip">⚠️ Un comentario negativo no es razón suficiente. Solo elimina spam claro o insultos directos.</span>'},
-  {e:'👥',t:'Tab Usuarios — La Sección Más Importante',b:'<p>Gestiona cada cuenta registrada. Acciones por usuario:</p><ul><li><strong>Verificar</strong> — asignar nivel Bronce / Oro / Élite</li><li><span class="co">Lista negra</span> — bloquear usuario</li><li><span class="cb">Descargas</span> — ver historial completo</li><li><span class="cw">Ajustar saldo</span> — modificar manualmente</li><li><span class="cr">Eliminar cuenta</span> — acción irreversible</li></ul>'},
-  {e:'💰',t:'Tab Pagos',b:'<p>Solicitudes de cobro de usuarios que superaron el umbral mínimo de ganancias por sus descargas.</p><ul><li><strong>CONFIRMAR</strong> — marcar como pagado tras hacer la transferencia</li><li><span class="cr">RECHAZAR</span> — rechazar con motivo (PayPal inválido, etc.)</li></ul><span class="tip">⚠️ <strong>Nunca marques como pagado sin haber enviado el dinero primero.</strong> El historial registra todo.</span>'},
-  {e:'⚠️',t:'Tab Revisión — Links Reportados',b:'<p>Items cuyos links fueron reportados por usuarios como caídos, obsoletos o con malware.</p><ul><li>✅ <strong>Online</strong> — el link funciona, resetea reportes</li><li>❌ <span class="cr">Caído</span> — confirmar que está caído</li><li>🗑 Eliminar todos los reportes sin cambiar estado</li></ul><span class="tip">💡 Verifica el link manualmente antes de marcarlo Online. Si hay reportes de malware, elimina el item.</span>'},
-  {e:'🚨',t:'Tab Fraude — Detección Automática',b:'<p>Detecta <strong>comportamiento sospechoso 24/7</strong> con patrones estadísticos automáticos.</p><ul><li>⚡ Velocidad de descarga anormal</li><li>🌐 IP hopping / uso de VPN</li><li>🤖 Patrones de bot</li><li>📈 <span class="cw">Spike repentino de ganancias</span></li></ul><span class="tip">⚠️ Los marcados como <strong>AUTO-MARCADO</strong> fueron bloqueados automáticamente. Revísalos primero.</span>'},
-  {e:'📋',t:'Tab Reportes de Contenido',b:'<p>Reportes directos de usuarios desde la app. Muestra desglose por motivo: Caído, Obsoleto, Malware.</p><ul><li>✅ <strong>Online</strong> — funciona bien, resetea los reportes</li><li>❌ <span class="cr">Caído</span> — confirmar el estado</li><li>🗑 Eliminar reportes</li></ul><span class="tip">💡 Atiende primero los que tienen <strong>más reportes</strong> — son los que más usuarios vieron caídos.</span>'},
-  {e:'🔒',t:'Seguridad — Tu Sesión Admin',b:'<p>Tu sesión tiene <strong>duración limitada por seguridad</strong>. El temporizador arriba muestra cuánto queda.</p><ul><li>Nunca compartas el <strong>PIN</strong> con nadie</li><li>Cierra sesión al terminar, especialmente en dispositivos ajenos</li><li>Si ves actividad rara, cambia el PIN en el backend</li><li>El botón <strong>"SALIR"</strong> cierra la sesión de forma segura</li></ul>'},
-  {e:'🚀',t:'¡Listo para administrar!',b:'<p>Ya conoces todo el panel. Los puntos clave:</p><ul><li><strong>Dashboard</strong> → panorámica general</li><li><strong>Producción</strong> → gestionar contenido activo (el backend auto-aprueba)</li><li><strong>Revisión</strong> → aprobar links reportados como online</li><li><strong>Usuarios</strong> → gestionar cuentas y moderar</li><li><strong>Pagos</strong> → procesar cobros</li><li><strong>📹 Videos</strong> → gestionar contenido en video</li><li><strong>Fraude</strong> → revisar alertas automáticas</li></ul><span class="tip">❓ Toca <strong>?</strong> abajo a la izquierda para relanzar este tutorial.</span>'}
+  {e:'👋',t:'Bienvenido al Panel Admin',b:'<p>Este es el <strong>Core Admin Pro de UpGames</strong>, tu centro de control total de la plataforma.</p><p>8 secciones, todo lo que necesitas para administrar sin fricción.</p><span class="tip">💡 Toca <strong>✕</strong> para saltar. El botón <strong>?</strong> abajo a la izquierda lo relanza cuando quieras.</span>'},
+  {e:'📊',t:'Dashboard — Vista General',b:'<p>Resumen en tiempo real de todo lo que pasa en UpGames:</p><ul><li><strong>Usuarios</strong> — totales, nuevos hoy y esta semana</li><li><strong>Entradas</strong> — activas y subidas hoy</li><li><strong>Descargas</strong> efectivas acumuladas</li><li><span class="cw">Saldo</span> en circulación y pendiente de pago</li><li>Top Uploaders e items más descargados</li></ul>'},
+  {e:'⚠️',t:'Revisión — Links a Verificar',b:'<p>Entradas cuyo link fue marcado en revisión (automáticamente al subir o por reportes).</p><ul><li>✅ <strong>Online</strong> — confirmás que el link funciona, resetea reportes</li><li>❌ <span class="cr">Caído</span> — el link está roto o fue eliminado</li><li>✏️ <strong>Editar</strong> — cambiar cualquier campo del item</li></ul><span class="tip">💡 El backend pone cada entrada nueva en revisión. Desde acá las marcás Online una vez verificadas.</span>'},
+  {e:'📋',t:'Entradas — Todo el Contenido',b:'<p>Todas las publicaciones activas visibles en la app. El backend las aprueba automáticamente al subir.</p><p>Desde aquí editá links, imágenes, categorías, o eliminá contenido que viole normas.</p><span class="tip">💡 Combina la búsqueda global con esta vista para encontrar cualquier item rápido.</span>'},
+  {e:'☑️',t:'Selección Múltiple (Bulk)',b:'<p>Activa el modo <strong>selección múltiple</strong> desde el ícono de checkmarks arriba a la derecha. Aparece una casilla en cada card.</p><ul><li><strong>Rechazar varios</strong> simultáneamente</li><li><span class="cr">Eliminar varios</span> en una sola acción</li></ul><span class="tip">💡 Útil para limpiar contenido de un mismo usuario de un solo golpe.</span>'},
+  {e:'💬',t:'Comentarios',b:'<p>Todos los comentarios dejados en las entradas. Podés <span class="cr">eliminar</span> los que sean spam, ofensivos o que violen las normas de comunidad.</p><span class="tip">⚠️ Un comentario negativo no es razón suficiente. Solo eliminá spam claro o insultos directos.</span>'},
+  {e:'👥',t:'Usuarios',b:'<p>Gestión completa de cuentas. Acciones disponibles:</p><ul><li><strong>Verificar</strong> — asignar nivel Bronce / Oro / Élite</li><li><span class="co">Lista negra</span> — suspender ganancias sin avisar</li><li><span class="cw">Ajustar saldo</span> — modificar manualmente</li><li><span class="cr">Eliminar</span> — borra la cuenta <strong>Y todas sus publicaciones</strong></li></ul><span class="tip">⚠️ El borrado de usuario es permanente e incluye todo su contenido. No hay vuelta atrás.</span>'},
+  {e:'💰',t:'Pagos Pendientes',b:'<p>Solicitudes de cobro de usuarios que superaron el umbral de ganancias.</p><ul><li><strong>PAGADO</strong> — marcarlo después de transferir el dinero</li><li><span class="cr">RECHAZAR</span> — con motivo (PayPal inválido, fraude, etc.)</li><li>📋 <strong>Historial</strong> — ver todos los pagos procesados</li></ul><span class="tip">⚠️ <strong>Nunca marques como pagado sin haber enviado el dinero primero.</strong></span>'},
+  {e:'📋',t:'Reportes de Contenido',b:'<p>Reportes enviados por usuarios desde la app. Cada card muestra el desglose por motivo: Caído, Obsoleto, Malware.</p><ul><li>✅ <strong>Online</strong> — funciona bien, resetea los reportes</li><li>❌ <span class="cr">Caído</span> — confirmar el estado</li><li>🗑 Limpiar reportes sin cambiar el estado</li></ul><span class="tip">💡 Atendé primero los que tienen más reportes — son los que más usuarios vieron rotos.</span>'},
+  {e:'📹',t:'Gestión de Videos',b:'<p>Videos subidos por usuarios con tipo: Tutorial, Gameplay, Review, Showcase u Otro.</p><ul><li>▶ <strong>Ver</strong> — reproduce inline (YouTube, Cloudinary o link externo)</li><li>✏️ <strong>Editar</strong> — modificar título, link, categoría</li><li>✅ <strong>Marcar Online</strong> — quitar revisión pendiente</li><li>🗑 <span class="cr">Eliminar</span> — borrar la publicación</li></ul><span class="tip">💡 El dot naranja en la pestaña indica videos en revisión que necesitás revisar.</span>'},
+  {e:'🔒',t:'Seguridad — Tu Sesión',b:'<p>Tu sesión dura <strong>8 horas</strong>. El temporizador arriba muestra el tiempo restante.</p><ul><li>Nunca compartás el <strong>PIN</strong> con nadie</li><li>Usá <strong>SALIR</strong> al terminar, especialmente en dispositivos ajenos</li><li>Si ves actividad rara, cambiá el PIN directamente en el backend</li></ul>'},
+  {e:'🚀',t:'¡Listo para administrar!',b:'<p>Las 8 secciones del panel:</p><ul><li>📊 <strong>Dashboard</strong> → panorámica global</li><li>⚠️ <strong>Revisión</strong> → verificar y poner online las entradas nuevas</li><li>📋 <strong>Entradas</strong> → gestionar todo el contenido activo</li><li>💬 <strong>Comentarios</strong> → moderar la comunidad</li><li>👥 <strong>Usuarios</strong> → cuentas, verificación, saldos</li><li>💰 <strong>Pagos</strong> → procesar cobros pendientes</li><li>📋 <strong>Reportes</strong> → contenido denunciado por usuarios</li><li>📹 <strong>Videos</strong> → gestión de contenido en video</li></ul><span class="tip">❓ Toca <strong>?</strong> abajo a la izquierda para relanzar este tutorial.</span>'}
 ];
 
 var bg=$('tv-bg'),card=$('tv-card'),fill=$('tv-fill'),num=$('tv-num'),
