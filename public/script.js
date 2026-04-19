@@ -269,28 +269,52 @@ function createTile(item, isFeatured=false) {
   const catClass = cat.toLowerCase().replace('ó','o').replace('ó','o').replace(/[^a-z]/g,'');
   el.className = 'game-tile game-tile--' + catClass + (isVideo?' game-tile--video':'');
   el.dataset.id=item._id;
-  el.innerHTML=`
-    <div class="thumb-wrap">
-      ${media}
-      ${isVideo?'<div class="tile-video-overlay"><ion-icon name="play-circle"></ion-icon></div>':''}
-      <div class="tile-status ${ls}">
-        <span class="tile-status-dot"></span>${statusLabel}
+
+  if(isVideo) {
+    // YouTube-style card: thumbnail arriba, info abajo con avatar a la izquierda
+    el.innerHTML=`
+      <div class="thumb-wrap">
+        ${media}
+        <div class="tile-video-overlay"><ion-icon name="play-circle"></ion-icon></div>
+        <div class="tile-status ${ls}"><span class="tile-status-dot"></span>${statusLabel}</div>
+        <button class="tile-fav-quick ${isFav?'active':''}" data-id="${item._id}" title="Favorito" aria-label="${isFav?'Quitar de favoritos':'Añadir a favoritos'}">
+          <ion-icon name="${isFav?'heart':'heart-outline'}"></ion-icon>
+        </button>
+        ${item.videoType?`<div class="tile-vid-type-badge">${item.videoType}</div>`:''}
       </div>
-      <button class="tile-fav-quick ${isFav?'active':''}" data-id="${item._id}" title="Favorito" aria-label="${isFav?'Quitar de favoritos':'Añadir a favoritos'}">
-        <ion-icon name="${isFav?'heart':'heart-outline'}"></ion-icon>
-      </button>
-      ${isVideo?`<div class="tile-video-badge">${item.videoType||'Video'}</div>`:''}
-    </div>
-    <div class="tile-info">
-      <div class="tile-cat ${isVideo?'tile-cat--video':''}">${cat}</div>
-      ${extraBadges}
-      <div class="tile-title">${item.title}</div>
-      <div class="tile-meta">
-        <div class="tile-avatar">${avatarLetter(item.usuario)}</div>
-        <div class="tile-user">@${item.usuario||'Cloud'}</div>
-        ${dl?`<div class="tile-downloads"><ion-icon name="download-outline"></ion-icon>${fmt(dl)}</div>`:''}
+      <div class="tile-info tile-info--yt">
+        <div class="tile-yt-avatar">${avatarLetter(item.usuario)}</div>
+        <div class="tile-yt-body">
+          <div class="tile-title">${item.title}</div>
+          <div class="tile-yt-meta">
+            <span class="tile-user">@${item.usuario||'Cloud'}${getBadge(item.usuario)}</span>
+            ${dl?`<span class="tile-yt-dot">·</span><span class="tile-yt-views"><ion-icon name="eye-outline"></ion-icon>${fmt(dl)}</span>`:''}
+          </div>
+        </div>
+      </div>`;
+  } else {
+    el.innerHTML=`
+      <div class="thumb-wrap">
+        ${media}
+        <div class="tile-status ${ls}">
+          <span class="tile-status-dot"></span>${statusLabel}
+        </div>
+        <button class="tile-fav-quick ${isFav?'active':''}" data-id="${item._id}" title="Favorito" aria-label="${isFav?'Quitar de favoritos':'Añadir a favoritos'}">
+          <ion-icon name="${isFav?'heart':'heart-outline'}"></ion-icon>
+        </button>
       </div>
-    </div>`;
+      <div class="tile-info">
+        <div class="tile-cat">${cat}</div>
+        ${extraBadges}
+        <div class="tile-title">${item.title}</div>
+        <div class="tile-meta">
+          <div class="tile-avatar">${avatarLetter(item.usuario)}</div>
+          <div class="tile-user">@${item.usuario||'Cloud'}</div>
+          ${dl?`<div class="tile-downloads"><ion-icon name="download-outline"></ion-icon>${fmt(dl)}</div>`:''}
+        </div>
+      </div>`;
+  }
+
   el.addEventListener('click',(e)=>{
     if(e.target.closest('.tile-fav-quick')) return;
     openDetail(item);
@@ -302,6 +326,11 @@ function createTile(item, isFeatured=false) {
   return el;
 }
 
+// ── VIDEO CARD — siempre abre el detail sheet ────────────
+function toggleVideoCard(el, item) { openDetail(item); }
+function expandVideoCard(el, item) { openDetail(item); }
+function collapseVideoCard(el) { el.classList.remove('expanded'); }
+
 
 // ══════════════════════════════════════════════════
 // HERO CAROUSEL — muestra los 10 primeros items
@@ -312,9 +341,9 @@ let heroTimer = null;
 let heroTouchStartX = 0;
 let heroAutoplayPaused = false;
 
-function initHeroCarousel(items) {
-  // Tomar los primeros 10 items
-  heroItems = items.slice(0, 6);
+function initHeroCarousel(items, isVideoMode) {
+  // En modo video: top 10 más vistos. En modo normal: primeros 6
+  heroItems = items.slice(0, isVideoMode ? 10 : 6);
   if(heroItems.length < 2) return; // Con 1 o 0 no tiene sentido
   
   const carousel = document.getElementById('hero-carousel');
@@ -322,34 +351,61 @@ function initHeroCarousel(items) {
   const dotsEl   = document.getElementById('hero-dots');
   
   carousel.style.display = 'block';
+  // Marcar visualmente el carousel según el modo
+  carousel.classList.toggle('hero-video-mode', !!isVideoMode);
   track.innerHTML = '';
   dotsEl.innerHTML = '';
 
   heroItems.forEach((item, i) => {
-    // Slide
     const slide = document.createElement('div');
-    slide.className = 'hero-slide';
+    slide.className = 'hero-slide' + (isVideoMode ? ' hero-slide--video' : '');
     slide.dataset.id = item._id;
-    
+
     const isYT  = isYouTubeUrl(item.image);
     const isMp4 = /\.(mp4|webm|mov)(\?.*)?$/i.test(item.image);
     let mediaSrc = item.image;
     if(isYT) mediaSrc = getYouTubeThumbnail(item.image);
-    
+
     const dl = item.descargasEfectivas || 0;
+
+    // Badge: video mode usa icono play + cyan, normal usa estrella
+    const badgeHTML = isVideoMode
+      ? `<div class="hero-badge hero-badge--video"><ion-icon name="play-circle"></ion-icon> TOP ${i+1}</div>`
+      : `<div class="hero-badge">⭐ Top ${i+1}</div>`;
+
+    // Tipo de video (Tutorial, Gameplay, etc.)
+    const vidTypeHTML = isVideoMode && item.videoType
+      ? `<div class="hero-vid-type">${item.videoType}</div>`
+      : '';
+
     slide.innerHTML = `
       <img src="${mediaSrc}" alt="${item.title}" loading="${i===0?'eager':'lazy'}"
            onerror="this.src='https://via.placeholder.com/600x260/12121f/555570?text=UpGames'">
-      ${isYT || isMp4 ? '<div class="yt-play-badge large"><ion-icon name="play-circle"></ion-icon></div>' : ''}
+      ${isYT || isMp4 || isVideoMode ? '<div class="yt-play-badge large"><ion-icon name="play-circle"></ion-icon></div>' : ''}
       <div class="hero-info">
-        <div class="hero-badge">⭐ Top ${i+1}</div>
+        ${badgeHTML}
+        ${vidTypeHTML}
         <div class="hero-title">${item.title}</div>
         <div class="hero-meta">
           <span class="hero-user">@${item.usuario||'Cloud'}${getBadge(item.usuario)}</span>
-          ${dl ? `<span class="hero-dl"><ion-icon name="download-outline"></ion-icon>${fmt(dl)}</span>` : ''}
+          ${dl ? `<span class="hero-dl"><ion-icon name="${isVideoMode?'eye-outline':'download-outline'}"></ion-icon>${fmt(dl)}</span>` : ''}
         </div>
       </div>`;
-    slide.addEventListener('click', () => openDetail(item));
+
+    // Click: video mode abre player inline en el output grid, normal abre detail
+    slide.addEventListener('click', () => {
+      if(isVideoMode) {
+        const tileEl = document.querySelector(`.game-tile--video[data-id="${item._id}"]`);
+        if(tileEl) {
+          tileEl.scrollIntoView({ behavior:'smooth', block:'center' });
+          setTimeout(() => expandVideoCard(tileEl, item), 400);
+        } else {
+          openDetail(item);
+        }
+      } else {
+        openDetail(item);
+      }
+    });
     track.appendChild(slide);
 
     // Dot
@@ -438,7 +494,13 @@ function render(list, reset=true) {
   if(!reset) return;
   if(typeof _vidObserver!=='undefined'&&_vidObserver){ _vidObserver.disconnect(); _vidObserver=null; }
   out.innerHTML='';
-  if(list.length>0 && typeof initHeroCarousel==='function') initHeroCarousel(list);
+  if(list.length>0 && typeof initHeroCarousel==='function') {
+    const isVideoMode = activeCategory === 'Video';
+    const carouselSource = isVideoMode
+      ? [...list].sort((a,b) => (b.descargasEfectivas||0) - (a.descargasEfectivas||0))
+      : list;
+    initHeroCarousel(carouselSource, isVideoMode);
+  }
   if(!list.length) {
     out.innerHTML=`<div class="empty-state">
       <ion-icon name="cloud-offline-outline"></ion-icon>
@@ -590,37 +652,153 @@ document.querySelectorAll('.chip').forEach(c=>{
   });
 });
 
+// ── REGISTRAR VISTA (videos) ──────────────────────────────
+// Reutiliza el campo descargasEfectivas como contador de vistas.
+// El flag tipo:'vista' sirve para que el backend pueda distinguirlo
+// y omitir la lógica de monetización hasta que esté lista.
+// Backend: en PUT /items/download/:id, si req.body.tipo==='vista'
+//          incrementar descargasEfectivas pero NO sumar earnings al autor.
+async function registrarVista(item) {
+  if(!item || !item._id) return;
+  try {
+    const r = await fetch(`${API_URL}/items/download/${item._id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tipo: 'vista' })
+    });
+    if(r.ok) {
+      const data = await r.json();
+      // Actualizar el número en la UI sin recargar todo
+      const newCount = data.descargasEfectivas ?? ((item.descargasEfectivas||0) + 1);
+      item.descargasEfectivas = newCount;
+      // Reflejar en el stat del detail sheet
+      const dlEl = document.getElementById('ds-dl');
+      if(dlEl) dlEl.textContent = fmt(newCount);
+      // Reflejar en la tile de la lista (si está visible)
+      const tile = document.querySelector(`.game-tile--video[data-id="${item._id}"]`);
+      if(tile) {
+        const viewsEl = tile.querySelector('.tile-yt-views');
+        if(viewsEl) viewsEl.innerHTML = `<ion-icon name="eye-outline"></ion-icon>${fmt(newCount)}`;
+      }
+    }
+  } catch(_) {} // silencioso — no interrumpir la experiencia
+}
+
 // ── OPEN DETAIL SHEET ─────────────────────────────────────
 function openDetail(item) {
   currentItem = item;
   const ls = item.linkStatus||(item.reportes>=3?'revision':'online');
-  // Construir array completo de medias
-  const allMedias = [item.image, ...(item.images||[])].filter(m=>m&&m.trim());
-  const firstVideo = allMedias.find(m=>isYouTubeUrl(m)||/\.(mp4|webm|mov|avi)(\?.*)?$/i.test(m));
+  const isVideoItem = item.category === 'Video';
+
+  // Para videos: el link ES el video; para otros: medias son imágenes/previews
+  const rawMedias = [item.image, ...(item.images||[])].filter(m=>m&&m.trim());
+  const allMedias = isVideoItem && item.link
+    ? [item.link, ...rawMedias.filter(m=>m!==item.link)]
+    : rawMedias;
+
+  const firstVideo = isVideoItem
+    ? (item.link || allMedias[0] || '')
+    : (allMedias.find(m=>isYouTubeUrl(m)||/\.(mp4|webm|mov|avi)(\?.*)?$/i.test(m)) || allMedias[0] || '');
   const primaryMedia = firstVideo || allMedias[0] || '';
 
   function loadSheetMedia(mediaUrl) {
     const img2 = document.getElementById('ds-media-img');
     const vid2 = document.getElementById('ds-media-vid');
-    const oldIf = document.getElementById('ds-yt-iframe');
-    if(oldIf) oldIf.remove();
+    const sheetMedia = document.querySelector('.sheet-media');
+    const overlay = sheetMedia.querySelector('.sheet-media-overlay');
+
+    // Limpiar inyecciones previas
+    const oldIf  = document.getElementById('ds-yt-iframe');
+    const oldVid = document.getElementById('ds-injected-vid');
+    if(oldIf)  oldIf.remove();
+    if(oldVid) oldVid.remove();
+
     const isYT2  = isYouTubeUrl(mediaUrl);
     const isMp42 = /\.(mp4|webm|mov|avi)(\?.*)?$/i.test(mediaUrl);
-    if(isYT2){
+
+    if(isYT2) {
       img2.style.display='none'; vid2.style.display='none'; vid2.src='';
-      const yti=document.createElement('iframe');
-      yti.id='ds-yt-iframe';
-      yti.src=getYouTubeEmbed(mediaUrl,0);
-      yti.allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
-      yti.allowFullscreen=true;
-      yti.style.cssText='position:absolute;inset:0;width:100%;height:100%;border:none;border-radius:16px;';
-      document.querySelector('.sheet-media').appendChild(yti);
-    } else if(isMp42){
-      img2.style.display='none'; vid2.style.display='block'; vid2.src=mediaUrl;
+      if(overlay) overlay.style.display = isVideoItem ? 'none' : '';
+
+      const yti = document.createElement('iframe');
+      yti.id = 'ds-yt-iframe';
+      const autoplay = isVideoItem ? 1 : 0;
+      const mute     = isVideoItem ? 0 : 1;
+      const ytId = getYouTubeId(mediaUrl);
+      yti.src = `https://www.youtube.com/embed/${ytId}?autoplay=${autoplay}&mute=${mute}&controls=1&rel=0&playsinline=1${isVideoItem ? '' : ('&loop=1&playlist=' + ytId)}`;
+      yti.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+      yti.allowFullscreen = true;
+      yti.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:none;border-radius:16px;';
+      sheetMedia.appendChild(yti);
+
+    } else if(isMp42) {
+      img2.style.display = 'none';
+
+      if(isVideoItem) {
+        // Video item: inyectar <video> limpio con controls, igual que el iframe de YT
+        vid2.style.display = 'none'; vid2.src = '';
+        if(overlay) overlay.style.display = 'none';
+
+        const nv = document.createElement('video');
+        nv.id = 'ds-injected-vid';
+        nv.src = mediaUrl;
+        nv.controls = true;
+        nv.autoplay  = true;
+        nv.playsInline = true;
+        // Sin border-radius en el elemento video — Android WebView lo bloquea al hacer fullscreen
+        nv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:none;background:#000;object-fit:contain;';
+        sheetMedia.appendChild(nv);
+
+        // Botón de fullscreen explícito (usa la API del navegador, no el control nativo)
+        // para evitar que overflow:hidden/clip del contenedor lo bloquee
+        const fsBtn = document.createElement('button');
+        fsBtn.id = 'ds-vid-fs-btn';
+        fsBtn.setAttribute('aria-label','Pantalla completa');
+        fsBtn.innerHTML = '<ion-icon name="expand-outline"></ion-icon>';
+        fsBtn.style.cssText = [
+          'position:absolute','bottom:10px','right:10px','z-index:20',
+          'background:rgba(0,0,0,.6)','backdrop-filter:blur(6px)',
+          'border:1px solid rgba(0,242,255,.35)','border-radius:8px',
+          'color:#00f2ff','font-size:1.05rem',
+          'width:34px','height:34px',
+          'display:flex','align-items:center','justify-content:center',
+          'cursor:pointer','transition:opacity .15s'
+        ].join(';');
+        fsBtn.onclick = (e) => {
+          e.stopPropagation();
+          if      (nv.requestFullscreen)        nv.requestFullscreen();
+          else if (nv.webkitRequestFullscreen)  nv.webkitRequestFullscreen();
+          else if (nv.webkitEnterFullscreen)    nv.webkitEnterFullscreen(); // iOS/Safari
+        };
+        sheetMedia.appendChild(fsBtn);
+
+        // Ocultar botón cuando el browser ya está en fullscreen
+        const onFsChange = () => {
+          const inFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+          fsBtn.style.display = inFs ? 'none' : 'flex';
+        };
+        document.addEventListener('fullscreenchange',       onFsChange);
+        document.addEventListener('webkitfullscreenchange', onFsChange);
+        // Limpiar listeners al cerrar
+        nv._fsCleanup = () => {
+          document.removeEventListener('fullscreenchange',       onFsChange);
+          document.removeEventListener('webkitfullscreenchange', onFsChange);
+        };
+      } else {
+        // Preview de juego: usar el <video> existente muted loop
+        if(overlay) overlay.style.display = '';
+        vid2.style.display = 'block';
+        vid2.muted = true; vid2.loop = true;
+        vid2.removeAttribute('controls');
+        vid2.src = mediaUrl;
+      }
+
     } else {
-      vid2.style.display='none'; vid2.src='';
-      img2.style.display='block'; img2.src=mediaUrl;
-      img2.onerror=()=>{img2.src='https://via.placeholder.com/600x340/12121f/555570?text=Sin+imagen';};
+      // Imagen estática
+      vid2.style.display = 'none'; vid2.src = '';
+      if(overlay) overlay.style.display = '';
+      img2.style.display = 'block'; img2.src = mediaUrl;
+      img2.onerror = () => { img2.src = 'https://via.placeholder.com/600x340/12121f/555570?text=Sin+imagen'; };
     }
   }
   loadSheetMedia(primaryMedia);
@@ -651,6 +829,10 @@ function openDetail(item) {
   document.getElementById('ds-rep').textContent=item.reportes||0;
   document.getElementById('ds-desc').textContent=item.description||'Sin descripción.';
 
+  // Etiquetas adaptadas por tipo
+  const dlStatLbl = document.querySelector('#ds-dl')?.closest?.('.stat-box')?.querySelector?.('.stat-lbl');
+  if(dlStatLbl) dlStatLbl.textContent = isVideoItem ? 'Vistas' : 'Descargas';
+
   // Author
   document.getElementById('ds-av-letter').textContent=avatarLetter(item.usuario);
   document.getElementById('ds-author-name').innerHTML=`@${item.usuario||'Cloud'} ${getBadge(item.usuario)}`;
@@ -662,23 +844,30 @@ function openDetail(item) {
   sb.className='sheet-status-bar '+ls;
   st.textContent=ls==='online'?'✓ Link Activo':ls==='revision'?'⚠️ En Revisión':'✗ Link Caído';
 
-  // Download — advertencia si link caído
+  // Download / Ver video
   const dlBtn = document.getElementById('ds-download');
-  // Pasar primera media disponible para mostrar en puente (video preferido)
-  const _puenteMedia = [item.image, ...(item.images||[])].filter(m=>m&&m.trim()).find(m=>
-    /youtu/i.test(m)||/\.mp4|\.webm|\.mov/i.test(m)
-  ) || item.image || '';
-  const _puenteTitle = encodeURIComponent(item.title||'');
-  const _puenteMediaEnc = encodeURIComponent(_puenteMedia);
-  dlBtn.href=`puente.html?id=${item._id}&media=${_puenteMediaEnc}&title=${_puenteTitle}`;
-  dlBtn.onclick = function(e) {
-    if(ls === 'caido') {
-      e.preventDefault();
-      if(confirm('⚠️ Este link está reportado como caído.\n¿Deseas intentar acceder de todas formas?')) {
-        window.open(`puente.html?id=${item._id}&media=${_puenteMediaEnc}&title=${_puenteTitle}`, '_blank');
+  if(isVideoItem) {
+    // Video: el player está embebido arriba — el botón de descarga no aplica
+    dlBtn.style.display = 'none';
+    dlBtn.onclick = null;
+  } else {
+    dlBtn.style.display = '';
+    const _puenteMedia = [item.image, ...(item.images||[])].filter(m=>m&&m.trim()).find(m=>
+      /youtu/i.test(m)||/\.mp4|\.webm|\.mov/i.test(m)
+    ) || item.image || '';
+    const _puenteTitle = encodeURIComponent(item.title||'');
+    const _puenteMediaEnc = encodeURIComponent(_puenteMedia);
+    dlBtn.href = `puente.html?id=${item._id}&media=${_puenteMediaEnc}&title=${_puenteTitle}`;
+    dlBtn.innerHTML = '<ion-icon name="cloud-download-outline"></ion-icon> ACCEDER A LA NUBE';
+    dlBtn.onclick = function(e) {
+      if(ls === 'caido') {
+        e.preventDefault();
+        if(confirm('⚠️ Este link está reportado como caído.\n¿Deseas intentar acceder de todas formas?')) {
+          window.open(`puente.html?id=${item._id}&media=${_puenteMediaEnc}&title=${_puenteTitle}`, '_blank');
+        }
       }
-    }
-  };
+    };
+  }
 
   // Fav button
   const favIds = LS.getJSON('favoritos', []);
@@ -686,7 +875,7 @@ function openDetail(item) {
   const btnFav = document.getElementById('ds-btn-fav');
   btnFav.className='action-pill'+(isFav?' fav-active':'');
   btnFav.innerHTML=`<ion-icon name="${isFav?'heart':'heart-outline'}"></ion-icon> ${isFav?'Guardado':'Favorito'}`;
-  btnFav.onclick=()=>{ fav(item._id); closeDetail(); };
+  btnFav.onclick=()=>{ fav(item._id); };
 
   document.getElementById('ds-btn-share').onclick=()=>share(item._id);
   document.getElementById('ds-btn-report').onclick=()=>openReportModal(item._id);
@@ -703,6 +892,9 @@ function openDetail(item) {
   document.getElementById('detail-overlay').classList.add('show');
   document.getElementById('detail-sheet').classList.add('open');
   document.body.style.overflow='hidden';
+
+  // Registrar vista si es un video (reutiliza descargasEfectivas con flag tipo=vista)
+  if(isVideoItem) registrarVista(item);
 }
 
 function closeDetail() {
@@ -710,8 +902,14 @@ function closeDetail() {
   document.getElementById('detail-sheet').classList.remove('open');
   if(!tutActive && !nxOpen) document.body.style.overflow='';
   currentItem=null;
-  const vid=document.getElementById('ds-media-vid'); vid.src='';
+  const vid=document.getElementById('ds-media-vid'); vid.src=''; vid.style.display='none';
   const ytIf=document.getElementById('ds-yt-iframe'); if(ytIf) ytIf.remove();
+  const injVid=document.getElementById('ds-injected-vid');
+  if(injVid){ if(injVid._fsCleanup) injVid._fsCleanup(); injVid.remove(); }
+  const fsBtn=document.getElementById('ds-vid-fs-btn'); if(fsBtn) fsBtn.remove();
+  // Restaurar overlay
+  const overlay = document.querySelector('.sheet-media .sheet-media-overlay');
+  if(overlay) overlay.style.display = '';
   const gal=document.getElementById('ds-gallery');
   if(gal){ gal.innerHTML=''; gal.style.display='none'; }
 }
@@ -1166,6 +1364,16 @@ function pfSwitchTab(tabName, el) {
   if(tabName === 'boveda') pfLoadBoveda();
   if(tabName === 'reportes') pfLoadReportes();
   if(tabName === 'economia') pfLoadEconomia();
+}
+
+// ── Historial sub-nav ──
+function histSwitchSubTab(tab, el) {
+  document.querySelectorAll('.hist-subnav-tab').forEach(t => t.classList.remove('active'));
+  if(el) el.classList.add('active');
+  const panelPub = document.getElementById('hist-panel-publicaciones');
+  const panelVid = document.getElementById('hist-panel-videos');
+  if(panelPub) panelPub.style.display = tab === 'publicaciones' ? 'block' : 'none';
+  if(panelVid) panelVid.style.display = tab === 'videos' ? 'block' : 'none';
 }
 
 // ── Form: upload ──
@@ -1642,7 +1850,6 @@ async function pfSubirJuego() {
 async function pfLoadHistorial() {
   const cont      = document.getElementById('pf-showContent');
   const vidCont   = document.getElementById('pf-showVideos');
-  const vidHdr    = document.getElementById('pf-hist-vid-hdr');
   const vidCount  = document.getElementById('pf-hist-vid-count');
   if(!cont || !pfUser) return;
   cont.innerHTML = '<div class="pf-empty"><ion-icon name="sync-outline"></ion-icon><p>Cargando...</p></div>';
@@ -1688,16 +1895,20 @@ async function pfLoadHistorial() {
       });
     }
 
-    // ── Videos ──
-    if(!vidCont || !vidHdr) return;
+    // ── Videos — actualizar badge de count en sub-nav ──
+    if(vidCount) {
+      if(videos.length > 0) {
+        vidCount.textContent = videos.length;
+        vidCount.style.display = 'inline-flex';
+      } else {
+        vidCount.style.display = 'none';
+      }
+    }
+    if(!vidCont) return;
     if(!videos.length) {
-      vidHdr.style.display = 'none';
-      vidCont.style.display = 'none';
+      vidCont.innerHTML='<div class="pf-empty"><ion-icon name="videocam-off-outline"></ion-icon><p>Aún no has publicado videos.</p></div>';
       return;
     }
-    vidHdr.style.display = 'flex';
-    vidCont.style.display = 'grid';
-    if(vidCount) vidCount.textContent = videos.length;
     vidCont.innerHTML = '';
     videos.forEach(item => {
       const isPending = item.status==='pendiente'||item.status==='pending';

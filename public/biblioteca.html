@@ -395,18 +395,32 @@
 
     <!-- ══ TAB: HISTORIAL ══ -->
     <div id="pf-tab-historial" class="perfil-tab-content">
-      <div class="pf-section-title"><ion-icon name="time"></ion-icon> TUS PUBLICACIONES</div>
-      <div class="pf-items-grid" id="pf-showContent">
-        <div class="pf-empty"><ion-icon name="sync-outline"></ion-icon><p>Cargando...</p></div>
+
+      <!-- ── Sub-nav sticky ── -->
+      <div class="hist-subnav" id="hist-subnav">
+        <button class="hist-subnav-tab active" data-subtab="publicaciones" onclick="histSwitchSubTab('publicaciones',this)">
+          <ion-icon name="cloud-upload-outline"></ion-icon> Publicaciones
+        </button>
+        <button class="hist-subnav-tab" data-subtab="videos" onclick="histSwitchSubTab('videos',this)">
+          <ion-icon name="videocam-outline"></ion-icon> Videos
+          <span class="hist-subnav-count" id="pf-hist-vid-count" style="display:none"></span>
+        </button>
       </div>
-      <!-- ── Sección videos ── -->
-      <div class="pf-hist-vid-hdr" id="pf-hist-vid-hdr" style="display:none">
-        <ion-icon name="videocam"></ion-icon> MIS VIDEOS
-        <span class="pf-hist-vid-count" id="pf-hist-vid-count"></span>
+
+      <!-- ── Panel: Publicaciones ── -->
+      <div id="hist-panel-publicaciones" class="hist-panel">
+        <div class="pf-items-grid" id="pf-showContent">
+          <div class="pf-empty"><ion-icon name="sync-outline"></ion-icon><p>Cargando...</p></div>
+        </div>
       </div>
-      <div class="pf-items-grid" id="pf-showVideos" style="display:none">
-        <div class="pf-empty"><ion-icon name="sync-outline"></ion-icon><p>Cargando...</p></div>
+
+      <!-- ── Panel: Videos ── -->
+      <div id="hist-panel-videos" class="hist-panel" style="display:none">
+        <div class="pf-items-grid" id="pf-showVideos">
+          <div class="pf-empty"><ion-icon name="sync-outline"></ion-icon><p>Cargando...</p></div>
+        </div>
       </div>
+
     </div>
 
     <!-- ══ TAB: BÓVEDA ══ -->
