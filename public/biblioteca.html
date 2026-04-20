@@ -336,6 +336,44 @@
           <input type="hidden" id="pf-vid-type" value="Tutorial">
         </div>
 
+        <!-- Entrada Destacada -->
+        <div class="pf-form-group">
+          <label class="pf-label">
+            <ion-icon name="pin" style="color:var(--cy)"></ion-icon>
+            Entrada Destacada
+            <span style="font-weight:400;color:var(--txt3);font-size:.72rem"> — opcional</span>
+          </label>
+          <p style="font-size:.73rem;color:var(--txt3);margin-bottom:10px;line-height:1.5">
+            Ancla una de tus publicaciones al video. Los espectadores podrán abrirla directamente desde aquí sin tener que buscarla en tu perfil.
+          </p>
+          <!-- Item seleccionado -->
+          <div class="pf-featured-selected" id="pf-featured-selected" style="display:none">
+            <img id="pf-featured-sel-img" src="" alt="">
+            <div class="pf-featured-sel-info">
+              <div class="pf-featured-sel-cat" id="pf-featured-sel-cat"></div>
+              <div class="pf-featured-sel-title" id="pf-featured-sel-title"></div>
+            </div>
+            <button class="pf-featured-sel-clear" onclick="pfClearFeaturedItem()" title="Quitar">
+              <ion-icon name="close-circle"></ion-icon>
+            </button>
+          </div>
+          <!-- Buscador -->
+          <div class="pf-featured-search-wrap" id="pf-featured-search-wrap">
+            <ion-icon name="search-outline"></ion-icon>
+            <input type="text" id="pf-featured-search" class="pf-featured-search"
+                   placeholder="Buscar en mis publicaciones..."
+                   oninput="pfFilterFeaturedItems(this.value)" autocomplete="off">
+          </div>
+          <!-- Lista desplegable -->
+          <div class="pf-featured-list" id="pf-featured-list">
+            <div class="pf-featured-loading" id="pf-featured-loading">
+              <ion-icon name="sync-outline" style="animation:spinAnim 1s linear infinite"></ion-icon>
+              Carga tus publicaciones al cambiar a esta categoría…
+            </div>
+          </div>
+          <input type="hidden" id="pf-vid-featured-id" value="">
+        </div>
+
         <!-- Upload Cloudinary -->
         <div class="pf-form-group">
           <label class="pf-label"><ion-icon name="cloud-upload" style="color:var(--cy)"></ion-icon> Subir Video</label>
@@ -805,6 +843,8 @@
     </div>
     <!-- Description -->
     <p class="sheet-desc" id="ds-desc"></p>
+    <!-- Featured Entry (videos only — se inyecta por JS) -->
+    <div id="ds-featured-entry" style="display:none"></div>
     <!-- Social Actions -->
     <div class="sheet-actions">
       <button class="action-pill" id="ds-btn-fav">

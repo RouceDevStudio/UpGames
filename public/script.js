@@ -887,6 +887,27 @@ function openDetail(item) {
   document.getElementById('ds-rep').textContent=item.reportes||0;
   document.getElementById('ds-desc').textContent=item.description||'Sin descripción.';
 
+  // ── Entrada destacada (solo para videos) ───────────────
+  const featEl = document.getElementById('ds-featured-entry');
+  if(featEl) {
+    if(isVideoItem && item.featuredItemId) {
+      featEl.style.display = '';
+      featEl.innerHTML = '<div class="ds-featured-entry"><div class="ds-featured-label"><ion-icon name="sync-outline" style="animation:spinAnim .8s linear infinite"></ion-icon> Cargando entrada\u2026</div></div>';
+      const cached = todosLosItems.find(i => i._id === item.featuredItemId);
+      if(cached) {
+        renderFeaturedEntry(featEl, cached);
+      } else {
+        fetch(`${API_URL}/items/${item.featuredItemId}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(d => { if(d && d._id) renderFeaturedEntry(featEl, d); else featEl.style.display = 'none'; })
+          .catch(() => { featEl.style.display = 'none'; });
+      }
+    } else {
+      featEl.style.display = 'none';
+      featEl.innerHTML = '';
+    }
+  }
+
   // ← FIX bug 2: actualizar el stat-box de FAVS/likes con el número real
   const dsLikesEl = document.getElementById('ds-likes');
   if(dsLikesEl) {
@@ -981,6 +1002,42 @@ function openDetail(item) {
     // Punto 6: escuchar evento ended en el video inyectado o iframe
     setTimeout(() => { attachAutoplayListener(item); }, 800);
   }
+}
+
+// ── Renderiza la entrada destacada en el detail sheet ─────
+function renderFeaturedEntry(container, item) {
+  const cat   = item.category || 'General';
+  const title = item.title    || 'Sin título';
+  const img   = item.image    || '';
+  const dl    = fmt(item.descargasEfectivas || 0);
+  const ls    = item.linkStatus || 'online';
+  const lsColor = ls === 'online' ? 'var(--g)' : ls === 'revision' ? '#ffcc00' : '#ff4343';
+  const lsDot   = `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${lsColor};margin-right:4px;vertical-align:middle"></span>`;
+
+  container.innerHTML = `
+    <div class="ds-featured-entry">
+      <div class="ds-featured-label">
+        <ion-icon name="pin"></ion-icon>
+        Entrada del autor
+      </div>
+      <div class="ds-featured-card">
+        <img src="${img}" alt="${title}"
+             onerror="this.src='https://via.placeholder.com/72x50/12121f/555570?text=?'">
+        <div class="ds-featured-info">
+          <div class="ds-featured-cat">${cat}</div>
+          <div class="ds-featured-title">${title}</div>
+          <div class="ds-featured-meta">
+            ${lsDot}
+            <ion-icon name="cloud-download-outline"></ion-icon>${dl} descargas
+          </div>
+        </div>
+        <div class="ds-featured-arrow">
+          <ion-icon name="chevron-forward-outline"></ion-icon>
+        </div>
+      </div>
+    </div>`;
+
+  container.querySelector('.ds-featured-card').addEventListener('click', () => openDetail(item));
 }
 
 function closeDetail() {
@@ -1657,6 +1714,7 @@ function pfOnCategoryChange(cat, btnEl) {
   if(cat === 'Video') {
     if(formStd) formStd.style.display = 'none';
     if(formVid) formVid.style.display = 'block';
+    pfLoadFeaturedSelector();
     return;
   }
 
@@ -1700,6 +1758,105 @@ function pfSelectVidType(type, btnEl) {
   if(btnEl) btnEl.classList.add('active');
   document.getElementById('pf-vid-type').value = type;
   pfUpdateVideoPreview();
+}
+
+// ══════════════════════════════════════════════════════
+// FEATURED ENTRY SELECTOR — Video Form
+// ══════════════════════════════════════════════════════
+let pfFeaturedItems = [];   // cache of non-video items for the selector
+
+async function pfLoadFeaturedSelector() {
+  if(!pfUser) return;
+
+  // If an item is already selected, don't re-render the list
+  const alreadySelected = document.getElementById('pf-vid-featured-id')?.value;
+  if(alreadySelected) return;
+
+  const list    = document.getElementById('pf-featured-list');
+  const loading = document.getElementById('pf-featured-loading');
+  if(!list) return;
+
+  if(loading) { loading.style.display = 'flex'; list.innerHTML = ''; list.appendChild(loading); }
+
+  try {
+    const token = LS.get('token');
+    const res = await fetch(`${PF_API}/items/user/${pfUser}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
+    });
+    const data = await res.json();
+    const items = Array.isArray(data) ? data : [];
+    // Only approved, non-video items
+    pfFeaturedItems = items.filter(i => i.category !== 'Video' && i.status !== 'pendiente' && i.status !== 'pending');
+    pfRenderFeaturedList(pfFeaturedItems);
+  } catch(e) {
+    if(list) list.innerHTML = '<div style="padding:14px;color:var(--txt3);font-size:.75rem;text-align:center">Error al cargar publicaciones</div>';
+  }
+}
+
+function pfRenderFeaturedList(items) {
+  const list = document.getElementById('pf-featured-list');
+  if(!list) return;
+
+  if(!items.length) {
+    list.innerHTML = `<div style="padding:16px;color:var(--txt3);font-size:.75rem;text-align:center;display:flex;flex-direction:column;gap:6px;align-items:center">
+      <ion-icon name="cloud-offline-outline" style="font-size:1.4rem"></ion-icon>
+      <span>No tienes publicaciones aprobadas disponibles</span>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = items.map(item => {
+    const safeTitle = (item.title || '').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+    const safeImg   = (item.image || '').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+    const safeCat   = (item.category || 'General').replace(/'/g, '&#39;');
+    return `
+      <div class="pf-featured-item" onclick="pfSelectFeaturedItem('${item._id}','${safeTitle}','${safeImg}','${safeCat}')">
+        <img src="${item.image || 'https://via.placeholder.com/50x35/12121f/555570?text=?'}"
+             alt="" loading="lazy"
+             onerror="this.src='https://via.placeholder.com/50x35/12121f/555570?text=?'">
+        <div class="pf-featured-item-info">
+          <div class="pf-featured-item-cat">${item.category || 'General'}</div>
+          <div class="pf-featured-item-title">${(item.title || 'Sin título').substring(0, 52)}</div>
+        </div>
+        <ion-icon name="pin-outline" class="pf-featured-item-add"></ion-icon>
+      </div>`;
+  }).join('');
+}
+
+function pfFilterFeaturedItems(query) {
+  if(!query.trim()) { pfRenderFeaturedList(pfFeaturedItems); return; }
+  const q = query.toLowerCase();
+  const filtered = pfFeaturedItems.filter(i =>
+    (i.title    || '').toLowerCase().includes(q) ||
+    (i.category || '').toLowerCase().includes(q)
+  );
+  pfRenderFeaturedList(filtered);
+}
+
+function pfSelectFeaturedItem(id, title, image, cat) {
+  document.getElementById('pf-vid-featured-id').value = id;
+  const img = document.getElementById('pf-featured-sel-img');
+  img.src = image || 'https://via.placeholder.com/56x40/12121f/555570?text=?';
+  img.onerror = () => { img.src = 'https://via.placeholder.com/56x40/12121f/555570?text=?'; };
+  document.getElementById('pf-featured-sel-title').textContent = title;
+  document.getElementById('pf-featured-sel-cat').textContent   = cat;
+  document.getElementById('pf-featured-selected').style.display = 'flex';
+  // Hide search + list
+  const wrap = document.getElementById('pf-featured-search-wrap');
+  const list = document.getElementById('pf-featured-list');
+  if(wrap) wrap.style.display = 'none';
+  if(list) list.style.display = 'none';
+  toast('📌 Entrada anclada al video');
+}
+
+function pfClearFeaturedItem() {
+  document.getElementById('pf-vid-featured-id').value = '';
+  document.getElementById('pf-featured-selected').style.display = 'none';
+  const wrap = document.getElementById('pf-featured-search-wrap');
+  const list = document.getElementById('pf-featured-list');
+  if(wrap) { wrap.style.display = ''; const inp = document.getElementById('pf-featured-search'); if(inp) inp.value = ''; }
+  if(list) list.style.display = '';
+  pfRenderFeaturedList(pfFeaturedItems);
 }
 
 // ── Cloudinary Widget ──
@@ -1814,6 +1971,7 @@ async function pfSubirVideo() {
   const thumb  = document.getElementById('pf-vid-thumbnail')?.value.trim();
   const type   = document.getElementById('pf-vid-type')?.value || 'Tutorial';
   const duracion = document.getElementById('pf-vid-duracion')?.value.trim() || '';
+  const featuredItemId = document.getElementById('pf-vid-featured-id')?.value.trim() || '';
 
   if(!titulo)  return toast('⚠️ El título es obligatorio.');
   if(!vidUrl)  return toast('⚠️ Debes subir un video primero.');
@@ -1839,6 +1997,7 @@ async function pfSubirVideo() {
         category: 'Video',
         videoType: type,
         extraData: duracion ? { duracion } : {},
+        featuredItemId: featuredItemId || undefined,
         usuario:  pfUser,
         status:   'pendiente'
       })
@@ -1855,6 +2014,9 @@ async function pfSubirVideo() {
       pfCldShowIdle();
       pfCloudinaryWidget = null;
       pfUpdateVideoPreview();
+      // Reset featured selector
+      pfFeaturedItems = [];
+      pfClearFeaturedItem();
       pfLoadHistorial();
       pfLoadUserData();
     } else {
