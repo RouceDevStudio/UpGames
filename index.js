@@ -501,6 +501,12 @@ const JuegoSchema = new mongoose.Schema({
         default: ''
     },
 
+    // ⭐ VIDEO: ID del item destacado que acompaña al video (juego, mod, app, etc.)
+    featuredItemId: {
+        type: String,
+        default: ''
+    },
+
     // ⭐ EXTRA: Campos adicionales por categoría (plataforma, SO, licencia, etc.)
     extraData: {
         type: mongoose.Schema.Types.Mixed,
@@ -2585,7 +2591,7 @@ app.get("/items", async (req, res) => {
         }
 
         const items = await Juego.find(filtro)
-            .select('_id title description image images link category usuario reportes linkStatus descargasEfectivas likesCount extraData videoType scoreRecomendacion')
+            .select('_id title description image images link category usuario reportes linkStatus descargasEfectivas likesCount extraData videoType featuredItemId scoreRecomendacion')
             .sort({ scoreRecomendacion: -1, createdAt: -1 }) // Ordenar por score (verificación+likes) luego fecha
             .limit(100)
             .lean();
@@ -2601,7 +2607,7 @@ app.get("/items/user/:usuario", async (req, res) => {
         const aportes = await Juego.find({ 
             usuario: req.params.usuario 
         })
-            .select('_id title description image images link category usuario reportes reportesDesglose linkStatus descargasEfectivas likesCount status createdAt scoreRecomendacion extraData videoType')
+            .select('_id title description image images link category usuario reportes reportesDesglose linkStatus descargasEfectivas likesCount status createdAt scoreRecomendacion extraData videoType featuredItemId')
             .sort({ scoreRecomendacion: -1, createdAt: -1 })
             .lean();
         res.json(aportes);
@@ -2703,7 +2709,7 @@ app.put("/items/:id", verificarToken, [
         }
 
         // Solo se permiten editar estos campos — nunca status, linkStatus ni reportes
-        const allowedFields = ['title', 'description', 'link', 'image', 'images', 'category', 'videoType', 'extraData'];
+        const allowedFields = ['title', 'description', 'link', 'image', 'images', 'category', 'videoType', 'extraData', 'featuredItemId'];
         const updates = {};
         allowedFields.forEach(field => {
             if (req.body[field] !== undefined) updates[field] = req.body[field];
