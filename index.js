@@ -3595,16 +3595,6 @@ app.get('/', (req, res) => {
     });
 });
 
-// ========== MANEJO DE ERRORES ==========
-app.use((req, res) => {
-    res.status(404).json({ error: "Endpoint no encontrado" });
-});
-
-app.use((err, req, res, next) => {
-    logger.error(`Error: ${error?.message || err?.message || "unknown"}`);
-    res.status(500).json({ error: "Error interno del servidor" });
-});
-
 // ============================================================
 // ⚙️ JOBS AUTOMÁTICOS
 // Se inician después de que el servidor arranca.
@@ -4151,6 +4141,17 @@ app.get('/chat/no-leidos', verificarToken, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
+
+// ========== MANEJO DE ERRORES ==========
+// IMPORTANTE: Debe estar DESPUÉS de todas las rutas para no interceptarlas
+app.use((req, res) => {
+    res.status(404).json({ error: "Endpoint no encontrado" });
+});
+
+app.use((err, req, res, next) => {
+    logger.error(`Error: ${err?.message || "unknown"}`);
+    res.status(500).json({ error: "Error interno del servidor" });
+});
 
 // ========== INICIAR SERVIDOR ==========
 const PORT = config.PORT;
