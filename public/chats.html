@@ -1031,9 +1031,15 @@ async function sendMessage() {
   inp.value = '';
   inp.style.height = 'auto';
 
-  // Burbuja optimista inmediata
-  const tempMsg = { id: 'tmp', de: ME, texto: text, leido: false, fecha: new Date().toISOString() };
+  // Burbuja optimista con ID único para poder eliminarla si falla
+  const tempId  = 'tmp-' + Date.now();
+  const tempMsg = { id: tempId, de: ME, texto: text, leido: false, fecha: new Date().toISOString() };
   appendNewMessages([tempMsg]);
+
+  // Adelantar lastMsgTs para que el polling no traiga el mismo mensaje
+  // como duplicado mientras esperamos la respuesta del servidor
+  const tsAnterior = lastMsgTs;
+  lastMsgTs = Date.now();
 
   try {
     const r = await fetch(`${API_URL}/chat/enviar`, {
@@ -1043,7 +1049,11 @@ async function sendMessage() {
     });
     const data = await r.json();
     if (!data.success) {
-      // Si el backend no tiene la ruta todavía
+      // Eliminar burbuja fantasma y restaurar input
+      document.querySelector(`[data-id="${tempId}"]`)?.remove();
+      lastMsgTs  = tsAnterior;
+      inp.value  = text;
+
       const msg = data.error || 'Error al enviar';
       if (r.status === 404) {
         toast('⚠️ Actualiza el servidor (index.js)');
@@ -1052,13 +1062,16 @@ async function sendMessage() {
       } else {
         toast('❌ ' + msg);
       }
-      inp.value = text;
     } else {
+      // Usar el timestamp real del servidor para el polling incremental
       lastMsgTs = new Date(data.mensaje.fecha).getTime();
     }
   } catch (_) {
-    toast('❌ Sin conexión al servidor');
+    // Sin conexión: eliminar burbuja fantasma y restaurar
+    document.querySelector(`[data-id="${tempId}"]`)?.remove();
+    lastMsgTs = tsAnterior;
     inp.value = text;
+    toast('❌ Sin conexión al servidor');
   } finally {
     btnSend.disabled = false;
   }
