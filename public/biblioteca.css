@@ -1050,6 +1050,25 @@ video:-webkit-full-screen {
 }
 .nav-tab.active .nav-dot { opacity:1; }
 
+/* ── Nexus center nav button ── */
+.nav-nexus {
+  flex: 1.2;
+  position: relative;
+}
+.nav-nexus-ring {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0f1f0f, #0a1a1a);
+  border: 1.5px solid rgba(94,255,67,.5);
+  border-bottom: 3px solid #5EFF43;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 14px rgba(94,255,67,.25), 0 0 4px rgba(94,255,67,.15);
+  animation: fabPulse 3s ease-in-out infinite;
+  margin-bottom: 2px;
+}
+.nav-nexus-ring svg { width: 26px; height: 26px; }
+.nav-nexus span { color: var(--g); font-size: .6rem; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; }
+
 /* ═══════════════════════════════════════════
    MODAL SYSTEM (Report, Terms, etc.)
 ═══════════════════════════════════════════ */
@@ -1645,20 +1664,7 @@ video:-webkit-full-screen {
    NEXUS AI FAB & PANEL
 ═══════════════════════════════════════════ */
 #nxFab {
-  position:fixed;
-  right:16px;
-  bottom:calc(var(--nav-h) + 12px);
-  width:52px; height:52px;
-  border-radius:50%;
-  background:linear-gradient(135deg,#0f1f0f,#0a1a1a);
-  border:1.5px solid rgba(94,255,67,.4);
-  display:flex; align-items:center; justify-content:center;
-  z-index:600;
-  box-shadow:0 4px 16px rgba(94,255,67,.15);
-  animation:fabPulse 3s ease-in-out infinite;
-  cursor:pointer;
-  /* Cuando el panel está abierto, el FAB sube a z-index mayor */
-  transition:z-index 0s;
+  display: none; /* Ahora está integrado en el bottom nav */
 }
 /* Cuando el panel está abierto, el FAB queda sobre el panel */
 #nxPanel.open ~ #nxFab,
@@ -2031,8 +2037,12 @@ body.nx-open #nxFab {
 
 /* ── Profile Action Buttons ── */
 .profile-actions {
-  display:flex; flex-direction:column; gap:8px;
   padding:0 12px 12px;
+}
+.profile-actions-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
 }
 .profile-action-btn {
   display:flex; align-items:center; gap:12px;
@@ -2044,6 +2054,23 @@ body.nx-open #nxFab {
   color:var(--txt);
   transition:border-color .18s, background .18s;
   cursor:pointer; width:100%; text-align:left;
+}
+.profile-action-btn.profile-action-icon-only {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 8px;
+  text-align: center;
+}
+.profile-action-btn.profile-action-icon-only ion-icon {
+  font-size: 1.5rem;
+}
+.profile-action-btn.profile-action-icon-only span {
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--txt2);
+  white-space: nowrap;
 }
 .profile-action-btn:active { border-color:var(--bd-g); background:var(--bg2); }
 .profile-action-btn ion-icon { font-size:1.2rem; flex-shrink:0; }
