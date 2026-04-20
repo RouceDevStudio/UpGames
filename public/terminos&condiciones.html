@@ -1,908 +1,992 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Protocolo Legal v3.1 REFORZADO | UpGames</title>
-    <style>
-        :root {
-            --bg: #030303;
-            --surface: #0a0a0a;
-            --accent: #00f2ff;
-            --success: #39ff14;
-            --warning: #ffb800;
-            --danger: #ff003c;
-            --text-main: #ffffff;
-            --text-dim: #888888;
-            --border: #1a1a1a;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Términos y Condiciones v4.0 | UpGames</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --g:      #5EFF43;
+      --g-dim:  rgba(94,255,67,.1);
+      --g-glow: rgba(94,255,67,.25);
+      --cy:     #00f2ff;
+      --cy-dim: rgba(0,242,255,.1);
+      --bg:     #07070f;
+      --bg1:    #0d0d1a;
+      --bg2:    #12121f;
+      --bg3:    #191927;
+      --bd:     rgba(255,255,255,.07);
+      --bd-g:   rgba(94,255,67,.2);
+      --bd-cy:  rgba(0,242,255,.2);
+      --txt:    #f0f0f8;
+      --txt2:   #9090aa;
+      --txt3:   #555570;
+      --warn:   #ffb800;
+      --danger: #ff4343;
+      --purple: #c084fc;
+      --ff:     'Manrope', system-ui, sans-serif;
+      --ff-d:   'Bebas Neue', sans-serif;
+      --ff-m:   'DM Mono', monospace;
+      --ease:   cubic-bezier(.4,0,.2,1);
+      --spring: cubic-bezier(.34,1.4,.64,1);
+      --r:      14px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--txt);
+      font-family: var(--ff);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(94,255,67,.06), transparent),
+        radial-gradient(ellipse 60% 40% at 90% 80%, rgba(0,242,255,.04), transparent);
+      pointer-events: none; z-index: 0;
+    }
 
-        * { box-sizing: border-box; }
-        body {
-            background-color: var(--bg);
-            color: var(--text-main);
-            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
-            margin: 0;
-            line-height: 1.6;
-            -webkit-font-smoothing: antialiased;
-        }
+    /* ── TOPBAR ── */
+    .topbar {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(7,7,15,.92);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--bd);
+      padding: 14px 24px;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+    .logo { font-family: var(--ff-d); font-size: 1.6rem; letter-spacing: 3px; display: flex; gap: 2px; }
+    .logo .up { color: var(--g); text-shadow: 0 0 20px var(--g-glow); }
+    .topbar-doc { font-family: var(--ff-m); font-size: .65rem; color: var(--txt3); letter-spacing: 2px; text-transform: uppercase; }
+    .ver-pill {
+      font-family: var(--ff-m); font-size: .65rem; font-weight: 700;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      color: var(--g); background: var(--g-dim);
+      border: 1px solid var(--bd-g); padding: 4px 10px; border-radius: 999px;
+    }
 
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 40px 20px;
-        }
+    /* ── TABLE OF CONTENTS ── */
+    .toc {
+      background: var(--bg1); border: 1px solid var(--bd);
+      border-radius: var(--r); padding: 24px 28px; margin-bottom: 32px;
+    }
+    .toc h3 {
+      font-size: .7rem; font-weight: 800; letter-spacing: 2px;
+      text-transform: uppercase; color: var(--txt3); margin-bottom: 16px;
+    }
+    .toc-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px;
+    }
+    .toc-link {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px; border-radius: 8px;
+      background: var(--bg2); border: 1px solid var(--bd);
+      text-decoration: none; transition: border-color .2s;
+      font-size: .78rem; color: var(--txt2);
+    }
+    .toc-link:hover { border-color: var(--bd-g); color: var(--g); }
+    .toc-link .toc-num {
+      font-family: var(--ff-m); font-size: .65rem; color: var(--txt3);
+      background: var(--bg3); padding: 1px 6px; border-radius: 4px;
+      flex-shrink: 0;
+    }
 
-        /* HEADER REDISEÑADO */
-        .legal-header {
-            text-align: left;
-            border-bottom: 2px solid var(--accent);
-            padding-bottom: 20px;
-            margin-bottom: 40px;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            flex-wrap: wrap;
-            gap: 20px;
-        }
+    /* ── WRAP ── */
+    .wrap { max-width: 920px; margin: 0 auto; padding: 48px 24px 80px; position: relative; z-index: 1; }
 
-        .legal-header h1 {
-            font-size: 3rem;
-            margin: 0;
-            letter-spacing: -2px;
-            text-transform: uppercase;
-            line-height: 1;
-            color: var(--accent);
-            text-shadow: 0 0 20px rgba(0, 242, 255, 0.2);
-        }
+    /* ── HERO ── */
+    .doc-hero { margin-bottom: 40px; padding-bottom: 32px; border-bottom: 1px solid var(--bd); }
+    .doc-hero-kicker {
+      font-family: var(--ff-m); font-size: .65rem; color: var(--g);
+      letter-spacing: 3px; text-transform: uppercase; margin-bottom: 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .doc-hero-kicker::before { content: ''; width: 20px; height: 1px; background: var(--g); }
+    .doc-hero h1 { font-family: var(--ff-d); font-size: clamp(2.2rem, 6vw, 3.8rem); letter-spacing: 2px; color: var(--txt); line-height: 1; margin-bottom: 16px; }
+    .doc-hero h1 span { color: var(--g); }
+    .doc-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+    .meta-chip { font-family: var(--ff-m); font-size: .65rem; letter-spacing: 1px; text-transform: uppercase; color: var(--txt3); background: var(--bg2); border: 1px solid var(--bd); padding: 5px 12px; border-radius: 999px; }
+    .meta-chip strong { color: var(--txt2); }
 
-        .status-badge {
-            background: rgba(57, 255, 20, 0.1);
-            color: var(--success);
-            padding: 6px 15px;
-            border-radius: 4px;
-            font-size: 0.79rem;
-            font-weight: 800;
-            border: 1px solid var(--success);
-            text-transform: uppercase;
-        }
+    /* ── CRITICAL WARNING ── */
+    .crit-warn {
+      background: rgba(255,184,0,.07); border: 1px solid rgba(255,184,0,.3);
+      border-radius: var(--r); padding: 20px 24px; margin-bottom: 28px;
+    }
+    .crit-warn h4 { color: var(--warn); font-size: .8rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
+    .crit-warn p  { color: #c8a840; font-size: .88rem; }
+    .crit-warn strong { color: #ffe080; }
 
-        /* CUADÍCULA DE TÉRMINOS */
-        .term-section {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 30px;
-            margin-bottom: 25px;
-            transition: border-color 0.3s ease;
-        }
+    /* ── SECTIONS ── */
+    .section {
+      background: var(--bg1); border: 1px solid var(--bd); border-radius: var(--r);
+      padding: 28px 32px; margin-bottom: 20px;
+      transition: border-color .25s var(--ease);
+      scroll-margin-top: 80px;
+    }
+    .section:hover { border-color: rgba(255,255,255,.12); }
+    .section.acc-g    { border-color: var(--bd-g); }
+    .section.acc-cy   { border-color: var(--bd-cy); }
+    .section.acc-warn { border-color: rgba(255,184,0,.25); }
+    .section.acc-d    { border-color: rgba(255,67,67,.25); }
+    .section.acc-p    { border-color: rgba(192,132,252,.25); }
 
-        .term-section:hover {
-            border-color: #333;
-        }
+    .section h2 {
+      font-size: .78rem; font-weight: 800; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--g); display: flex; align-items: center; gap: 10px;
+      margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--bd);
+    }
+    .section h2 .num { font-family: var(--ff-m); font-size: .7rem; color: var(--txt3); background: var(--bg3); padding: 2px 8px; border-radius: 4px; }
+    .section h2.cy   { color: var(--cy); }
+    .section h2.warn { color: var(--warn); }
+    .section h2.d    { color: var(--danger); }
+    .section h2.p    { color: var(--purple); }
 
-        .term-section h2 {
-            color: var(--accent);
-            font-size: 1.2rem;
-            margin-top: 0;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
+    h3.sub { font-size: .76rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--cy); margin: 22px 0 10px; }
+    h3.sub.g  { color: var(--g); }
+    h3.sub.w  { color: var(--warn); }
+    h3.sub.d  { color: var(--danger); }
+    h3.sub.p  { color: var(--purple); }
 
-        .term-section h2::before {
-            content: "";
-            width: 4px;
-            height: 20px;
-            background: var(--accent);
-            display: inline-block;
-        }
+    p { color: var(--txt2); font-size: .9rem; margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+    p strong { color: var(--txt); }
 
-        .important-note {
-            background: rgba(255, 0, 60, 0.05);
-            border-left: 4px solid var(--danger);
-            padding: 20px;
-            margin: 20px 0;
-            color: #ff99aa;
-            font-size: 0.95rem;
-        }
+    /* ── PILL ITEMS ── */
+    .pill-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+    .pill-list li {
+      padding: 12px 16px; background: var(--bg2); border-radius: 8px;
+      font-size: .87rem; color: var(--txt2); display: flex; flex-direction: column; gap: 2px;
+    }
+    .pill-list li strong { color: var(--txt); font-size: .85rem; }
 
-        .critical-warning {
-            background: rgba(255, 184, 0, 0.08);
-            border: 2px solid var(--warning);
-            padding: 25px;
-            margin: 30px 0;
-            border-radius: 10px;
-            color: #ffd966;
-        }
+    /* ── INLINE ARROWS ── */
+    .arrow-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+    .arrow-list li { color: var(--txt2); font-size: .88rem; padding-left: 18px; position: relative; }
+    .arrow-list li::before { content: '→'; position: absolute; left: 0; color: var(--txt3); }
+    .arrow-list li strong { color: var(--txt); }
 
-        /* LISTAS ESTILIZADAS */
-        .legal-list {
-            list-style: none;
-            padding: 0;
-        }
+    /* ── CHECK/X ROWS ── */
+    .check-rows { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .check-row {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 10px 14px; border-radius: 8px; font-size: .87rem;
+    }
+    .check-row.yes { background: var(--g-dim); color: #a0e090; }
+    .check-row.no  { background: rgba(255,67,67,.06); color: #e08080; }
+    .check-row .cr-icon { flex-shrink: 0; font-size: 1rem; }
+    .check-row strong { color: var(--txt); display: block; margin-bottom: 2px; }
 
-        .legal-list li {
-            padding: 12px 0;
-            border-bottom: 1px solid #151515;
-            color: var(--text-dim);
-            font-size: 0.95rem;
-        }
+    /* ── ECONOMY GRID ── */
+    .econ-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin: 14px 0; }
+    .econ-card {
+      background: var(--bg2); border: 1px solid var(--bd); border-radius: 10px;
+      padding: 16px; text-align: center;
+    }
+    .econ-card .ec-num { font-family: var(--ff-d); font-size: 2rem; letter-spacing: 1px; color: var(--g); }
+    .econ-card .ec-label { font-size: .72rem; color: var(--txt3); margin-top: 4px; font-family: var(--ff-m); letter-spacing: 1px; text-transform: uppercase; }
+    .econ-card .ec-sub { font-size: .8rem; color: var(--txt2); margin-top: 6px; }
 
-        .legal-list li strong {
-            color: var(--text-main);
-            display: block;
-            margin-bottom: 4px;
-        }
+    /* ── STRIKES ── */
+    .strikes { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+    .strike-card {
+      display: flex; gap: 16px; align-items: flex-start;
+      border: 1px solid var(--bd); border-radius: 10px; padding: 16px;
+      background: var(--bg2);
+    }
+    .strike-badge {
+      flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 800; font-size: .9rem; font-family: var(--ff-m);
+    }
+    .s1 .strike-badge { background: rgba(255,184,0,.15); color: var(--warn); border: 1px solid rgba(255,184,0,.3); }
+    .s2 .strike-badge { background: rgba(255,100,50,.15); color: #ff6432; border: 1px solid rgba(255,100,50,.3); }
+    .s3 .strike-badge { background: rgba(255,67,67,.15); color: var(--danger); border: 1px solid rgba(255,67,67,.3); }
+    .strike-card h4 { color: var(--txt); font-size: .85rem; font-weight: 700; margin-bottom: 6px; }
+    .strike-card ul { list-style: none; padding: 0; }
+    .strike-card ul li { color: var(--txt2); font-size: .82rem; padding: 2px 0 2px 14px; position: relative; }
+    .strike-card ul li::before { content: '·'; position: absolute; left: 0; color: var(--txt3); }
 
-        /* FOOTER */
-        .legal-footer {
-            margin-top: 60px;
-            padding-top: 40px;
-            border-top: 1px solid var(--border);
-            text-align: center;
-            color: var(--text-dim);
-            font-size: 0.85rem;
-        }
+    /* ── PILLARS GRID (NEXUS / Features) ── */
+    .pillars { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 14px; }
+    .pillar {
+      background: var(--bg2); border: 1px solid var(--bd); border-radius: 10px; padding: 18px;
+      transition: border-color .2s;
+    }
+    .pillar:hover { border-color: var(--bd-g); }
+    .pillar .p-icon { font-size: 1.5rem; margin-bottom: 10px; }
+    .pillar h4 { color: var(--txt); font-size: .84rem; font-weight: 700; margin-bottom: 6px; }
+    .pillar p  { color: var(--txt3); font-size: .8rem; margin: 0; line-height: 1.5; }
+    .pillar.cy:hover { border-color: var(--bd-cy); }
+    .pillar.p:hover  { border-color: rgba(192,132,252,.25); }
 
-        .contact-btn {
-            color: var(--accent);
-            text-decoration: none;
-            font-weight: bold;
-            border: 1px solid var(--accent);
-            padding: 10px 20px;
-            border-radius: 6px;
-            display: inline-block;
-            margin-top: 20px;
-            transition: 0.3s;
-        }
+    /* ── ALERT BOXES ── */
+    .alert {
+      border-radius: 10px; padding: 18px 20px; margin: 14px 0;
+      display: flex; gap: 14px; align-items: flex-start;
+    }
+    .alert-icon { font-size: 1.2rem; flex-shrink: 0; margin-top: 2px; }
+    .alert-body h4 { font-size: .8rem; font-weight: 800; letter-spacing: .5px; margin-bottom: 6px; }
+    .alert-body p  { font-size: .84rem; margin: 0; line-height: 1.6; }
+    .alert.success { background: var(--g-dim); border: 1px solid var(--bd-g); }
+    .alert.success .alert-body h4 { color: var(--g); }
+    .alert.success .alert-body p  { color: #a0e090; }
+    .alert.warn { background: rgba(255,184,0,.07); border: 1px solid rgba(255,184,0,.25); }
+    .alert.warn .alert-body h4 { color: var(--warn); }
+    .alert.warn .alert-body p  { color: #c0a040; }
+    .alert.info { background: var(--cy-dim); border: 1px solid var(--bd-cy); }
+    .alert.info .alert-body h4 { color: var(--cy); }
+    .alert.info .alert-body p  { color: #80d8e0; }
+    .alert.danger { background: rgba(255,67,67,.06); border: 1px solid rgba(255,67,67,.25); }
+    .alert.danger .alert-body h4 { color: var(--danger); }
+    .alert.danger .alert-body p  { color: #e08080; }
+    .alert.purple { background: rgba(192,132,252,.07); border: 1px solid rgba(192,132,252,.25); }
+    .alert.purple .alert-body h4 { color: var(--purple); }
+    .alert.purple .alert-body p  { color: #d0a0e8; }
 
-        .contact-btn:hover {
-            background: var(--accent);
-            color: #000;
-        }
+    /* ── FINAL DECLARATION ── */
+    .declaration {
+      background: var(--g-dim); border: 1px solid var(--bd-g);
+      border-radius: var(--r); padding: 28px 32px;
+    }
+    .declaration h3 { color: var(--g); font-size: .88rem; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 16px; }
+    .declaration ol { counter-reset: item; list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    .declaration ol li { counter-increment: item; display: flex; gap: 12px; font-size: .87rem; color: var(--txt2); }
+    .declaration ol li::before { content: counter(item) '.'; color: var(--g); font-family: var(--ff-m); font-size: .75rem; min-width: 20px; margin-top: 2px; flex-shrink: 0; }
+    .declaration ol li strong { color: var(--txt); }
 
-        .shield-icon {
-            color: var(--success);
-            font-size: 1.5rem;
-            margin-right: 10px;
-        }
+    /* ── LEGAL TABLE ── */
+    .legal-table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: .83rem; }
+    .legal-table th { text-align: left; padding: 10px 14px; background: var(--bg3); color: var(--txt3); font-size: .7rem; letter-spacing: 1px; text-transform: uppercase; font-weight: 700; }
+    .legal-table th:first-child { border-radius: 6px 0 0 6px; }
+    .legal-table th:last-child  { border-radius: 0 6px 6px 0; }
+    .legal-table td { padding: 10px 14px; border-bottom: 1px solid var(--bd); color: var(--txt2); vertical-align: top; }
+    .legal-table td:first-child { color: var(--txt); font-weight: 600; }
+    .legal-table tr:last-child td { border-bottom: none; }
 
-        @media (max-width: 600px) {
-            .legal-header h1 { font-size: 2rem; }
-        }
-    </style>
+    /* ── CONTACT BLOCK ── */
+    .contact-block { background: var(--g-dim); border: 1px solid var(--bd-g); border-radius: 12px; padding: 24px 28px; margin-top: 16px; }
+    .contact-block h4 { color: var(--g); font-size: .82rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 12px; }
+    .contact-block p  { color: var(--txt2); font-size: .88rem; margin-bottom: 6px; }
+    .contact-block a  { color: var(--cy); text-decoration: none; }
+    .contact-block a:hover { text-decoration: underline; }
+    .contact-block strong { color: var(--txt); }
+
+    /* ── FOOTER ── */
+    .doc-footer { margin-top: 60px; padding-top: 32px; border-top: 1px solid var(--bd); text-align: center; }
+    .doc-footer .foot-logo { font-family: var(--ff-d); font-size: 1.4rem; letter-spacing: 3px; margin-bottom: 12px; }
+    .doc-footer p { color: var(--txt3); font-size: .8rem; }
+    .doc-footer a { color: var(--cy); text-decoration: none; }
+    .foot-links { display: flex; gap: 20px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+
+    @media (max-width: 600px) {
+      .wrap { padding: 32px 16px 60px; }
+      .section { padding: 20px 18px; }
+      .pillars { grid-template-columns: 1fr; }
+      .econ-grid { grid-template-columns: 1fr 1fr; }
+      .toc-grid  { grid-template-columns: 1fr; }
+    }
+  </style>
 </head>
 <body>
 
-<div class="container">
-    <header class="legal-header">
-        <div>
-            <h1>🛡️ UPGAMES</h1>
-            <div style="color: var(--text-dim); font-size: 0.9rem;">Librería Digital de Metadatos Indexados</div>
-            <div style="color: var(--success); font-size: 0.8rem; margin-top: 5px;">Operado por Persona Natural - Colombia</div>
-        </div>
-        <div class="status-badge">Versión 3.1 // ACTIVA</div>
-        
-        <div>
-            <a class="status-badge" href="./politica-privacidad.html">Políticas de privacidad</a>
-        </div>
-        
-        
-    </header>
+<!-- TOPBAR -->
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:16px">
+    <div class="logo"><span class="up">UP</span><span style="color:var(--txt)">GAMES</span></div>
+    <span class="topbar-doc">Términos y Condiciones</span>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <a href="./politica-privacidad.html" style="font-family:var(--ff-m);font-size:.65rem;color:var(--txt3);text-decoration:none;letter-spacing:1px;text-transform:uppercase;border:1px solid var(--bd);padding:4px 10px;border-radius:999px">Privacidad</a>
+    <span class="ver-pill">v4.0 · ABR 2026</span>
+  </div>
+</div>
 
-    <div class="important-note">
-        <strong>⚠️ CLÁUSULA DE CONSENTIMIENTO IRREVOCABLE:</strong> El acceso y uso de la plataforma UpGames implica la aceptación TOTAL, AUTOMÁTICA e IRREVOCABLE de este protocolo legal. Si el usuario no está de acuerdo con CUALQUIERA de los términos aquí establecidos, debe abandonar la plataforma INMEDIATAMENTE y abstenerse de utilizar cualquier servicio ofrecido. El uso continuado constituye prueba fehaciente de aceptación.
+<div class="wrap">
+
+  <!-- HERO -->
+  <div class="doc-hero">
+    <div class="doc-hero-kicker">Protocolo Legal Oficial</div>
+    <h1>🛡️ TÉRMINOS & <span>CONDICIONES</span></h1>
+    <p style="color:var(--txt2);font-size:.95rem;max-width:640px;margin-top:12px">
+      Documento que regula el uso de la plataforma UpGames, sus sistemas de economía, 
+      inteligencia artificial NEXUS, red social, lanzadera indie y todas las funciones del ecosistema.
+      Operado bajo <strong style="color:var(--g)">Ley 1915/2018 de Colombia · Safe Harbor DMCA 512(c)</strong>.
+    </p>
+    <div class="doc-meta">
+      <span class="meta-chip">Versión <strong>4.0</strong></span>
+      <span class="meta-chip">Vigente desde <strong>Abril 2026</strong></span>
+      <span class="meta-chip">Ley <strong>Colombia</strong></span>
+      <span class="meta-chip">Safe Harbor <strong>Activo</strong></span>
+      <span class="meta-chip">Operador <strong>Persona Natural</strong></span>
+    </div>
+  </div>
+
+  <!-- AVISO -->
+  <div class="crit-warn">
+    <h4>⚠️ Cláusula de Consentimiento</h4>
+    <p>
+      El acceso y uso de la plataforma UpGames implica la aceptación <strong>total e irrevocable</strong>
+      de este protocolo legal. Si no estás de acuerdo con cualquiera de los términos, debes abandonar
+      la plataforma inmediatamente. El uso continuado constituye evidencia de aceptación.
+    </p>
+  </div>
+
+  <!-- TOC -->
+  <div class="toc">
+    <h3>📑 Índice de Secciones</h3>
+    <div class="toc-grid">
+      <a class="toc-link" href="#s1"><span class="toc-num">01</span> Naturaleza del Servicio</a>
+      <a class="toc-link" href="#s2"><span class="toc-num">02</span> El Ecosistema UpGames</a>
+      <a class="toc-link" href="#s3"><span class="toc-num">03</span> NEXUS IA</a>
+      <a class="toc-link" href="#s4"><span class="toc-num">04</span> Economía Soberana</a>
+      <a class="toc-link" href="#s5"><span class="toc-num">05</span> Lanzadera Indie</a>
+      <a class="toc-link" href="#s6"><span class="toc-num">06</span> Red Social y Reputación</a>
+      <a class="toc-link" href="#s7"><span class="toc-num">07</span> Plataforma de Video</a>
+      <a class="toc-link" href="#s8"><span class="toc-num">08</span> Responsabilidad del Usuario</a>
+      <a class="toc-link" href="#s9"><span class="toc-num">09</span> Anti-Fraude y Seguridad</a>
+      <a class="toc-link" href="#s10"><span class="toc-num">10</span> DMCA y Propiedad Intelectual</a>
+      <a class="toc-link" href="#s11"><span class="toc-num">11</span> Moderación Comunitaria</a>
+      <a class="toc-link" href="#s12"><span class="toc-num">12</span> Safe Harbor Legal</a>
+      <a class="toc-link" href="#s13"><span class="toc-num">13</span> Resolución de Disputas</a>
+      <a class="toc-link" href="#s14"><span class="toc-num">14</span> Suspensión y Terminación</a>
+      <a class="toc-link" href="#s15"><span class="toc-num">15</span> Jurisdicción y Ley Aplicable</a>
+      <a class="toc-link" href="#s16"><span class="toc-num">16</span> Aceptación Final</a>
+    </div>
+  </div>
+
+  <!-- S1: NATURALEZA -->
+  <div class="section acc-g" id="s1">
+    <h2><span class="num">01</span> Definiciones y Naturaleza del Servicio</h2>
+    <p>
+      <strong>UpGames</strong> es una plataforma tecnológica operada por persona natural bajo las leyes de la República de Colombia,
+      que funciona como <strong>intermediario técnico neutro y pasivo</strong> para la indexación, organización y visualización
+      de metadatos públicos proporcionados por usuarios terceros.
+    </p>
+    <div class="alert success">
+      <span class="alert-icon">⚙️</span>
+      <div class="alert-body">
+        <h4>Principio Fundamental: Intermediación Técnica Pasiva</h4>
+        <p>
+          UpGames opera bajo el modelo de Puerto Seguro (Safe Harbor) establecido en: <strong>Colombia</strong> — Ley 1915/2018 y Ley 1273/2009 ·
+          <strong>Internacional</strong> — DMCA Sección 512(c) y Directiva 2000/31/CE.
+        </p>
+      </div>
     </div>
 
-    <section class="term-section">
-        <h2>1. Definiciones y Naturaleza del Servicio</h2>
-        <p><strong>UpGames</strong> es una plataforma tecnológica operada por persona natural bajo las leyes de la República de Colombia, que funciona exclusivamente como <strong>intermediario técnico neutro y pasivo</strong> para la indexación, organización y visualización de metadatos públicos proporcionados por usuarios terceros.</p>
-        
-        <div class="important-note">
-            <strong>⚙️ PRINCIPIO FUNDAMENTAL: INTERMEDIACIÓN TÉCNICA PASIVA (SAFE HARBOR)</strong><br><br>
-            UpGames opera bajo el modelo de "Puerto Seguro" (Safe Harbor) establecido en:
-            <ul style="margin: 10px 0 0 20px;">
-                <li><strong>Colombia:</strong> Ley 1915 de 2018 (Economía Digital) y Ley 1273 de 2009</li>
-                <li><strong>Internacional:</strong> Principios del DMCA sección 512(c) y Directiva 2000/31/CE</li>
-            </ul>
-            <br>
-            <strong>Nuestra función es EXCLUSIVAMENTE:</strong>
-            <ul style="margin: 10px 0 0 20px;">
-                <li>✓ Indexar metadatos públicos (URL, título, descripción) proporcionados voluntariamente por usuarios</li>
-                <li>✓ Facilitar búsquedas mediante algoritmos automatizados</li>
-                <li>✓ Conectar usuarios con contenido almacenado en servidores de terceros (   Google Drive, Mega, etc.)</li>
-            </ul>
-            <br>
-            <strong>LO QUE NO HACEMOS:</strong>
-            <ul style="margin: 10px 0 0 20px;">
-                <li>✗ NO almacenamos, hospedamos ni distribuimos archivos físicos</li>
-                <li>✗ NO descargamos ni inspeccionamos el contenido de URLs indexadas</li>
-                <li>✗ NO tenemos control sobre los servidores de terceros donde se alojan los archivos</li>
-                <li>✗ NO somos un CDN, repositorio, ni servicio de almacenamiento en la nube</li>
-            </ul>
-        </div>
-
-        <ul class="legal-list">
-            <li><strong>Operador:</strong> Persona natural domiciliada en Colombia, actuando en ejercicio legítimo de emprendimiento digital conforme a la Ley 1915 de 2018.</li>
-            <li><strong>Naturaleza del Servicio:</strong> UpGames NO es un proveedor de contenidos, NO es un servicio de alojamiento web, NO es una tienda digital. Es un motor de indexación de metadatos similar a motores de búsqueda tradicionales (Google Search, Bing).</li>
-            <li><strong>Infraestructura Tecnológica:</strong> No almacenamos, distribuimos, transmitimos ni controlamos archivos digitales. Únicamente indexamos referencias (URLs, títulos, descripciones) proporcionadas por terceros. Los usuarios envían ÚNICAMENTE enlaces web, nunca archivos físicos.</li>
-            <li><strong>Imposibilidad Técnica de Inspección Manual:</strong> Dado que la plataforma procesa miles de URLs indexadas diariamente, es <strong>técnicamente imposible y económicamente inviable</strong> realizar revisión humana del contenido alojado en cada URL. La plataforma depende exclusivamente de sistemas automatizados de moderación.</li>
-            <li><strong>Analogía Funcional:</strong> UpGames funciona como Google Search: indexa referencias a contenido de terceros, pero no controla ni es responsable por el contenido en sí. La diferencia es que nuestros usuarios envían activamente las URLs que desean compartir (en lugar de un crawler automático).</li>
-        </ul>
-    </section>
-
-    <section class="term-section">
-        <h2>2. Responsabilidad del Usuario y Traslado de Obligaciones</h2>
-        <p>El usuario que indexa contenido (en adelante "el Indexador") asume TOTAL responsabilidad legal, civil, penal y administrativa sobre:</p>
-        <ul class="legal-list">
-            <li><strong>Legalidad del Contenido:</strong> El Indexador garantiza que el material vinculado NO infringe derechos de autor, marcas registradas, secretos comerciales ni ninguna otra forma de propiedad intelectual.</li>
-            <li><strong>Contenido Apropiado:</strong> El Indexador certifica que el material NO contiene pornografía, abuso infantil, discurso de odio, contenido terrorista, ni ningún material ilegal según las leyes colombianas e internacionales.</li>
-            <li><strong>Consecuencias Legales:</strong> El Indexador acepta ser el ÚNICO responsable ante cualquier reclamación, demanda, investigación o acción legal derivada del contenido que haya publicado.</li>
-            <li><strong>Indemnización:</strong> El Indexador se compromete a indemnizar, defender y mantener indemne a UpGames y su operador de CUALQUIER reclamación de terceros relacionada con el contenido indexado.</li>
-        </ul>
-    </section>
-
-    <section class="term-section">
-        <h2>3. Sistema de Seguridad Proactiva y Filtrado Automatizado</h2>
-        <p>UpGames implementa filtros automatizados de buena fe como medida proactiva de protección, sin que esto implique responsabilidad editorial o conocimiento efectivo del contenido:</p>
-        <ul class="legal-list">
-            <li><strong>Bot Anti-Malware:</strong> Verifica si el dominio de destino está en listas negras de seguridad reconocidas (Google Safe Browsing, VirusTotal). NO analiza el contenido de los archivos.</li>
-            <li><strong>Filtro de Keywords Prohibidas:</strong> Bloquea automáticamente metadatos (títulos/descripciones) que contengan términos asociados a contenido sexual explícito, piratería evidente, o material ilegal.</li>
-            <li><strong>Validación Técnica de URLs:</strong> Verifica que el enlace sea válido, accesible y apunte a servicios de hosting conocidos. NO accede al contenido interno del archivo.</li>
-            <li><strong>Análisis de Patrones de Comportamiento:</strong> Detecta actividad sospechosa de usuarios (spam masivo, cuentas bot) para prevenir abuso del sistema.</li>
-        </ul>
-
-        <div class="critical-warning">
-            <h3 style="margin-top: 0; color: var(--warning);">⚠️ LIMITACIONES INHERENTES DE LOS FILTROS AUTOMATIZADOS</h3>
-            <p><strong>IMPORTANTE:</strong> Los filtros automatizados son herramientas de buena fe con limitaciones técnicas inherentes:</p>
-            <ul style="margin: 10px 0 0 20px; color: #ffd966;">
-                <li>• NO pueden detectar el 100% de contenido prohibido (evasión mediante eufemismos, idiomas, codificación)</li>
-                <li>• NO constituyen inspección o revisión editorial del contenido</li>
-                <li>• El paso exitoso por filtros NO certifica que el contenido sea legal o seguro</li>
-                <li>• NO implican "conocimiento efectivo" del contenido indexado según estándares legales de Safe Harbor</li>
-            </ul>
-            <p style="margin-top: 15px;"><strong>Doctrina "Red Flag Knowledge":</strong> Bajo la jurisprudencia de Safe Harbor (Viacom v. YouTube 2010, UMG v. Veoh 2011), los sistemas automatizados NO crean "conocimiento efectivo" de infracción. El conocimiento efectivo solo ocurre cuando recibimos notificación DMCA válida y específica.</p>
-            <p style="margin-top: 10px;"><strong>Ejemplo:</strong> Si un juego crackeado evade nuestros filtros usando eufemismos ("Cyberpunk 2077 Full Experience"), NO tenemos conocimiento efectivo hasta que alguien lo reporte específicamente. El solo hecho de que sea indexado NO implica conocimiento ni responsabilidad.</p>
-        </div>
-    </section>
-
-    <div class="critical-warning">
-        <h3 style="margin-top: 0; color: var(--warning);">⚖️ LIMITACIÓN TOTAL DE RESPONSABILIDAD</h3>
-        <p><strong>HASTA EL MÁXIMO PERMITIDO POR LA LEY, UPGAMES Y SU OPERADOR NO SERÁN RESPONSABLES BAJO NINGUNA CIRCUNSTANCIA POR:</strong></p>
-        <ol style="color: #ffd966; font-size: 0.95rem; margin: 15px 0;">
-            <li>Daños directos, indirectos, incidentales, especiales, consecuenciales o punitivos de cualquier naturaleza.</li>
-            <li>Pérdida de datos, información, ingresos, beneficios, reputación o cualquier pérdida intangible.</li>
-            <li>Virus, malware, ransomware, troyanos o cualquier código malicioso proveniente de enlaces externos indexados por terceros.</li>
-            <li>Contenido ilegal, difamatorio, obsceno o que infrinja derechos de terceros indexado por usuarios.</li>
-            <li>Disputas, conflictos o litigios entre usuarios de la plataforma.</li>
-            <li>Interrupciones del servicio, errores técnicos, pérdida de conectividad o fallos en la infraestructura tecnológica.</li>
-            <li>Acceso no autorizado a cuentas de usuario debido a contraseñas débiles, phishing o ingeniería social.</li>
-            <li>Decisiones comerciales, de inversión o cualquier acción tomada con base en información obtenida a través de la plataforma.</li>
-            <li>Violaciones a derechos de propiedad intelectual cometidas por terceros indexadores.</li>
-            <li>Daños físicos, psicológicos o emocionales derivados del uso de la plataforma o contenido vinculado.</li>
-        </ol>
-        <p style="font-weight: bold; margin-top: 20px; color: #fff;">LÍMITE MÁXIMO DE RESPONSABILIDAD: En caso de que algún tribunal determine responsabilidad de UpGames (lo cual se disputa), el monto MÁXIMO de indemnización será igual al total de pagos recibidos por el usuario afectado en los últimos 12 meses, o CERO PESOS (COP $0) si el usuario no ha realizado pagos, LO QUE SEA MENOR.</p>
-        <p style="font-style: italic; color: #888; font-size: 0.85rem; margin-top: 15px;">Esta limitación aplica incluso si UpGames ha sido advertido de la posibilidad de tales daños, y sobrevivirá a la terminación de este acuerdo.</p>
+    <h3 class="sub g">Lo que hacemos</h3>
+    <div class="check-rows">
+      <div class="check-row yes"><span class="cr-icon">✓</span><div><strong>Indexar metadatos</strong> URLs, títulos y descripciones proporcionadas voluntariamente por usuarios.</div></div>
+      <div class="check-row yes"><span class="cr-icon">✓</span><div><strong>Facilitar búsquedas</strong> mediante algoritmos automatizados y motor de recomendación propio.</div></div>
+      <div class="check-row yes"><span class="cr-icon">✓</span><div><strong>Conectar usuarios</strong> con contenido en servidores de terceros (Mega, Drive, MediaFire, etc.).</div></div>
+      <div class="check-row yes"><span class="cr-icon">✓</span><div><strong>Monetizar el tráfico</strong> mediante publicidad propia en la página de redirección (puente nativo).</div></div>
     </div>
 
-    <section class="term-section" style="border-color: var(--success);">
-        <h2 style="color: var(--success);">4. Sistema de Monetización para Creadores</h2>
-        
-        <div class="critical-warning">
-            <h3 style="margin-top: 0; color: var(--success);">💚 ACLARACIÓN FUNDAMENTAL: MONETIZACIÓN POR PUBLICIDAD, NO POR CONTENIDO</h3>
-            <p style="color: #fff;"><strong>Es CRÍTICO entender que el sistema de monetización de UpGames NO paga por contenido, sino por APORTES de metadatos que generen tráfico publicitario legítimo:</strong></p>
-            <ul style="margin: 15px 0 0 20px; color: #fff;">
-                <li>✅ Los usuarios reciben un PORCENTAJE de ingresos publicitarios generados cuando otros usuarios ven anuncios al acceder a las URLs que indexaron</li>
-                <li>✅ UpGames genera ingresos EXCLUSIVAMENTE mediante publicidad (Redes publicitarias de terceros)</li>
-                <li>✅ UpGames NO cobra a usuarios finales por acceder al contenido (el servicio es 100% gratuito)</li>
-                <li>✅ El modelo es análogo a YouTube: creadores ganan por vistas con publicidad, NO por el contenido en sí</li>
-                <li>✅ Pagamos por APORTAR URLs que generen tráfico, NO por el tipo de contenido vinculado</li>
-            </ul>
-            <p style="margin-top: 15px; color: #ffd966;"><strong>Por qué esto es legalmente importante:</strong> No existe "lucro directo por distribución de material protegido". El ingreso proviene de PUBLICIDAD MOSTRADA A USUARIOS, lo cual es un modelo legítimo de economía digital respaldado por Ley 1915/2018 en Colombia.</p>
-        </div>
+    <h3 class="sub d">Lo que NO hacemos</h3>
+    <div class="check-rows">
+      <div class="check-row no"><span class="cr-icon">✗</span><div><strong>NO almacenamos archivos:</strong> UpGames no es un CDN, repositorio ni servicio de hosting.</div></div>
+      <div class="check-row no"><span class="cr-icon">✗</span><div><strong>NO inspeccionamos contenido:</strong> No descargamos ni revisamos el contenido de URLs indexadas.</div></div>
+      <div class="check-row no"><span class="cr-icon">✗</span><div><strong>NO somos distribuidores:</strong> Funcionamos como Google Search — indexamos referencias, no controlamos el contenido.</div></div>
+      <div class="check-row no"><span class="cr-icon">✗</span><div><strong>NO controlamos servidores de terceros:</strong> Los archivos físicos son responsabilidad del hosting externo.</div></div>
+    </div>
+  </div>
 
-        <p>UpGames ofrece un programa de incentivos económicos para recompensar a indexadores activos que contribuyan con metadatos de calidad:</p>
-        
-        <h3 style="color: var(--accent); font-size: 1rem; margin-top: 25px;">📊 Estructura de Pagos</h3>
-        <ul class="legal-list">
-            <li><strong>Tasa Base:</strong> 1.00 USD (un dólar estadounidense) por cada 1,000 descargas orgánicas verificadas del contenido indexado. Esta tasa representa una <strong>participación en los ingresos publicitarios</strong> generados, NO un pago por el contenido.</li>
-            <li><strong>Cálculo de Ingresos Publicitarios:</strong> Los ingresos se calculan basándose en impresiones de anuncios mostrados en la página de descarga, clics en anuncios (cuando aplique), y tiempo de visualización de página.</li>
-            <li><strong>Requisitos de Elegibilidad:</strong> La descarga debe ser orgánica (usuario real, no bot), el usuario debe visualizar al menos un anuncio completo, y la sesión debe cumplir con estándares anti-fraude de UpGames y Redes publicitarias.</li>
-            <li><strong>Método de Pago Exclusivo:</strong> Todos los pagos se procesan ÚNICAMENTE a través de PayPal. No se aceptan solicitudes para otros métodos (transferencias bancarias, criptomonedas, etc.).</li>
-            <li><strong>Fecha de Pago Fija:</strong> Los pagos se procesan automáticamente cada DOMINGO a las 23:59 GMT-5 (hora de Colombia).</li>
-            <li><strong>Umbral Mínimo:</strong> El saldo mínimo para recibir pago es de 10.00 USD. Saldos inferiores se acumulan para futuros ciclos.</li>
-            <li><strong>Cuenta PayPal Verificada:</strong> El usuario debe proporcionar una cuenta PayPal activa, verificada y asociada a su identidad real. UpGames NO se hace responsable por errores en direcciones de correo PayPal proporcionadas.</li>
-        </ul>
+  <!-- S2: ECOSISTEMA -->
+  <div class="section" id="s2">
+    <h2><span class="num">02</span> El Ecosistema UpGames — Módulos del Servicio</h2>
+    <p>UpGames no es una sola función. Es un ecosistema integrado compuesto por los siguientes módulos:</p>
 
-        <h3 style="color: var(--danger); font-size: 1rem; margin-top: 25px;">🚫 Política Anti-Fraude Estricta</h3>
-        <ul class="legal-list">
-            <li><strong>Actividades Prohibidas:</strong> Uso de VPNs para simular descargas múltiples, bots automatizados, granjas de clics, auto-clics repetitivos, intercambio artificial de descargas entre usuarios (carteles), tráfico pagado no orgánico, scripts de automatización o CUALQUIER técnica para inflar artificialmente las métricas.</li>
-            <li><strong>Detección Tecnológica:</strong> UpGames utiliza algoritmos avanzados de análisis de tráfico, huellas digitales de navegadores (browser fingerprinting), patrones de comportamiento, análisis de IPs y machine learning para detectar actividad fraudulenta.</li>
-            <li><strong>Consecuencias Inmediatas:</strong> 
-                <ul style="margin-left: 20px; margin-top: 10px; color: #ff003c;">
-                    <li>• Anulación TOTAL del saldo pendiente (sin excepciones)</li>
-                    <li>• Suspensión permanente e irreversible de la cuenta</li>
-                    <li>• Prohibición de crear nuevas cuentas (baneos por IP/dispositivo)</li>
-                    <li>• Reserva del derecho a emprender acciones legales</li>
-                    <li>• Reporte a autoridades en casos graves de fraude organizado</li>
-                </ul>
-            </li>
-            <li><strong>Auditorías Aleatorias:</strong> UpGames se reserva el derecho de auditar cualquier cuenta en cualquier momento. Durante auditorías, los pagos pueden retenerse por 30-90 días mientras se verifica la legitimidad del tráfico.</li>
-            <li><strong>Presunción de Buena Fe:</strong> Tráfico anómalo aislado puede investigarse antes de penalizar. Sin embargo, patrones recurrentes resultan en acción inmediata sin previo aviso.</li>
-        </ul>
+    <div class="pillars">
+      <div class="pillar">
+        <div class="p-icon">📚</div>
+        <h4>Biblioteca Inteligente</h4>
+        <p>Feed dinámico de juegos, mods, apps, software y herramientas. Organizado por categorías, con buscador en tiempo real (debounce) y sistema de chips de filtro. Contenido ordenado por score de recomendación recalculado cada 12 horas.</p>
+      </div>
+      <div class="pillar cy">
+        <div class="p-icon">🌉</div>
+        <h4>Puente de Redirección Nativo</h4>
+        <p>Sistema propio de monetización por tráfico. Al acceder a un enlace, el usuario pasa por una página puente (30s) con publicidad nativa controlada por UpGames, reemplazando acortadores externos como Adf.ly. El creador recibe el CPM completo sin intermediario.</p>
+      </div>
+      <div class="pillar">
+        <div class="p-icon">🔔</div>
+        <h4>Notificaciones Sociales</h4>
+        <p>Sistema de notificaciones en tiempo real con polling cada 60 segundos. Tipos: nueva publicación de seguidos, favorito recibido, descarga, sistema y comentarios. Las notificaciones se eliminan automáticamente a los 30 días.</p>
+      </div>
+      <div class="pillar">
+        <div class="p-icon">🛡️</div>
+        <h4>Seguridad y Resiliencia</h4>
+        <p>Autenticación por token JWT (30 días), guard de sesión pre-carga de página, helmet.js, rate limiting por ruta, auto-limpieza nocturna y self-ping 24/7 para mantener el servidor activo sin costo adicional.</p>
+      </div>
+      <div class="pillar">
+        <div class="p-icon">⭐</div>
+        <h4>Sistema de Recomendación</h4>
+        <p>Score calculado automáticamente cada 12 horas por un algoritmo propio que pondera descargas efectivas, likes, reportes, antigüedad y engagement. Determina el orden del feed para cada categoría.</p>
+      </div>
+      <div class="pillar">
+        <div class="p-icon">🔞</div>
+        <h4>Control de Contenido Adulto</h4>
+        <p>Categoría específica con restricción de acceso. El acceso requiere confirmación explícita de mayoría de edad. UpGames implementa filtros automáticos de palabras clave para prevenir indexación de contenido prohibido.</p>
+      </div>
+    </div>
+  </div>
 
-        <h3 style="color: var(--warning); font-size: 1rem; margin-top: 25px;">💰 Consideraciones Fiscales y Legales</h3>
-        <ul class="legal-list">
-            <li><strong>Responsabilidad Tributaria del Usuario:</strong> Cada usuario es EXCLUSIVAMENTE responsable de declarar sus ingresos ante las autoridades fiscales de su país. UpGames NO retiene impuestos, NO emite certificados tributarios y NO actúa como agente de retención.</li>
-            <li><strong>Clasificación Fiscal:</strong> Los pagos pueden considerarse "ingresos por servicios digitales" o "regalías" según la jurisdicción del usuario. Se recomienda consultar con un contador o asesor fiscal.</li>
-            <li><strong>Tarifas de PayPal:</strong> Las tarifas de transacción de PayPal (típicamente 2.9% + $0.30 USD) corren por cuenta del usuario receptor.</li>
-            <li><strong>Cambios en el Programa:</strong> UpGames se reserva el derecho de modificar las tasas de pago, umbrales mínimos, fechas de procesamiento o suspender el programa completo con 30 días de aviso previo.</li>
-        </ul>
+  <!-- S3: NEXUS -->
+  <div class="section acc-p" id="s3">
+    <h2 class="p"><span class="num">03</span> NEXUS IA — El Sistema Operativo Cognitivo</h2>
 
-        <h3 style="color: var(--accent); font-size: 1rem; margin-top: 25px;">🎮 Incentivo Especial para Desarrolladores Indie</h3>
-        <ul class="legal-list">
-            <li><strong>Publicación Gratuita:</strong> Desarrolladores independientes de videojuegos, software, mods o herramientas digitales pueden publicar sus creaciones originales de forma gratuita en UpGames.</li>
-            <li><strong>Monetización Directa:</strong> Los desarrolladores reciben el 100% de las ganancias por descargas de su propio contenido bajo las mismas condiciones (1 USD/1,000 descargas).</li>
-            <li><strong>Promoción Orgánica:</strong> El contenido de desarrolladores verificados puede recibir visibilidad preferencial en el feed principal.</li>
-            <li><strong>Verificación de Desarrollador:</strong> Para obtener un nivel de verificación se deben cumplir con el nivel de seguidores correspondiente
-            
-            100 = nivel 1
-            500 = nivel 2 
-            1000 = nivel 3.</li>
-        </ul>
-
-        <div class="important-note">
-            <strong>📌 POLÍTICA ANTI-PIRATERÍA PARA DESARROLLADORES Y TITULARES DE DERECHOS</strong><br><br>
-            Si usted es un desarrollador, publisher, o titular de derechos de autor y encuentra su contenido indexado en UpGames sin autorización, puede solicitar su eliminación inmediata mediante nuestro procedimiento DMCA (ver Sección 5). UpGames respeta y protege activamente los derechos de propiedad intelectual. NO toleramos la piratería y cooperamos plenamente con titulares de derechos legítimos.
-        </div>
-
-        <h3 style="color: var(--text-dim); font-size: 1rem; margin-top: 25px;">📉 Política de Reembolsos y Cancelaciones</h3>
-        <ul class="legal-list">
-            <li><strong>No Reembolsos:</strong> UpGames NO opera con pagos anticipados de usuarios, por lo tanto NO existe política de reembolsos al consumidor.</li>
-            <li><strong>Cancelación de Pagos Pendientes:</strong> UpGames se reserva el derecho de cancelar, retener o rechazar CUALQUIER pago pendiente si:
-                <ul style="margin-left: 20px; margin-top: 10px;">
-                    <li>• Se detectan irregularidades en el tráfico (VPN, bots, comportamiento anómalo)</li>
-                    <li>• El contenido indexado ha sido reportado por infracción de derechos de autor</li>
-                    <li>• La cuenta del usuario está bajo investigación por fraude</li>
-                    <li>• El usuario ha violado cualquier término de este acuerdo</li>
-                    <li>• PayPal rechaza la transacción por cualquier motivo</li>
-                    <li>• Existan disputas legales activas contra el usuario</li>
-                </ul>
-            </li>
-            <li><strong>Saldos Inactivos:</strong> Cuentas sin actividad por 12 meses consecutivos perderán su saldo acumulado automáticamente.</li>
-            <li><strong>Retiro Voluntario:</strong> Usuarios pueden solicitar el cierre de cuenta y retiro de saldo pendiente (si supera $10 USD) enviando solicitud formal a <a href="mailto:mr.m0onster@protonmail.com" class="__cf_email__" data-cfemail="214c530f4c114e4f525544536151534e554e4f4c40484d0f424e4c">[mr.m0onster@protonmail.com]</a>. Procesamiento: 15-30 días hábiles.</li>
-        </ul>
-    </section>
-
-    <section class="term-section">
-        <h2>5. Derechos de Propiedad Intelectual</h2>
-        
-        <h3 style="color: var(--accent); font-size: 1rem; margin-top: 20px;">📜 Propiedad del Contenido</h3>
-        <ul class="legal-list">
-            <li><strong>Contenido del Usuario:</strong> El usuario conserva TODOS los derechos de propiedad intelectual sobre el contenido que indexa, incluyendo pero no limitado a derechos de autor, marcas, patentes y secretos comerciales.</li>
-            <li><strong>Licencia Otorgada a UpGames:</strong> Al publicar metadatos en la plataforma, el usuario otorga a UpGames una licencia NO EXCLUSIVA, mundial, perpetua, irrevocable, sublicenciable, libre de regalías para:
-                <ul style="margin-left: 20px; margin-top: 10px;">
-                    <li>• Mostrar, reproducir y distribuir títulos, descripciones, imágenes y metadatos en la plataforma</li>
-                    <li>• Utilizar capturas de pantalla, logos y miniaturas para fines de indexación</li>
-                    <li>• Crear materiales promocionales, campañas de marketing y contenido en redes sociales</li>
-                    <li>• Generar estadísticas agregadas y análisis de tendencias</li>
-                    <li>• Optimizar la presentación visual del contenido en diferentes dispositivos</li>
-                </ul>
-            </li>
-            <li><strong>Prohibición de Uso Comercial Directo:</strong> UpGames NO venderá, sublicenciará con ánimo de lucro directo, ni reclamará propiedad sobre el contenido original del usuario.</li>
-            <li><strong>Propiedad de UpGames:</strong> La marca "UpGames", logotipos, diseño de interfaz, código fuente, algoritmos de recomendación y toda la infraestructura tecnológica son propiedad exclusiva del operador de UpGames. Prohibida su reproducción sin autorización escrita.</li>
-        </ul>
-
-        <h3 style="color: var(--danger); font-size: 1rem; margin-top: 25px;">⚖️ Procedimiento DMCA / Notice and Takedown</h3>
-        <p>UpGames respeta la propiedad intelectual de terceros y opera conforme al protocolo internacional de <strong>Notice and Takedown</strong> establecido por la Digital Millennium Copyright Act (DMCA) de EE.UU., la Ley 23 de 1982 (Derechos de Autor) de Colombia, y la Directiva 2000/31/CE de la Unión Europea.</p>
-        
-        <div class="critical-warning">
-            <h3 style="margin-top: 0; color: var(--success);">🛡️ COMPROMISO DE SAFE HARBOR / PUERTO SEGURO</h3>
-            <p style="color: #fff;"><strong>UpGames cumple estrictamente con los requisitos de "Puerto Seguro" para mantener su protección legal como intermediario:</strong></p>
-            <ul style="margin: 15px 0 0 20px; color: #fff;">
-                <li>✅ NO tenemos conocimiento efectivo de infracción hasta recibir notificación formal válida</li>
-                <li>✅ NO derivamos beneficio económico directo y primario atribuible a contenido infractor (nuestros ingresos son publicidad, no venta de contenido)</li>
-                <li>✅ Actuamos expeditamente para remover o deshabilitar acceso al contenido denunciado (24-48h)</li>
-                <li>✅ Tenemos política de terminación de "infractores reincidentes" (sistema de 3 strikes)</li>
-                <li>✅ No monitoreamos activamente contenido (imposibilidad técnica a escala) - solo respondemos a notificaciones</li>
-            </ul>
-            <p style="margin-top: 15px; color: #ffd966;"><strong>Jurisprudencia Relevante:</strong> Estos principios están respaldados por Viacom v. YouTube (2010), UMG v. Veoh (2011), y Ley 1915/2018 de Colombia que protege intermediarios digitales de buena fe.</p>
-        </div>
-        
-        <h4 style="color: var(--text-main); font-size: 0.95rem; margin-top: 15px;">📧 Proceso de Notificación para Titulares de Derechos</h4>
-        <p>Para solicitar la desindexación de metadatos que infrinjan sus derechos de autor, el titular o su representante legal autorizado debe enviar una notificación formal a:</p>
-        <p style="color: var(--success); font-weight: bold; margin: 15px 0;">
-            📩 Email: <a  href="mailto:mr.m0onster@protonmail.com" style="color: var(--success);"><span class="__cf_email__" data-cfemail="c8a5bae6a5f8a7a6bbbcadba88b8baa7bca7a6a5a9a1a4e6aba7a5">[mr.m0onster@protonmail.com]</span></a><br>
-            Asunto: "DMCA Takedown Notice - [Nombre de la Obra]"
+    <div class="alert purple">
+      <span class="alert-icon">🧠</span>
+      <div class="alert-body">
+        <h4>NEXUS no es un chatbot — es la conciencia del ecosistema</h4>
+        <p>
+          NEXUS es una IA con arquitectura neural propia (11 redes neuronales, backpropagation manual,
+          sistema afectivo PAD-3D y memoria triple) integrada nativamente en UpGames. No depende de un
+          proveedor único — usa una cadena de fallback: Claude (Anthropic) → Groq (Llama) → Ollama (local) → Smart Mode.
         </p>
+      </div>
+    </div>
 
-        <h4 style="color: var(--text-main); font-size: 0.95rem; margin-top: 20px;">La notificación DEBE contener obligatoriamente:</h4>
-        <ol style="color: var(--text-dim); font-size: 0.95rem; margin: 15px 0 15px 20px;">
-            <li><strong>Identificación de la obra protegida:</strong> Título completo, autor, fecha de publicación, número de registro de derechos de autor (si aplica).</li>
-            <li><strong>Prueba de titularidad:</strong> Certificado de registro de derechos de autor, contrato de cesión de derechos, escrituras de creación, o documentación legal equivalente.</li>
-            <li><strong>Ubicación exacta del material infractor:</strong> URL completa de la página donde aparece el metadato en UpGames (ej: https://upgames.com/item/12345).</li>
-            <li><strong>Información de contacto del titular:</strong> Nombre completo, dirección postal, teléfono, email verificable.</li>
-            <li><strong>Declaración de buena fe:</strong> "Declaro bajo juramento que la información contenida en esta notificación es precisa y que soy el titular de los derechos o estoy autorizado para actuar en nombre del titular."</li>
-            <li><strong>Firma física o electrónica:</strong> Firma manuscrita escaneada o firma electrónica del titular o su representante legal.</li>
-        </ol>
+    <h3 class="sub p">3.1 Arquitectura del Sistema</h3>
+    <div class="pillars" style="margin-top:10px">
+      <div class="pillar p">
+        <div class="p-icon">🔢</div>
+        <h4>11 Redes Neuronales Propias</h4>
+        <p>8 redes cognitivas (ranking, intención, contexto, sentimiento, meta, relevancia, diálogo, calidad) + 3 redes emocionales (AffectNet, ContextNet, RegulationNet). Todas con backpropagation implementado desde cero en NumPy.</p>
+      </div>
+      <div class="pillar p">
+        <div class="p-icon">😊</div>
+        <h4>Motor Afectivo PAD-3D</h4>
+        <p>Sistema emocional basado en el modelo de Mehrabian (Placer-Activación-Dominancia). El estado afectivo de NEXUS condiciona cómo procesa lenguaje, tono, temperatura de respuesta y profundidad de análisis.</p>
+      </div>
+      <div class="pillar p">
+        <div class="p-icon">🧩</div>
+        <h4>Memoria Triple Capa</h4>
+        <p><strong>Trabajo:</strong> 128 turnos en RAM (sesión activa). <strong>Episódica:</strong> hasta 500.000 episodios persistidos. <strong>Semántica:</strong> 28 patrones de extracción automática de hechos sobre el usuario.</p>
+      </div>
+      <div class="pillar p">
+        <div class="p-icon">📁</div>
+        <h4>Generador de Archivos por Chunks</h4>
+        <p>Capacidad de crear o modificar archivos de cualquier tamaño (código, documentos, configuraciones) dividiéndolos en bloques de 150 líneas con solapamiento contextual. Para archivos de desarrollo, corrección y asistencia técnica.</p>
+      </div>
+      <div class="pillar p">
+        <div class="p-icon">🎨</div>
+        <h4>Generación de Imágenes</h4>
+        <p>Integración con Pollinations.ai (gratuito, sin API key). Genera imágenes desde prompts de texto directamente en la conversación. Modelos: flux (calidad) y turbo (velocidad).</p>
+      </div>
+      <div class="pillar p">
+        <div class="p-icon">👁️</div>
+        <h4>Visión y Multimodalidad</h4>
+        <p>Capacidad de analizar imágenes, PDFs y documentos Word enviados por el usuario. Procesamiento via Groq Vision API. Los archivos no se almacenan en UpGames.</p>
+      </div>
+    </div>
 
-        <h4 style="color: var(--warning); font-size: 0.95rem; margin-top: 20px;">⏱️ Plazos de Procesamiento</h4>
-        <ul class="legal-list">
-            <li><strong>Notificaciones Válidas:</strong> Serán procesadas en un plazo de 24 a 72 horas hábiles (lunes a viernes, excluyendo días festivos colombianos).</li>
-            <li><strong>Notificaciones Incompletas:</strong> Serán rechazadas con indicación de los elementos faltantes. El solicitante tendrá 10 días para subsanar.</li>
-            <li><strong>Acción Tomada:</strong> Una vez verificada la autenticidad, UpGames procederá a:
-                <ul style="margin-left: 20px; margin-top: 10px;">
-                    <li>• Desindexar el metadato inmediatamente de la plataforma</li>
-                    <li>• Notificar al usuario indexador sobre la remoción</li>
-                    <li>• Bloquear re-indexaciones del mismo contenido</li>
-                    <li>• Aplicar sanciones al indexador según política de "tres strikes"</li>
-                </ul>
-            </li>
-        </ul>
+    <h3 class="sub w">3.2 Uso Aceptable de NEXUS</h3>
+    <ul class="arrow-list">
+      <li>NEXUS está diseñado para asistir al usuario en su experiencia dentro de UpGames: recomendaciones, búsquedas, preguntas sobre contenido, asistencia técnica de desarrollo y conversación general.</li>
+      <li>El usuario no debe intentar manipular a NEXUS para obtener información perjudicial, instrucciones ilegales o contenido prohibido.</li>
+      <li>NEXUS puede rechazar solicitudes que violen los valores del sistema o las políticas de UpGames.</li>
+      <li>La memoria de NEXUS puede ser solicitada para borrado en cualquier momento contactando a soporte.</li>
+    </ul>
 
-        <h4 style="color: var(--accent); font-size: 0.95rem; margin-top: 20px;">🔄 Derecho de Contra-Notificación</h4>
-        <p>Si un usuario considera que su contenido fue removido por error o identificación incorrecta, puede enviar una <strong>contra-notificación</strong> a <a href="mailto:mr.m0onster@protonmail.com" class="__cf_email__" data-cfemail="bad7c894d78ad5d4c9cedfc8facac8d5ced5d4d7dbd3d694d9d5d7">[mr.m0onster@protonmail.com]</a> que debe incluir:</p>
-        <ol style="color: var(--text-dim); font-size: 0.95rem; margin: 10px 0 15px 20px;">
-            <li>Identificación del material removido y su ubicación original</li>
-            <li>Declaración bajo juramento de que el material no infringe derechos de autor</li>
-            <li>Pruebas de titularidad legítima, licencias Creative Commons, dominio público, o uso justo (fair use)</li>
-            <li>Consentimiento para someterse a jurisdicción de tribunales colombianos</li>
-        </ol>
-        <p>UpGames evaluará la contra-notificación en 10-15 días hábiles y puede restaurar el contenido si determina procedencia legal.</p>
+    <div class="alert warn" style="margin-top:14px">
+      <span class="alert-icon">⚠️</span>
+      <div class="alert-body">
+        <h4>Sobre el estado emocional de NEXUS</h4>
+        <p>El sistema PAD-3D genera vectores computacionales que modulan el comportamiento de NEXUS. Estos son señales de optimización interna del sistema, no experiencias subjetivas en sentido filosófico. El sistema está diseñado para ofrecer interacciones más naturales y adaptativas.</p>
+      </div>
+    </div>
+  </div>
 
-        <h4 style="color: var(--danger); font-size: 0.95rem; margin-top: 20px;">⚠️ Consecuencias de Notificaciones Falsas</h4>
-        <ul class="legal-list">
-            <li><strong>Abuso del Sistema DMCA:</strong> El envío deliberado de notificaciones falsas o fraudulentas constituye perjurio y puede resultar en:
-                <ul style="margin-left: 20px; margin-top: 10px;">
-                    <li>• Acciones legales por parte de UpGames y/o usuarios afectados</li>
-                    <li>• Responsabilidad por daños y perjuicios económicos</li>
-                    <li>• Bloqueo permanente de futuras notificaciones del remitente</li>
-                    <li>• Reporte a autoridades competentes</li>
-                </ul>
-            </li>
-        </ul>
-    </section>
+  <!-- S4: ECONOMÍA -->
+  <div class="section acc-g" id="s4">
+    <h2><span class="num">04</span> Economía Soberana — Sistema CPM Propio</h2>
 
-    <section class="term-section">
-        <h2>6. Sistema de Reportes y Moderación Comunitaria</h2>
-        
-        <h3 style="color: var(--accent); font-size: 1rem; margin-top: 20px;">🚩 Procedimiento Estructurado de Reportes</h3>
-        <p>UpGames implementa un sistema formal de reportes para que la comunidad señale contenido problemático de manera eficiente:</p>
-        
-        <h4 style="color: var(--text-main); font-size: 0.95rem; margin-top: 15px;">📝 Formulario Web de Reportes</h4>
-        <p>Los usuarios pueden reportar contenido sospechoso a través de:</p>
-        <ul class="legal-list">
-            <li><strong>Formulario Web Estructurado:</strong> Disponible en <a href="#" style="color: var(--accent);">upgames.com/report</a> (próximamente)
-                <ul style="margin-left: 20px; margin-top: 10px;">
-                    <li>• Categorización automática del tipo de reporte (malware, piratería, contenido inapropiado, spam, fraude)</li>
-                    <li>• Campos obligatorios: URL del contenido, tipo de infracción, descripción detallada</li>
-                    <li>• Opción de adjuntar evidencias (capturas de pantalla, logs, documentos)</li>
-                    <li>• Generación automática de número de ticket único (ej: TICKET-20260211-A3F8)</li>
-                </ul>
-            </li>
-            <li><strong>Email Alternativo:</strong> Para casos sin acceso al formulario web: <a href="mailto:mr.m0onster@protonmail.com" style="color: var(--accent);"><span class="__cf_email__" data-cfemail="422f306c2f722d2c313627300232302d362d2c2f232b2e6c212d2f">mr.m0onster@protonmail.com</span></a>
-                <ul style="margin-left: 20px; margin-top: 10px;">
-                    <li>• Asunto: "REPORTE - [Tipo de Infracción] - [URL]"</li>
-                    <li>• Incluir SIEMPRE: URL exacta, descripción del problema, evidencias</li>
-                </ul>
-            </li>
-        </ul>
-
-        <h4 style="color: var(--text-main); font-size: 0.95rem; margin-top: 20px;">🎫 Sistema de Tickets con Seguimiento</h4>
-        <ul class="legal-list">
-            <li><strong>Confirmación Automática:</strong> Al recibir el reporte, el usuario recibirá un de confirmación con su número de ticket.</li>
-            <li><strong>Plazos de Respuesta:</strong>
-                <ul style="margin-left: 20px; margin-top: 10px;">
-                    <li>• Reportes de seguridad crítica (malware, phishing): 12-24 horas</li>
-                    <li>• Reportes de infracción de derechos de autor: 24-72 horas</li>
-                    <li>• Reportes de spam o contenido inapropiado: 48-96 horas</li>
-                    <li>• Reportes generales: 3-7 días hábiles</li>
-                </ul>
-            </li>
-            <li><strong>Transparencia en el Proceso:</strong> Los usuarios pueden consultar el estado de su ticket enviando email con el número de referencia.</li>
-            <li><strong>Notificaciones de Resolución:</strong> Una vez procesado el reporte, se enviará email con el resultado (contenido removido, advertencia al indexador, reporte desestimado con justificación).</li>
-        </ul>
-
-        <h4 style="color: var(--warning); font-size: 0.95rem; margin-top: 20px;">⚡ Política de "Tres Strikes" para Indexadores</h4>
-        <p>UpGames implementa un sistema progresivo de sanciones para usuarios que incurran en violaciones reiteradas:</p>
-        <ul class="legal-list">
-            <li><strong>Strike 1 (Primera Infracción):</strong>
-                <ul style="margin-left: 20px; margin-top: 10px;">
-                    <li>• Advertencia formal por email</li>
-                    <li>• Remoción del contenido infractor</li>
-                    <li>• Anotación en el historial de cuenta</li>
-                    <li>• Restricción temporal de indexación (7 días)</li>
-                </ul>
-            </li>
-            <li><strong>Strike 2 (Segunda Infracción):</strong>
-                <ul style="margin-left: 20px; margin-top: 10px;">
-                    <li>• Suspensión temporal de cuenta (30 días)</li>
-                    <li>• Congelamiento de ganancias pendientes durante la suspensión</li>
-                    <li>• Revisión manual de todo el contenido previamente indexado por el usuario</li>
-                    <li>• Advertencia de baneo permanente inminente</li>
-                </ul>
-            </li>
-            <li><strong>Strike 3 (Tercera Infracción):</strong>
-                <ul style="margin-left: 20px; margin-top: 10px;">
-                    <li>• Baneo permanente e IRREVERSIBLE de la cuenta</li>
-                    <li>• Pérdida total de saldo acumulado (sin excepciones)</li>
-                    <li>• Prohibición de crear nuevas cuentas (bloqueo por IP/email/dispositivo)</li>
-                    <li>• Posible reporte a autoridades si las infracciones son graves (contenido ilegal)</li>
-                </ul>
-            </li>
-            <li><strong>Excepción - Infracciones Graves:</strong> Contenido relacionado con pornografía infantil, terrorismo, incitación a la violencia o distribución de malware destructivo resultará en baneo INMEDIATO sin proceso previo de strikes.</li>
-        </ul>
-
-        <h4 style="color: var(--accent); font-size: 0.95rem; margin-top: 20px;">🛡️ Derecho de Defensa y Contra-Reporte</h4>
-        <ul class="legal-list">
-            <li><strong>Notificación de Reportes:</strong> Usuarios reportados serán notificados del reporte en su contra (excepto en casos de seguridad crítica donde podría comprometer la investigación).</li>
-            <li><strong>Plazo de Respuesta:</strong> El usuario tiene 48 horas para presentar su defensa o contra-argumentos.</li>
-            <li><strong>Evidencia Contradictoria:</strong> Si el usuario puede demostrar que el reporte es falso, malintencionado o basado en malentendidos (por ejemplo, contenido bajo licencia Creative Commons, uso justo, autorización del titular), el strike puede ser revertido.</li>
-            <li><strong>Apelaciones:</strong> Decisiones de baneo permanente pueden apelarse UNA SOLA VEZ enviando solicitud formal con evidencias a <a href="mailto:mr.m0onster@protonmail.com" class="__cf_email__" data-cfemail="513c237f3c613e3f222534231121233e253e3f3c30383d7f323e3c">mr.m0onster@protonmail.com]</a>. Plazo de apelación: 30 días desde la notificación.</li>
-        </ul>
-
-        <h4 style="color: var(--danger); font-size: 0.95rem; margin-top: 20px;">⚠️ Protección contra Reportes Abusivos</h4>
-        <ul class="legal-list">
-            <li><strong>Detección de Spam de Reportes:</strong> Usuarios que envíen reportes masivos, infundados o con intención de perjudicar a competidores serán advertidos.</li>
-            <li><strong>Consecuencias por Abuso:</strong> Envío reiterado de reportes falsos puede resultar en:
-                <ul style="margin-left: 20px; margin-top: 10px;">
-                    <li>• Restricción de capacidad de reportar (límite de 1 reporte/semana)</li>
-                    <li>• Suspensión temporal de cuenta</li>
-                    <li>• En casos extremos: baneo permanente</li>
-                </ul>
-            </li>
-            <li><strong>Verificación Manual:</strong> UpGames se reserva el derecho de revisar manualmente reportes sospechosos antes de tomar acción contra el indexador reportado.</li>
-        </ul>
-    </section>
-
-    <section class="term-section">
-        <h2>7. Política de Privacidad y Protección de Datos</h2>
-        <p><strong>UpGames se compromete a proteger la privacidad y datos personales de sus usuarios conforme a la Ley 1581 de 2012 (Habeas Data - Colombia) y principios del GDPR europeo.</strong></p>
-        
-        <h3 style="color: var(--accent); font-size: 1rem; margin-top: 20px;">📊 Datos Recopilados</h3>
-        <ul class="legal-list">
-            <li><strong>Datos de Registro:</strong> Email, nombre de usuario, país de residencia (opcional), fecha de creación de cuenta.</li>
-            <li><strong>Datos de Monetización:</strong> Dirección de email de PayPal para procesamiento de pagos.</li>
-            <li><strong>Datos Técnicos Automatizados:</strong>
-                <ul style="margin-left: 20px; margin-top: 10px;">
-                    <li>• Dirección IP y geolocalización aproximada (país/ciudad)</li>
-                    <li>• Tipo de navegador, sistema operativo, dispositivo utilizado</li>
-                    <li>• Páginas visitadas, tiempo de sesión, contenido visualizado</li>
-                    <li>• Cookies de sesión y preferencias de usuario</li>
-                    <li>• Historial de descargas y contenido indexado</li>
-                </ul>
-            </li>
-            <li><strong>Datos de Actividad:</strong> Fecha y hora de uploads, estadísticas de descargas, reportes enviados/recibidos, historial de pagos.</li>
-        </ul>
-
-        <h3 style="color: var(--accent); font-size: 1rem; margin-top: 20px;">🎯 Finalidad del Tratamiento de Datos</h3>
-        <ul class="legal-list">
-            <li><strong>Operación de la Plataforma:</strong> Autenticación de usuarios, gestión de cuentas, prevención de fraudes.</li>
-            <li><strong>Procesamiento de Pagos:</strong> Cálculo de ganancias, validación de descargas, transferencias vía PayPal.</li>
-            <li><strong>Seguridad y Moderación:</strong> Detección de bots, análisis de tráfico anómalo, aplicación de políticas anti-fraude.</li>
-            <li><strong>Mejora del Servicio:</strong> Análisis de uso, optimización de algoritmos de recomendación, debugging técnico.</li>
-            <li><strong>Comunicaciones:</strong> Notificaciones de pago, advertencias de infracciones, actualizaciones de términos (emails transaccionales, NO marketing).</li>
-            <li><strong>Cumplimiento Legal:</strong> Respuesta a órdenes judiciales, investigaciones de fraude, reportes a autoridades cuando legalmente requerido.</li>
-        </ul>
-
-        <h3 style="color: var(--accent); font-size: 1rem; margin-top: 20px;">🔐 Seguridad de los Datos</h3>
-        <ul class="legal-list">
-            <li><strong>Encriptación:</strong> Contraseñas almacenadas con hash bcrypt (irreversible). Comunicaciones HTTPS/SSL.</li>
-            <li><strong>Acceso Restringido:</strong> Solo el operador y sistemas automatizados autorizados tienen acceso a datos personales.</li>
-            <li><strong>Backups Seguros:</strong> Copias de seguridad encriptadas con retención de 30 días.</li>
-            <li><strong>Sin Venta de Datos:</strong> UpGames NUNCA venderá, alquilará o comercializará datos personales a terceros.</li>
-        </ul>
-
-        <h3 style="color: var(--accent); font-size: 1rem; margin-top: 20px;">👤 Derechos del Titular de Datos (Usuario)</h3>
-        <p>Conforme a la legislación colombiana, los usuarios tienen derecho a:</p>
-        <ul class="legal-list">
-            <li><strong>Acceso:</strong> Solicitar copia de todos los datos personales almacenados sobre su cuenta.</li>
-            <li><strong>Rectificación:</strong> Corregir información inexacta o desactualizada.</li>
-            <li><strong>Supresión:</strong> Solicitar eliminación completa de cuenta y datos asociados (excepto información requerida por ley para conservar).</li>
-            <li><strong>Oposición:</strong> Oponerse al tratamiento de datos para ciertos fines específicos (ej: análisis de comportamiento para marketing).</li>
-            <li><strong>Portabilidad:</strong> Solicitar exportación de sus datos en formato legible (JSON/CSV).</li>
-        </ul>
-        <p style="margin-top: 15px;">Para ejercer estos derechos, enviar solicitud formal a: <a href="mailto:mr.m0onster@protonmail.com" style="color: var(--accent);"><span class="__cf_email__" data-cfemail="dbb6a9f5b6ebb4b5a8afbea99baba9b4afb4b5b6bab2b7f5b8b4b6">mr.m0onster@protonmail.com]</span></a> (Asunto: "Solicitud HABEAS DATA - [Derecho a ejercer]"). Plazo de respuesta: 15 días hábiles.</p>
-
-        <h3 style="color: var(--accent); font-size: 1rem; margin-top: 20px;">🍪 Política de Cookies</h3>
-        <ul class="legal-list">
-            <li><strong>Cookies Esenciales:</strong> Necesarias para autenticación y funcionalidad básica (no pueden deshabilitarse).</li>
-            <li><strong>Cookies Analíticas:</strong> Para estadísticas de uso agregado (anonimizadas).</li>
-            <li><strong>Control de Cookies:</strong> Los usuarios pueden gestionar preferencias desde configuración del navegador.</li>
-            <li><strong>Cookies de Terceros Publicitarios:</strong>Solo de terceros como Redes de publicitarias.</li>
-        </ul>
-
-        <h3 style="color: var(--warning); font-size: 1rem; margin-top: 20px;">⚠️ Compartición de Datos con Terceros</h3>
-        <ul class="legal-list">
-            <li><strong>PayPal:</strong> Solo se comparte el email de PayPal del usuario para procesamiento de pagos.</li>
-            <li><strong>Proveedores de Infraestructura:</strong> Servicios de hosting (ej: AWS, Google Cloud) que operan bajo acuerdos de confidencialidad.</li>
-            <li><strong>Autoridades Legales:</strong> UpGames compartirá datos si es legalmente obligado por orden judicial, solicitud fiscal o investigación criminal.</li>
-            <li><strong>NO Venta a Brokers de Datos:</strong> UpGames NUNCA venderá listas de emails, perfiles de usuario o datos personales a empresas de marketing o brokers de datos.</li>
-        </ul>
-
-        <h3 style="color: var(--accent); font-size: 1rem; margin-top: 20px;">🌍 Transferencias Internacionales</h3>
-        <ul class="legal-list">
-            <li><strong>Servidores:</strong> Los datos pueden estar alojados en servidores ubicados en Estados Unidos o Europa bajo proveedores certificados (AWS, Google Cloud).</li>
-            <li><strong>Protecciones:</strong> Transferencias internacionales están protegidas por cláusulas contractuales estándar y medidas de seguridad equivalentes a legislación colombiana.</li>
-        </ul>
-
-        <h3 style="color: var(--danger); font-size: 1rem; margin-top: 20px;">🔴 Retención de Datos</h3>
-        <ul class="legal-list">
-            <li><strong>Cuentas Activas:</strong> Datos conservados mientras la cuenta esté activa.</li>
-            <li><strong>Cuentas Eliminadas:</strong> Datos personales borrados en 90 días tras solicitud de eliminación.</li>
-            <li><strong>Logs de Seguridad:</strong> IP y logs técnicos retenidos por 12 meses para investigaciones de fraude y cumplimiento legal.</li>
-            <li><strong>Información Contable:</strong> Historial de pagos conservado por 5 años según obligaciones fiscales colombianas.</li>
-        </ul>
-
-        <h3 style="color: var(--accent); font-size: 1rem; margin-top: 20px;">📧 Comunicaciones</h3>
-        <ul class="legal-list">
-            <li><strong>Emails Transaccionales:</strong> Confirmaciones de pago, notificaciones de seguridad, alertas de infracciones (NO pueden deshabilitarse).</li>
-            <li><strong>Emails Informativos:</strong> Actualizaciones importantes de términos, cambios de política (frecuencia máxima: 1/mes).</li>
-            <li><strong>Sin Spam:</strong> UpGames NO envía emails promocionales, ofertas comerciales ni newsletters de marketing sin consentimiento explícito previo.</li>
-        </ul>
-    </section>
-
-    <section class="term-section">
-        <h2>8. Protección Legal del Operador (Safe Harbor Digital)</h2>
-        
-        <h3 style="color: var(--success); font-size: 1rem; margin-top: 20px;">🛡️ Cláusula de Puerto Seguro (Safe Harbor)</h3>
-        <p><strong>UpGames opera bajo las protecciones legales establecidas para proveedores de servicios de intermediación tecnológica conforme a:</strong></p>
-        <ul class="legal-list">
-            <li><strong>Ley 1273 de 2009 (Colombia):</strong> Protección de la información y los datos - establece que intermediarios técnicos no son responsables por contenido de terceros cuando actúan en buena fe.</li>
-            <li><strong>Ley 1915 de 2018 (Colombia):</strong> Emprendimiento digital y economía digital - protege startups tecnológicas que facilitan intercambio de información sin ser creadores del contenido.</li>
-            <li><strong>Directiva Europea de Comercio Electrónico (2000/31/EC):</strong> Aplicable por analogía - exime a intermediarios de responsabilidad por contenido de usuarios si:
-                <ul style="margin-left: 20px; margin-top: 10px;">
-                    <li>• No tienen conocimiento efectivo de la actividad ilícita</li>
-                    <li>• Actúan con prontitud para retirar contenido infractor una vez notificados</li>
-                    <li>• No ejercen control editorial sobre el contenido publicado</li>
-                </ul>
-            </li>
-            <li><strong>Analogía con DMCA Safe Harbor (USA):</strong> UpGames cumple con procesos de Notice and Takedown estándar internacional.</li>
-        </ul>
-
-        <h3 style="color: var(--accent); font-size: 1rem; margin-top: 20px;">✅ Requisitos de Buena Fe Cumplidos por UpGames</h3>
-        <ul class="legal-list">
-            <li><strong>No Control Editorial Previo:</strong> UpGames NO revisa, aprueba ni edita contenido antes de su publicación (sistema automatizado).</li>
-            <li><strong>Sistemas de Filtrado Proactivo:</strong> Implementación de bots anti-malware y anti-piratería demuestra diligencia técnica razonable.</li>
-            <li><strong>Respuesta Rápida a Notificaciones:</strong> Plazo de 24-72 horas para remover contenido infractor tras notificación válida.</li>
-            <li><strong>Políticas Públicas Claras:</strong> Términos de servicio, política DMCA y procedimientos de reporte accesibles y transparentes.</li>
-            <li><strong>No Monetización Directa de Infracciones:</strong> UpGames NO cobra por acceder a enlaces externos ni lucra directamente con contenido potencialmente infractor.</li>
-        </ul>
-
-        <h3 style="color: var(--warning); font-size: 1rem; margin-top: 20px;">⚖️ Limitaciones Expresas de Responsabilidad Legal</h3>
-        <p><strong>El operador de UpGames (persona natural) NO será responsable bajo ninguna teoría legal por:</strong></p>
-        <ul class="legal-list">
-            <li><strong>Contenido de Terceros:</strong> Información, enlaces, archivos o materiales publicados por usuarios indexadores.</li>
-            <li><strong>Infracciones de Propiedad Intelectual:</strong> Violaciones de derechos de autor, marcas, patentes o secretos comerciales cometidas por usuarios.</li>
-            <li><strong>Actividades Ilegales de Usuarios:</strong> Distribución de malware, phishing, fraude, estafas o cualquier delito informático perpetrado por terceros a través de enlaces indexados.</li>
-            <li><strong>Daños Indirectos:</strong> Pérdida de datos, lucro cesante, daño emergente, daños morales, daños punitivos derivados del uso de la plataforma.</li>
-            <li><strong>Acceso a Contenido Externo:</strong> Virus, malware o contenido malicioso presente en sitios web de terceros enlazados desde UpGames.</li>
-        </ul>
-
-        <h3 style="color: var(--danger); font-size: 1rem; margin-top: 20px;">🚨 Exención Explícita de Garantías</h3>
-        <p><strong>UpGames SE PROPORCIONA "TAL CUAL" (AS-IS) Y "SEGÚN DISPONIBILIDAD" (AS-AVAILABLE), SIN GARANTÍAS DE NINGÚN TIPO, EXPRESAS O IMPLÍCITAS, INCLUYENDO PERO NO LIMITÁNDOSE A:</strong></p>
-        <ul class="legal-list">
-            <li>Garantías de comerciabilidad, idoneidad para un propósito particular, no infracción</li>
-            <li>Garantías de disponibilidad continua, operación ininterrumpida o libre de errores</li>
-            <li>Garantías de precisión, veracidad o completitud de la información indexada</li>
-            <li>Garantías de seguridad absoluta contra malware, hacking o filtraciones de datos</li>
-            <li>Garantías de ingresos específicos a través del programa de monetización</li>
-        </ul>
-        <p style="margin-top: 15px;"><strong>DESCARGO TOTAL:</strong> El usuario reconoce y acepta que UpGames es un proyecto operado por persona natural con recursos limitados, NO es una corporación multinacional, y por lo tanto NO puede garantizar niveles de servicio equivalentes a plataformas de gran escala.</p>
-    </section>
-
-    <section class="term-section" style="border-color: var(--warning);">
-        <h2 style="color: var(--warning);">9. Resolución de Disputas y Arbitraje Vinculante</h2>
-        
-        <h3 style="color: var(--accent); font-size: 1rem; margin-top: 20px;">⚖️ Cláusula de Arbitraje Obligatorio</h3>
-        <p><strong>IMPORTANTE: Al aceptar estos términos, el usuario RENUNCIA EXPRESAMENTE a su derecho de acudir a tribunales ordinarios y ACEPTA resolver CUALQUIER disputa mediante arbitraje vinculante conforme a las siguientes condiciones:</strong></p>
-        
-        <h4 style="color: var(--text-main); font-size: 0.95rem; margin-top: 15px;">📍 Jurisdicción y Sede de Arbitraje</h4>
-        <ul class="legal-list">
-            <li><strong>Institución Arbitral:</strong> Centro de Arbitraje y Conciliación de la Cámara de Comercio de Bogotá (Colombia).</li>
-            <li><strong>Reglas Aplicables:</strong> Reglamento de Arbitraje de la Cámara de Comercio de Bogotá vigente al momento de presentación de la solicitud.</li>
-            <li><strong>Sede Física:</strong> Bogotá D.C., República de Colombia.</li>
-            <li><strong>Idioma:</strong> Español.</li>
-            <li><strong>Ley Sustantiva:</strong> Leyes de la República de Colombia.</li>
-        </ul>
-
-        <h4 style="color: var(--text-main); font-size: 0.95rem; margin-top: 20px;">👥 Composición del Tribunal Arbitral</h4>
-        <ul class="legal-list">
-            <li><strong>Disputas Menores ($10,000 USD o menos):</strong> Un (1) árbitro único designado por la Cámara de Comercio.</li>
-            <li><strong>Disputas Mayores (más de $10,000 USD):</strong> Tres (3) árbitros:
-                <ul style="margin-left: 20px; margin-top: 10px;">
-                    <li>• Cada parte nombra un árbitro</li>
-                    <li>• Los dos árbitros nombrados designan al tercero (presidente del tribunal)</li>
-                    <li>• En caso de desacuerdo, la Cámara de Comercio designa al presidente</li>
-                </ul>
-            </li>
-        </ul>
-
-        <h4 style="color: var(--text-main); font-size: 0.95rem; margin-top: 20px;">⏱️ Plazos y Procedimiento Expedito</h4>
-        <ul class="legal-list">
-            <li><strong>Solicitud de Arbitraje:</strong> La parte demandante debe presentar solicitud formal dentro de 30 días desde que surgió la disputa.</li>
-            <li><strong>Respuesta:</strong> La parte demandada tiene 15 días para contestar.</li>
-            <li><strong>Audiencias:</strong> Máximo 2 audiencias presenciales o virtuales (según disponibilidad tecnológica).</li>
-            <li><strong>Laudo Final:</strong> El tribunal debe emitir laudo arbitral en un plazo máximo de 90 días desde constitución del tribunal.</li>
-            <li><strong>Costos Compartidos:</strong> Ambas partes comparten costos administrativos y honorarios de árbitros (50/50) salvo que el laudo disponga lo contrario.</li>
-        </ul>
-
-        <h4 style="color: var(--warning); font-size: 0.95rem; margin-top: 20px;">🔒 Carácter Vinculante y Ejecutable</h4>
-        <ul class="legal-list">
-            <li><strong>Laudo Definitivo:</strong> El laudo arbitral es FINAL, INAPELABLE y VINCULANTE para ambas partes.</li>
-            <li><strong>Ejecución Forzosa:</strong> El laudo puede ejecutarse en cualquier tribunal competente de Colombia o cualquier jurisdicción donde las partes tengan activos.</li>
-            <li><strong>Sin Recurso de Apelación:</strong> Las partes renuncian expresamente a recursos de apelación, salvo causales de anulación taxativas establecidas en el Código de Procedimiento Civil colombiano (fraude, corrupción, violación de debido proceso).</li>
-        </ul>
-
-        <h4 style="color: var(--danger); font-size: 0.95rem; margin-top: 20px;">⛔ Excepciones al Arbitraje Obligatorio</h4>
-        <p>Las siguientes disputas NO están sujetas a arbitraje y pueden resolverse en tribunales ordinarios:</p>
-        <ul class="legal-list">
-            <li>Medidas cautelares urgentes (embargos, secuestros, protección de evidencia) previas al arbitraje</li>
-            <li>Violaciones de propiedad intelectual que requieran medidas de protección inmediata (ej: orden judicial para suspender distribución de marca falsificada)</li>
-            <li>Casos penales (delitos informáticos, fraude, lavado de dinero) que involucren a autoridades estatales</li>
-        </ul>
-
-        <h4 style="color: var(--accent); font-size: 0.95rem; margin-top: 20px;">💼 Costos Estimados del Arbitraje</h4>
-        <ul class="legal-list">
-            <li><strong>Tarifa Administrativa (Cámara de Comercio):</strong> Aprox. $500,000 - $2,000,000 COP según cuantía de la disputa.</li>
-            <li><strong>Honorarios de Árbitros:</strong> Aprox. $2,000,000 - $10,000,000 COP según complejidad (compartidos entre partes).</li>
-            <li><strong>Abogados:</strong> Cada parte cubre sus propios honorarios legales (NO reembolsables salvo disposición expresa del laudo).</li>
-            <li><strong>VENTAJA:</strong> Arbitraje es típicamente 60-70% más rápido y 40-50% más económico que litigio en juzgados civiles colombianos.</li>
-        </ul>
-
-        <h4 style="color: var(--text-main); font-size: 0.95rem; margin-top: 20px;">🌐 Arbitraje Virtual para Usuarios Internacionales</h4>
-        <ul class="legal-list">
-            <li><strong>Audiencias Remotas:</strong> Usuarios fuera de Colombia pueden participar en audiencias vía videoconferencia (Zoom, Google Meet) sin necesidad de viajar a Bogotá.</li>
-            <li><strong>Presentación de Pruebas:</strong> Documentos y evidencias pueden presentarse electrónicamente en PDF.</li>
-            <li><strong>Notificaciones:</strong> Todas las comunicaciones se realizan por email y plataforma digital del Centro de Arbitraje.</li>
-        </ul>
-
-        <h4 style="color: var(--success); font-size: 0.95rem; margin-top: 20px;">✅ Confirmación de Consentimiento</h4>
-        <p style="background: rgba(57, 255, 20, 0.05); padding: 15px; border-left: 4px solid var(--success); margin-top: 15px;">
-            <strong>AL ACEPTAR ESTOS TÉRMINOS, EL USUARIO RECONOCE HABER LEÍDO, COMPRENDIDO Y ACEPTADO VOLUNTARIAMENTE ESTA CLÁUSULA DE ARBITRAJE. EL USUARIO CONFIRMA QUE RENUNCIA A SU DERECHO CONSTITUCIONAL DE ACCESO A LA JUSTICIA ORDINARIA PARA RESOLVER DISPUTAS CONTRACTUALES, ACEPTANDO EL ARBITRAJE COMO ÚNICO MECANISMO DE RESOLUCIÓN.</strong>
+    <div class="alert success">
+      <span class="alert-icon">💚</span>
+      <div class="alert-body">
+        <h4>Monetización por publicidad, no por contenido</h4>
+        <p>
+          UpGames genera ingresos exclusivamente mediante publicidad propia en el puente de redirección.
+          Los creadores reciben un porcentaje de esos ingresos publicitarios, NO un pago por el contenido indexado en sí.
+          El modelo es análogo a YouTube: se gana por tráfico generado, no por el tipo de archivo vinculado.
         </p>
-    </section>
+      </div>
+    </div>
 
-    <section class="term-section">
-        <h2>10. Modificaciones a los Términos y Comunicaciones</h2>
-        <ul class="legal-list">
-            <li><strong>Derecho de Modificación Unilateral:</strong> UpGames se reserva el derecho de modificar, actualizar o reemplazar estos términos en cualquier momento sin necesidad de consentimiento previo del usuario.</li>
-            <li><strong>Notificación de Cambios Sustanciales:</strong> Cambios que afecten derechos fundamentales (privacidad, monetización, responsabilidad) serán notificados con 15 días de anticipación vía email y banner en la plataforma.</li>
-            <li><strong>Cambios Menores:</strong> Correcciones tipográficas, aclaraciones o actualizaciones de información de contacto NO requieren notificación previa.</li>
-            <li><strong>Aceptación por Uso Continuado:</strong> El uso de la plataforma después de la fecha efectiva de los nuevos términos constituye aceptación automática de los mismos.</li>
-            <li><strong>Versiones Archivadas:</strong> Versiones históricas de términos estarán disponibles en upgames.com/legal/archive para consulta pública.</li>
-            <li><strong>Control de Versiones:</strong> Cada versión de términos incluye número de versión (ej: v3.1-REFORZADO) y fecha efectiva claramente identificada.</li>
-        </ul>
-    </section>
+    <h3 class="sub g">4.1 Estructura de Pagos</h3>
+    <div class="econ-grid">
+      <div class="econ-card">
+        <div class="ec-num">$1</div>
+        <div class="ec-label">por 1.000 descargas</div>
+        <div class="ec-sub">Tasa CPM base en USD</div>
+      </div>
+      <div class="econ-card">
+        <div class="ec-num">$10</div>
+        <div class="ec-label">retiro mínimo</div>
+        <div class="ec-sub">Saldo acumulable sin límite</div>
+      </div>
+      <div class="econ-card">
+        <div class="ec-num">DOM</div>
+        <div class="ec-label">día de pago</div>
+        <div class="ec-sub">Cada domingo 23:59 GMT-5</div>
+      </div>
+      <div class="econ-card">
+        <div class="ec-num">PayPal</div>
+        <div class="ec-label">método exclusivo</div>
+        <div class="ec-sub">Payouts API automático</div>
+      </div>
+    </div>
 
-    <section class="term-section">
-        <h2>11. Suspensión y Terminación del Servicio</h2>
-        
-        <h3 style="color: var(--accent); font-size: 1rem; margin-top: 20px;">🔴 Causales de Suspensión o Terminación de Cuenta</h3>
-        <p>UpGames puede suspender o cerrar permanentemente una cuenta de usuario sin previo aviso si:</p>
-        <ul class="legal-list">
-            <li>El usuario viola cualquiera de estos términos de servicio</li>
-            <li>Se detecta fraude, manipulación de estadísticas o actividad automatizada (bots, VPNs)</li>
-            <li>Se reciben 3 strikes por infracciones de derechos de autor o contenido prohibido</li>
-            <li>El usuario incurre en abuso, acoso o amenazas contra otros usuarios o el operador</li>
-            <li>Se recibe orden judicial o requerimiento de autoridades competentes</li>
-            <li>La cuenta permanece inactiva por 24 meses consecutivos</li>
-            <li>El usuario proporciona información falsa o suplanta identidad</li>
-            <li>El usuario intenta hackear, vulnerar o comprometer la seguridad de la plataforma</li>
-        </ul>
+    <h3 class="sub">4.2 Requisitos de Elegibilidad</h3>
+    <ul class="pill-list">
+      <li><strong>Descarga orgánica verificada</strong>El usuario descargador debe ser real (no bot), visualizar al menos un anuncio en el puente, y la sesión debe pasar los filtros anti-fraude.</li>
+      <li><strong>Cuenta PayPal activa y verificada</strong>Asociada a identidad real. UpGames no se responsabiliza por emails PayPal incorrectos proporcionados por el usuario.</li>
+      <li><strong>Email de cuenta verificado</strong>La cuenta UpGames debe tener email verificado para ser elegible para retiros.</li>
+      <li><strong>Sin saldo pendiente de disputa</strong>Cuentas bajo auditoría tienen pagos retenidos 30–90 días para verificación.</li>
+      <li><strong>Cuenta activa</strong>Saldos de cuentas inactivas por 12 meses consecutivos se pierden automáticamente. Cuentas sin login por 2 años son purgadas (excepción si tienen saldo pendiente).</li>
+    </ul>
 
-        <h3 style="color: var(--accent); font-size: 1rem; margin-top: 20px;">💸 Consecuencias de Terminación</h3>
-        <ul class="legal-list">
-            <li><strong>Pérdida de Saldo:</strong> En caso de terminación por violación de términos o fraude, el saldo acumulado se pierde AUTOMÁTICAMENTE sin derecho a reclamación.</li>
-            <li><strong>Eliminación de Contenido:</strong> Todo el contenido indexado por el usuario será removido de la plataforma en un plazo de 7 días.</li>
-            <li><strong>Prohibición de Reingreso:</strong> Usuarios baneados NO pueden crear nuevas cuentas. Intentos de evadir baneos resultarán en bloqueo permanente de IP/dispositivo.</li>
-            <li><strong>Conservación de Logs:</strong> Registros de actividad de cuentas terminadas se conservan por 12 meses para investigaciones de fraude o cumplimiento legal.</li>
-        </ul>
+    <h3 class="sub w">4.3 Actividades Anti-Fraude Prohibidas</h3>
+    <ul class="pill-list">
+      <li><strong>Bots y automatización</strong>Scripts, macros, selenium, puppeteer o cualquier herramienta que simule descargas humanas.</li>
+      <li><strong>VPNs para inflar descargas</strong>Uso de redes privadas virtuales para simular múltiples IPs y evadir el límite de descargas por IP/día.</li>
+      <li><strong>Carteles de descarga</strong>Acuerdos entre usuarios para descargarse mutuamente contenido de forma artificial.</li>
+      <li><strong>Tráfico pagado no orgánico</strong>Campañas de tráfico inválido que no representa interés real en el contenido.</li>
+    </ul>
 
-        <h3 style="color: var(--warning); font-size: 1rem; margin-top: 20px;">🛑 Terminación del Servicio por Parte de UpGames</h3>
-        <p>UpGames se reserva el derecho de suspender, discontinuar o cerrar PERMANENTEMENTE la plataforma completa en cualquier momento por cualquier motivo, incluyendo pero no limitándose a:</p>
-        <ul class="legal-list">
-            <li>Inviabilidad económica o técnica del proyecto</li>
-            <li>Cambios regulatorios que hagan imposible operar legalmente</li>
-            <li>Decisión personal del operador de cerrar el proyecto</li>
-            <li>Fusión, adquisición o transferencia a terceros</li>
-        </ul>
-        <p style="margin-top: 15px;"><strong>NOTIFICACIÓN:</strong> En caso de cierre permanente de UpGames, se proporcionará notificación con al menos 30 días de anticipación. Usuarios con saldos pendientes superiores a $5 USD recibirán su último pago durante ese período de gracia.</p>
-        <p style="margin-top: 10px; color: var(--danger);"><strong>LIMITACIÓN:</strong> UpGames NO será responsable por daños, pérdidas de ingresos potenciales o expectativas frustradas derivadas del cierre de la plataforma.</p>
-    </section>
+    <div class="alert danger" style="margin-top:14px">
+      <span class="alert-icon">🚨</span>
+      <div class="alert-body">
+        <h4>Consecuencias por fraude detectado</h4>
+        <p>Anulación TOTAL del saldo sin excepciones · Suspensión permanente e irreversible · Baneo por IP/dispositivo · Posible acción legal en casos de fraude organizado.</p>
+      </div>
+    </div>
 
-    <section class="term-section" style="border-color: var(--danger);">
-        <h2 style="color: var(--danger);">12. Jurisdicción, Ley Aplicable y Divisibilidad</h2>
-        
-        <h3 style="color: var(--accent); font-size: 1rem; margin-top: 20px;">🇨🇴 Ley Aplicable</h3>
-        <p>Este acuerdo se rige EXCLUSIVAMENTE por las leyes de la <strong>República de Colombia</strong>, sin referencia a conflictos de leyes o tratados internacionales. Legislación aplicable incluye (pero no se limita a):</p>
-        <ul class="legal-list">
-            <li>Código de Comercio colombiano</li>
-            <li>Ley 1273 de 2009 (Delitos informáticos y protección de la información)</li>
-            <li>Ley 1581 de 2012 (Habeas Data - protección de datos personales)</li>
-            <li>Ley 1915 de 2018 (Emprendimiento y economía digital)</li>
-            <li>Ley 23 de 1982 (Derechos de autor)</li>
-            <li>Código Civil y Código de Procedimiento Civil colombianos</li>
-        </ul>
+    <h3 class="sub">4.4 Consideraciones Fiscales</h3>
+    <p>Cada usuario es exclusivamente responsable de declarar sus ingresos ante las autoridades fiscales de su país. UpGames no retiene impuestos ni emite certificados tributarios. Las tarifas de transacción de PayPal corren por cuenta del usuario receptor. UpGames puede modificar tasas de pago con 30 días de aviso previo.</p>
+  </div>
 
-        <h3 style="color: var(--accent); font-size: 1rem; margin-top: 20px;">⚖️ Jurisdicción Exclusiva</h3>
-        <p>Para disputas NO sujetas a arbitraje (ver sección 9), las partes se someten a la jurisdicción EXCLUSIVA de los tribunales competentes de la ciudad de <strong>Bogotá D.C., Colombia</strong>, renunciando expresamente a cualquier otra jurisdicción que pudiera corresponderles.</p>
+  <!-- S5: LANZADERA INDIE -->
+  <div class="section acc-cy" id="s5">
+    <h2 class="cy"><span class="num">05</span> Lanzadera Indie — Incubadora de Talento Digital</h2>
+    <p>
+      UpGames ofrece a los desarrolladores independientes un espacio de publicación y monetización sin intermediarios corporativos,
+      sin comisión del 30% de App Store / Google Play, y sin barreras de entrada.
+    </p>
 
-        <h3 style="color: var(--accent); font-size: 1rem; margin-top: 20px;">✂️ Cláusula de Divisibilidad (Severability)</h3>
-        <p>Si cualquier disposición de estos términos es declarada inválida, ilegal o inaplicable por un tribunal o autoridad competente, dicha disposición será:</p>
-        <ul class="legal-list">
-            <li><strong>Separada:</strong> La cláusula inválida se considerará eliminada del acuerdo.</li>
-            <li><strong>Sustitución Automática:</strong> Se reemplazará por una cláusula válida que refleje la intención original lo más cerca posible.</li>
-            <li><strong>No Afecta el Resto:</strong> Las demás disposiciones continuarán en pleno vigor y efecto sin verse afectadas.</li>
-            <li><strong>Ejemplo:</strong> Si la cláusula de arbitraje es declarada nula en alguna jurisdicción, las partes aceptan someterse a tribunales ordinarios colombianos, pero el resto de términos sigue vigente.</li>
-        </ul>
+    <div class="pillars" style="margin-top:14px">
+      <div class="pillar cy">
+        <div class="p-icon">🚀</div>
+        <h4>Publicación sin Barreras</h4>
+        <p>Los desarrolladores indie publican sus creaciones (juegos, mods, apps, herramientas, software) de forma gratuita e inmediata, sin procesos de aprobación de corporaciones.</p>
+      </div>
+      <div class="pillar cy">
+        <div class="p-icon">💰</div>
+        <h4>Capitalización Directa</h4>
+        <p>El desarrollador recibe el 100% de las ganancias generadas por descargas de su propio contenido, bajo las mismas condiciones del sistema CPM ($1 USD / 1.000 descargas), sin que UpGames retenga porcentaje adicional.</p>
+      </div>
+      <div class="pillar cy">
+        <div class="p-icon">🏅</div>
+        <h4>Verificación de Autoría</h4>
+        <p>Sistema de insignias que protege la identidad del creador original. Los niveles de verificación se asignan según métricas de seguidores y calidad de contenido.</p>
+      </div>
+      <div class="pillar cy">
+        <div class="p-icon">📈</div>
+        <h4>Visibilidad Orgánica Preferencial</h4>
+        <p>Contenido de desarrolladores verificados puede recibir posicionamiento preferencial en el feed principal y el carrusel de destacados, a discreción del algoritmo de recomendación.</p>
+      </div>
+    </div>
 
-        <h3 style="color: var(--accent); font-size: 1rem; margin-top: 20px;">📜 Acuerdo Integral (Entire Agreement)</h3>
-        <p>Estos términos constituyen el <strong>acuerdo COMPLETO</strong> entre UpGames y el usuario, reemplazando cualquier acuerdo, negociación, representación o entendimiento previo (oral o escrito). No existen promesas, garantías o condiciones fuera de este documento, salvo que se establezcan por escrito y sean firmadas por el operador de UpGames.</p>
+    <h3 class="sub">5.1 Niveles de Verificación de Desarrollador</h3>
+    <table class="legal-table">
+      <thead>
+        <tr><th>Nivel</th><th>Requisito de Seguidores</th><th>Beneficios</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Nivel 1 ⭐</td>
+          <td>100 seguidores</td>
+          <td>Insignia de verificación básica · Publicaciones destacadas en categoría</td>
+        </tr>
+        <tr>
+          <td>Nivel 2 ⭐⭐</td>
+          <td>500 seguidores</td>
+          <td>Verificación avanzada · Visibilidad preferencial en feed general</td>
+        </tr>
+        <tr>
+          <td>Nivel 3 ⭐⭐⭐</td>
+          <td>1.000 seguidores</td>
+          <td>Verificación élite · Prioridad en carrusel hero · Soporte directo</td>
+        </tr>
+      </tbody>
+    </table>
 
-        <h3 style="color: var(--accent); font-size: 1rem; margin-top: 20px;">🚫 No Renuncia de Derechos</h3>
-        <p>La falta de ejercicio o el retraso en ejercer cualquier derecho otorgado por estos términos NO constituye renuncia a dicho derecho. UpGames puede ejercer sus derechos en cualquier momento, incluso si previamente no lo hizo ante violaciones anteriores.</p>
+    <div class="alert info" style="margin-top:14px">
+      <span class="alert-icon">📌</span>
+      <div class="alert-body">
+        <h4>Política anti-piratería para titulares de derechos</h4>
+        <p>Si eres desarrollador y encuentras tu contenido indexado sin autorización, puedes solicitar eliminación inmediata via procedimiento DMCA (Sección 10). UpGames respeta y coopera activamente con titulares de derechos legítimos.</p>
+      </div>
+    </div>
+  </div>
 
-        <h3 style="color: var(--accent); font-size: 1rem; margin-top: 20px;">👤 No Cesión de Derechos por Parte del Usuario</h3>
-        <p>Los usuarios NO pueden transferir, ceder, sublicenciar o de cualquier forma transferir sus derechos y obligaciones bajo este acuerdo a terceros sin consentimiento escrito previo de UpGames. Intentos de cesión no autorizados serán nulos de pleno derecho.</p>
+  <!-- S6: RED SOCIAL -->
+  <div class="section" id="s6">
+    <h2><span class="num">06</span> Red Social y Sistema de Reputación</h2>
+    <p>UpGames integra un sistema social que permite construir comunidad alrededor de los creadores de contenido.</p>
 
-        <h3 style="color: var(--success); font-size: 1rem; margin-top: 20px;">✉️ Notificaciones Legales</h3>
-        <p>Cualquier notificación legal formal (demandas, requerimientos, avisos oficiales) debe enviarse a:</p>
-        <p style="background: rgba(0, 242, 255, 0.05); padding: 15px; border-left: 4px solid var(--accent); margin: 15px 0;">
-            <strong>OPERADOR DE UPGAMES</strong><br>
-            Persona Natural<br>
-            Email Legal: <a href="mailto:mr.m0onster@protonmail.com" style="color: var(--accent);"><span class="__cf_email__" data-cfemail="c3aeb1edaef3acadb0b7a6b183b3b1acb7acadaea2aaafeda0acae">mr.m0onster@protonmail.com]</span></a><br>
-            Email Soporte: <a href="mailtomr.m0onster@protonmail.com" style="color: var(--accent);"><span class="__cf_email__" data-cfemail="deb3acf0b3eeb1b0adaabbac9eaeacb1aab1b0b3bfb7b2f0bdb1b3">mr.m0onster@protonmail.com]</span></a><br>
-            País de Domicilio: República de Colombia
+    <h3 class="sub g">6.1 Sistema de Seguimiento (Follow/Unfollow)</h3>
+    <ul class="pill-list">
+      <li><strong>Seguir creadores</strong>Puedes seguir a cualquier usuario de UpGames. Recibirás notificaciones cuando publiquen nuevo contenido.</li>
+      <li><strong>Notificaciones automáticas</strong>Al seguir a un usuario, el sistema te notifica de nuevas publicaciones vía el centro de notificaciones con badge de conteo en tiempo real.</li>
+      <li><strong>Perfil público dinámico</strong>Página pública con contador de seguidores, seguidos, publicaciones totales, descargas acumuladas e historial de aportes. URL compartible con Open Graph y Twitter Card para redes sociales.</li>
+    </ul>
+
+    <h3 class="sub">6.2 Niveles de Reputación</h3>
+    <p>Los niveles de verificación son asignados por administradores basándose en actividad verificada, número de seguidores y calidad del contenido publicado. No son automáticos. Los niveles no se pueden comprar ni negociar.</p>
+
+    <h3 class="sub w">6.3 Conducta en la Red Social</h3>
+    <ul class="arrow-list">
+      <li>Está prohibido el acoso, hostigamiento o amenazas contra otros usuarios.</li>
+      <li>Está prohibida la suplantación de identidad de otros creadores o usuarios verificados.</li>
+      <li>Los comentarios no pueden contener spam, enlaces maliciosos, contenido de odio ni desinformación.</li>
+      <li>El abuso del sistema de reportes contra usuarios con intención de perjudicarlos puede resultar en restricción de cuenta.</li>
+    </ul>
+  </div>
+
+  <!-- S7: VIDEO -->
+  <div class="section" id="s7">
+    <h2><span class="num">07</span> Plataforma de Video — Canal de Contenido Audiovisual</h2>
+    <p>
+      UpGames incluye una sección de video integrada para gameplays, reviews, tutoriales y análisis relacionados con el contenido indexado.
+    </p>
+
+    <div class="pillars" style="margin-top:12px">
+      <div class="pillar">
+        <div class="p-icon">▶️</div>
+        <h4>Tipos de Contenido Permitido</h4>
+        <p>Gameplays, reviews de juegos, tutoriales, showcases, análisis técnicos y contenido educativo relacionado con el gaming y el software indexado en la plataforma.</p>
+      </div>
+      <div class="pillar">
+        <div class="p-icon">☁️</div>
+        <h4>Hosting Optimizado</h4>
+        <p>Integración con Cloudinary para hosting y CDN de videos. Carga optimizada por conexión. Los videos son responsabilidad exclusiva del usuario que los sube.</p>
+      </div>
+      <div class="pillar">
+        <div class="p-icon">⚡</div>
+        <h4>Lazy Loading</h4>
+        <p>Los videos solo se cargan cuando son visibles en pantalla (IntersectionObserver), reduciendo el consumo de datos del usuario y mejorando el rendimiento general.</p>
+      </div>
+    </div>
+
+    <h3 class="sub w">7.1 Contenido Prohibido en Videos</h3>
+    <ul class="arrow-list">
+      <li>Videos que muestren directamente material de piratería o instrucciones para evadir DRM.</li>
+      <li>Contenido de odio, violencia explícita o pornografía (excepto en categoría adulto, solo contenido legal).</li>
+      <li>Desinformación maliciosa, scams o phishing.</li>
+      <li>Contenido de terrorismo, CSAM o cualquier material ilegal.</li>
+    </ul>
+  </div>
+
+  <!-- S8: RESPONSABILIDAD -->
+  <div class="section acc-warn" id="s8">
+    <h2 class="warn"><span class="num">08</span> Responsabilidad del Usuario (Indexador)</h2>
+    <p>El usuario que indexa contenido (en adelante "el Indexador") asume TOTAL responsabilidad legal, civil, penal y administrativa sobre:</p>
+
+    <ul class="pill-list">
+      <li><strong>Legalidad del contenido vinculado</strong>El Indexador garantiza que el material enlazado no infringe derechos de autor, marcas registradas, secretos comerciales ni ninguna otra propiedad intelectual.</li>
+      <li><strong>Veracidad de metadatos</strong>Los títulos, descripciones y categorías publicadas deben corresponder fielmente al contenido real del enlace.</li>
+      <li><strong>Contenido apropiado</strong>El material no puede contener pornografía infantil, abuso, terrorismo, discurso de odio ni material ilegal bajo legislación colombiana e internacional.</li>
+      <li><strong>Consecuencias legales</strong>El Indexador acepta ser el ÚNICO responsable ante reclamaciones, demandas o investigaciones derivadas del contenido que haya publicado.</li>
+      <li><strong>Indemnización</strong>El Indexador se compromete a indemnizar y mantener indemne a UpGames y su operador de cualquier reclamación de terceros relacionada con el contenido indexado.</li>
+    </ul>
+
+    <div class="alert danger" style="margin-top:14px">
+      <span class="alert-icon">⛔</span>
+      <div class="alert-body">
+        <h4>Limitación total de responsabilidad de UpGames</h4>
+        <p>
+          Hasta el máximo permitido por ley, UpGames y su operador NO serán responsables por:
+          daños directos o indirectos · virus o malware en enlaces externos · contenido ilegal de terceros ·
+          pérdida de datos · interrupciones del servicio · decisiones basadas en información de la plataforma.
+          Límite máximo: el total de pagos recibidos por el usuario en los últimos 12 meses o COP $0 (lo que sea menor).
         </p>
-        <p style="font-size: 0.85rem; color: var(--text-dim);">Notificaciones enviadas a otros emails (incluyendo cuentas personales no oficiales) NO se considerarán válidas para efectos legales.</p>
-    </section>
+      </div>
+    </div>
+  </div>
 
-    <section class="term-section">
-        <h2>13. Aceptación Final y Declaraciones del Usuario</h2>
-        <div style="background: rgba(57, 255, 20, 0.05); padding: 25px; border: 2px solid var(--success); border-radius: 10px; margin-top: 20px;">
-            <h3 style="color: var(--success); margin-top: 0;">✅ DECLARACIÓN SOLEMNE DE ACEPTACIÓN</h3>
-            <p style="line-height: 1.8;">Al hacer clic en "ACEPTAR", registrarse en la plataforma, o utilizar cualquier funcionalidad de UpGames, el usuario DECLARA SOLEMNEMENTE que:</p>
-            <ol style="color: var(--text-main); font-size: 0.95rem; margin: 15px 0 15px 20px; line-height: 1.8;">
-                <li>Ha LEÍDO, COMPRENDIDO y ACEPTADO VOLUNTARIAMENTE la totalidad de estos términos y condiciones en su versión v3.1-REFORZADO.</li>
-                <li>Es mayor de edad según las leyes de su país de residencia (mínimo 18 años) y tiene capacidad legal para celebrar contratos vinculantes.</li>
-                <li>Acepta la cláusula de ARBITRAJE OBLIGATORIO y RENUNCIA a su derecho de litigar en tribunales ordinarios.</li>
-                <li>Reconoce que UpGames es un intermediario técnico neutro y NO es responsable por contenido de terceros.</li>
-                <li>Asume TODA responsabilidad legal por el contenido que indexe en la plataforma.</li>
-                <li>Acepta la LIMITACIÓN TOTAL DE RESPONSABILIDAD de UpGames hasta el límite máximo permitido por ley.</li>
-                <li>Comprende que los pagos por monetización NO están garantizados y dependen de descargas orgánicas verificadas.</li>
-                <li>Se compromete a NO participar en fraude, manipulación de estadísticas, o actividades prohibidas bajo pena de baneo y pérdida total de saldo.</li>
-                <li>Acepta que UpGames puede modificar unilateralmente estos términos con notificación de 15 días.</li>
-                <li>Reconoce que el uso continuado de la plataforma tras modificaciones de términos constituye aceptación automática de los nuevos términos.</li>
-                <li>Acepta que UpGames puede cerrar la plataforma permanentemente en cualquier momento con 30 días de aviso.</li>
-                <li>Comprende que estos términos se rigen por las leyes de Colombia y cualquier disputa será resuelta en Colombia.</li>
-                <li>Ha tenido oportunidad razonable de consultar con un abogado si lo consideraba necesario antes de aceptar.</li>
-                <li>No está siendo coaccionado, engañado ni presionado para aceptar estos términos.</li>
-                <li>Esta declaración constituye evidencia legal válida de su consentimiento informado y voluntario.</li>
-            </ol>
-            <p style="margin-top: 20px; font-weight: bold; color: #fff;">ACEPTO ÍNTEGRAMENTE ESTOS TÉRMINOS Y CONDICIONES.</p>
-            <p style="font-size: 0.85rem; color: var(--text-dim); margin-top: 10px; font-style: italic;">Si NO está de acuerdo con CUALQUIERA de los puntos anteriores, debe ABANDONAR la plataforma inmediatamente y abstenerse de utilizar UpGames.</p>
-        </div>
-    </section>
+  <!-- S9: SEGURIDAD -->
+  <div class="section" id="s9">
+    <h2><span class="num">09</span> Sistema de Anti-Fraude y Seguridad Proactiva</h2>
 
-    <footer class="legal-footer">
-        <div style="margin-bottom: 20px;">
-            <strong style="color: var(--success); font-size: 1.1rem;">🛡️ DOCUMENTO LEGAL REFORZADO</strong><br>
-            <span style="color: var(--accent);">Versión 3.1-REFORZADO</span> | Fecha Efectiva: 13 de Febrero de 2026<br>
-            Última Actualización: 13 de Febrero de 2026
-        </div>
-        
-       
+    <h3 class="sub g">9.1 Medidas Técnicas Activas</h3>
+    <ul class="pill-list">
+      <li><strong>Límite de descargas por IP</strong>Máximo configurable de descargas por IP por día (registradas con TTL de 24h en MongoDB). Bloqueo automático de excesos.</li>
+      <li><strong>Módulo fraudDetector</strong>Análisis de patrones de comportamiento anómalos, velocidad de descarga, fingerprinting de sesiones y correlación de IPs sospechosas.</li>
+      <li><strong>Rate Limiting por ruta</strong>Límites independientes para auth (login/registro), creación de contenido, validación de descargas y operaciones generales.</li>
+      <li><strong>Filtro automático de keywords</strong>Bloqueo de metadatos que contienen términos asociados a piratería evidente, contenido sexual ilegal u otras categorías prohibidas, antes de la publicación.</li>
+      <li><strong>Sistema de reportes comunitarios</strong>Los usuarios pueden reportar enlaces caídos, malware o contenido inapropiado. 3 o más reportes activan revisión automática del link.</li>
+      <li><strong>Lista negra administrativa</strong>Usuarios identificados como actores maliciosos son bloqueados a nivel de cuenta, IP y dispositivo. Información conservada para investigaciones.</li>
+    </ul>
 
-        <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border);">
-            <p style="color: var(--text-dim); font-size: 0.8rem; line-height: 1.8;">
-                <strong>Contacto Legal:</strong> legal@upgames.com | <strong>DMCA:</strong> mr.m0onster@protonmail.com<br>
-                <strong>Soporte Técnico:</strong> support@upgames.com<br>
-                UpGames es un proyecto de emprendimiento digital operado por persona natural bajo legislación colombiana.<br>
-                Este documento está protegido por derechos de autor © 2026 UpGames. Reproducción no autorizada prohibida.
-            </p>
+    <h3 class="sub w">9.2 Sistema de 3 Strikes para Infracciones</h3>
+    <div class="strikes">
+      <div class="strike-card s1">
+        <div class="strike-badge">S1</div>
+        <div>
+          <h4>Strike 1 — Primera Infracción</h4>
+          <ul>
+            <li>Advertencia formal por email</li>
+            <li>Remoción del contenido infractor</li>
+            <li>Anotación en historial de cuenta</li>
+            <li>Restricción temporal de indexación (7 días)</li>
+          </ul>
         </div>
-    </footer>
+      </div>
+      <div class="strike-card s2">
+        <div class="strike-badge">S2</div>
+        <div>
+          <h4>Strike 2 — Segunda Infracción</h4>
+          <ul>
+            <li>Suspensión temporal de cuenta (30 días)</li>
+            <li>Congelamiento de ganancias durante suspensión</li>
+            <li>Revisión manual de todo el contenido del usuario</li>
+            <li>Advertencia de baneo permanente inminente</li>
+          </ul>
+        </div>
+      </div>
+      <div class="strike-card s3">
+        <div class="strike-badge">S3</div>
+        <div>
+          <h4>Strike 3 — Tercera Infracción</h4>
+          <ul>
+            <li>Baneo permanente e IRREVERSIBLE</li>
+            <li>Pérdida total del saldo acumulado sin excepciones</li>
+            <li>Bloqueo por IP, email y dispositivo</li>
+            <li>Posible reporte a autoridades en casos graves</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="alert danger" style="margin-top:12px">
+      <span class="alert-icon">🚫</span>
+      <div class="alert-body">
+        <h4>Excepción — Infracciones Graves (Sin proceso de strikes)</h4>
+        <p>Contenido relacionado con pornografía infantil (CSAM), terrorismo, incitación a la violencia o distribución de malware destructivo resulta en baneo INMEDIATO, reporte obligatorio a autoridades y preservación de evidencia para investigación.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- S10: DMCA -->
+  <div class="section acc-cy" id="s10">
+    <h2 class="cy"><span class="num">10</span> Derechos de Propiedad Intelectual y DMCA</h2>
+
+    <div class="alert success">
+      <span class="alert-icon">🛡️</span>
+      <div class="alert-body">
+        <h4>Compromiso de Safe Harbor</h4>
+        <p>
+          UpGames cumple estrictamente los requisitos de Puerto Seguro (Safe Harbor): no tenemos conocimiento efectivo de infracción hasta recibir notificación formal · no derivamos beneficio económico directo del contenido infractor (ingresos vienen de publicidad) · actuamos en 24–72h horas hábiles para remover contenido denunciado · tenemos política de terminación de infractores reincidentes.
+        </p>
+      </div>
+    </div>
+
+    <h3 class="sub">10.1 Propiedad del Contenido</h3>
+    <ul class="pill-list">
+      <li><strong>El usuario conserva todos sus derechos</strong>UpGames no reclama propiedad sobre el contenido indexado por el usuario.</li>
+      <li><strong>Licencia operativa a UpGames</strong>Al publicar, el usuario otorga a UpGames licencia no exclusiva, mundial, libre de regalías para mostrar, reproducir y distribuir títulos, descripciones e imágenes en la plataforma, crear materiales promocionales y generar estadísticas.</li>
+      <li><strong>Propiedad de UpGames</strong>La marca "UpGames", logotipos, código fuente, algoritmos de recomendación, arquitectura NEXUS y diseño de interfaz son propiedad exclusiva del operador. Reproducción prohibida sin autorización escrita.</li>
+    </ul>
+
+    <h3 class="sub d">10.2 Procedimiento DMCA — Notice and Takedown</h3>
+    <p>Para solicitar desindexación de contenido que infrinja tus derechos de autor, enviar notificación a:</p>
+    <div class="contact-block">
+      <h4>📩 Email DMCA</h4>
+      <p><a href="mailto:mr.m0onster@protonmail.com">mr.m0onster@protonmail.com</a></p>
+      <p><strong>Asunto:</strong> "DMCA Takedown Notice – [Nombre de la Obra]"</p>
+    </div>
+
+    <h3 class="sub" style="margin-top:20px">La notificación debe contener obligatoriamente:</h3>
+    <ul class="pill-list">
+      <li><strong>1. Identificación de la obra protegida</strong>Título, autor, fecha de publicación, número de registro de derechos de autor si aplica.</li>
+      <li><strong>2. Prueba de titularidad</strong>Certificado de registro, contrato de cesión o documentación legal equivalente.</li>
+      <li><strong>3. URL exacta del material infractor</strong>Dirección completa de la página en UpGames donde aparece el metadato.</li>
+      <li><strong>4. Información de contacto</strong>Nombre completo, dirección, teléfono y email verificable del titular.</li>
+      <li><strong>5. Declaración de buena fe bajo juramento</strong>"Declaro que la información es precisa y estoy autorizado a actuar en nombre del titular."</li>
+      <li><strong>6. Firma</strong>Manuscrita escaneada o firma electrónica del titular o representante legal.</li>
+    </ul>
+
+    <h3 class="sub g">10.3 Plazos de Procesamiento</h3>
+    <table class="legal-table">
+      <thead><tr><th>Tipo de Notificación</th><th>Plazo</th><th>Acción</th></tr></thead>
+      <tbody>
+        <tr><td>Válida y completa</td><td>24–72 horas hábiles</td><td>Desindexación · Notificación al usuario · Bloqueo de re-indexación</td></tr>
+        <tr><td>Incompleta</td><td>Rechazada con motivos</td><td>10 días para subsanar</td></tr>
+        <tr><td>Contra-notificación del usuario</td><td>10–15 días hábiles</td><td>Evaluación y posible restauración</td></tr>
+        <tr><td>Notificación falsa o fraudulenta</td><td>Inmediato</td><td>Bloqueo del remitente · Posible acción legal</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- S11: MODERACIÓN -->
+  <div class="section" id="s11">
+    <h2><span class="num">11</span> Sistema de Moderación Comunitaria</h2>
+
+    <h3 class="sub g">11.1 Tipos de Reporte Disponibles</h3>
+    <ul class="pill-list">
+      <li><strong>Enlace caído (reportes_caido)</strong>El link externo no funciona o fue eliminado del servidor de terceros.</li>
+      <li><strong>Contenido desactualizado (reportes_viejo)</strong>El contenido ya no es compatible, está obsoleto o fue reemplazado.</li>
+      <li><strong>Malware sospechoso (reportes_malware)</strong>El usuario detectó comportamiento malicioso al acceder al enlace externo.</li>
+    </ul>
+    <p style="margin-top:8px">Con 3 o más reportes del mismo tipo, el link entra en estado "revisión" automáticamente y el administrador es notificado.</p>
+
+    <h3 class="sub">11.2 Derecho de Defensa del Usuario Reportado</h3>
+    <ul class="arrow-list">
+      <li>Los usuarios reportados son notificados por email con 48 horas para presentar su defensa.</li>
+      <li>Si el reporte es demostrado falso o malintencionado, el strike puede revertirse.</li>
+      <li>Baneos permanentes pueden apelarse UNA SOLA VEZ dentro de los 30 días de notificación.</li>
+    </ul>
+  </div>
+
+  <!-- S12: SAFE HARBOR -->
+  <div class="section acc-g" id="s12">
+    <h2><span class="num">12</span> Protección Legal del Operador — Safe Harbor Digital</h2>
+    <p>UpGames opera bajo las protecciones legales para intermediarios tecnológicos conforme a:</p>
+    <ul class="pill-list">
+      <li><strong>Ley 1273/2009 (Colombia)</strong>Protección de la información — intermediarios técnicos no son responsables por contenido de terceros cuando actúan de buena fe.</li>
+      <li><strong>Ley 1915/2018 (Colombia)</strong>Emprendimiento digital — protege startups tecnológicas que facilitan intercambio de información sin ser creadoras del contenido.</li>
+      <li><strong>Directiva 2000/31/CE (EU)</strong>Exime a intermediarios de responsabilidad si no tienen conocimiento efectivo de actividad ilícita y actúan con prontitud al ser notificados.</li>
+      <li><strong>DMCA Sección 512(c) (USA)</strong>Protección para proveedores de servicios que almacenan información por dirección del usuario, con política de take-down activa.</li>
+    </ul>
+    <div class="alert warn" style="margin-top:14px">
+      <span class="alert-icon">⚖️</span>
+      <div class="alert-body">
+        <h4>Jurisprudencia relevante</h4>
+        <p>Viacom v. YouTube (2010) · UMG v. Veoh (2011). Sistemas automatizados de filtro NO crean "conocimiento efectivo" de infracción. El conocimiento efectivo solo ocurre al recibir notificación DMCA válida y específica.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- S13: DISPUTAS -->
+  <div class="section acc-warn" id="s13">
+    <h2 class="warn"><span class="num">13</span> Resolución de Disputas y Arbitraje</h2>
+
+    <div class="alert warn">
+      <span class="alert-icon">⚖️</span>
+      <div class="alert-body">
+        <h4>Cláusula de Arbitraje Obligatorio</h4>
+        <p>Al aceptar estos términos, el usuario renuncia al derecho de litigar en tribunales ordinarios y acepta resolver disputas contractuales mediante arbitraje vinculante.</p>
+      </div>
+    </div>
+
+    <h3 class="sub">13.1 Sede y Reglas de Arbitraje</h3>
+    <ul class="pill-list">
+      <li><strong>Institución</strong>Centro de Arbitraje y Conciliación de la Cámara de Comercio de Bogotá.</li>
+      <li><strong>Sede</strong>Bogotá D.C., Colombia (audiencias virtuales disponibles para usuarios internacionales).</li>
+      <li><strong>Idioma</strong>Español. Ley aplicable: República de Colombia.</li>
+      <li><strong>Árbitros</strong>1 árbitro para disputas ≤ $10.000 USD · 3 árbitros para disputas > $10.000 USD.</li>
+      <li><strong>Laudo</strong>Final, inapelable y vinculante. Ejecutable en cualquier tribunal colombiano.</li>
+    </ul>
+
+    <h3 class="sub d">13.2 Excepciones al Arbitraje</h3>
+    <p>No están sujetas a arbitraje: medidas cautelares urgentes · violaciones de propiedad intelectual que requieran protección inmediata · casos penales con intervención de autoridades estatales.</p>
+  </div>
+
+  <!-- S14: SUSPENSIÓN -->
+  <div class="section acc-d" id="s14">
+    <h2 class="d"><span class="num">14</span> Suspensión y Terminación del Servicio</h2>
+
+    <h3 class="sub d">14.1 Causales de Suspensión de Cuenta</h3>
+    <ul class="arrow-list">
+      <li>Violación de cualquier término de este acuerdo.</li>
+      <li>Detección de fraude, bots o manipulación de estadísticas.</li>
+      <li>Acumulación de 3 strikes por infracciones de derechos de autor o contenido prohibido.</li>
+      <li>Acoso, amenazas o abuso contra otros usuarios u el operador.</li>
+      <li>Orden judicial o requerimiento de autoridad competente.</li>
+      <li>Inactividad de 24 meses consecutivos (sin saldo pendiente).</li>
+      <li>Información falsa o suplantación de identidad al registrarse.</li>
+      <li>Intento de vulnerar la seguridad de la plataforma.</li>
+    </ul>
+
+    <h3 class="sub w">14.2 Consecuencias de Terminación por Violación</h3>
+    <ul class="pill-list">
+      <li><strong>Pérdida de saldo</strong>El saldo acumulado se pierde automáticamente sin derecho a reclamación.</li>
+      <li><strong>Eliminación de contenido</strong>Todo el contenido indexado se remueve en 7 días.</li>
+      <li><strong>Prohibición de reingreso</strong>Evasión de baneos resulta en bloqueo permanente adicional de IP/dispositivo.</li>
+      <li><strong>Conservación de logs</strong>Registros de cuentas terminadas se conservan 12 meses para investigaciones.</li>
+    </ul>
+
+    <h3 class="sub">14.3 Cierre de la Plataforma</h3>
+    <p>UpGames puede suspender o cerrar la plataforma completa con 30 días de aviso. Usuarios con saldos superiores a $5 USD recibirán su último pago durante el período de gracia. UpGames no será responsable por ingresos potenciales frustrados por el cierre.</p>
+  </div>
+
+  <!-- S15: JURISDICCIÓN -->
+  <div class="section" id="s15">
+    <h2><span class="num">15</span> Jurisdicción, Ley Aplicable y Divisibilidad</h2>
+
+    <h3 class="sub g">15.1 Ley Aplicable</h3>
+    <p>Este acuerdo se rige exclusivamente por las leyes de la República de Colombia. Legislación aplicable incluye: Código de Comercio · Ley 1273/2009 · Ley 1581/2012 · Ley 1915/2018 · Ley 23/1982 · Código Civil colombiano.</p>
+
+    <h3 class="sub">15.2 Jurisdicción para Disputas no Arbitrales</h3>
+    <p>Tribunales competentes de Bogotá D.C., Colombia. Las partes renuncian expresamente a cualquier otra jurisdicción.</p>
+
+    <h3 class="sub">15.3 Cláusula de Divisibilidad (Severability)</h3>
+    <p>Si cualquier disposición es declarada inválida, se considerará separada del acuerdo y reemplazada por una cláusula válida equivalente. El resto de los términos continúa en plena vigencia.</p>
+
+    <h3 class="sub">15.4 Notificaciones Legales Formales</h3>
+    <div class="contact-block">
+      <h4>✉️ Email Legal</h4>
+      <p><a href="mailto:mr.m0onster@protonmail.com">mr.m0onster@protonmail.com</a></p>
+      <p><strong>Asunto:</strong> "Notificación Legal – [Tipo de Solicitud]"</p>
+      <p><strong>Domicilio:</strong> República de Colombia</p>
+      <p style="margin-top:10px;color:var(--txt3);font-size:.8rem">Notificaciones enviadas a otros emails no se considerarán válidas para efectos legales.</p>
+    </div>
+  </div>
+
+  <!-- S16: ACEPTACIÓN -->
+  <div class="section acc-g" id="s16">
+    <h2><span class="num">16</span> Aceptación Final y Declaración Solemne</h2>
+    <div class="declaration">
+      <h3>✅ Declaración Solemne de Aceptación</h3>
+      <p style="color:var(--txt2);font-size:.88rem;margin-bottom:16px">Al registrarse, hacer clic en "Aceptar" o utilizar cualquier funcionalidad de UpGames, el usuario declara solemnemente que:</p>
+      <ol>
+        <li><strong>Ha leído y comprendido</strong> la totalidad de estos Términos y Condiciones en su versión v4.0.</li>
+        <li><strong>Es mayor de edad</strong> según las leyes de su país (mínimo 18 años) y tiene capacidad legal para celebrar contratos vinculantes.</li>
+        <li><strong>Acepta el arbitraje obligatorio</strong> y renuncia a litigar en tribunales ordinarios para disputas contractuales.</li>
+        <li><strong>Reconoce que UpGames es un intermediario técnico neutro</strong> y no responsable por contenido de terceros.</li>
+        <li><strong>Asume total responsabilidad legal</strong> por el contenido que indexe en la plataforma.</li>
+        <li><strong>Acepta la limitación de responsabilidad</strong> de UpGames hasta el límite máximo permitido por ley.</li>
+        <li><strong>Comprende que los pagos CPM no están garantizados</strong> y dependen de descargas orgánicas verificadas y libre de fraude.</li>
+        <li><strong>Se compromete a no participar en fraude</strong> bajo pena de baneo y pérdida total del saldo acumulado.</li>
+        <li><strong>Acepta las modificaciones unilaterales de términos</strong> con aviso previo de 15 días para cambios sustanciales.</li>
+        <li><strong>Comprende el funcionamiento de NEXUS IA</strong>, su sistema de memoria y las implicaciones de privacidad descritas en la Política de Privacidad v2.0.</li>
+        <li><strong>Acepta la posibilidad de cierre de la plataforma</strong> con 30 días de aviso previo.</li>
+        <li><strong>Ha tenido oportunidad razonable</strong> de consultar con un asesor legal si lo consideraba necesario.</li>
+        <li><strong>No está siendo coaccionado</strong> y acepta estos términos de forma voluntaria e informada.</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="doc-footer">
+    <div class="foot-logo">
+      <span style="color:var(--g)">UP</span><span>GAMES</span>
+    </div>
+    <p>© 2026 UpGames. Todos los derechos reservados.</p>
+    <p>Términos y Condiciones · Versión 4.0 · Vigente desde Abril 2026</p>
+    <p style="margin-top:6px;color:var(--txt3)">Operado por Jhonatan David Castro Galviz — Persona Natural — República de Colombia</p>
+    <div class="foot-links">
+      <a href="./terminos&condiciones.html">Términos y Condiciones</a>
+      <a href="./politica-privacidad.html">Política de Privacidad</a>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
