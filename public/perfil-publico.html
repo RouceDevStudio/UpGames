@@ -526,6 +526,89 @@ display:block;
   .items-grid { grid-template-columns: repeat(5, 1fr); }
   .hero-cover  { height: 220px; }
 }
+
+/* SUB-NAV Publicaciones / Videos */
+.pub-subnav {
+  position: sticky; top: var(--hdr-h); z-index: 200;
+  display: flex; background: var(--bg);
+  border-bottom: 1px solid var(--bd);
+  padding: 0 4px; gap: 0;
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+}
+.pub-subnav-tab {
+  flex: 1; background: transparent; border: none;
+  border-bottom: 2px solid transparent; color: var(--txt2);
+  font-family: var(--ff); font-size: .72rem; font-weight: 700;
+  padding: 10px 4px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 5px;
+  letter-spacing: .3px; text-transform: uppercase;
+  transition: color .15s, border-color .15s;
+}
+.pub-subnav-tab.active       { color: var(--g);  border-bottom-color: var(--g); }
+.pub-subnav-tab.tab-video.active { color: var(--cy); border-bottom-color: var(--cy); }
+.pub-subnav-tab ion-icon { font-size: .9rem; }
+.pub-subnav-count {
+  font-size: .6rem; font-weight: 800; padding: 1px 6px;
+  border-radius: 999px; border: 1px solid;
+}
+.pub-subnav-tab.active .pub-subnav-count {
+  background: rgba(94,255,67,.15); color: var(--g); border-color: rgba(94,255,67,.25);
+}
+.pub-subnav-tab.tab-video.active .pub-subnav-count {
+  background: rgba(0,242,255,.15); color: var(--cy); border-color: rgba(0,242,255,.25);
+}
+.pub-subnav-tab:not(.active) .pub-subnav-count {
+  background: rgba(255,255,255,.05); color: var(--txt3); border-color: rgba(255,255,255,.08);
+}
+.pub-panel { display: none; }
+.pub-panel.active { display: block; }
+
+/* Card de video — full-width, YouTube-style */
+.item-card--video {
+  grid-column: 1 / -1; flex-direction: column;
+  border-color: rgba(0,242,255,.15); background: var(--bg1);
+}
+.item-card--video .thumb-wrap {
+  width: 100%; aspect-ratio: 16/9;
+  border-radius: var(--card-r) var(--card-r) 0 0;
+  overflow: hidden; position: relative;
+}
+.item-card--video:hover { border-color: rgba(0,242,255,.45); box-shadow: 0 8px 28px rgba(0,242,255,.08); }
+.video-play-overlay {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.28); pointer-events: none;
+}
+.video-play-overlay ion-icon { font-size: 2.4rem; color: rgba(255,255,255,.9); filter: drop-shadow(0 2px 8px rgba(0,0,0,.6)); }
+.video-type-badge {
+  position: absolute; bottom: 6px; left: 6px;
+  padding: 2px 8px; background: rgba(0,242,255,.85); color: #000;
+  font-size: .58rem; font-weight: 800; letter-spacing: .5px;
+  text-transform: uppercase; border-radius: 999px;
+  backdrop-filter: blur(6px); pointer-events: none;
+}
+.video-dur-badge {
+  position: absolute; bottom: 6px; right: 6px;
+  background: rgba(0,0,0,.82); color: #fff;
+  font-size: .58rem; font-weight: 800; font-family: var(--ff-mono);
+  padding: 2px 6px; border-radius: 4px;
+  backdrop-filter: blur(4px); pointer-events: none;
+}
+.item-card--video .item-info { flex-direction: row; gap: 10px; align-items: flex-start; padding: 10px 12px 12px; }
+.vid-avatar {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--cy), var(--g));
+  display: flex; align-items: center; justify-content: center;
+  font-size: .72rem; font-weight: 900; color: #000; flex-shrink: 0; margin-top: 1px;
+}
+.vid-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.vid-body .item-title { font-size: .85rem; }
+.vid-meta { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; font-size: .69rem; color: var(--txt3); }
+.vid-meta .vid-dot { color: var(--txt3); font-size: .75rem; }
+.vid-meta .vid-views { display:flex; align-items:center; gap:3px; }
+.vid-meta .vid-views ion-icon { font-size: .75rem; }
+.vid-meta .vid-likes { display:flex; align-items:center; gap:3px; color:#ff4d6a; }
+.vid-meta .vid-likes ion-icon { font-size: .75rem; }
     </style>
 
     <!-- ╔══════════════════════════════════════════════╗
@@ -609,7 +692,30 @@ display:block;
             </h3>
             <span class="section-count" id="pub-count"></span>
         </div>
-        <div id="user-items" class="items-grid"></div>
+
+        <!-- Sub-nav Publicaciones / Videos -->
+        <nav class="pub-subnav" id="pub-subnav">
+            <button class="pub-subnav-tab active" id="tab-btn-pub" onclick="pubSwitchTab('publicaciones', this)">
+                <ion-icon name="grid-outline"></ion-icon>
+                Publicaciones
+                <span class="pub-subnav-count" id="pub-subnav-count-pub">0</span>
+            </button>
+            <button class="pub-subnav-tab tab-video" id="tab-btn-vid" onclick="pubSwitchTab('videos', this)">
+                <ion-icon name="play-circle-outline"></ion-icon>
+                Videos
+                <span class="pub-subnav-count" id="pub-subnav-count-vid">0</span>
+            </button>
+        </nav>
+
+        <!-- Panel: Publicaciones (no video) -->
+        <div class="pub-panel active" id="pub-panel-publicaciones">
+            <div id="user-items" class="items-grid"></div>
+        </div>
+
+        <!-- Panel: Videos -->
+        <div class="pub-panel" id="pub-panel-videos">
+            <div id="user-videos" class="items-grid"></div>
+        </div>
     </div>
 
     <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
@@ -720,78 +826,144 @@ display:block;
             }
         }
 
-        // ✅ CARGAR PUBLICACIONES
+        // ── Sub-nav switch ──
+        function pubSwitchTab(tab, el) {
+            document.querySelectorAll('.pub-subnav-tab').forEach(t => t.classList.remove('active'));
+            if(el) el.classList.add('active');
+            document.getElementById('pub-panel-publicaciones').classList.toggle('active', tab === 'publicaciones');
+            document.getElementById('pub-panel-videos').classList.toggle('active', tab === 'videos');
+        }
+
+        // ✅ CARGAR PUBLICACIONES — separadas en Juegos y Videos
         async function cargarPublicaciones() {
             try {
                 const response = await fetchAPI(`${API_URL}/items/user/${usuarioViendo}`);
-                
-                // ⭐ Si el usuario viendo es el autor, mostrar TODAS sus publicaciones (incluyendo caídas)
-                // Si es otro usuario, solo mostrar las aprobadas
+
                 const esAutor = usuarioActual && usuarioActual.toLowerCase() === usuarioViendo.toLowerCase();
-                const itemsUsuario = Array.isArray(response) 
+                const todos = Array.isArray(response)
                     ? (esAutor ? response : response.filter(item => item.status === 'aprobado'))
                     : [];
 
-                console.log(`📦 Publicaciones de ${usuarioViendo}:`, itemsUsuario.length);
+                const juegos = todos.filter(i => i.category !== 'Video');
+                const videos = todos.filter(i => i.category === 'Video');
 
-                const container = document.getElementById('user-items');
+                console.log(`📦 Publicaciones de ${usuarioViendo}: ${juegos.length} juegos, ${videos.length} videos`);
 
-                // Actualizar contador
+                // Actualizar contadores del sub-nav
+                document.getElementById('pub-subnav-count-pub').textContent = juegos.length;
+                document.getElementById('pub-subnav-count-vid').textContent = videos.length;
+
+                // Actualizar contador del header (total)
+                const total = todos.length;
                 const countEl = document.getElementById('pub-count');
-                if (countEl) countEl.textContent = itemsUsuario.length > 0 ? `${itemsUsuario.length} resultados` : '';
+                if(countEl) countEl.textContent = total > 0 ? `${total} resultados` : '';
 
-                if (itemsUsuario.length === 0) {
-                    container.innerHTML = `
+                // Ocultar sub-nav si no hay videos
+                if(videos.length === 0) {
+                    document.getElementById('pub-subnav').style.display = 'none';
+                }
+
+                // ── Renderizar JUEGOS ──
+                const contJuegos = document.getElementById('user-items');
+                if(!juegos.length) {
+                    contJuegos.innerHTML = `
                         <div class="empty-msg">
                             <ion-icon name="cloud-offline-outline"></ion-icon>
                             <h3>Sin publicaciones</h3>
                             <p>Este usuario aún no ha publicado nada.</p>
-                        </div>
-                    `;
-                    return;
-                }
+                        </div>`;
+                } else {
+                    contJuegos.innerHTML = '';
+                    juegos.forEach((item, idx) => {
+                        const descargas = item.descargasEfectivas || 0;
+                        const likes = item.likesCount || 0;
+                        const linkStatus = item.linkStatus || 'online';
+                        const linkStatusText = linkStatus === 'online' ? 'Online'
+                            : linkStatus === 'revision' ? 'Revisión' : 'Caído';
 
-                container.innerHTML = '';
-
-                itemsUsuario.forEach((item, idx) => {
-                    // ⭐ AGREGAR ESTADÍSTICAS DE DESCARGAS
-                    const descargas = item.descargasEfectivas || 0;
-                    const linkStatus = item.linkStatus || 'online';
-                    const linkStatusText = linkStatus === 'online' ? 'Online' : 
-                                           linkStatus === 'revision' ? 'Revisión' : 
-                                           'Caído';
-
-                    const card = document.createElement('div');
-                    card.className = 'item-card';
-                    card.style.animationDelay = `${idx * 40}ms`;
-                    card.onclick = () => {
-                        window.location.href = `./biblioteca.html?id=${item._id}`;
-                    };
-
-                    card.innerHTML = `
-                        <div class="thumb-wrap">
-                            <img src="${item.image || 'https://via.placeholder.com/300x170/12121f/555570?text=Sin+Imagen'}" 
-                                 alt="${item.title}" 
-                                 onerror="this.src='https://via.placeholder.com/300x170/12121f/555570?text=Sin+Imagen'">
-                            <div class="item-link-badge ${linkStatus}">
-                                <span class="item-link-dot"></span>
-                                ${linkStatusText}
-                            </div>
-                        </div>
-                        <div class="item-info">
-                            <div class="item-category">${item.category || 'General'}</div>
-                            <div class="item-title">${item.title}</div>
-                            <div class="item-stats">
-                                <div class="item-stat">
-                                    <ion-icon name="cloud-download-outline"></ion-icon>
-                                    <span class="item-stat-val">${descargas >= 1000 ? (descargas/1000).toFixed(1)+'K' : descargas}</span>
+                        const card = document.createElement('div');
+                        card.className = 'item-card';
+                        card.style.animationDelay = `${idx * 40}ms`;
+                        card.onclick = () => { window.location.href = `./biblioteca.html?id=${item._id}`; };
+                        card.innerHTML = `
+                            <div class="thumb-wrap">
+                                <img src="${item.image || 'https://via.placeholder.com/300x170/12121f/555570?text=Sin+Imagen'}"
+                                     alt="${item.title}"
+                                     onerror="this.src='https://via.placeholder.com/300x170/12121f/555570?text=Sin+Imagen'">
+                                <div class="item-link-badge ${linkStatus}">
+                                    <span class="item-link-dot"></span>
+                                    ${linkStatusText}
                                 </div>
                             </div>
-                        </div>
-                    `;
+                            <div class="item-info">
+                                <div class="item-category">${item.category || 'General'}</div>
+                                <div class="item-title">${item.title}</div>
+                                <div class="item-stats">
+                                    <div class="item-stat">
+                                        <ion-icon name="cloud-download-outline"></ion-icon>
+                                        <span class="item-stat-val">${descargas >= 1000 ? (descargas/1000).toFixed(1)+'K' : descargas}</span>
+                                    </div>
+                                    ${likes > 0 ? `<div class="item-stat" style="color:#ff4d6a">
+                                        <ion-icon name="heart" style="color:#ff4d6a"></ion-icon>
+                                        <span class="item-stat-val" style="color:#ff4d6a">${likes >= 1000 ? (likes/1000).toFixed(1)+'K' : likes}</span>
+                                    </div>` : ''}
+                                </div>
+                            </div>`;
+                        contJuegos.appendChild(card);
+                    });
+                }
 
-                    container.appendChild(card);
-                });
+                // ── Renderizar VIDEOS ──
+                const contVideos = document.getElementById('user-videos');
+                if(!videos.length) {
+                    contVideos.innerHTML = `
+                        <div class="empty-msg">
+                            <ion-icon name="videocam-off-outline"></ion-icon>
+                            <h3>Sin videos</h3>
+                            <p>Este usuario aún no ha publicado videos.</p>
+                        </div>`;
+                } else {
+                    contVideos.innerHTML = '';
+                    videos.forEach((item, idx) => {
+                        const vistas = item.descargasEfectivas || 0;
+                        const likes  = item.likesCount || 0;
+                        const duracion = item.extraData?.duracion || '';
+                        const linkStatus = item.linkStatus || 'online';
+
+                        const fmtN = n => n >= 1000 ? (n/1000).toFixed(1)+'K' : n;
+                        const avatarLetter = (item.usuario || '?')[0].toUpperCase();
+
+                        const card = document.createElement('div');
+                        card.className = 'item-card item-card--video';
+                        card.style.animationDelay = `${idx * 40}ms`;
+                        card.onclick = () => { window.location.href = `./biblioteca.html?id=${item._id}`; };
+                        card.innerHTML = `
+                            <div class="thumb-wrap">
+                                <img src="${item.image || 'https://via.placeholder.com/600x338/07070f/00f2ff?text=VIDEO'}"
+                                     alt="${item.title}"
+                                     onerror="this.src='https://via.placeholder.com/600x338/07070f/00f2ff?text=VIDEO'">
+                                <div class="video-play-overlay"><ion-icon name="play-circle"></ion-icon></div>
+                                <div class="item-link-badge ${linkStatus}">
+                                    <span class="item-link-dot"></span>
+                                    ${linkStatus === 'online' ? 'Online' : linkStatus === 'revision' ? 'Revisión' : 'Caído'}
+                                </div>
+                                ${item.videoType ? `<div class="video-type-badge">${item.videoType}</div>` : ''}
+                                ${duracion ? `<div class="video-dur-badge">${duracion}</div>` : ''}
+                            </div>
+                            <div class="item-info">
+                                <div class="vid-avatar">${avatarLetter}</div>
+                                <div class="vid-body">
+                                    <div class="item-title">${item.title}</div>
+                                    <div class="vid-meta">
+                                        ${vistas > 0 ? `<span class="vid-views"><ion-icon name="eye-outline"></ion-icon>${fmtN(vistas)}</span>` : ''}
+                                        ${vistas > 0 && likes > 0 ? `<span class="vid-dot">·</span>` : ''}
+                                        ${likes > 0 ? `<span class="vid-likes"><ion-icon name="heart"></ion-icon>${fmtN(likes)}</span>` : ''}
+                                    </div>
+                                </div>
+                            </div>`;
+                        contVideos.appendChild(card);
+                    });
+                }
 
             } catch (error) {
                 console.error("❌ Error cargando publicaciones:", error);
@@ -800,8 +972,7 @@ display:block;
                         <ion-icon name="warning-outline"></ion-icon>
                         <h3>Error</h3>
                         <p>No se pudieron cargar las publicaciones</p>
-                    </div>
-                `;
+                    </div>`;
             }
         }
 
