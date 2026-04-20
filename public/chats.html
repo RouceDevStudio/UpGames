@@ -1043,13 +1043,21 @@ async function sendMessage() {
     });
     const data = await r.json();
     if (!data.success) {
-      toast('❌ ' + (data.error || 'Error al enviar'));
-      inp.value = text; // devolver texto si falla
+      // Si el backend no tiene la ruta todavía
+      const msg = data.error || 'Error al enviar';
+      if (r.status === 404) {
+        toast('⚠️ Actualiza el servidor (index.js)');
+      } else if (msg.includes('mutuamente')) {
+        toast('⚠️ Solo puedes chatear con seguidores mutuos');
+      } else {
+        toast('❌ ' + msg);
+      }
+      inp.value = text;
     } else {
       lastMsgTs = new Date(data.mensaje.fecha).getTime();
     }
   } catch (_) {
-    toast('❌ Sin conexión');
+    toast('❌ Sin conexión al servidor');
     inp.value = text;
   } finally {
     btnSend.disabled = false;
@@ -1140,12 +1148,24 @@ function requestNotifPermission() {
 // ══════════════════════════════════════════════════════
 async function init() {
   requestNotifPermission();
-  await loadConvList();
 
-  // Polling lista cada 8s
+  // Verificar que el backend tiene las rutas de chat
+  try {
+    const probe = await fetch(`${API_URL}/chat/no-leidos`, { headers: authH() });
+    if (probe.status === 404) {
+      document.getElementById('conv-list').innerHTML = `
+        <div class="empty-chats" style="color:#ffcc00">
+          <ion-icon name="warning-outline" style="color:#ffcc00;font-size:2rem"></ion-icon>
+          <h3 style="color:#ffcc00">Backend desactualizado</h3>
+          <p>Sube el nuevo <strong>index.js</strong> a Railway para activar los chats en tiempo real.</p>
+        </div>`;
+      return;
+    }
+  } catch (_) {}
+
+  await loadConvList();
   setInterval(loadConvList, 8000);
 
-  // Si viene con ?usuario=X, abrir directamente
   const target = new URLSearchParams(window.location.search).get('usuario');
   if (target?.trim()) setTimeout(() => openChat(target.trim()), 120);
 }
