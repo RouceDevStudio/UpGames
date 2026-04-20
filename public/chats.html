@@ -641,24 +641,18 @@ textarea { font-family:inherit; resize:none; }
       display:none;align-items:center;justify-content:center;padding:0 5px">0</div>
   </header>
 
-  <!-- Banner temporal (se cierra y guarda en LS) -->
-  <div class="temp-banner" id="temp-banner-list">
-    <ion-icon name="time-outline"></ion-icon>
-    <div class="temp-banner-text">
-      <strong>⚡ Chats temporales</strong>
-      Los mensajes se guardan en este dispositivo y se perderán si limpias el caché o usas modo incógnito. No hay servidor.
-    </div>
-    <button class="temp-banner-close" onclick="dismissBanner('list')" aria-label="Cerrar aviso">
-      <ion-icon name="close-outline"></ion-icon>
-    </button>
-  </div>
-
-  <!-- Buscador -->
-  <div class="search-bar-wrap">
-    <div class="search-inner">
+  <!-- Buscador + botón vaciar -->
+  <div class="search-bar-wrap" style="display:flex;gap:8px;align-items:center;">
+    <div class="search-inner" style="flex:1">
       <ion-icon name="search-outline"></ion-icon>
       <input type="text" id="list-search" placeholder="Buscar conversación..." oninput="filterConvList(this.value)" autocomplete="off">
     </div>
+    <button id="btn-vaciar-todo" onclick="vaciarTodosChats()" title="Vaciar todos los chats"
+      style="flex-shrink:0;width:38px;height:38px;border-radius:10px;border:1px solid rgba(255,67,67,.25);
+        background:rgba(255,67,67,.08);color:#ff6b6b;display:flex;align-items:center;justify-content:center;
+        font-size:1.1rem;cursor:pointer;transition:background .15s;">
+      <ion-icon name="trash-outline"></ion-icon>
+    </button>
   </div>
 
   <!-- Lista -->
@@ -677,32 +671,24 @@ textarea { font-family:inherit; resize:none; }
     <button class="hdr-back" onclick="closeChat()" aria-label="Volver a chats">
       <ion-icon name="arrow-back-outline"></ion-icon>
     </button>
-    <div id="chat-contact-avatar">?</div>
+    <div id="chat-contact-avatar" class="conv-avatar" style="width:34px;height:34px;font-size:.85rem;">?</div>
     <div class="hdr-contact">
       <div class="hdr-title" id="chat-contact-name">Usuario</div>
-      <div class="hdr-sub">@<span id="chat-contact-sub"></span></div>
+      <div class="hdr-sub" id="chat-contact-status">En línea</div>
     </div>
     <div class="hdr-actions">
       <button class="hdr-icon-btn" onclick="goToProfile()" title="Ver perfil" aria-label="Ver perfil">
         <ion-icon name="person-circle-outline"></ion-icon>
       </button>
-      <button class="hdr-icon-btn" onclick="confirmDeleteChat()" title="Borrar chat" aria-label="Borrar conversación">
+      <button class="hdr-icon-btn" onclick="confirmDeleteContact()" title="Eliminar contacto" aria-label="Eliminar contacto"
+        style="color:#ff6b6b">
+        <ion-icon name="person-remove-outline"></ion-icon>
+      </button>
+      <button class="hdr-icon-btn" onclick="confirmDeleteChat()" title="Borrar mensajes" aria-label="Borrar mensajes">
         <ion-icon name="trash-outline"></ion-icon>
       </button>
     </div>
   </header>
-
-  <!-- Banner temporal en el chat -->
-  <div class="temp-banner" id="temp-banner-chat" style="display:none">
-    <ion-icon name="time-outline"></ion-icon>
-    <div class="temp-banner-text">
-      <strong>⚡ Chat temporal</strong>
-      Solo existe en este dispositivo. El otro usuario no recibirá tus mensajes en tiempo real.
-    </div>
-    <button class="temp-banner-close" onclick="dismissBanner('chat')" aria-label="Cerrar aviso">
-      <ion-icon name="close-outline"></ion-icon>
-    </button>
-  </div>
 
   <!-- Área de mensajes -->
   <div id="chat-messages"></div>
@@ -722,24 +708,18 @@ textarea { font-family:inherit; resize:none; }
 
 
 <!-- ══════════════════════════════════
-  MODAL — aviso primer chat
+  MODAL — confirmación genérica
 ══════════════════════════════════ -->
-<div class="modal-overlay" id="first-chat-modal">
+<div class="modal-overlay" id="confirm-modal">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
-    <div class="modal-icon">💬</div>
-    <div class="modal-title">Antes de chatear…</div>
-    <div class="modal-body">
-      Estás a punto de abrir un chat con <strong id="modal-contact-name" style="color:var(--g)">@usuario</strong>
-    </div>
-    <div class="modal-warn">
-      <ion-icon name="warning-outline"></ion-icon>
-      <span><strong>Chats 100% temporales.</strong> Los mensajes se almacenan solo en este navegador/dispositivo. Si limpias datos o usas modo incógnito, se perderán para siempre. No hay sincronización entre dispositivos ni servidor.</span>
-    </div>
-    <button class="modal-btn primary" onclick="acceptFirstChat()">
-      <ion-icon name="chatbubble-ellipses-outline"></ion-icon> Entendido, abrir chat
+    <div class="modal-icon" id="confirm-modal-icon">⚠️</div>
+    <div class="modal-title" id="confirm-modal-title"></div>
+    <div class="modal-body" id="confirm-modal-body"></div>
+    <button class="modal-btn primary" id="confirm-modal-ok" style="background:rgba(255,67,67,.15);border-color:rgba(255,67,67,.3);color:#ff4343;">
+      Confirmar
     </button>
-    <button class="modal-btn secondary" onclick="closeFirstChatModal()">Cancelar</button>
+    <button class="modal-btn secondary" onclick="closeConfirmModal()">Cancelar</button>
   </div>
 </div>
 
@@ -752,428 +732,424 @@ textarea { font-family:inherit; resize:none; }
 
 <script>
 /* ═══════════════════════════════════════════════════
-   CHATS — UpGames · localStorage only
-   Estructura LS:
-   upgames_chats_v1 = {
-     [contactUsername]: {
-       messages: [{ id, from, text, ts, read }],
-       createdAt: timestamp
-     }
-   }
-   upgames_chat_banner_dismissed = { list:bool, chat:bool }
+   CHATS — UpGames · API Real + Polling + Notificaciones
 ═══════════════════════════════════════════════════ */
-const ME       = localStorage.getItem('user_admin') || 'yo';
-const LS_KEY   = 'upgames_chats_v1';
-const LS_BANNER= 'upgames_chat_banner_v1';
+const API_URL = 'https://upgames-production.up.railway.app';
+const ME      = localStorage.getItem('user_admin') || '';
+const TOKEN   = localStorage.getItem('token')      || '';
 
-let currentContact = null;   // username del chat abierto
-let pendingContact  = null;   // username pendiente de confirmar (modal)
-let allContacts     = [];     // cache para búsqueda
+if (!ME || !TOKEN) { location.replace('../index.html'); }
 
-// ── Helpers localStorage ─────────────────────────────
-function loadChats() {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch(_) { return {}; }
-}
-function saveChats(data) {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch(_) {}
-}
-function getBanners() {
-  try { return JSON.parse(localStorage.getItem(LS_BANNER) || '{}'); } catch(_) { return {}; }
-}
-function saveBanners(b) {
-  try { localStorage.setItem(LS_BANNER, JSON.stringify(b)); } catch(_) {}
-}
+let currentContact  = null;
+let allContacts     = [];
+let pollingTimer    = null;
+let lastMsgTs       = 0;   // timestamp del último mensaje recibido (polling incremental)
 
-// ── Formato de tiempo ────────────────────────────────
-function fmtTime(ts) {
-  const d = new Date(ts);
-  const now = new Date();
-  const diff = now - d;
-  const MINUTE = 60000, HOUR = 3600000, DAY = 86400000;
-  if (diff < MINUTE)   return 'ahora';
-  if (diff < HOUR)     return `${Math.floor(diff/MINUTE)}m`;
-  if (diff < DAY)      return d.toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit' });
-  if (diff < DAY*2)    return 'ayer';
-  if (diff < DAY*7)    return ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][d.getDay()];
-  return d.toLocaleDateString('es-ES', { day:'2-digit', month:'2-digit' });
+// ── Helpers ──────────────────────────────────────────
+function authH() {
+  return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` };
 }
-function fmtHour(ts) {
-  return new Date(ts).toLocaleTimeString('es-ES', { hour:'2-digit', minute:'2-digit' });
+function escapeHTML(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-function fmtDateSep(ts) {
-  const d = new Date(ts);
-  const now = new Date();
-  const diff = now - d;
-  if (diff < 86400000 && now.getDate() === d.getDate()) return 'Hoy';
+function avatarLetter(u) { return (u || '?')[0].toUpperCase(); }
+function fmtTime(iso) {
+  const d = new Date(iso), now = new Date(), diff = now - d;
+  const M=60000, H=3600000, D=86400000;
+  if (diff < M)     return 'ahora';
+  if (diff < H)     return Math.floor(diff/M) + 'm';
+  if (diff < D)     return d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+  if (diff < D*2)   return 'ayer';
+  if (diff < D*7)   return ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][d.getDay()];
+  return d.toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit'});
+}
+function fmtHour(iso) {
+  return new Date(iso).toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'});
+}
+function fmtDateSep(iso) {
+  const d = new Date(iso), now = new Date(), diff = now - d;
+  if (diff < 86400000 && now.getDate()===d.getDate()) return 'Hoy';
   if (diff < 172800000) return 'Ayer';
-  return d.toLocaleDateString('es-ES', { weekday:'long', day:'numeric', month:'long' });
+  return d.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'});
 }
-
-// ── Avatar letter ────────────────────────────────────
-function avatarLetter(u) { return (u||'?')[0].toUpperCase(); }
-
-// ── Toast ─────────────────────────────────────────────
-function toast(msg, dur=2400) {
+function toast(msg, dur=2600) {
   const box = document.getElementById('toast-box');
-  const t   = document.createElement('div');
+  const t = document.createElement('div');
   t.className = 'toast-item';
   t.textContent = msg;
   box.appendChild(t);
-  setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 280); }, dur);
+  setTimeout(()=>{ t.classList.add('out'); setTimeout(()=>t.remove(),280); }, dur);
 }
 
-// ── Banners ──────────────────────────────────────────
-function dismissBanner(which) {
-  const b = getBanners();
-  b[which] = true;
-  saveBanners(b);
-  const el = document.getElementById(`temp-banner-${which}`);
-  if (el) { el.style.transition='opacity .25s'; el.style.opacity='0'; setTimeout(()=>el.remove(),260); }
+// ── Modal de confirmación ─────────────────────────────
+let _confirmCb = null;
+function showConfirm(icon, title, body, cb) {
+  document.getElementById('confirm-modal-icon').textContent  = icon;
+  document.getElementById('confirm-modal-title').textContent = title;
+  document.getElementById('confirm-modal-body').innerHTML    = body;
+  _confirmCb = cb;
+  document.getElementById('confirm-modal-ok').onclick = () => { closeConfirmModal(); cb && cb(); };
+  document.getElementById('confirm-modal').classList.add('show');
 }
-function initBanners() {
-  const b = getBanners();
-  if (b.list) { const el = document.getElementById('temp-banner-list'); if(el) el.style.display='none'; }
+function closeConfirmModal() {
+  document.getElementById('confirm-modal').classList.remove('show');
 }
+document.getElementById('confirm-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeConfirmModal();
+});
 
 // ══════════════════════════════════════════════════════
-// VISTA LISTA
+// LISTA DE CONVERSACIONES (polling cada 8s)
 // ══════════════════════════════════════════════════════
-function renderConvList(filter='') {
-  const data    = loadChats();
-  const listEl  = document.getElementById('conv-list');
-  const q       = filter.toLowerCase().trim();
+async function loadConvList() {
+  try {
+    const r = await fetch(`${API_URL}/chat/conversaciones`, { headers: authH() });
+    if (!r.ok) return;
+    const data = await r.json();
+    if (!data.success) return;
+    allContacts = data.conversaciones || [];
+    renderConvList(document.getElementById('list-search')?.value || '');
+  } catch (_) {}
+}
 
-  // Ordenar por último mensaje (más reciente primero)
-  allContacts = Object.entries(data)
-    .map(([username, chat]) => {
-      const msgs    = chat.messages || [];
-      const last    = msgs[msgs.length - 1] || null;
-      const unread  = msgs.filter(m => m.from !== ME && !m.read).length;
-      return { username, last, unread, msgs };
-    })
-    .sort((a, b) => {
-      const ta = a.last?.ts || 0;
-      const tb = b.last?.ts || 0;
-      return tb - ta;
-    });
+function renderConvList(filter = '') {
+  const listEl = document.getElementById('conv-list');
+  const q = filter.toLowerCase().trim();
 
   const filtered = q
-    ? allContacts.filter(c => c.username.toLowerCase().includes(q))
+    ? allContacts.filter(c => c.contacto.toLowerCase().includes(q))
     : allContacts;
+
+  // Badge total no leídos
+  const totalUnread = allContacts.reduce((a, c) => a + (c.noLeidos || 0), 0);
+  const badge = document.getElementById('hdr-unread-total');
+  if (badge) {
+    badge.style.display = totalUnread > 0 ? 'flex' : 'none';
+    badge.textContent = totalUnread > 99 ? '99+' : totalUnread;
+  }
 
   if (!filtered.length) {
     listEl.innerHTML = '';
     const empty = document.createElement('div');
     empty.className = 'empty-chats';
-    if (q) {
-      empty.innerHTML = `
-        <ion-icon name="search-outline"></ion-icon>
-        <h3>Sin resultados</h3>
-        <p>No hay ningún chat con "<strong>${q}</strong>"</p>`;
-    } else {
-      empty.innerHTML = `
-        <ion-icon name="chatbubbles-outline"></ion-icon>
-        <h3>Sin conversaciones aún</h3>
-        <p>Visita el perfil de alguien que sigas y toca <strong>Mensaje</strong> para empezar a chatear.</p>
-        <a href="./biblioteca.html"><ion-icon name="arrow-back-outline"></ion-icon> Ir a la Biblioteca</a>`;
-    }
+    empty.innerHTML = q
+      ? `<ion-icon name="search-outline"></ion-icon><h3>Sin resultados</h3><p>No hay chat con "<strong>${q}</strong>"</p>`
+      : `<ion-icon name="chatbubbles-outline"></ion-icon><h3>Sin conversaciones</h3>
+         <p>Visita el perfil de alguien que sigas y toca <strong>Mensaje</strong>.</p>
+         <a href="./biblioteca.html"><ion-icon name="arrow-back-outline"></ion-icon> Ir a la Biblioteca</a>`;
     listEl.appendChild(empty);
     return;
   }
 
   listEl.innerHTML = '';
-  filtered.forEach(({ username, last, unread }) => {
+  filtered.forEach(({ contacto, ultimoMensaje, noLeidos }) => {
     const item = document.createElement('div');
-    item.className = 'conv-item' + (unread > 0 ? ' unread' : '');
-    item.dataset.user = username;
+    item.className = 'conv-item' + (noLeidos > 0 ? ' unread' : '');
+    item.dataset.user = contacto;
 
-    const lastText = last
-      ? (last.from === ME ? last.text : last.text).substring(0, 55)
-      : 'Inicia la conversación…';
-    const isMine   = last && last.from === ME;
+    const lastText  = ultimoMensaje ? ultimoMensaje.texto.substring(0, 55) : 'Inicia la conversación…';
+    const isMine    = ultimoMensaje?.de === ME;
+    const timeStr   = ultimoMensaje ? fmtTime(ultimoMensaje.fecha) : '';
 
     item.innerHTML = `
-      <div class="conv-avatar">${avatarLetter(username)}</div>
+      <div class="conv-avatar">${avatarLetter(contacto)}</div>
       <div class="conv-body">
         <div class="conv-row1">
-          <div class="conv-name">@${username}</div>
-          <div class="conv-time">${last ? fmtTime(last.ts) : ''}</div>
+          <div class="conv-name">@${contacto}</div>
+          <div class="conv-time">${timeStr}</div>
         </div>
         <div class="conv-row2">
-          <div class="conv-last-msg ${isMine ? 'mine' : ''}">${lastText}</div>
-          ${unread > 0 ? `<div class="conv-unread-badge">${unread > 99 ? '99+' : unread}</div>` : ''}
+          <div class="conv-last-msg ${isMine ? 'mine' : ''}">${isMine ? '↑ ' : ''}${escapeHTML(lastText)}</div>
+          ${noLeidos > 0 ? `<div class="conv-unread-badge">${noLeidos > 99 ? '99+' : noLeidos}</div>` : ''}
         </div>
       </div>`;
 
-    item.addEventListener('click', () => openChat(username));
+    item.addEventListener('click', () => openChat(contacto));
     listEl.appendChild(item);
   });
-
-  // Badge total en header
-  const totalUnread = allContacts.reduce((a, c) => a + c.unread, 0);
-  const badge = document.getElementById('hdr-unread-total');
-  if (badge) {
-    if (totalUnread > 0) {
-      badge.style.display = 'flex';
-      badge.textContent = totalUnread > 99 ? '99+' : totalUnread;
-    } else {
-      badge.style.display = 'none';
-    }
-  }
 }
 
-function filterConvList(q) {
-  renderConvList(q);
-}
+function filterConvList(q) { renderConvList(q); }
 
 // ══════════════════════════════════════════════════════
-// ABRIR CHAT
+// ABRIR / CERRAR CHAT
 // ══════════════════════════════════════════════════════
-function openChat(username) {
-  const data = loadChats();
-  // Si ya hay historial, abrir directamente
-  if (data[username] && data[username].messages && data[username].messages.length > 0) {
-    _doOpenChat(username);
-    return;
-  }
-  // Primera vez: mostrar modal de aviso
-  pendingContact = username;
-  document.getElementById('modal-contact-name').textContent = '@' + username;
-  document.getElementById('first-chat-modal').classList.add('show');
-}
-
-function acceptFirstChat() {
-  closeFirstChatModal();
-  if (pendingContact) {
-    _doOpenChat(pendingContact);
-    pendingContact = null;
-  }
-}
-function closeFirstChatModal() {
-  document.getElementById('first-chat-modal').classList.remove('show');
-}
-
-function _doOpenChat(username) {
+async function openChat(username) {
   currentContact = username;
+  lastMsgTs = 0;
 
-  // Marcar mensajes como leídos
-  const data = loadChats();
-  if (data[username]) {
-    (data[username].messages || []).forEach(m => { if (m.from !== ME) m.read = true; });
-    saveChats(data);
-  }
-
-  // Actualizar header
   document.getElementById('chat-contact-avatar').textContent = avatarLetter(username);
-  document.getElementById('chat-contact-name').textContent = '@' + username;
-  document.getElementById('chat-contact-sub').textContent = username;
+  document.getElementById('chat-contact-name').textContent   = '@' + username;
+  document.getElementById('chat-contact-status').textContent = 'cargando…';
+  document.getElementById('chat-messages').innerHTML = `
+    <div style="margin:auto;text-align:center;padding:40px 20px;color:var(--txt3);font-size:.8rem">
+      <ion-icon name="ellipsis-horizontal" style="font-size:1.5rem;animation:spinAnim 1s linear infinite"></ion-icon>
+    </div>`;
 
-  // Banner chat
-  const b = getBanners();
-  const bannerEl = document.getElementById('temp-banner-chat');
-  if (bannerEl) bannerEl.style.display = b.chat ? 'none' : 'flex';
-
-  // Renderizar mensajes
-  renderMessages(username);
-
-  // Abrir vista
   document.getElementById('view-chat').classList.add('open');
-  document.body.style.overflow = 'hidden';
 
-  // Focus en input
-  setTimeout(() => {
-    const inp = document.getElementById('chat-input');
-    if (inp) inp.focus();
-  }, 350);
+  await fetchMessages(username, true);
+
+  // Polling de mensajes nuevos cada 3s
+  clearInterval(pollingTimer);
+  pollingTimer = setInterval(() => pollNewMessages(username), 3000);
 }
 
 function closeChat() {
-  document.getElementById('view-chat').classList.remove('open');
+  clearInterval(pollingTimer);
+  pollingTimer = null;
   currentContact = null;
-  // Refresh lista
-  renderConvList(document.getElementById('list-search')?.value || '');
+  document.getElementById('view-chat').classList.remove('open');
+  loadConvList();
 }
 
 // ══════════════════════════════════════════════════════
-// RENDER MENSAJES
+// CARGAR / RENDERIZAR MENSAJES
 // ══════════════════════════════════════════════════════
-function renderMessages(username) {
-  const data     = loadChats();
-  const msgs     = (data[username]?.messages) || [];
-  const container = document.getElementById('chat-messages');
-  container.innerHTML = '';
+async function fetchMessages(username, fullLoad = false) {
+  try {
+    const url = fullLoad
+      ? `${API_URL}/chat/mensajes/${username}`
+      : `${API_URL}/chat/mensajes/${username}?desde=${lastMsgTs}`;
+    const r = await fetch(url, { headers: authH() });
+    if (!r.ok) return;
+    const data = await r.json();
+    if (!data.success) return;
 
-  if (!msgs.length) {
-    container.innerHTML = `
-      <div style="margin:auto;text-align:center;padding:40px 20px;color:var(--txt3);font-size:.8rem;line-height:1.6">
-        <div style="font-size:2rem;margin-bottom:10px">👋</div>
-        <p>Sois mutuamente seguidores.<br>Empieza la conversación.</p>
-      </div>`;
-    return;
-  }
-
-  let lastDate = null;
-  msgs.forEach((msg, i) => {
-    const msgDate = fmtDateSep(msg.ts);
-    if (msgDate !== lastDate) {
-      lastDate = msgDate;
-      const sep = document.createElement('div');
-      sep.className = 'msg-date-sep';
-      sep.textContent = msgDate;
-      container.appendChild(sep);
+    const msgs = data.mensajes || [];
+    if (!msgs.length && fullLoad) {
+      document.getElementById('chat-messages').innerHTML = `
+        <div style="margin:auto;text-align:center;padding:40px 20px;color:var(--txt3);font-size:.8rem;line-height:1.6">
+          <div style="font-size:2rem;margin-bottom:10px">👋</div>
+          <p>Sois mutuamente seguidores.<br>Empieza la conversación.</p>
+        </div>`;
+      document.getElementById('chat-contact-status').textContent = 'en línea';
+      return;
     }
 
-    const isMine = msg.from === ME;
-    const wrap   = document.createElement('div');
-    wrap.className = `msg-bubble-wrap ${isMine ? 'sent' : 'recv'}`;
-    wrap.dataset.id = msg.id;
+    if (fullLoad) {
+      renderAllMessages(msgs);
+    } else if (msgs.length) {
+      appendNewMessages(msgs);
+    }
 
-    // Determinar si mostrar timestamp (solo en el último del grupo o si hay gap)
-    const next    = msgs[i + 1];
-    const showTs  = !next || next.from !== msg.from || (next.ts - msg.ts) > 180000;
+    // Guardar timestamp del más reciente
+    if (msgs.length) {
+      lastMsgTs = new Date(msgs[msgs.length - 1].fecha).getTime();
+    }
+    document.getElementById('chat-contact-status').textContent = 'en línea';
+  } catch (_) {
+    document.getElementById('chat-contact-status').textContent = 'sin conexión';
+  }
+}
 
-    wrap.innerHTML = `
-      <div class="msg-bubble">${escapeHTML(msg.text).replace(/\n/g,'<br>')}</div>
-      ${showTs ? `<div class="msg-time">
-        ${fmtHour(msg.ts)}
-        ${isMine ? '<ion-icon name="checkmark-done-outline" class="msg-check"></ion-icon>' : ''}
-      </div>` : ''}`;
+async function pollNewMessages(username) {
+  if (currentContact !== username) return;
+  await fetchMessages(username, false);
+}
 
-    container.appendChild(wrap);
+function renderAllMessages(msgs) {
+  const container = document.getElementById('chat-messages');
+  container.innerHTML = '';
+  let lastDate = null;
+  msgs.forEach((msg, i) => {
+    const dateStr = fmtDateSep(msg.fecha);
+    if (dateStr !== lastDate) {
+      lastDate = dateStr;
+      const sep = document.createElement('div');
+      sep.className = 'msg-date-sep';
+      sep.textContent = dateStr;
+      container.appendChild(sep);
+    }
+    const next   = msgs[i + 1];
+    const showTs = !next || next.de !== msg.de || (new Date(next.fecha) - new Date(msg.fecha)) > 180000;
+    container.appendChild(buildBubble(msg, showTs));
   });
-
-  // Scroll al fondo
   container.scrollTop = container.scrollHeight;
 }
 
-function escapeHTML(str) {
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function appendNewMessages(msgs) {
+  const container = document.getElementById('chat-messages');
+  // Quitar estado vacío
+  const emptyEl = container.querySelector('div[style*="margin:auto"]');
+  if (emptyEl) emptyEl.remove();
+
+  msgs.forEach(msg => {
+    const dateStr = fmtDateSep(msg.fecha);
+    const last = container.querySelector('.msg-date-sep:last-of-type');
+    if (!last || last.textContent !== dateStr) {
+      const sep = document.createElement('div');
+      sep.className = 'msg-date-sep';
+      sep.textContent = dateStr;
+      container.appendChild(sep);
+    }
+    container.appendChild(buildBubble(msg, true));
+  });
+  container.scrollTop = container.scrollHeight;
+
+  // Notificación si no está en foco
+  const recibidos = msgs.filter(m => m.de !== ME);
+  if (recibidos.length && document.hidden) {
+    const ultimo = recibidos[recibidos.length - 1];
+    if (Notification.permission === 'granted') {
+      new Notification(`💬 Mensaje de @${ultimo.de}`, {
+        body: ultimo.texto.substring(0, 80),
+        icon: '/favicon.png',
+        tag:  'chat-' + ultimo.de,
+        renotify: true
+      });
+    }
+  }
+}
+
+function buildBubble(msg, showTs) {
+  const isMine = msg.de === ME;
+  const wrap = document.createElement('div');
+  wrap.className = `msg-bubble-wrap ${isMine ? 'sent' : 'recv'}`;
+  wrap.dataset.id = msg.id;
+  wrap.innerHTML = `
+    <div class="msg-bubble">${escapeHTML(msg.texto).replace(/\n/g,'<br>')}</div>
+    ${showTs ? `<div class="msg-time">
+      ${fmtHour(msg.fecha)}
+      ${isMine ? `<ion-icon name="${msg.leido ? 'checkmark-done' : 'checkmark'}-outline" class="msg-check" style="color:${msg.leido ? 'var(--cy)' : 'var(--txt3)'}"></ion-icon>` : ''}
+    </div>` : ''}`;
+  return wrap;
 }
 
 // ══════════════════════════════════════════════════════
 // ENVIAR MENSAJE
 // ══════════════════════════════════════════════════════
-function sendMessage() {
+async function sendMessage() {
   if (!currentContact) return;
   const inp  = document.getElementById('chat-input');
   const text = inp.value.trim();
   if (!text) return;
 
-  const data = loadChats();
-  if (!data[currentContact]) {
-    data[currentContact] = { messages: [], createdAt: Date.now() };
-  }
-
-  const msg = {
-    id:   Date.now() + '-' + Math.random().toString(36).slice(2,7),
-    from: ME,
-    text,
-    ts:   Date.now(),
-    read: false
-  };
-
-  data[currentContact].messages.push(msg);
-  saveChats(data);
-
-  // Limpiar input
+  // Deshabilitar mientras envía
+  const btnSend = document.getElementById('btn-send');
+  btnSend.disabled = true;
   inp.value = '';
   inp.style.height = 'auto';
 
-  // Renderizar nuevo mensaje
-  appendMessage(msg);
-}
+  // Burbuja optimista inmediata
+  const tempMsg = { id: 'tmp', de: ME, texto: text, leido: false, fecha: new Date().toISOString() };
+  appendNewMessages([tempMsg]);
 
-function appendMessage(msg) {
-  const container = document.getElementById('chat-messages');
-
-  // Quitar estado vacío si existe
-  const emptyEl = container.querySelector('div[style*="margin:auto"]');
-  if (emptyEl) emptyEl.remove();
-
-  // Separador de fecha si es nuevo día
-  const msgs = (loadChats()[currentContact]?.messages) || [];
-  const prev = msgs[msgs.length - 2];
-  if (!prev || fmtDateSep(msg.ts) !== fmtDateSep(prev.ts)) {
-    const sep = document.createElement('div');
-    sep.className = 'msg-date-sep';
-    sep.textContent = fmtDateSep(msg.ts);
-    container.appendChild(sep);
+  try {
+    const r = await fetch(`${API_URL}/chat/enviar`, {
+      method: 'POST',
+      headers: authH(),
+      body: JSON.stringify({ para: currentContact, texto: text })
+    });
+    const data = await r.json();
+    if (!data.success) {
+      toast('❌ ' + (data.error || 'Error al enviar'));
+      inp.value = text; // devolver texto si falla
+    } else {
+      lastMsgTs = new Date(data.mensaje.fecha).getTime();
+    }
+  } catch (_) {
+    toast('❌ Sin conexión');
+    inp.value = text;
+  } finally {
+    btnSend.disabled = false;
   }
-
-  const isMine = msg.from === ME;
-  const wrap   = document.createElement('div');
-  wrap.className = `msg-bubble-wrap ${isMine ? 'sent' : 'recv'}`;
-  wrap.dataset.id = msg.id;
-  wrap.innerHTML = `
-    <div class="msg-bubble">${escapeHTML(msg.text).replace(/\n/g,'<br>')}</div>
-    <div class="msg-time">
-      ${fmtHour(msg.ts)}
-      ${isMine ? '<ion-icon name="checkmark-done-outline" class="msg-check"></ion-icon>' : ''}
-    </div>`;
-
-  container.appendChild(wrap);
-  container.scrollTop = container.scrollHeight;
 }
 
-// ── Auto-resize textarea ─────────────────────────────
 function autoResizeInput(el) {
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }
-
-// ── Enter para enviar (Shift+Enter = salto de línea) ─
 function handleInputKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
-  }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 }
 
 // ══════════════════════════════════════════════════════
-// ACCIONES
+// ACCIONES — Borrar chat / Eliminar contacto / Vaciar todo
 // ══════════════════════════════════════════════════════
 function goToProfile() {
-  if (currentContact) {
+  if (currentContact)
     window.location.href = `./perfil-publico.html?usuario=${encodeURIComponent(currentContact)}`;
-  }
 }
 
-async function confirmDeleteChat() {
+function confirmDeleteChat() {
   if (!currentContact) return;
-  // Usar confirm nativo — sin custom confirm disponible aquí
-  if (!confirm(`¿Borrar toda la conversación con @${currentContact}?\n\nEsta acción no se puede deshacer.`)) return;
-  const data = loadChats();
-  delete data[currentContact];
-  saveChats(data);
-  toast('🗑️ Conversación eliminada');
-  closeChat();
+  showConfirm('🗑️', 'Borrar mensajes',
+    `¿Eliminar todos los mensajes con <strong style="color:var(--g)">@${currentContact}</strong>?<br>El contacto seguirá en tu lista.`,
+    async () => {
+      try {
+        await fetch(`${API_URL}/chat/conversacion/${currentContact}`, { method:'DELETE', headers: authH() });
+        toast('🗑️ Mensajes eliminados');
+        document.getElementById('chat-messages').innerHTML = `
+          <div style="margin:auto;text-align:center;padding:40px 20px;color:var(--txt3);font-size:.8rem;line-height:1.6">
+            <div style="font-size:2rem;margin-bottom:10px">👋</div>
+            <p>Conversación vacía.<br>Empieza de nuevo.</p>
+          </div>`;
+        lastMsgTs = 0;
+      } catch (_) { toast('❌ Error al borrar'); }
+    }
+  );
+}
+
+function confirmDeleteContact() {
+  if (!currentContact) return;
+  showConfirm('👤', 'Eliminar contacto',
+    `¿Quitar a <strong style="color:var(--g)">@${currentContact}</strong> de tus chats y borrar todos los mensajes?`,
+    async () => {
+      try {
+        await fetch(`${API_URL}/chat/conversacion/${currentContact}`, { method:'DELETE', headers: authH() });
+        toast('✅ Contacto eliminado');
+        closeChat();
+        loadConvList();
+      } catch (_) { toast('❌ Error'); }
+    }
+  );
+}
+
+function vaciarTodosChats() {
+  if (!allContacts.length) { toast('No hay chats que vaciar'); return; }
+  showConfirm('⚠️', 'Vaciar todos los chats',
+    `¿Eliminar <strong style="color:#ff4343">todos</strong> los mensajes de <strong>${allContacts.length}</strong> conversación(es)?<br>Esta acción no se puede deshacer.`,
+    async () => {
+      try {
+        // Borrar todas en paralelo
+        await Promise.all(
+          allContacts.map(c =>
+            fetch(`${API_URL}/chat/conversacion/${c.contacto}`, { method:'DELETE', headers: authH() })
+          )
+        );
+        toast('✅ Todos los chats eliminados');
+        allContacts = [];
+        renderConvList();
+      } catch (_) { toast('❌ Error al vaciar'); }
+    }
+  );
 }
 
 // ══════════════════════════════════════════════════════
-// INICIO — DETECTAR PARÁMETRO ?usuario=
+// NOTIFICACIONES PUSH — pedir permiso al abrir
 // ══════════════════════════════════════════════════════
-function init() {
-  initBanners();
-  renderConvList();
-
-  // Si viene con ?usuario=X, abrir directamente ese chat
-  const params  = new URLSearchParams(window.location.search);
-  const target  = params.get('usuario');
-  if (target && target.trim()) {
-    // Pequeño delay para que cargue la vista lista primero
-    setTimeout(() => openChat(target.trim()), 80);
+function requestNotifPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
   }
 }
 
-// ── Cerrar modal al tocar el fondo ──────────────────
-document.getElementById('first-chat-modal').addEventListener('click', function(e) {
-  if (e.target === this) closeFirstChatModal();
-});
+// ══════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════
+async function init() {
+  requestNotifPermission();
+  await loadConvList();
 
-// ── Inicializar ──────────────────────────────────────
+  // Polling lista cada 8s
+  setInterval(loadConvList, 8000);
+
+  // Si viene con ?usuario=X, abrir directamente
+  const target = new URLSearchParams(window.location.search).get('usuario');
+  if (target?.trim()) setTimeout(() => openChat(target.trim()), 120);
+}
+
 document.addEventListener('DOMContentLoaded', init);
 </script>
 </body>

@@ -2077,6 +2077,36 @@ body.nx-open #nxFab {
 .profile-action-btn.red ion-icon { color:#ff4343; }
 .profile-action-btn.red:active { border-color:rgba(255,67,67,.3); }
 
+/* ── Fila de limpieza en perfil ── */
+.profile-clean-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+.profile-clean-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 10px;
+  background: var(--bg1);
+  border: 1px solid var(--bd);
+  border-radius: 12px;
+  font-size: .72rem;
+  font-weight: 600;
+  color: var(--txt3);
+  cursor: pointer;
+  width: 100%;
+  transition: border-color .18s, background .18s, color .18s;
+}
+.profile-clean-btn ion-icon { font-size: 1rem; flex-shrink: 0; }
+.profile-clean-btn:active {
+  border-color: rgba(255,67,67,.3);
+  background: rgba(255,67,67,.06);
+  color: #ff4343;
+}
+
 /* ── Perfil Inner Tabs ── */
 .perfil-tabs {
   display:flex; gap:0;

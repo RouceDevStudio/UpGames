@@ -3923,9 +3923,12 @@ function _initNotifUI() {
     font-family:inherit;
   `;
   panel.innerHTML = `
-    <div style="padding:14px 16px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #222;">
+    <div style="padding:12px 14px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1e1e1e;gap:8px;">
       <span style="font-size:.82rem;font-weight:700;color:#fff;letter-spacing:.5px;">NOTIFICACIONES</span>
-      <button onclick="_marcarTodasLeidas()" style="background:none;border:none;color:#5EFF43;font-size:.72rem;cursor:pointer;font-weight:700;">Marcar leídas</button>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button onclick="_marcarTodasLeidas()" style="background:none;border:none;color:#5EFF43;font-size:.7rem;cursor:pointer;font-weight:700;padding:4px 8px;border-radius:7px;transition:background .15s;" onmouseover="this.style.background='rgba(94,255,67,.1)'" onmouseout="this.style.background='none'">✓ Leídas</button>
+        <button onclick="_eliminarTodasNotif()" style="background:none;border:none;color:#ff4343;font-size:.7rem;cursor:pointer;font-weight:700;padding:4px 8px;border-radius:7px;transition:background .15s;" onmouseover="this.style.background='rgba(255,67,67,.1)'" onmouseout="this.style.background='none'">🗑 Vaciar</button>
+      </div>
     </div>
     <div id="notif-list" style="padding:8px 0;"></div>
   `;
@@ -3977,34 +3980,46 @@ async function _cargarNotificaciones() {
     list.innerHTML = data.notificaciones.map(n => {
       const timeAgo = _timeAgo(new Date(n.fecha));
       const unread  = !n.leida;
+      const nId     = n._id || '';
       return `
-        <div onclick="_abrirItemDesdeNotif('${n.itemId}')"
-          style="
+        <div style="
             display:flex;align-items:center;gap:10px;
-            padding:10px 14px;cursor:pointer;
+            padding:10px 14px;
             background:${unread ? 'rgba(94,255,67,.05)' : 'transparent'};
             border-left:${unread ? '3px solid #5EFF43' : '3px solid transparent'};
             transition:background .2s;
+            position:relative;
           "
-          onmouseover="this.style.background='rgba(255,255,255,.04)'"
-          onmouseout="this.style.background='${unread ? 'rgba(94,255,67,.05)' : 'transparent'}'">
-          ${n.itemImage
-            ? `<img src="${n.itemImage}" style="width:44px;height:32px;object-fit:cover;border-radius:6px;flex-shrink:0;"
-                onerror="this.style.display='none'">`
-            : `<div style="width:44px;height:32px;background:#1a1a1a;border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
-                 <ion-icon name="game-controller" style="color:#555;font-size:.9rem;"></ion-icon>
-               </div>`
-          }
-          <div style="flex:1;min-width:0;">
-            <div style="font-size:.78rem;color:${unread ? '#fff' : '#aaa'};font-weight:${unread ? '600' : '400'};
-              white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-              <span style="color:#5EFF43">@${n.emisor}</span> publicó
+          onmouseover="this.style.background='rgba(255,255,255,.04)';this.querySelector('.notif-del-btn').style.opacity='1'"
+          onmouseout="this.style.background='${unread ? 'rgba(94,255,67,.05)' : 'transparent'}';this.querySelector('.notif-del-btn').style.opacity='0'">
+          <div onclick="_abrirItemDesdeNotif('${n.itemId}')" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer;">
+            ${n.itemImage
+              ? `<img src="${n.itemImage}" style="width:44px;height:32px;object-fit:cover;border-radius:6px;flex-shrink:0;"
+                  onerror="this.style.display='none'">`
+              : `<div style="width:44px;height:32px;background:#1a1a1a;border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+                   <ion-icon name="game-controller" style="color:#555;font-size:.9rem;"></ion-icon>
+                 </div>`
+            }
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:.78rem;color:${unread ? '#fff' : '#aaa'};font-weight:${unread ? '600' : '400'};
+                white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                ${n.tipo === 'sistema' && n.itemTitle?.startsWith('Mensaje')
+                  ? `<span style="color:#00f2ff">@${n.emisor}</span> te envió un mensaje`
+                  : `<span style="color:#5EFF43">@${n.emisor}</span> publicó`}
+              </div>
+              <div style="font-size:.74rem;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                ${n.itemTitle || 'Nueva publicación'}
+              </div>
             </div>
-            <div style="font-size:.74rem;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-              ${n.itemTitle || 'Nueva publicación'}
-            </div>
+            <span style="font-size:.68rem;color:#444;flex-shrink:0;margin-right:4px;">${timeAgo}</span>
           </div>
-          <span style="font-size:.68rem;color:#444;flex-shrink:0;">${timeAgo}</span>
+          <button class="notif-del-btn" onclick="event.stopPropagation();_eliminarNotif('${nId}',this)" 
+            title="Eliminar notificación"
+            style="opacity:0;flex-shrink:0;background:rgba(255,67,67,.12);border:none;color:#ff4343;
+              width:24px;height:24px;border-radius:50%;cursor:pointer;font-size:.75rem;
+              display:flex;align-items:center;justify-content:center;transition:opacity .2s,background .15s;"
+            onmouseover="this.style.background='rgba(255,67,67,.25)'"
+            onmouseout="this.style.background='rgba(255,67,67,.12)'">✕</button>
         </div>
       `;
     }).join('');
@@ -4027,6 +4042,59 @@ async function _marcarTodasLeidas() {
     _cargarNotificaciones();
   } catch (err) {
     console.warn('[Notif] Error marcando leídas:', err);
+  }
+}
+
+// Eliminar una notificación individual
+async function _eliminarNotif(notifId, btnEl) {
+  if (!notifId) return;
+  const usuario = LS.get('user_admin');
+  const token   = LS.get('token');
+  if (!usuario || !token) return;
+  try {
+    // Animación de salida
+    const row = btnEl.parentElement;
+    row.style.transition = 'opacity .2s, max-height .25s';
+    row.style.opacity = '0';
+    row.style.maxHeight = '0';
+    row.style.overflow = 'hidden';
+    await fetch(`${API_URL}/notificaciones/${notifId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    setTimeout(() => { row.remove(); }, 260);
+    // Actualizar badge
+    _pollNotifBadge();
+  } catch (err) {
+    console.warn('[Notif] Error eliminando:', err);
+  }
+}
+
+// Vaciar todas las notificaciones
+async function _eliminarTodasNotif() {
+  const usuario = LS.get('user_admin');
+  const token   = LS.get('token');
+  if (!usuario || !token) return;
+  const list = document.getElementById('notif-list');
+  if (list) {
+    list.style.transition = 'opacity .2s';
+    list.style.opacity = '0';
+  }
+  try {
+    await fetch(`${API_URL}/notificaciones/todas/${usuario}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    _updateNotifBadge(0);
+    setTimeout(() => {
+      if (list) {
+        list.style.opacity = '1';
+        list.innerHTML = `<div style="padding:24px;text-align:center;color:#555;font-size:.8rem;">Sin notificaciones</div>`;
+      }
+    }, 220);
+  } catch (err) {
+    console.warn('[Notif] Error vaciando:', err);
+    if (list) list.style.opacity = '1';
   }
 }
 
