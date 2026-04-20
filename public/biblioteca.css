@@ -2514,17 +2514,92 @@ body.nx-open #nxFab {
 .pf-modal-body { padding:16px 20px 20px; }
 
 /* Settings tabs */
-.pf-stabs { display:flex; border-bottom:1px solid var(--bd); margin-bottom:16px; }
+.pf-stabs { display:flex; border-bottom:1px solid var(--bd); margin-bottom:16px; overflow-x:auto; scrollbar-width:none; }
+.pf-stabs::-webkit-scrollbar { display:none; }
 .pf-stab {
-  flex:1; padding:12px; text-align:center;
-  font-size:.78rem; font-weight:700; color:var(--txt3);
+  flex-shrink:0; padding:12px 16px; text-align:center;
+  font-size:.76rem; font-weight:700; color:var(--txt3);
   border-bottom:2.5px solid transparent; cursor:pointer;
   background:none; border-top:none; border-left:none; border-right:none;
+  white-space:nowrap;
   transition:color .18s, border-color .18s;
 }
 .pf-stab.active { color:var(--g); border-bottom-color:var(--g); }
 .pf-scontent { display:none; }
 .pf-scontent.active { display:block; }
+
+/* ── Social links row (bajo la bio) ── */
+.profile-social-links {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.pf-social-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--bg3);
+  border: 1px solid var(--bd);
+  font-size: 1.05rem;
+  transition: transform .2s var(--spring), background .2s;
+}
+.pf-social-icon-btn:hover { transform: scale(1.15); background: var(--bg2); }
+
+/* ── Settings: hints y cooldown badge ── */
+.pf-settings-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid var(--bd);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: .73rem;
+  color: var(--txt2);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+.pf-settings-hint ion-icon { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+.pf-cooldown-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255,160,0,.1);
+  border: 1px solid rgba(255,160,0,.3);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: .73rem;
+  color: #ffcc44;
+  font-weight: 600;
+  margin-bottom: 14px;
+}
+.pf-cooldown-badge ion-icon { font-size: 1rem; }
+
+/* ── Social link input rows ── */
+.pf-link-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.pf-link-icon-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg3);
+  border: 1px solid var(--bd);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  flex-shrink: 0;
+  transition: background .2s;
+}
+.pf-link-input { flex: 1; margin-bottom: 0 !important; }
 .pf-avatar-preview {
   width:120px; height:120px; border-radius:50%;
   background:linear-gradient(135deg,var(--g),var(--cy));

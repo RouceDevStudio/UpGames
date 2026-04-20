@@ -144,6 +144,7 @@
           <span id="pf-badge"></span>
         </div>
         <div class="profile-bio" id="pf-bio">Sin biografía</div>
+        <div class="profile-social-links" id="pf-social-links-row"></div>
       </div>
     </div>
 
@@ -557,7 +558,7 @@
   </div>
 </div>
 
-<!-- ══ Modal: Configuración (Avatar/Bio) ══ -->
+<!-- ══ Modal: Configuración (Avatar/Bio/Nombre/Email/Contraseña/Links) ══ -->
 <div class="pf-modal-overlay" id="pf-settingsModal">
   <div class="pf-modal-sheet">
     <div class="pf-modal-handle"></div>
@@ -566,11 +567,16 @@
       <button class="pf-modal-close" onclick="pfCloseSettings()"><ion-icon name="close-outline"></ion-icon></button>
     </div>
     <div class="pf-modal-body">
-      <div class="pf-stabs">
+      <div class="pf-stabs pf-stabs--scroll">
         <button class="pf-stab active" onclick="pfSwitchSettings('avatar',this)">Avatar</button>
         <button class="pf-stab" onclick="pfSwitchSettings('bio',this)">Bio</button>
+        <button class="pf-stab" onclick="pfSwitchSettings('links',this)">Links</button>
+        <button class="pf-stab" onclick="pfSwitchSettings('nombre',this)">Nombre</button>
+        <button class="pf-stab" onclick="pfSwitchSettings('email',this)">Email</button>
+        <button class="pf-stab" onclick="pfSwitchSettings('pass',this)">Contraseña</button>
       </div>
-      <!-- Avatar -->
+
+      <!-- ── Avatar ── -->
       <div id="pf-settings-avatar" class="pf-scontent active">
         <div class="pf-avatar-preview" id="pf-preview-avatar">
           <ion-icon name="person"></ion-icon>
@@ -585,7 +591,8 @@
           <ion-icon name="save"></ion-icon> GUARDAR AVATAR
         </button>
       </div>
-      <!-- Bio -->
+
+      <!-- ── Bio ── -->
       <div id="pf-settings-bio" class="pf-scontent">
         <div class="pf-form-group">
           <label class="pf-label">Biografía (máx. 200 caracteres)</label>
@@ -599,6 +606,132 @@
           <ion-icon name="save"></ion-icon> GUARDAR BIO
         </button>
       </div>
+
+      <!-- ── Links de Redes Sociales ── -->
+      <div id="pf-settings-links" class="pf-scontent">
+        <p class="pf-settings-hint">
+          <ion-icon name="information-circle-outline"></ion-icon>
+          Agrega hasta 4 links. El ícono de la red social se detecta automáticamente.
+        </p>
+        <div id="pf-links-inputs">
+          <div class="pf-link-row" id="pf-link-row-0">
+            <div class="pf-link-icon-wrap" id="pf-link-icon-0">
+              <ion-icon name="link-outline"></ion-icon>
+            </div>
+            <input type="url" class="pf-input pf-link-input" id="pf-link-0"
+                   placeholder="https://youtube.com/@tucanal"
+                   oninput="pfDetectLinkIcon(0)">
+          </div>
+          <div class="pf-link-row" id="pf-link-row-1">
+            <div class="pf-link-icon-wrap" id="pf-link-icon-1">
+              <ion-icon name="link-outline"></ion-icon>
+            </div>
+            <input type="url" class="pf-input pf-link-input" id="pf-link-1"
+                   placeholder="https://instagram.com/tuperfil"
+                   oninput="pfDetectLinkIcon(1)">
+          </div>
+          <div class="pf-link-row" id="pf-link-row-2">
+            <div class="pf-link-icon-wrap" id="pf-link-icon-2">
+              <ion-icon name="link-outline"></ion-icon>
+            </div>
+            <input type="url" class="pf-input pf-link-input" id="pf-link-2"
+                   placeholder="https://x.com/tuusuario"
+                   oninput="pfDetectLinkIcon(2)">
+          </div>
+          <div class="pf-link-row" id="pf-link-row-3">
+            <div class="pf-link-icon-wrap" id="pf-link-icon-3">
+              <ion-icon name="link-outline"></ion-icon>
+            </div>
+            <input type="url" class="pf-input pf-link-input" id="pf-link-3"
+                   placeholder="https://tiktok.com/@tuperfil"
+                   oninput="pfDetectLinkIcon(3)">
+          </div>
+        </div>
+        <button class="pf-btn-save" onclick="pfSaveSocialLinks()">
+          <ion-icon name="save"></ion-icon> GUARDAR LINKS
+        </button>
+      </div>
+
+      <!-- ── Editar Nombre de usuario ── -->
+      <div id="pf-settings-nombre" class="pf-scontent">
+        <div class="pf-cooldown-badge" id="pf-nombre-cooldown" style="display:none">
+          <ion-icon name="time-outline"></ion-icon>
+          <span id="pf-nombre-cooldown-msg">Disponible en X días</span>
+        </div>
+        <p class="pf-settings-hint">
+          <ion-icon name="warning-outline" style="color:#ffcc00"></ion-icon>
+          Solo puedes cambiar tu nombre de usuario <strong>1 vez cada 30 días</strong>. Este nombre también se usa para iniciar sesión.
+        </p>
+        <div class="pf-form-group">
+          <label class="pf-label">Nuevo nombre de usuario</label>
+          <input type="text" id="pf-input-username" class="pf-input"
+                 placeholder="minimo3, maximo20 chars"
+                 minlength="3" maxlength="20"
+                 autocomplete="off"
+                 oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9_]/g,'')">
+          <small style="color:var(--txt3);font-size:.72rem">Solo letras minúsculas, números y guión bajo (_)</small>
+        </div>
+        <div class="pf-form-group">
+          <label class="pf-label">Confirma tu contraseña</label>
+          <input type="password" id="pf-input-username-pass" class="pf-input"
+                 placeholder="Tu contraseña actual" autocomplete="current-password">
+        </div>
+        <button class="pf-btn-save" id="pf-btn-save-username" onclick="pfSaveUsername()">
+          <ion-icon name="person-outline"></ion-icon> CAMBIAR NOMBRE
+        </button>
+      </div>
+
+      <!-- ── Editar Email ── -->
+      <div id="pf-settings-email" class="pf-scontent">
+        <div class="pf-cooldown-badge" id="pf-email-cooldown" style="display:none">
+          <ion-icon name="time-outline"></ion-icon>
+          <span id="pf-email-cooldown-msg">Disponible en X días</span>
+        </div>
+        <p class="pf-settings-hint">
+          <ion-icon name="warning-outline" style="color:#ffcc00"></ion-icon>
+          Solo puedes cambiar tu email <strong>1 vez cada 30 días</strong>. El nuevo email también sirve para iniciar sesión.
+        </p>
+        <div class="pf-form-group">
+          <label class="pf-label">Nuevo email</label>
+          <input type="email" id="pf-input-newemail" class="pf-input"
+                 placeholder="nuevo@email.com" autocomplete="off">
+        </div>
+        <div class="pf-form-group">
+          <label class="pf-label">Confirma tu contraseña</label>
+          <input type="password" id="pf-input-newemail-pass" class="pf-input"
+                 placeholder="Tu contraseña actual" autocomplete="current-password">
+        </div>
+        <button class="pf-btn-save" id="pf-btn-save-email" onclick="pfSaveEmail()">
+          <ion-icon name="mail-outline"></ion-icon> CAMBIAR EMAIL
+        </button>
+      </div>
+
+      <!-- ── Cambiar Contraseña ── -->
+      <div id="pf-settings-pass" class="pf-scontent">
+        <p class="pf-settings-hint">
+          <ion-icon name="lock-closed-outline" style="color:var(--cy)"></ion-icon>
+          Usa una contraseña segura de al menos 8 caracteres.
+        </p>
+        <div class="pf-form-group">
+          <label class="pf-label">Contraseña actual</label>
+          <input type="password" id="pf-input-oldpass" class="pf-input"
+                 placeholder="Tu contraseña actual" autocomplete="current-password">
+        </div>
+        <div class="pf-form-group">
+          <label class="pf-label">Nueva contraseña</label>
+          <input type="password" id="pf-input-newpass" class="pf-input"
+                 placeholder="Mínimo 8 caracteres" autocomplete="new-password">
+        </div>
+        <div class="pf-form-group">
+          <label class="pf-label">Repetir nueva contraseña</label>
+          <input type="password" id="pf-input-newpass2" class="pf-input"
+                 placeholder="Repite la nueva contraseña" autocomplete="new-password">
+        </div>
+        <button class="pf-btn-save" onclick="pfSavePassword()">
+          <ion-icon name="lock-closed-outline"></ion-icon> CAMBIAR CONTRASEÑA
+        </button>
+      </div>
+
     </div>
   </div>
 </div>
@@ -1393,5 +1526,229 @@
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
 <script src="script.js"></script>
+
+<!-- ══════════════════════════════════════
+  EXTENSIÓN DE PERFIL: Nombre / Email / Contraseña / Links
+══════════════════════════════════════ -->
+<script>
+/* ─── Plataformas detectables ─── */
+const PF_PLATFORMS = [
+  { key:'youtube',   match:['youtube.com','youtu.be'],    icon:'logo-youtube',  color:'#FF0000', label:'YouTube'  },
+  { key:'facebook',  match:['facebook.com','fb.com'],     icon:'logo-facebook', color:'#1877F2', label:'Facebook' },
+  { key:'instagram', match:['instagram.com'],             icon:'logo-instagram',color:'#E1306C', label:'Instagram'},
+  { key:'twitter',   match:['twitter.com','x.com'],       icon:'logo-twitter',  color:'#f0f0f8', label:'X'        },
+  { key:'tiktok',    match:['tiktok.com'],                icon:'logo-tiktok',   color:'#00f2ea', label:'TikTok'   },
+  { key:'twitch',    match:['twitch.tv'],                 icon:'logo-twitch',   color:'#9146FF', label:'Twitch'   },
+  { key:'discord',   match:['discord.gg','discord.com'],  icon:'logo-discord',  color:'#5865F2', label:'Discord'  },
+  { key:'linkedin',  match:['linkedin.com'],              icon:'logo-linkedin', color:'#0A66C2', label:'LinkedIn' },
+  { key:'github',    match:['github.com'],                icon:'logo-github',   color:'#f0f0f8', label:'GitHub'   },
+];
+
+function pfDetectPlatform(url) {
+  if (!url) return null;
+  const u = url.toLowerCase();
+  return PF_PLATFORMS.find(p => p.match.some(m => u.includes(m))) || null;
+}
+
+/* Actualiza el ícono en el input row mientras el usuario escribe */
+function pfDetectLinkIcon(idx) {
+  const url   = document.getElementById(`pf-link-${idx}`)?.value || '';
+  const wrap  = document.getElementById(`pf-link-icon-${idx}`);
+  if (!wrap) return;
+  const plat  = pfDetectPlatform(url);
+  const icon  = plat ? plat.icon  : 'link-outline';
+  const color = plat ? plat.color : 'var(--txt3)';
+  wrap.innerHTML = `<ion-icon name="${icon}" style="color:${color}"></ion-icon>`;
+}
+
+/* ─── pfOpenSettings (override para cargar datos en nuevas tabs) ─── */
+const _pfOpenSettingsOrig = typeof pfOpenSettings === 'function' ? pfOpenSettings : null;
+window.pfOpenSettings = function() {
+  if (_pfOpenSettingsOrig) _pfOpenSettingsOrig();
+  pfLoadSettingsExtras();
+};
+
+function pfLoadSettingsExtras() {
+  const userRaw = localStorage.getItem('user_admin');
+  if (!userRaw) return;
+  try {
+    const u = JSON.parse(userRaw);
+
+    /* ── Cooldown de nombre ── */
+    pfCheckCooldown('nombre', u.lastUsernameChange);
+    /* ── Cooldown de email ── */
+    pfCheckCooldown('email', u.lastEmailChange);
+    /* ── Cargar links existentes ── */
+    const links = u.socialLinks || [];
+    for (let i = 0; i < 4; i++) {
+      const el = document.getElementById(`pf-link-${i}`);
+      if (el) { el.value = links[i] || ''; pfDetectLinkIcon(i); }
+    }
+  } catch(e) {}
+}
+
+function pfCheckCooldown(type, lastChange) {
+  const badge   = document.getElementById(`pf-${type}-cooldown`);
+  const btnId   = type === 'nombre' ? 'pf-btn-save-username' : 'pf-btn-save-email';
+  const btn     = document.getElementById(btnId);
+  if (!badge) return;
+
+  if (!lastChange) { badge.style.display = 'none'; if(btn) btn.disabled = false; return; }
+
+  const last    = new Date(lastChange);
+  const now     = new Date();
+  const diffMs  = now - last;
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+  const remaining = Math.ceil(30 - diffDays);
+
+  if (remaining > 0) {
+    badge.style.display = 'flex';
+    document.getElementById(`pf-${type}-cooldown-msg`).textContent =
+      `Podrás cambiar tu ${type === 'nombre' ? 'nombre' : 'email'} en ${remaining} día${remaining !== 1 ? 's' : ''}`;
+    if (btn) { btn.disabled = true; btn.style.opacity = '.5'; btn.style.cursor = 'not-allowed'; }
+  } else {
+    badge.style.display = 'none';
+    if (btn) { btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; }
+  }
+}
+
+/* ─── Guardar nuevo nombre de usuario ─── */
+async function pfSaveUsername() {
+  const newUser  = (document.getElementById('pf-input-username')?.value || '').trim();
+  const password = document.getElementById('pf-input-username-pass')?.value || '';
+  if (!newUser || newUser.length < 3) { showToast('El nombre debe tener al menos 3 caracteres', 'error'); return; }
+  if (!password) { showToast('Ingresa tu contraseña para confirmar', 'error'); return; }
+  const token = localStorage.getItem('token');
+  try {
+    const res = await fetch(`${API_URL}/usuarios/update-username`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ nuevoUsuario: newUser, password })
+    });
+    const data = await res.json();
+    if (!data.success) { showToast(data.error || 'Error al cambiar nombre', 'error'); return; }
+    /* Actualizar localStorage */
+    const u = JSON.parse(localStorage.getItem('user_admin') || '{}');
+    u.usuario = newUser;
+    u.lastUsernameChange = new Date().toISOString();
+    localStorage.setItem('user_admin', JSON.stringify(u));
+    document.getElementById('pf-username').textContent = '@' + newUser;
+    document.getElementById('pf-input-username').value = '';
+    document.getElementById('pf-input-username-pass').value = '';
+    pfCheckCooldown('nombre', u.lastUsernameChange);
+    showToast('¡Nombre actualizado!', 'success');
+  } catch(e) { showToast('Error de red', 'error'); }
+}
+
+/* ─── Guardar nuevo email ─── */
+async function pfSaveEmail() {
+  const newEmail = (document.getElementById('pf-input-newemail')?.value || '').trim();
+  const password = document.getElementById('pf-input-newemail-pass')?.value || '';
+  if (!newEmail || !/\S+@\S+\.\S+/.test(newEmail)) { showToast('Ingresa un email válido', 'error'); return; }
+  if (!password) { showToast('Ingresa tu contraseña para confirmar', 'error'); return; }
+  const token = localStorage.getItem('token');
+  try {
+    const res = await fetch(`${API_URL}/usuarios/update-email`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ nuevoEmail: newEmail, password })
+    });
+    const data = await res.json();
+    if (!data.success) { showToast(data.error || 'Error al cambiar email', 'error'); return; }
+    const u = JSON.parse(localStorage.getItem('user_admin') || '{}');
+    u.email = newEmail;
+    u.lastEmailChange = new Date().toISOString();
+    localStorage.setItem('user_admin', JSON.stringify(u));
+    document.getElementById('pf-input-newemail').value = '';
+    document.getElementById('pf-input-newemail-pass').value = '';
+    pfCheckCooldown('email', u.lastEmailChange);
+    showToast('¡Email actualizado!', 'success');
+  } catch(e) { showToast('Error de red', 'error'); }
+}
+
+/* ─── Cambiar contraseña ─── */
+async function pfSavePassword() {
+  const oldPass  = document.getElementById('pf-input-oldpass')?.value || '';
+  const newPass  = document.getElementById('pf-input-newpass')?.value || '';
+  const newPass2 = document.getElementById('pf-input-newpass2')?.value || '';
+  if (!oldPass) { showToast('Ingresa tu contraseña actual', 'error'); return; }
+  if (newPass.length < 8) { showToast('La nueva contraseña debe tener al menos 8 caracteres', 'error'); return; }
+  if (newPass !== newPass2) { showToast('Las contraseñas no coinciden', 'error'); return; }
+  const token = localStorage.getItem('token');
+  try {
+    const res = await fetch(`${API_URL}/usuarios/update-password`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ passwordActual: oldPass, nuevaPassword: newPass })
+    });
+    const data = await res.json();
+    if (!data.success) { showToast(data.error || 'Error al cambiar contraseña', 'error'); return; }
+    document.getElementById('pf-input-oldpass').value  = '';
+    document.getElementById('pf-input-newpass').value  = '';
+    document.getElementById('pf-input-newpass2').value = '';
+    showToast('¡Contraseña actualizada!', 'success');
+  } catch(e) { showToast('Error de red', 'error'); }
+}
+
+/* ─── Guardar links de redes sociales ─── */
+async function pfSaveSocialLinks() {
+  const links = [];
+  for (let i = 0; i < 4; i++) {
+    const v = (document.getElementById(`pf-link-${i}`)?.value || '').trim();
+    if (v) links.push(v);
+  }
+  const token = localStorage.getItem('token');
+  try {
+    const res = await fetch(`${API_URL}/usuarios/update-social-links`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ socialLinks: links })
+    });
+    const data = await res.json();
+    if (!data.success) { showToast(data.error || 'Error al guardar links', 'error'); return; }
+    const u = JSON.parse(localStorage.getItem('user_admin') || '{}');
+    u.socialLinks = links;
+    localStorage.setItem('user_admin', JSON.stringify(u));
+    pfRenderSocialLinks(links);
+    showToast('¡Links guardados!', 'success');
+  } catch(e) { showToast('Error de red', 'error'); }
+}
+
+/* ─── Renderizar iconos de redes bajo la bio ─── */
+function pfRenderSocialLinks(links) {
+  const row = document.getElementById('pf-social-links-row');
+  if (!row) return;
+  if (!links || links.length === 0) { row.innerHTML = ''; return; }
+  const MAX_DISPLAY = 4;
+  const shown = links.slice(0, MAX_DISPLAY);
+  row.innerHTML = shown.map(url => {
+    const plat = pfDetectPlatform(url);
+    if (!plat) return '';
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer"
+               class="pf-social-icon-btn"
+               style="color:${plat.color}"
+               title="${plat.label}">
+               <ion-icon name="${plat.icon}"></ion-icon>
+            </a>`;
+  }).join('');
+}
+
+/* ─── Patch: cargar social links al renderizar perfil ─── */
+/* Sobreescribir pfLoadProfile o escuchar su fin */
+const _pfLoadProfileOrig = typeof pfLoadProfile === 'function' ? pfLoadProfile : null;
+if (_pfLoadProfileOrig) {
+  window.pfLoadProfile = async function(...args) {
+    await _pfLoadProfileOrig.apply(this, args);
+    const u = JSON.parse(localStorage.getItem('user_admin') || '{}');
+    if (u.socialLinks) pfRenderSocialLinks(u.socialLinks);
+  };
+} else {
+  /* Si pfLoadProfile no está definida aún, escuchar DOMContentLoaded */
+  document.addEventListener('DOMContentLoaded', () => {
+    const u = JSON.parse(localStorage.getItem('user_admin') || '{}');
+    if (u.socialLinks) pfRenderSocialLinks(u.socialLinks);
+  });
+}
+</script>
 </body>
 </html>
