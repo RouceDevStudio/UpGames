@@ -1,312 +1,931 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Política de Privacidad | UpGames</title>
-    <style>
-        :root {
-            --bg: #030303;
-            --surface: #0a0a0a;
-            --accent: #00f2ff;
-            --success: #39ff14;
-            --text-main: #ffffff;
-            --text-dim: #888888;
-            --border: #1a1a1a;
-        }
-        * { box-sizing: border-box; }
-        body {
-            background-color: var(--bg);
-            color: var(--text-main);
-            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
-            margin: 0;
-            line-height: 1.6;
-            -webkit-font-smoothing: antialiased;
-        }
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 40px 20px;
-        }
-        .header {
-            text-align: left;
-            border-bottom: 2px solid var(--accent);
-            padding-bottom: 20px;
-            margin-bottom: 40px;
-        }
-        h1 {
-            font-size: 3rem;
-            margin: 0;
-            color: var(--accent);
-            text-shadow: 0 0 20px rgba(0, 242, 255, 0.2);
-        }
-        .version {
-            color: var(--text-dim);
-            font-size: 0.9rem;
-            margin-top: 10px;
-        }
-        .section {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 30px;
-            margin-bottom: 25px;
-        }
-        h2 {
-            color: var(--accent);
-            font-size: 1.2rem;
-            margin-top: 0;
-        }
-        .important {
-            background: rgba(255, 184, 0, 0.08);
-            border-left: 4px solid #ffb800;
-            padding: 15px;
-            margin: 15px 0;
-            color: #ffd966;
-        }
-        ul {
-            padding-left: 20px;
-        }
-        li {
-            margin-bottom: 10px;
-        }
-        .contact {
-            background: rgba(57, 255, 20, 0.1);
-            border: 1px solid var(--success);
-            padding: 20px;
-            border-radius: 10px;
-            margin: 20px 0;
-        }
-        a {
-            color: var(--accent);
-            text-decoration: none;
-        }
-        a:hover {
-            text-decoration: underline;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Política de Privacidad v2.0 | UpGames</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --g:      #5EFF43;
+      --g-dim:  rgba(94,255,67,.1);
+      --g-glow: rgba(94,255,67,.25);
+      --cy:     #00f2ff;
+      --cy-dim: rgba(0,242,255,.1);
+      --bg:     #07070f;
+      --bg1:    #0d0d1a;
+      --bg2:    #12121f;
+      --bg3:    #191927;
+      --bd:     rgba(255,255,255,.07);
+      --bd-g:   rgba(94,255,67,.2);
+      --bd-cy:  rgba(0,242,255,.2);
+      --txt:    #f0f0f8;
+      --txt2:   #9090aa;
+      --txt3:   #555570;
+      --warn:   #ffb800;
+      --danger: #ff4343;
+      --ff:     'Manrope', system-ui, sans-serif;
+      --ff-d:   'Bebas Neue', sans-serif;
+      --ff-m:   'DM Mono', monospace;
+      --ease:   cubic-bezier(.4,0,.2,1);
+      --r:      14px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--txt);
+      font-family: var(--ff);
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* ── GRID NOISE BG ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(94,255,67,.06), transparent),
+        radial-gradient(ellipse 60% 40% at 90% 80%, rgba(0,242,255,.04), transparent);
+      pointer-events: none; z-index: 0;
+    }
+
+    /* ── TOP BAR ── */
+    .topbar {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(7,7,15,.92);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--bd);
+      padding: 14px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px;
+    }
+    .logo {
+      font-family: var(--ff-d);
+      font-size: 1.6rem;
+      letter-spacing: 3px;
+      display: flex; gap: 2px; align-items: center;
+    }
+    .logo .up  { color: var(--g); text-shadow: 0 0 20px var(--g-glow); }
+    .logo .gm  { color: var(--txt); }
+    .topbar-doc {
+      font-family: var(--ff-m);
+      font-size: .65rem;
+      color: var(--txt3);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+    .ver-pill {
+      font-family: var(--ff-m);
+      font-size: .65rem;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--cy);
+      background: var(--cy-dim);
+      border: 1px solid var(--bd-cy);
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+
+    /* ── WRAPPER ── */
+    .wrap {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+      position: relative; z-index: 1;
+    }
+
+    /* ── HERO HEADER ── */
+    .doc-hero {
+      margin-bottom: 48px;
+      padding-bottom: 32px;
+      border-bottom: 1px solid var(--bd);
+    }
+    .doc-hero-kicker {
+      font-family: var(--ff-m);
+      font-size: .65rem;
+      color: var(--g);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .doc-hero-kicker::before {
+      content: ''; width: 20px; height: 1px; background: var(--g);
+    }
+    .doc-hero h1 {
+      font-family: var(--ff-d);
+      font-size: clamp(2.4rem, 6vw, 4rem);
+      letter-spacing: 2px;
+      color: var(--txt);
+      line-height: 1;
+      margin-bottom: 16px;
+    }
+    .doc-hero h1 span { color: var(--g); }
+    .doc-meta {
+      display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px;
+    }
+    .meta-chip {
+      font-family: var(--ff-m);
+      font-size: .65rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--txt3);
+      background: var(--bg2);
+      border: 1px solid var(--bd);
+      padding: 5px 12px;
+      border-radius: 999px;
+    }
+    .meta-chip strong { color: var(--txt2); }
+
+    /* ── SUMMARY BOX ── */
+    .summary-box {
+      background: linear-gradient(135deg, rgba(94,255,67,.06), rgba(0,242,255,.04));
+      border: 1px solid var(--bd-g);
+      border-radius: var(--r);
+      padding: 24px 28px;
+      margin-bottom: 32px;
+      display: flex; gap: 16px; align-items: flex-start;
+    }
+    .summary-box .sb-icon {
+      font-size: 1.8rem; flex-shrink: 0; margin-top: 2px;
+    }
+    .summary-box h3 {
+      color: var(--g);
+      font-size: .8rem;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .summary-box p { color: var(--txt2); font-size: .9rem; }
+    .summary-box strong { color: var(--txt); }
+
+    /* ── SECTIONS ── */
+    .section {
+      background: var(--bg1);
+      border: 1px solid var(--bd);
+      border-radius: var(--r);
+      padding: 28px 32px;
+      margin-bottom: 20px;
+      transition: border-color .25s var(--ease);
+    }
+    .section:hover { border-color: rgba(255,255,255,.12); }
+    .section.accent-g { border-color: var(--bd-g); }
+    .section.accent-cy { border-color: var(--bd-cy); }
+    .section.accent-warn { border-color: rgba(255,184,0,.25); }
+    .section.accent-danger { border-color: rgba(255,67,67,.25); }
+
+    .section h2 {
+      font-size: .8rem;
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: var(--g);
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--bd);
+    }
+    .section h2 .num {
+      font-family: var(--ff-m);
+      font-size: .7rem;
+      color: var(--txt3);
+      background: var(--bg3);
+      padding: 2px 8px;
+      border-radius: 4px;
+      min-width: 28px; text-align: center;
+    }
+    .section h2.cy { color: var(--cy); }
+    .section h2.warn { color: var(--warn); }
+    .section h2.danger { color: var(--danger); }
+
+    h3.sub {
+      font-size: .78rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--cy);
+      margin: 22px 0 10px;
+    }
+    h3.sub.g    { color: var(--g); }
+    h3.sub.warn { color: var(--warn); }
+    h3.sub.d    { color: var(--danger); }
+
+    p { color: var(--txt2); font-size: .9rem; margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+    p strong { color: var(--txt); }
+
+    /* ── LISTS ── */
+    .dlist {
+      list-style: none;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .dlist li {
+      padding: 12px 16px;
+      background: var(--bg2);
+      border-radius: 8px;
+      font-size: .88rem;
+      color: var(--txt2);
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .dlist li strong {
+      color: var(--txt);
+      font-size: .85rem;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .dlist li strong .tag {
+      font-family: var(--ff-m);
+      font-size: .6rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+    .tag.req  { background: rgba(94,255,67,.1);   color: var(--g);    border: 1px solid var(--bd-g); }
+    .tag.opt  { background: rgba(0,242,255,.1);   color: var(--cy);   border: 1px solid var(--bd-cy); }
+    .tag.auto { background: rgba(255,184,0,.1);   color: var(--warn); border: 1px solid rgba(255,184,0,.25); }
+    .tag.ai   { background: rgba(180,100,255,.1); color: #c084fc;     border: 1px solid rgba(180,100,255,.25); }
+    .tag.ttl  { background: rgba(255,67,67,.1);   color: var(--danger); border: 1px solid rgba(255,67,67,.25); }
+
+    /* ── INLINE LIST ── */
+    .ilist {
+      list-style: none; padding: 0;
+      display: flex; flex-direction: column; gap: 6px;
+      margin-top: 8px;
+    }
+    .ilist li {
+      color: var(--txt2); font-size: .88rem;
+      padding-left: 16px; position: relative;
+    }
+    .ilist li::before {
+      content: '→'; position: absolute; left: 0;
+      color: var(--txt3); font-size: .75rem;
+    }
+    .ilist li strong { color: var(--txt); }
+
+    /* ── RIGHTS GRID ── */
+    .rights-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 12px; margin-top: 12px;
+    }
+    .right-card {
+      background: var(--bg2);
+      border: 1px solid var(--bd);
+      border-radius: 10px;
+      padding: 16px;
+    }
+    .right-card .rc-icon { font-size: 1.3rem; margin-bottom: 8px; }
+    .right-card h4 { color: var(--txt); font-size: .82rem; font-weight: 700; margin-bottom: 4px; }
+    .right-card p  { color: var(--txt3); font-size: .78rem; margin: 0; }
+
+    /* ── RETENTION TABLE ── */
+    .ret-table {
+      width: 100%; border-collapse: collapse; margin-top: 12px;
+      font-size: .83rem;
+    }
+    .ret-table th {
+      text-align: left; padding: 10px 14px;
+      background: var(--bg3);
+      color: var(--txt3);
+      font-size: .7rem; letter-spacing: 1px; text-transform: uppercase;
+      font-weight: 700;
+    }
+    .ret-table th:first-child { border-radius: 6px 0 0 6px; }
+    .ret-table th:last-child  { border-radius: 0 6px 6px 0; }
+    .ret-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--bd);
+      color: var(--txt2);
+      vertical-align: top;
+    }
+    .ret-table td:first-child { color: var(--txt); font-weight: 600; }
+    .ret-table tr:last-child td { border-bottom: none; }
+    .ret-ttl {
+      font-family: var(--ff-m);
+      font-size: .7rem;
+      color: var(--g);
+      background: var(--g-dim);
+      border: 1px solid var(--bd-g);
+      padding: 2px 7px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+
+    /* ── ALERT BOXES ── */
+    .alert {
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin: 16px 0;
+      display: flex; gap: 14px; align-items: flex-start;
+    }
+    .alert-icon { font-size: 1.2rem; flex-shrink: 0; margin-top: 1px; }
+    .alert-body h4 { font-size: .8rem; font-weight: 800; letter-spacing: .5px; margin-bottom: 6px; }
+    .alert-body p  { font-size: .84rem; margin: 0; }
+    .alert.warn {
+      background: rgba(255,184,0,.07);
+      border: 1px solid rgba(255,184,0,.25);
+    }
+    .alert.warn .alert-body h4 { color: var(--warn); }
+    .alert.warn .alert-body p  { color: #e0c060; }
+    .alert.success {
+      background: var(--g-dim);
+      border: 1px solid var(--bd-g);
+    }
+    .alert.success .alert-body h4 { color: var(--g); }
+    .alert.success .alert-body p  { color: #a0e090; }
+    .alert.info {
+      background: var(--cy-dim);
+      border: 1px solid var(--bd-cy);
+    }
+    .alert.info .alert-body h4 { color: var(--cy); }
+    .alert.info .alert-body p  { color: #80d8e0; }
+    .alert.danger {
+      background: rgba(255,67,67,.06);
+      border: 1px solid rgba(255,67,67,.25);
+    }
+    .alert.danger .alert-body h4 { color: var(--danger); }
+    .alert.danger .alert-body p  { color: #e08080; }
+
+    /* ── CONTACT BLOCK ── */
+    .contact-block {
+      background: var(--g-dim);
+      border: 1px solid var(--bd-g);
+      border-radius: 12px;
+      padding: 24px 28px;
+      margin-top: 16px;
+    }
+    .contact-block h4 { color: var(--g); font-size: .82rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 12px; }
+    .contact-block p  { color: var(--txt2); font-size: .88rem; margin-bottom: 6px; }
+    .contact-block a  { color: var(--cy); text-decoration: none; }
+    .contact-block a:hover { text-decoration: underline; }
+    .contact-block strong { color: var(--txt); }
+
+    /* ── THIRD-PARTIES ── */
+    .thirds {
+      display: flex; flex-direction: column; gap: 10px; margin-top: 10px;
+    }
+    .third-row {
+      display: flex; align-items: center; gap: 14px;
+      background: var(--bg2);
+      border: 1px solid var(--bd);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+    .third-row .tr-icon { font-size: 1.3rem; flex-shrink: 0; }
+    .third-row h4 { color: var(--txt); font-size: .84rem; font-weight: 700; margin-bottom: 2px; }
+    .third-row p  { color: var(--txt3); font-size: .78rem; margin: 0; }
+
+    /* ── FOOTER ── */
+    .doc-footer {
+      margin-top: 60px;
+      padding-top: 32px;
+      border-top: 1px solid var(--bd);
+      text-align: center;
+    }
+    .doc-footer .foot-logo {
+      font-family: var(--ff-d);
+      font-size: 1.4rem;
+      letter-spacing: 3px;
+      margin-bottom: 12px;
+    }
+    .doc-footer p { color: var(--txt3); font-size: .8rem; }
+    .doc-footer a { color: var(--cy); text-decoration: none; }
+    .doc-footer a:hover { text-decoration: underline; }
+    .foot-links { display: flex; gap: 20px; justify-content: center; margin-top: 12px; flex-wrap: wrap; }
+
+    /* ── NEXUS CARD ── */
+    .nexus-card {
+      background: linear-gradient(135deg, rgba(180,100,255,.06), rgba(0,242,255,.04));
+      border: 1px solid rgba(180,100,255,.25);
+      border-radius: var(--r);
+      padding: 20px 24px;
+      margin: 12px 0;
+    }
+    .nexus-card h4 { color: #c084fc; font-size: .8rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 10px; }
+    .nexus-card p  { color: var(--txt2); font-size: .88rem; margin: 0; }
+
+    @media (max-width: 600px) {
+      .wrap { padding: 32px 16px 60px; }
+      .section { padding: 20px 18px; }
+      .rights-grid { grid-template-columns: 1fr; }
+      .ret-table { font-size: .78rem; }
+    }
+  </style>
 </head>
 <body>
 
-<div class="container">
-    <header class="header">
-        <h1>🔒 POLÍTICA DE PRIVACIDAD</h1>
-        <div class="version">Versión 1.0 | Última actualización: 13 de Febrero, 2026</div>
-        <div style="color: var(--text-dim); margin-top: 10px;">
-            UpGames - Plataforma de Indexación de Metadatos
-        </div>
-    </header>
-
-    <div class="important">
-        <strong>RESUMEN DE POLÍTICAS</strong> UpGames recopila información mínima necesaria para operar el servicio. Tus datos personales NUNCA se venden a terceros. Esta política cumple con GDPR (Europa), LGPD (Brasil) y CCPA (California).
-    </div>
-
-    <section class="section">
-        <h2>1. Responsable del Tratamiento de Datos</h2>
-        <p><strong>Operador:</strong> Jhonatan David Castro Galviz</p>
-        <p><strong>Domicilio:</strong> Colombia</p>
-        <p><strong>Contacto de Privacidad:</strong> <a href="mailto:mr.m0onster@protonmail.com">mr.m0onster@protonmail.com</a></p>
-    </section>
-
-    <section class="section">
-        <h2>2. Datos que Recopilamos</h2>
-        
-        <h3 style="color: var(--text-main); margin-top: 20px;">2.1 Datos de Registro (Obligatorios)</h3>
-        <ul>
-            <li><strong>Nombre de usuario:</strong> Identificador único elegido por ti (3-20 caracteres)</li>
-            <li><strong>Email:</strong> Para autenticación, recuperación de cuenta y notificaciones críticas</li>
-            <li><strong>Contraseña:</strong> Almacenada con hash bcrypt (nunca guardamos contraseñas en texto plano)</li>
-        </ul>
-
-        <h3 style="color: var(--text-main); margin-top: 20px;">2.2 Datos de Monetización (Opcionales)</h3>
-        <ul>
-            <li><strong>Email de PayPal:</strong> Solo si deseas recibir pagos por descargas de tus publicaciones indexadas</li>
-            <li><strong>Datos de verificación:</strong> Nivel de verificación (0-3) asignado por administradores</li>
-        </ul>
-
-        <h3 style="color: var(--text-main); margin-top: 20px;">2.3 Datos Técnicos (Automáticos)</h3>
-        <ul>
-            <li><strong>Dirección IP:</strong> Para detección de fraude y límites anti-bots (2 descargas por IP por día)</li>
-            <li><strong>User-Agent:</strong> Navegador y sistema operativo (para compatibilidad)</li>
-            <li><strong>Timestamps:</strong> Fecha y hora de acciones (subida de publicaciones, descargas, logins)</li>
-            <li><strong>Logs de actividad:</strong> Actividades sospechosas para prevención de fraude</li>
-        </ul>
-
-        <h3 style="color: var(--text-main); margin-top: 20px;">2.4 Datos de Contenido Indexado</h3>
-        <ul>
-            <li><strong>Metadatos de publicaciones:</strong> Título, descripción, imagen, enlace externo, categoría, tags</li>
-            <li><strong>Estadísticas:</strong> Número de descargas efectivas, reportes de enlaces caídos</li>
-        </ul>
-
-        <div class="important">
-            <strong>⚠️ IMPORTANTE:</strong> UpGames NO almacena archivos. Solo indexamos enlaces externos a servicios de terceros (Mega, MediaFire, Google Drive, etc.).
-        </div>
-    </section>
-
-    <section class="section">
-        <h2>3. Finalidad del Tratamiento de Datos</h2>
-        <p>Utilizamos tus datos personales EXCLUSIVAMENTE para:</p>
-        <ul>
-            <li><strong>Autenticación:</strong> Verificar tu identidad al iniciar sesión</li>
-            <li><strong>Seguridad:</strong> Detectar y prevenir fraude, spam, y actividad maliciosa</li>
-            <li><strong>Monetización:</strong> Calcular y procesar pagos por descargas efectivas verificadas</li>
-            <li><strong>Comunicación:</strong> Enviar notificaciones críticas (cambios en términos, alertas de seguridad)</li>
-            <li><strong>Cumplimiento Legal:</strong> Responder a solicitudes DMCA y órdenes judiciales</li>
-            <li><strong>Mejora del Servicio:</strong> Análisis agregado y anónimo de tendencias</li>
-        </ul>
-    </section>
-
-    <section class="section">
-        <h2>4. Compartir Datos con Terceros</h2>
-        
-        <h3 style="color: var(--text-main);">4.1 Servicios que Pueden Recibir Tus Datos</h3>
-        <ul>
-            <li><strong>PayPal:</strong> Tu email de PayPal se comparte con PayPal Inc. para procesar pagos</li>
-            <li><strong>MongoDB Atlas:</strong> Base de datos alojada en servidores AWS (cifrados en reposo)</li>
-            <li><strong>Render.com:</strong> Hosting del backend (logs de servidor)</li>
-            <li><strong>GitHub Pages:</strong> Hosting del frontend (sin datos sensibles)</li>
-        </ul>
-
-        <h3 style="color: var(--text-main); margin-top: 20px;">4.2 NUNCA Compartimos Datos Para:</h3>
-        <ul>
-            <li>❌ Publicidad dirigida o perfilado</li>
-            <li>❌ Venta a brokers de datos</li>
-            <li>❌ Marketing de terceros no afiliados</li>
-            <li>❌ Análisis de comportamiento para fines comerciales ajenos a UpGames</li>
-        </ul>
-
-        <div class="important">
-            <strong>🔒 GARANTÍA:</strong> Tus datos personales NUNCA se venden, alquilan o intercambian con terceros para marketing.
-        </div>
-    </section>
-
-    <section class="section">
-        <h2>5. Retención de Datos</h2>
-        <ul>
-            <li><strong>Datos de cuenta:</strong> Mientras tu cuenta esté activa + 1 año después de eliminación</li>
-            <li><strong>IPs de descargas:</strong> 24 horas (auto-eliminación mediante TTL de MongoDB)</li>
-            <li><strong>Logs de actividad sospechosa:</strong> 90 días (para análisis de patrones)</li>
-            <li><strong>Historial de pagos:</strong> 7 años (obligación fiscal)</li>
-            <li><strong>Contenido indexado:</strong> Hasta que lo elimines o sea removido por DMCA</li>
-        </ul>
-    </section>
-
-    <section class="section">
-        <h2>6. Tus Derechos (GDPR, LGPD, CCPA)</h2>
-        <p>Como usuario, tienes derecho a:</p>
-        
-        <ul>
-            <li><strong>✓ Acceso:</strong> Solicitar una copia de todos tus datos personales en formato JSON</li>
-            <li><strong>✓ Rectificación:</strong> Corregir datos incorrectos o desactualizados</li>
-            <li><strong>✓ Eliminación ("Derecho al Olvido"):</strong> Borrar tu cuenta y datos asociados</li>
-            <li><strong>✓ Portabilidad:</strong> Exportar tus datos en formato legible por máquina</li>
-            <li><strong>✓ Oposición:</strong> Oponerte al procesamiento de datos para fines específicos</li>
-            <li><strong>✓ Limitación:</strong> Restringir el procesamiento en casos justificados</li>
-            <li><strong>✓ No Venta (CCPA):</strong> Optar por no vender datos personales (ya no vendemos ninguno)</li>
-        </ul>
-
-        <div class="contact">
-            <strong>📧 Para Ejercer Tus Derechos:</strong><br>
-            Envía un email a: <a href="mailto:mr.m0onster@protonmail.com">mr.m0onster@protonmail.com</a><br>
-            Asunto: "Solicitud de Privacidad - [Tu Usuario]"<br>
-            <br>
-            <strong>Tiempo de Respuesta:</strong> Máximo 30 días hábiles<br>
-            <strong>Costo:</strong> GRATUITO (primera solicitud por año)
-        </div>
-    </section>
-
-    <section class="section">
-        <h2>7. Seguridad de Datos</h2>
-        <p>Implementamos medidas técnicas y organizativas para proteger tus datos:</p>
-        <ul>
-            <li>🔐 <strong>Cifrado:</strong> HTTPS/TLS 1.3 en tránsito, AES-256 en reposo (MongoDB)</li>
-            <li>🔑 <strong>Hashing:</strong> Contraseñas con bcrypt (factor de costo 10)</li>
-            <li>🛡️ <strong>Tokens JWT:</strong> Autenticación segura con expiración de 15 minutos</li>
-            <li>⚡ <strong>Rate Limiting:</strong> Protección contra ataques de fuerza bruta</li>
-            <li>🚫 <strong>Anti-Fraude:</strong> Sistema de detección automática de comportamiento sospechoso</li>
-            <li>📋 <strong>Logs de Auditoría:</strong> Registro de accesos administrativos</li>
-        </ul>
-
-        <div class="important">
-            <strong>⚠️ Notificación de Brechas:</strong> En caso de brecha de seguridad que afecte datos sensibles, notificaremos por email en un plazo máximo de 72 horas.
-        </div>
-    </section>
-
-    <section class="section">
-        <h2>8. Cookies y Tecnologías de Rastreo</h2>
-        
-        <h3 style="color: var(--text-main);">8.1 Cookies Esenciales (No Requieren Consentimiento)</h3>
-        <ul>
-            <li><strong>localStorage.token:</strong> Token JWT para mantener sesión iniciada</li>
-            <li><strong>localStorage.user_admin:</strong> Nombre de usuario logueado (solo identificador)</li>
-        </ul>
-
-        <h3 style="color: var(--text-main); margin-top: 20px;">8.2 Cookies de Publicidad (Terceros)</h3>
-        <ul>
-            <li><strong>highperformanceformat.com:</strong> Anuncios en página puente (30s antes de descarga)</li>
-            <li><strong>effectivegatecpm.com:</strong> Red publicitaria de monetización</li>
-        </ul>
-
-        <p>Puedes bloquear estas cookies con extensiones del navegador (uBlock Origin, Privacy Badger) sin afectar funcionalidad básica.</p>
-    </section>
-
-    <section class="section">
-        <h2>9. Transferencias Internacionales</h2>
-        <p>Tus datos pueden ser transferidos y procesados en servidores ubicados fuera de tu país de residencia:</p>
-        <ul>
-            <li><strong>MongoDB Atlas:</strong> Servidores AWS (Virginia, EE.UU.) - Cláusulas contractuales estándar (SCC)</li>
-            <li><strong>Render.com:</strong> Oregon, EE.UU. - Certificado Privacy Shield (válido)</li>
-            <li><strong>PayPal:</strong> Global - Política de privacidad propia</li>
-        </ul>
-        <p>Estas transferencias cumplen con requisitos GDPR mediante mecanismos de salvaguarda aprobados.</p>
-    </section>
-
-    <section class="section">
-        <h2>10. Privacidad de Menores</h2>
-        <p><strong>UpGames NO está dirigido a menores de 13 años.</strong></p>
-        <p>Si descubrimos que hemos recopilado datos de un menor sin consentimiento parental, eliminaremos esa información inmediatamente.</p>
-        <p>Padres/tutores pueden contactarnos en: <a href="mailto:mr.m0onster@protonmail.com">mr.m0onster@protonmail.com</a></p>
-    </section>
-
-    <section class="section">
-        <h2>11. Cambios a Esta Política</h2>
-        <p>Nos reservamos el derecho de actualizar esta política en cualquier momento. Los cambios se notificarán mediante:</p>
-        <ul>
-            <li>📧 Email a usuarios registrados (cambios sustanciales)</li>
-            <li>🔔 Banner en la plataforma (30 días antes de aplicar)</li>
-            <li>📅 Actualización de la fecha "Última actualización" arriba</li>
-        </ul>
-        <p><strong>Uso continuado = Aceptación de cambios.</strong> Si no estás de acuerdo, puedes eliminar tu cuenta.</p>
-    </section>
-
-    <section class="section">
-        <h2>12. Contacto</h2>
-        <div class="contact">
-            <strong>Oficial de Protección de Datos (DPO):</strong><br>
-            Jhonatan David Castro Galviz<br>
-            <br>
-            <strong>Email:</strong> <a href="mailto:mr.m0onster@protonmail.com">mr.m0onster@protonmail.com</a><br>
-            <strong>Asunto recomendado:</strong> "Privacidad - [Tu Consulta]"<br>
-            <br>
-            <strong>Tiempo de respuesta:</strong> 5-10 días hábiles<br>
-            <br>
-            <strong>Autoridad de Control (Colombia):</strong><br>
-            Superintendencia de Industria y Comercio (SIC)<br>
-            Website: <a href="https://www.sic.gov.co" target="_blank">www.sic.gov.co</a>
-        </div>
-    </section>
-
-    <div class="important" style="margin-top: 40px;">
-        <strong>✅ COMPROMISO DE TRANSPARENCIA:</strong> Esta política se redactó en lenguaje claro y directo. Si algo no está claro, por favor contáctanos. Tienes derecho a entender cómo se usan tus datos.
-    </div>
-
-    <div style="text-align: center; margin-top: 60px; padding-top: 40px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 0.85rem;">
-        © 2026 UpGames. Todos los derechos reservados.<br>
-        <a href="./terminos&condiciones.html">Términos y Condiciones</a> • 
-        <a href="./politica-privacidad.html">Política de Privacidad</a>
-    </div>
-
+<!-- TOPBAR -->
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:16px">
+    <div class="logo"><span class="up">UP</span><span class="gm">GAMES</span></div>
+    <span class="topbar-doc">Política de Privacidad</span>
+  </div>
+  <span class="ver-pill">v2.0 · ABR 2026</span>
 </div>
 
+<div class="wrap">
+
+  <!-- HERO -->
+  <div class="doc-hero">
+    <div class="doc-hero-kicker">Documento Legal Oficial</div>
+    <h1>🔒 POLÍTICA DE <span>PRIVACIDAD</span></h1>
+    <p style="color:var(--txt2);font-size:.95rem;max-width:640px;margin-top:12px">
+      UpGames recopila únicamente los datos necesarios para operar el servicio. Tus datos personales
+      <strong style="color:var(--g)">NUNCA se venden a terceros.</strong>
+      Esta política cumple con GDPR (Europa), Ley 1581/2012 (Colombia) y CCPA (California).
+    </p>
+    <div class="doc-meta">
+      <span class="meta-chip">Versión <strong>2.0</strong></span>
+      <span class="meta-chip">Vigente desde <strong>Abril 2026</strong></span>
+      <span class="meta-chip">Ley aplicable <strong>Colombia</strong></span>
+      <span class="meta-chip">Operador <strong>Persona Natural</strong></span>
+    </div>
+  </div>
+
+  <!-- SUMMARY -->
+  <div class="summary-box">
+    <div class="sb-icon">🛡️</div>
+    <div>
+      <h3>Resumen ejecutivo</h3>
+      <p>
+        Recopilamos tu <strong>email, usuario y contraseña</strong> (hasheada con bcrypt) para autenticarte.
+        Opcionalmente, tu <strong>email de PayPal</strong> para pagos. De forma automática, registramos tu <strong>IP</strong> (anti-fraude, TTL 24h)
+        y tu <strong>última sesión</strong>. Si usas NEXUS IA, su motor de memoria maneja contexto conversacional
+        localizado en nuestros servidores Railway. <strong>Nada más. Nunca vendemos datos.</strong>
+      </p>
+    </div>
+  </div>
+
+  <!-- SECCIÓN 1 -->
+  <div class="section accent-g">
+    <h2><span class="num">01</span> Responsable del Tratamiento</h2>
+    <ul class="dlist">
+      <li><strong>Operador</strong>Jhonatan David Castro Galviz — Persona Natural</li>
+      <li><strong>Domicilio legal</strong>República de Colombia</li>
+      <li><strong>Naturaleza jurídica</strong>Emprendimiento digital individual (Ley 1915/2018)</li>
+      <li><strong>Email de privacidad</strong><a href="mailto:mr.m0onster@protonmail.com" style="color:var(--cy)">mr.m0onster@protonmail.com</a></li>
+      <li><strong>Plataforma</strong>UpGames — Biblioteca digital de indexación de metadatos gaming</li>
+    </ul>
+  </div>
+
+  <!-- SECCIÓN 2 -->
+  <div class="section">
+    <h2><span class="num">02</span> Datos que Recopilamos</h2>
+
+    <h3 class="sub g">2.1 Datos de Registro (Obligatorios)</h3>
+    <ul class="dlist">
+      <li>
+        <strong>Nombre de usuario <span class="tag req">Requerido</span></strong>
+        Identificador único elegido por ti (3–20 caracteres, en minúscula). Público en tu perfil.
+      </li>
+      <li>
+        <strong>Dirección de email <span class="tag req">Requerido</span></strong>
+        Para autenticación, verificación de cuenta, recuperación de contraseña y notificaciones críticas del sistema.
+      </li>
+      <li>
+        <strong>Contraseña <span class="tag req">Requerido</span></strong>
+        Almacenada exclusivamente como hash bcrypt (factor de costo 10). Nunca guardamos contraseñas en texto plano ni reversible.
+      </li>
+      <li>
+        <strong>IP de registro <span class="tag auto">Automático</span></strong>
+        Capturada una sola vez al crear la cuenta, para auditoría de fraude y cumplimiento legal.
+      </li>
+    </ul>
+
+    <h3 class="sub">2.2 Datos de Monetización (Opcionales)</h3>
+    <ul class="dlist">
+      <li>
+        <strong>Email de PayPal <span class="tag opt">Opcional</span></strong>
+        Solo requerido si deseas recibir pagos por descargas de tus publicaciones indexadas. Se comparte únicamente con PayPal Inc. para procesar transferencias.
+      </li>
+      <li>
+        <strong>Nivel de verificación (0–3) <span class="tag opt">Opcional</span></strong>
+        Asignado por administradores según métricas de seguidores y calidad de contenido. Determina insignia de perfil.
+      </li>
+    </ul>
+
+    <h3 class="sub warn">2.3 Datos Técnicos Automáticos</h3>
+    <ul class="dlist">
+      <li>
+        <strong>Dirección IP por descarga <span class="tag ttl">TTL: 24h</span></strong>
+        Registrada temporalmente para anti-bots y límite de descargas por IP/día. Se elimina automáticamente vía índice TTL de MongoDB a las 24 horas.
+      </li>
+      <li>
+        <strong>Timestamp de último login <span class="tag auto">Automático</span></strong>
+        Fecha del último acceso. Usada para el sistema de purga automática de cuentas inactivas (umbral: 2 años sin actividad).
+      </li>
+      <li>
+        <strong>Logs de actividad del servidor <span class="tag auto">Automático</span></strong>
+        Método HTTP, ruta y tiempo de respuesta para debugging. No incluyen cuerpo de solicitudes ni datos personales sensibles.
+      </li>
+      <li>
+        <strong>Tokens de sesión JWT <span class="tag auto">Automático</span></strong>
+        Generados al iniciar sesión. Vigencia de <strong>30 días</strong>. Almacenados en localStorage del navegador del usuario. No se almacenan en servidor.
+      </li>
+    </ul>
+
+    <h3 class="sub">2.4 Datos de Perfil Social (Opcionales)</h3>
+    <ul class="dlist">
+      <li>
+        <strong>Avatar <span class="tag opt">Opcional</span></strong>
+        Imagen de perfil alojada en Cloudinary. URL pública en tu perfil visible por otros usuarios.
+      </li>
+      <li>
+        <strong>Biografía <span class="tag opt">Opcional</span></strong>
+        Texto libre de hasta 200 caracteres. Visible públicamente en tu perfil.
+      </li>
+      <li>
+        <strong>Lista de seguidores y seguidos <span class="tag opt">Opcional</span></strong>
+        Usernames de usuarios que te siguen o a quienes sigues. Visibles en tu perfil público.
+      </li>
+    </ul>
+
+    <h3 class="sub">2.5 Datos de Contenido Indexado</h3>
+    <ul class="dlist">
+      <li>
+        <strong>Metadatos de publicaciones <span class="tag req">Requerido</span></strong>
+        Título, descripción, URL externa, imagen, categoría, tags, tipo de contenido (juego/mod/app/software/video).
+      </li>
+      <li>
+        <strong>Estadísticas de publicación <span class="tag auto">Automático</span></strong>
+        Contador de descargas efectivas, likes, reportes, score de recomendación (calculado cada 12h por algoritmo propio).
+      </li>
+      <li>
+        <strong>Comentarios <span class="tag opt">Opcional</span></strong>
+        Textos de comentarios en publicaciones, vinculados a tu nombre de usuario y fecha.
+      </li>
+      <li>
+        <strong>Favoritos <span class="tag opt">Opcional</span></strong>
+        Lista de IDs de publicaciones que has marcado como favorito.
+      </li>
+    </ul>
+
+    <h3 class="sub ai">2.6 Datos de NEXUS IA (Sistema de IA Integrado)</h3>
+    <div class="nexus-card">
+      <h4>🧠 NEXUS — Motor de Inteligencia Artificial Propio</h4>
+      <p>
+        NEXUS es una IA con arquitectura propia que opera dentro de UpGames. Al interactuar con NEXUS,
+        los siguientes datos son procesados y pueden ser persistidos para mejorar tu experiencia personalizada:
+      </p>
+    </div>
+    <ul class="dlist" style="margin-top:10px">
+      <li>
+        <strong>Memoria de Trabajo (WorkingMemory) <span class="tag ai">IA</span></strong>
+        Últimos 128 turnos de la conversación activa. Reside en RAM del servidor durante la sesión. No persiste al cerrar.
+      </li>
+      <li>
+        <strong>Memoria Episódica <span class="tag ai">IA</span></strong>
+        Historial de interacciones y consultas anteriores (hasta 500.000 episodios). Persiste en servidor Railway para continuidad entre sesiones. Incluye consultas, respuestas y feedback implícito de calidad.
+      </li>
+      <li>
+        <strong>Memoria Semántica <span class="tag ai">IA</span></strong>
+        Hechos aprendidos automáticamente de tus conversaciones mediante 28 patrones de extracción (nombre, ciudad, juego favorito, plataforma, preferencias, etc.). Persiste en servidor. Puedes solicitar su eliminación en cualquier momento.
+      </li>
+      <li>
+        <strong>Estado afectivo PAD-3D <span class="tag ai">IA</span></strong>
+        Vector emocional computacional (Placer, Activación, Dominancia) de NEXUS. Es un estado interno del sistema, no datos personales del usuario.
+      </li>
+      <li>
+        <strong>Imágenes generadas (Pollinations.ai) <span class="tag opt">Opcional</span></strong>
+        Si solicitas generación de imágenes, el prompt se envía a Pollinations.ai (servicio gratuito y sin autenticación). Las imágenes se generan en sus servidores. Consulta su política de privacidad en pollinations.ai.
+      </li>
+      <li>
+        <strong>Imágenes de visión (Groq Vision) <span class="tag opt">Opcional</span></strong>
+        Si envías imágenes a NEXUS para análisis, se procesan via API Groq. Las imágenes no se almacenan en UpGames.
+      </li>
+    </ul>
+
+    <div class="alert warn" style="margin-top:16px">
+      <span class="alert-icon">⚠️</span>
+      <div class="alert-body">
+        <h4>Importante: UpGames NO almacena archivos</h4>
+        <p>Solo indexamos metadatos (URLs, títulos, descripciones). Los archivos residen en servicios de terceros (Mega, MediaFire, Google Drive, etc.) sobre los cuales no tenemos control.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECCIÓN 3 -->
+  <div class="section">
+    <h2><span class="num">03</span> Finalidad del Tratamiento</h2>
+    <ul class="ilist">
+      <li><strong>Autenticación y gestión de cuenta:</strong> verificar identidad, mantener sesión y recuperar contraseña.</li>
+      <li><strong>Anti-fraude y seguridad:</strong> detectar bots, IPs anómalas, comportamiento fraudulento y proteger la economía de la plataforma.</li>
+      <li><strong>Monetización:</strong> calcular descargas orgánicas verificadas y procesar pagos automáticos vía PayPal Payouts API.</li>
+      <li><strong>Sistema de recomendación:</strong> calcular el score de relevancia de cada publicación (recálculo cada 12h) para personalizar el feed.</li>
+      <li><strong>Notificaciones sociales:</strong> informarte de nuevas publicaciones de usuarios que sigues, favoritos y eventos del sistema. Las notificaciones se eliminan automáticamente a los 30 días (TTL MongoDB).</li>
+      <li><strong>NEXUS IA:</strong> personalizar la asistencia de IA, mantener continuidad conversacional y extraer preferencias para mejores recomendaciones.</li>
+      <li><strong>Comunicación crítica:</strong> envío transaccional (verificación de email, recuperación de contraseña, alertas de seguridad, cambios de términos). Sin marketing no solicitado.</li>
+      <li><strong>Purga de inactividad:</strong> eliminación automática de cuentas sin login por 2 años (excepto usuarios con saldo pendiente, admins o en lista negra administrativa).</li>
+      <li><strong>Cumplimiento legal:</strong> respuesta a solicitudes DMCA, órdenes judiciales y requerimientos de autoridades competentes.</li>
+    </ul>
+  </div>
+
+  <!-- SECCIÓN 4 -->
+  <div class="section">
+    <h2><span class="num">04</span> Terceros que Pueden Recibir tus Datos</h2>
+
+    <div class="thirds">
+      <div class="third-row">
+        <span class="tr-icon">💳</span>
+        <div>
+          <h4>PayPal Inc.</h4>
+          <p>Tu email de PayPal se comparte exclusivamente para procesar transferencias de ganancias. Sujeto a la política de privacidad de PayPal.</p>
+        </div>
+      </div>
+      <div class="third-row">
+        <span class="tr-icon">🗄️</span>
+        <div>
+          <h4>MongoDB Atlas (AWS)</h4>
+          <p>Base de datos principal cifrada en reposo (AES-256) en servidores AWS. Tu usuario, email (hasheado), estadísticas y metadatos residen aquí.</p>
+        </div>
+      </div>
+      <div class="third-row">
+        <span class="tr-icon">🚂</span>
+        <div>
+          <h4>Railway.app</h4>
+          <p>Hosting del backend y servicios NEXUS. Logs de servidor, tráfico de API y procesos de IA corren en sus instancias. Certificados SOC 2.</p>
+        </div>
+      </div>
+      <div class="third-row">
+        <span class="tr-icon">🖼️</span>
+        <div>
+          <h4>Cloudinary</h4>
+          <p>CDN de imágenes y videos. Los avatares de usuario y miniaturas de publicaciones se hospedan en sus servidores. URLs públicas.</p>
+        </div>
+      </div>
+      <div class="third-row">
+        <span class="tr-icon">🤖</span>
+        <div>
+          <h4>Anthropic / Groq (LLMs de NEXUS)</h4>
+          <p>Cuando NEXUS IA necesita procesar tu consulta, el texto del mensaje se envía a Anthropic (Claude) o Groq (Llama) vía API segura. No se envían datos de identificación personal.</p>
+        </div>
+      </div>
+      <div class="third-row">
+        <span class="tr-icon">📄</span>
+        <div>
+          <h4>GitHub Pages</h4>
+          <p>Hosting del frontend. Sin datos sensibles. Solo sirve archivos HTML, CSS y JS estáticos.</p>
+        </div>
+      </div>
+      <div class="third-row">
+        <span class="tr-icon">📢</span>
+        <div>
+          <h4>Redes Publicitarias (Puente de Descarga)</h4>
+          <p>highperformanceformat.com y effectivegatecpm.com muestran anuncios en la página de redirección (puente.html) durante 30 segundos. Estas redes pueden instalar sus propias cookies. Puedes bloquearlas con uBlock Origin sin afectar la funcionalidad.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="alert success" style="margin-top:16px">
+      <span class="alert-icon">✅</span>
+      <div class="alert-body">
+        <h4>Garantía absoluta</h4>
+        <p>Tus datos personales NUNCA se venden, alquilan, intercambian ni ceden a brokers de datos, empresas de marketing ni terceros no afiliados con ningún fin comercial ajeno a UpGames.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECCIÓN 5 -->
+  <div class="section">
+    <h2><span class="num">05</span> Retención de Datos</h2>
+    <table class="ret-table">
+      <thead>
+        <tr>
+          <th>Dato</th>
+          <th>Período de Retención</th>
+          <th>Mecanismo</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Datos de cuenta activa</td>
+          <td>Mientras la cuenta esté activa</td>
+          <td>Manual / solicitud de eliminación</td>
+        </tr>
+        <tr>
+          <td>Cuentas inactivas (sin login)</td>
+          <td>2 años de inactividad → purga automática</td>
+          <td><span class="ret-ttl">JOB automático semanal</span></td>
+        </tr>
+        <tr>
+          <td>IPs de descarga anti-bot</td>
+          <td>24 horas</td>
+          <td><span class="ret-ttl">TTL MongoDB</span></td>
+        </tr>
+        <tr>
+          <td>Notificaciones sociales</td>
+          <td>30 días</td>
+          <td><span class="ret-ttl">TTL MongoDB</span></td>
+        </tr>
+        <tr>
+          <td>Logs de actividad sospechosa</td>
+          <td>90 días</td>
+          <td>Módulo fraudDetector</td>
+        </tr>
+        <tr>
+          <td>Historial de pagos</td>
+          <td>7 años</td>
+          <td>Obligación fiscal colombiana</td>
+        </tr>
+        <tr>
+          <td>Memoria episódica NEXUS</td>
+          <td>Activa mientras la cuenta exista</td>
+          <td>Solicitud de eliminación disponible</td>
+        </tr>
+        <tr>
+          <td>Tokens de email (verificación / reset)</td>
+          <td>24h (verificación) / 1h (reset)</td>
+          <td><span class="ret-ttl">TTL campo expires</span></td>
+        </tr>
+        <tr>
+          <td>Sesiones admin</td>
+          <td>8 horas</td>
+          <td>In-memory Map con limpieza horaria</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- SECCIÓN 6 -->
+  <div class="section accent-cy">
+    <h2 class="cy"><span class="num">06</span> Tus Derechos (GDPR · Ley 1581 · CCPA)</h2>
+    <div class="rights-grid">
+      <div class="right-card">
+        <div class="rc-icon">📋</div>
+        <h4>Acceso</h4>
+        <p>Solicitar copia completa de todos tus datos personales en formato JSON.</p>
+      </div>
+      <div class="right-card">
+        <div class="rc-icon">✏️</div>
+        <h4>Rectificación</h4>
+        <p>Corregir datos incorrectos o desactualizados (email, avatar, bio).</p>
+      </div>
+      <div class="right-card">
+        <div class="rc-icon">🗑️</div>
+        <h4>Eliminación</h4>
+        <p>"Derecho al olvido": borrar cuenta, publicaciones y datos asociados.</p>
+      </div>
+      <div class="right-card">
+        <div class="rc-icon">📦</div>
+        <h4>Portabilidad</h4>
+        <p>Exportar tus datos en formato legible por máquina (JSON/CSV).</p>
+      </div>
+      <div class="right-card">
+        <div class="rc-icon">🚫</div>
+        <h4>Oposición</h4>
+        <p>Oponerte al procesamiento para fines específicos (ej. análisis de comportamiento).</p>
+      </div>
+      <div class="right-card">
+        <div class="rc-icon">🧠</div>
+        <h4>Memoria NEXUS</h4>
+        <p>Solicitar borrado de memoria episódica y semántica aprendida por NEXUS sobre ti.</p>
+      </div>
+      <div class="right-card">
+        <div class="rc-icon">🔕</div>
+        <h4>No venta (CCPA)</h4>
+        <p>Ya no vendemos ningún dato personal. Derecho garantizado por diseño.</p>
+      </div>
+      <div class="right-card">
+        <div class="rc-icon">⏸️</div>
+        <h4>Limitación</h4>
+        <p>Restringir el procesamiento en casos justificados mientras se evalúa una disputa.</p>
+      </div>
+    </div>
+    <div class="contact-block">
+      <h4>📧 Cómo ejercer tus derechos</h4>
+      <p><strong>Email:</strong> <a href="mailto:mr.m0onster@protonmail.com">mr.m0onster@protonmail.com</a></p>
+      <p><strong>Asunto:</strong> "Solicitud de Privacidad – [Tu Usuario] – [Derecho a ejercer]"</p>
+      <p><strong>Tiempo de respuesta:</strong> Máximo 15 días hábiles · <strong>Costo:</strong> Gratuito</p>
+      <p style="margin-top:10px;color:var(--txt3);font-size:.8rem">
+        Autoridad de control en Colombia: Superintendencia de Industria y Comercio (SIC) — 
+        <a href="https://www.sic.gov.co" target="_blank">www.sic.gov.co</a>
+      </p>
+    </div>
+  </div>
+
+  <!-- SECCIÓN 7 -->
+  <div class="section">
+    <h2><span class="num">07</span> Seguridad Técnica</h2>
+    <ul class="dlist">
+      <li><strong>🔐 Cifrado en tránsito</strong>HTTPS/TLS 1.3 en todas las comunicaciones cliente-servidor.</li>
+      <li><strong>🔑 Hash de contraseñas</strong>bcrypt con factor de costo 10. Irreversible por diseño.</li>
+      <li><strong>🪙 Autenticación JWT</strong>Tokens firmados con secreto independiente. Vigencia 30 días. Secreto de admin separado del secreto de usuario.</li>
+      <li><strong>⚡ Rate Limiting</strong>Límites por ruta: auth (inicio de sesión, registro), creación de contenido, validación de descargas, y límite general. Protección contra fuerza bruta.</li>
+      <li><strong>🛡️ Helmet.js</strong>Headers de seguridad HTTP aplicados globalmente (CSP, HSTS, X-Frame-Options, etc.).</li>
+      <li><strong>🤖 Anti-bots</strong>Límite de descargas por IP/día. Registro temporal con TTL de 24h. Módulo fraudDetector con detección de patrones anómalos.</li>
+      <li><strong>🚨 Notificación de brechas</strong>En caso de brecha de seguridad que afecte datos sensibles, notificaremos a los usuarios afectados en máximo 72 horas.</li>
+    </ul>
+  </div>
+
+  <!-- SECCIÓN 8 -->
+  <div class="section">
+    <h2><span class="num">08</span> Cookies y Almacenamiento Local</h2>
+
+    <h3 class="sub g">8.1 Esenciales (No requieren consentimiento)</h3>
+    <ul class="dlist">
+      <li><strong>localStorage.token</strong>Token JWT de sesión. Requerido para mantener el login activo. Expira a los 30 días.</li>
+      <li><strong>localStorage.user_admin</strong>Nombre de usuario logueado (identificador de sesión). Sin datos sensibles.</li>
+      <li><strong>localStorage (caché de contenido)</strong>Caché temporal de items del catálogo con TTL de 2 minutos para carga instantánea.</li>
+      <li><strong>localStorage (preferencias de UI)</strong>Estado del onboarding completado, configuración de vista. Sin datos personales.</li>
+    </ul>
+
+    <h3 class="sub warn">8.2 De terceros publicitarios (Página de Redirección)</h3>
+    <ul class="dlist">
+      <li><strong>highperformanceformat.com</strong>Red publicitaria CPM en la página puente (30s de espera antes de descarga). Puede instalar cookies propias de seguimiento publicitario.</li>
+      <li><strong>effectivegatecpm.com</strong>Red publicitaria adicional. Mismas condiciones que el punto anterior.</li>
+    </ul>
+    <p style="margin-top:10px;color:var(--txt3);font-size:.84rem">
+      Puedes bloquear cookies de terceros con extensiones como uBlock Origin o Privacy Badger sin afectar la funcionalidad principal de UpGames.
+    </p>
+  </div>
+
+  <!-- SECCIÓN 9 -->
+  <div class="section">
+    <h2><span class="num">09</span> Transferencias Internacionales</h2>
+    <ul class="ilist">
+      <li><strong>MongoDB Atlas:</strong> Servidores AWS en Virginia (EE.UU.). Transferencia protegida por Cláusulas Contractuales Estándar (SCC) compatibles con GDPR.</li>
+      <li><strong>Railway.app:</strong> Infraestructura en EE.UU. Cumple con estándares SOC 2 Tipo II.</li>
+      <li><strong>PayPal:</strong> Red global. Sujeto a su propia política de privacidad y acuerdos internacionales de transferencia.</li>
+      <li><strong>Anthropic / Groq:</strong> APIs en EE.UU. Procesamiento de texto de consultas NEXUS bajo sus respectivas políticas de privacidad. Sin datos identificativos.</li>
+      <li><strong>Cloudinary:</strong> CDN global. URLs de imágenes públicas sin datos personales.</li>
+    </ul>
+    <div class="alert info" style="margin-top:16px">
+      <span class="alert-icon">🌐</span>
+      <div class="alert-body">
+        <h4>Mecanismo de salvaguarda</h4>
+        <p>Todas las transferencias internacionales de datos se realizan bajo mecanismos aprobados por autoridades de protección de datos, equivalentes a los requisitos de la Ley 1581/2012 colombiana y el GDPR europeo.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECCIÓN 10 -->
+  <div class="section">
+    <h2><span class="num">10</span> Privacidad de Menores</h2>
+    <div class="alert danger">
+      <span class="alert-icon">🔞</span>
+      <div class="alert-body">
+        <h4>UpGames no está dirigido a menores de 13 años</h4>
+        <p>
+          Para ciertas categorías de contenido (marcadas con el chip correspondiente en la plataforma), el acceso puede estar restringido a mayores de 18 años. 
+          Si eres padre/tutor y detectas que tu hijo menor tiene cuenta en UpGames, contáctanos en <a href="mailto:mr.m0onster@protonmail.com" style="color:var(--cy)">mr.m0onster@protonmail.com</a> para eliminar la cuenta inmediatamente.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- SECCIÓN 11 -->
+  <div class="section">
+    <h2><span class="num">11</span> Cambios a Esta Política</h2>
+    <ul class="ilist">
+      <li>Cambios sustanciales se notificarán por <strong>email</strong> a usuarios registrados con al menos 15 días de anticipación.</li>
+      <li>Un <strong>banner en la plataforma</strong> informará de los cambios durante el período de transición.</li>
+      <li>La <strong>fecha de vigencia</strong> visible al inicio del documento se actualizará en cada versión.</li>
+      <li>El <strong>número de versión</strong> (actualmente v2.0) incrementará con cada revisión significativa.</li>
+      <li>El uso continuado de la plataforma después de la fecha efectiva de los cambios constituye aceptación.</li>
+    </ul>
+  </div>
+
+  <!-- SECCIÓN 12 -->
+  <div class="section accent-g">
+    <h2><span class="num">12</span> Contacto DPO y Autoridades</h2>
+    <div class="contact-block">
+      <h4>🔒 Oficial de Protección de Datos (DPO)</h4>
+      <p><strong>Nombre:</strong> Jhonatan David Castro Galviz</p>
+      <p><strong>Email:</strong> <a href="mailto:mr.m0onster@protonmail.com">mr.m0onster@protonmail.com</a></p>
+      <p><strong>Asunto recomendado:</strong> "Privacidad – [Tu Consulta]"</p>
+      <p><strong>Tiempo de respuesta:</strong> 5–10 días hábiles</p>
+    </div>
+    <div class="alert info" style="margin-top:12px">
+      <span class="alert-icon">🏛️</span>
+      <div class="alert-body">
+        <h4>Autoridad de Control (Colombia)</h4>
+        <p>Superintendencia de Industria y Comercio (SIC) — <a href="https://www.sic.gov.co" target="_blank" style="color:var(--g)">www.sic.gov.co</a></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="doc-footer">
+    <div class="foot-logo">
+      <span style="color:var(--g)">UP</span><span>GAMES</span>
+    </div>
+    <p>© 2026 UpGames. Todos los derechos reservados.</p>
+    <p>Documento Política de Privacidad · Versión 2.0 · Vigente desde Abril 2026</p>
+    <div class="foot-links">
+      <a href="./terminos&condiciones.html">Términos y Condiciones</a>
+      <a href="./politica-privacidad.html">Política de Privacidad</a>
+    </div>
+  </div>
+
+</div>
 </body>
 </html>
