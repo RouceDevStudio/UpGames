@@ -751,6 +751,20 @@ const NotificacionSchema = new mongoose.Schema({
 NotificacionSchema.index({ destinatario: 1, leida: 1, fecha: -1 });
 const Notificacion = mongoose.model('Notificacion', NotificacionSchema);
 
+// ========== MODELO: MENSAJES DE CHAT ==========
+const MensajeSchema = new mongoose.Schema({
+    de:    { type: String, required: true, index: true },   // quien envía
+    para:  { type: String, required: true, index: true },   // quien recibe
+    texto: { type: String, required: true, maxlength: 2000 },
+    leido: { type: Boolean, default: false, index: true },
+    fecha: { type: Date,   default: Date.now, index: true, expires: 90 * 24 * 60 * 60 } // TTL 90 días
+}, { collection: 'mensajes', timestamps: false });
+
+// Índice compuesto para cargar conversación entre dos usuarios rápido
+MensajeSchema.index({ de: 1, para: 1, fecha: 1 });
+MensajeSchema.index({ para: 1, leido: 1 });
+const Mensaje = mongoose.model('Mensaje', MensajeSchema);
+
 // ========== MIDDLEWARE DE AUTENTICACIÓN JWT ==========
 const verificarToken = (req, res, next) => {
     const token = req.headers.authorization?.split(' ')[1];
@@ -3894,6 +3908,243 @@ function iniciarJobsAutomaticos() {
     logger.info('TODOS LOS JOBS AUTOMÁTICOS INICIADOS');
     
 }
+
+/**
+ * DELETE /notificaciones/:id
+ * Elimina una notificación individual por su _id
+ */
+app.delete('/notificaciones/:id', verificarToken, async (req, res) => {
+    try {
+        const notif = await Notificacion.findById(req.params.id).lean();
+        if (!notif) return res.status(404).json({ success: false, error: 'No encontrada' });
+        if (notif.destinatario !== req.usuario)
+            return res.status(403).json({ success: false, error: 'Sin permiso' });
+        await Notificacion.deleteOne({ _id: req.params.id });
+        res.json({ success: true });
+    } catch (err) {
+        logger.error(`Error eliminando notificación: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error interno' });
+    }
+});
+
+/**
+ * DELETE /notificaciones/todas/:usuario
+ * Elimina TODAS las notificaciones de un usuario
+ */
+app.delete('/notificaciones/todas/:usuario', verificarToken, async (req, res) => {
+    try {
+        const { usuario } = req.params;
+        if (req.usuario !== usuario)
+            return res.status(403).json({ success: false, error: 'Sin permiso' });
+        await Notificacion.deleteMany({ destinatario: usuario });
+        res.json({ success: true });
+    } catch (err) {
+        logger.error(`Error vaciando notificaciones: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error interno' });
+    }
+});
+
+// ══════════════════════════════════════════════════════════════
+// CHAT EN TIEMPO REAL — REST + Polling
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * POST /chat/enviar
+ * Envía un mensaje a otro usuario.
+ * Ambos deben seguirse mutuamente.
+ * Crea automáticamente una notificación al destinatario.
+ */
+app.post('/chat/enviar', verificarToken, async (req, res) => {
+    try {
+        const { para, texto } = req.body;
+        const de = req.usuario;
+
+        if (!para || !texto || !texto.trim()) {
+            return res.status(400).json({ success: false, error: 'Destinatario y texto requeridos' });
+        }
+        if (de === para) {
+            return res.status(400).json({ success: false, error: 'No puedes enviarte mensajes a ti mismo' });
+        }
+        if (texto.trim().length > 2000) {
+            return res.status(400).json({ success: false, error: 'Mensaje demasiado largo (máx 2000 caracteres)' });
+        }
+
+        // Verificar que ambos se siguen mutuamente
+        const [emisor, receptor] = await Promise.all([
+            Usuario.findOne({ usuario: de   }).select('siguiendo').lean(),
+            Usuario.findOne({ usuario: para }).select('listaSeguidores siguiendo').lean()
+        ]);
+
+        if (!receptor) {
+            return res.status(404).json({ success: false, error: 'Usuario destinatario no existe' });
+        }
+
+        const emisorSigueReceptor  = (emisor?.siguiendo       || []).includes(para);
+        const receptorSigueEmisor  = (receptor?.listaSeguidores || []).includes(de);
+
+        if (!emisorSigueReceptor || !receptorSigueEmisor) {
+            return res.status(403).json({ success: false, error: 'Solo puedes chatear con usuarios que se siguen mutuamente' });
+        }
+
+        // Guardar mensaje
+        const msg = new Mensaje({ de, para, texto: texto.trim() });
+        await msg.save();
+
+        // Crear notificación push para el destinatario (tipo 'mensaje')
+        try {
+            const notif = new Notificacion({
+                destinatario: para,
+                tipo:         'sistema',
+                emisor:       de,
+                itemId:       msg._id.toString(),
+                itemTitle:    `Mensaje de @${de}`,
+                itemImage:    '',
+                leida:        false,
+                fecha:        new Date()
+            });
+            await notif.save();
+        } catch (_) { /* notificación no crítica */ }
+
+        res.json({ success: true, mensaje: { id: msg._id, de, para, texto: msg.texto, leido: false, fecha: msg.fecha } });
+    } catch (err) {
+        logger.error(`Error enviando mensaje: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error interno' });
+    }
+});
+
+/**
+ * GET /chat/mensajes/:otroUsuario
+ * Carga el historial de mensajes entre el usuario autenticado y otroUsuario.
+ * También marca como leídos los mensajes recibidos.
+ * Query params: ?desde=<timestamp_ms>  → solo mensajes más nuevos que esa fecha (para polling)
+ */
+app.get('/chat/mensajes/:otroUsuario', verificarToken, async (req, res) => {
+    try {
+        const yo    = req.usuario;
+        const otro  = req.params.otroUsuario;
+        const desde = req.query.desde ? new Date(Number(req.query.desde)) : null;
+
+        const filtro = {
+            $or: [
+                { de: yo,   para: otro },
+                { de: otro, para: yo   }
+            ]
+        };
+        if (desde) filtro.fecha = { $gt: desde };
+
+        const mensajes = await Mensaje.find(filtro)
+            .sort({ fecha: 1 })
+            .limit(200)
+            .lean();
+
+        // Marcar como leídos los que me llegaron a mí
+        const idsNoLeidos = mensajes
+            .filter(m => m.para === yo && !m.leido)
+            .map(m => m._id);
+
+        if (idsNoLeidos.length) {
+            await Mensaje.updateMany({ _id: { $in: idsNoLeidos } }, { $set: { leido: true } });
+        }
+
+        res.json({
+            success: true,
+            mensajes: mensajes.map(m => ({
+                id:     m._id,
+                de:     m.de,
+                para:   m.para,
+                texto:  m.texto,
+                leido:  m.leido,
+                fecha:  m.fecha
+            }))
+        });
+    } catch (err) {
+        logger.error(`Error cargando mensajes: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error interno' });
+    }
+});
+
+/**
+ * GET /chat/conversaciones
+ * Devuelve la lista de conversaciones del usuario autenticado
+ * con el último mensaje y el conteo de no leídos de cada una.
+ */
+app.get('/chat/conversaciones', verificarToken, async (req, res) => {
+    try {
+        const yo = req.usuario;
+
+        // Obtener todos los mensajes donde yo participo
+        const mensajes = await Mensaje.find({
+            $or: [{ de: yo }, { para: yo }]
+        }).sort({ fecha: -1 }).lean();
+
+        // Agrupar por contacto
+        const convMap = {};
+        for (const m of mensajes) {
+            const contacto = m.de === yo ? m.para : m.de;
+            if (!convMap[contacto]) {
+                convMap[contacto] = { ultimo: m, noLeidos: 0 };
+            }
+            // Contar no leídos recibidos
+            if (m.para === yo && !m.leido) convMap[contacto].noLeidos++;
+        }
+
+        const conversaciones = Object.entries(convMap).map(([contacto, data]) => ({
+            contacto,
+            ultimoMensaje: {
+                texto: data.ultimo.texto,
+                de:    data.ultimo.de,
+                fecha: data.ultimo.fecha
+            },
+            noLeidos: data.noLeidos
+        }));
+
+        // Ordenar por fecha del último mensaje
+        conversaciones.sort((a, b) => new Date(b.ultimoMensaje.fecha) - new Date(a.ultimoMensaje.fecha));
+
+        res.json({ success: true, conversaciones });
+    } catch (err) {
+        logger.error(`Error cargando conversaciones: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error interno' });
+    }
+});
+
+/**
+ * DELETE /chat/conversacion/:otroUsuario
+ * Elimina todos los mensajes entre el usuario autenticado y otroUsuario.
+ */
+app.delete('/chat/conversacion/:otroUsuario', verificarToken, async (req, res) => {
+    try {
+        const yo   = req.usuario;
+        const otro = req.params.otroUsuario;
+        await Mensaje.deleteMany({
+            $or: [
+                { de: yo,   para: otro },
+                { de: otro, para: yo   }
+            ]
+        });
+        res.json({ success: true });
+    } catch (err) {
+        logger.error(`Error borrando conversación: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error interno' });
+    }
+});
+
+/**
+ * GET /chat/no-leidos
+ * Devuelve el total de mensajes no leídos del usuario autenticado.
+ * Usado para el badge en el menú.
+ */
+app.get('/chat/no-leidos', verificarToken, async (req, res) => {
+    try {
+        const yo = req.usuario;
+        const total = await Mensaje.countDocuments({ para: yo, leido: false });
+        res.json({ success: true, noLeidos: total });
+    } catch (err) {
+        res.status(500).json({ success: false, error: 'Error interno' });
+    }
+});
+
+// ══════════════════════════════════════════════════════════════
 
 // ========== INICIAR SERVIDOR ==========
 const PORT = config.PORT;
