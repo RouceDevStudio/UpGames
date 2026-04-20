@@ -329,6 +329,43 @@ display:block;
 .btn-seguir.btn-siguiendo::before { display: none; }
 .btn-seguir.btn-siguiendo:hover:not(:disabled) { background: var(--g-dim); transform: none; box-shadow: none; }
 
+/* Fila de acciones (Seguir + Mensaje) */
+.hero-action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Botón Mensaje */
+.btn-mensaje {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--cy);
+  font-size: .8rem;
+  font-weight: 800;
+  letter-spacing: .4px;
+  border: 1.5px solid rgba(0,242,255,.35);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .18s, border-color .18s, transform .12s var(--spring);
+  white-space: nowrap;
+  font-family: var(--ff);
+  animation: msgBtnIn .3s var(--spring);
+}
+@keyframes msgBtnIn {
+  from { opacity:0; transform:scale(.85) translateX(8px); }
+  to   { opacity:1; transform:scale(1)   translateX(0);   }
+}
+.btn-mensaje:hover  { background: rgba(0,242,255,.08); border-color: var(--cy); }
+.btn-mensaje:active { transform: scale(.95); }
+.btn-mensaje ion-icon { font-size: 1rem; }
+
 /* ═══════════════════════════════════════════
    SECTION HEADER
 ═══════════════════════════════════════════ */
@@ -661,10 +698,16 @@ display:block;
                     </div>
                     <p class="hero-bio" id="user-bio">Cargando perfil…</p>
                 </div>
-                <button id="btn-seguir" class="btn-seguir">
+                <div class="hero-action-row">
+                  <button id="btn-seguir" class="btn-seguir">
                     <ion-icon name="person-add-outline"></ion-icon>
                     Seguir
-                </button>
+                  </button>
+                  <button id="btn-mensaje" class="btn-mensaje" style="display:none" onclick="abrirChat()">
+                    <ion-icon name="chatbubble-ellipses-outline"></ion-icon>
+                    Mensaje
+                  </button>
+                </div>
             </div>
             <div class="stats">
                 <div class="stat-item">
@@ -1009,13 +1052,15 @@ display:block;
 
         // ✅ CONFIGURAR BOTÓN DE SEGUIR
         function configurarBotonSeguir(estaSiguiendo) {
-            const btnSeguir = document.getElementById('btn-seguir');
+            const btnSeguir  = document.getElementById('btn-seguir');
+            const btnMensaje = document.getElementById('btn-mensaje');
             
             if (!usuarioActual) {
                 btnSeguir.innerHTML = `<ion-icon name="log-in-outline"></ion-icon> Iniciar sesión`;
                 btnSeguir.onclick = () => window.location.href = './index.html';
                 btnSeguir.disabled = false;
                 btnSeguir.className = 'btn-seguir';
+                if (btnMensaje) btnMensaje.style.display = 'none';
                 return;
             }
 
@@ -1025,11 +1070,21 @@ display:block;
                 btnSeguir.innerHTML = `<ion-icon name="checkmark-circle-outline"></ion-icon> Siguiendo`;
                 btnSeguir.className = 'btn-seguir btn-siguiendo';
                 btnSeguir.onclick = dejarDeSeguir;
+                // Mostrar botón de mensaje
+                if (btnMensaje) btnMensaje.style.display = 'inline-flex';
             } else {
                 btnSeguir.innerHTML = `<ion-icon name="person-add-outline"></ion-icon> Seguir`;
                 btnSeguir.className = 'btn-seguir';
                 btnSeguir.onclick = seguirUsuario;
+                // Ocultar botón de mensaje
+                if (btnMensaje) btnMensaje.style.display = 'none';
             }
+        }
+
+        // ✅ ABRIR CHAT
+        function abrirChat() {
+            if (!usuarioActual || !usuarioViendo) return;
+            window.location.href = `./chats.html?usuario=${encodeURIComponent(usuarioViendo)}`;
         }
 
         // ✅ SEGUIR USUARIO
