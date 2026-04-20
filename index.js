@@ -670,6 +670,21 @@ const UsuarioSchema = new mongoose.Schema({
     resetPasswordExpires: {
         type: Date,
         default: null
+    },
+    // ── SOCIAL LINKS (máx 4 URLs) ──────────────────────
+    socialLinks: {
+        type: [String],
+        default: [],
+        validate: { validator: v => v.length <= 4, message: 'Máximo 4 links sociales' }
+    },
+    // ── COOLDOWNS DE EDICIÓN ───────────────────────────
+    lastUsernameChange: {
+        type: Date,
+        default: null
+    },
+    lastEmailChange: {
+        type: Date,
+        default: null
     }
 }, { 
     collection: 'usuarios',
@@ -1941,7 +1956,10 @@ app.post('/auth/login', [
                 email: usuario.email,
                 verificadoNivel: usuario.verificadoNivel,
                 isVerificado: usuario.isVerificado,
-                saldo: usuario.saldo
+                saldo: usuario.saldo,
+                socialLinks: usuario.socialLinks || [],
+                lastUsernameChange: usuario.lastUsernameChange || null,
+                lastEmailChange: usuario.lastEmailChange || null
             }
         });
 
@@ -3229,6 +3247,163 @@ app.put('/usuarios/update-bio', [
     } catch (err) {
         logger.error(`Error en update-bio: ${err.message}`);
         res.status(500).json({ success: false, error: 'Error al actualizar bio' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// ⭐ PUT /usuarios/update-username  — Cambiar nombre de usuario (cooldown 30 días)
+// ═══════════════════════════════════════════════════════════
+app.put('/usuarios/update-username', [
+    verificarToken,
+    body('nuevoUsuario').trim().isLength({ min: 3, max: 20 }).matches(/^[a-z0-9_]+$/),
+    body('password').notEmpty()
+], async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'Nombre inválido (3-20 chars, solo letras minúsculas, números y _)' });
+    try {
+        const { nuevoUsuario, password } = req.body;
+        const usuario = await Usuario.findOne({ usuario: req.usuario.toLowerCase() });
+        if (!usuario) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+
+        // Verificar contraseña
+        const passOk = await bcrypt.compare(password, usuario.password);
+        if (!passOk) return res.status(401).json({ success: false, error: 'Contraseña incorrecta' });
+
+        // Cooldown 30 días
+        if (usuario.lastUsernameChange) {
+            const diffMs   = Date.now() - new Date(usuario.lastUsernameChange).getTime();
+            const diffDays = diffMs / (1000 * 60 * 60 * 24);
+            if (diffDays < 30) {
+                const restante = Math.ceil(30 - diffDays);
+                return res.status(429).json({ success: false, error: `Debes esperar ${restante} día${restante !== 1 ? 's' : ''} más para cambiar tu nombre` });
+            }
+        }
+
+        // Verificar unicidad
+        const existe = await Usuario.findOne({ usuario: nuevoUsuario.toLowerCase() });
+        if (existe) return res.status(409).json({ success: false, error: 'Ese nombre de usuario ya está en uso' });
+
+        await Usuario.updateOne(
+            { usuario: req.usuario.toLowerCase() },
+            { $set: { usuario: nuevoUsuario.toLowerCase(), lastUsernameChange: new Date() } }
+        );
+        logger.info(`Usuario ${req.usuario} cambió su nombre a ${nuevoUsuario}`);
+        res.json({ success: true });
+    } catch (err) {
+        logger.error(`Error en update-username: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error al actualizar nombre' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// ⭐ PUT /usuarios/update-email  — Cambiar email (cooldown 30 días)
+// ═══════════════════════════════════════════════════════════
+app.put('/usuarios/update-email', [
+    verificarToken,
+    body('nuevoEmail').isEmail().normalizeEmail(),
+    body('password').notEmpty()
+], async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'Email inválido' });
+    try {
+        const { nuevoEmail, password } = req.body;
+        const usuario = await Usuario.findOne({ usuario: req.usuario.toLowerCase() });
+        if (!usuario) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+
+        // Verificar contraseña
+        const passOk = await bcrypt.compare(password, usuario.password);
+        if (!passOk) return res.status(401).json({ success: false, error: 'Contraseña incorrecta' });
+
+        // Cooldown 30 días
+        if (usuario.lastEmailChange) {
+            const diffMs   = Date.now() - new Date(usuario.lastEmailChange).getTime();
+            const diffDays = diffMs / (1000 * 60 * 60 * 24);
+            if (diffDays < 30) {
+                const restante = Math.ceil(30 - diffDays);
+                return res.status(429).json({ success: false, error: `Debes esperar ${restante} día${restante !== 1 ? 's' : ''} más para cambiar tu email` });
+            }
+        }
+
+        // Verificar unicidad
+        const existe = await Usuario.findOne({ email: nuevoEmail.toLowerCase() });
+        if (existe) return res.status(409).json({ success: false, error: 'Ese email ya está en uso' });
+
+        await Usuario.updateOne(
+            { usuario: req.usuario.toLowerCase() },
+            { $set: { email: nuevoEmail.toLowerCase(), lastEmailChange: new Date(), emailVerificado: false } }
+        );
+        logger.info(`Usuario ${req.usuario} cambió su email a ${nuevoEmail}`);
+        res.json({ success: true });
+    } catch (err) {
+        logger.error(`Error en update-email: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error al actualizar email' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// ⭐ PUT /usuarios/update-password  — Cambiar contraseña
+// ═══════════════════════════════════════════════════════════
+app.put('/usuarios/update-password', [
+    verificarToken,
+    body('passwordActual').notEmpty(),
+    body('nuevaPassword').isLength({ min: 8 })
+], async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'La nueva contraseña debe tener al menos 8 caracteres' });
+    try {
+        const { passwordActual, nuevaPassword } = req.body;
+        const usuario = await Usuario.findOne({ usuario: req.usuario.toLowerCase() });
+        if (!usuario) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+
+        const passOk = await bcrypt.compare(passwordActual, usuario.password);
+        if (!passOk) return res.status(401).json({ success: false, error: 'La contraseña actual es incorrecta' });
+
+        if (await bcrypt.compare(nuevaPassword, usuario.password)) {
+            return res.status(400).json({ success: false, error: 'La nueva contraseña no puede ser igual a la actual' });
+        }
+
+        const hashed = await bcrypt.hash(nuevaPassword, 10);
+        await Usuario.updateOne(
+            { usuario: req.usuario.toLowerCase() },
+            { $set: { password: hashed } }
+        );
+        logger.info(`Usuario ${req.usuario} cambió su contraseña`);
+        res.json({ success: true });
+    } catch (err) {
+        logger.error(`Error en update-password: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error al actualizar contraseña' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// ⭐ PUT /usuarios/update-social-links  — Guardar links de redes sociales (máx 4)
+// ═══════════════════════════════════════════════════════════
+app.put('/usuarios/update-social-links', [
+    verificarToken,
+    body('socialLinks').isArray({ max: 4 })
+], async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'Máximo 4 links permitidos' });
+    try {
+        const { socialLinks } = req.body;
+        // Filtrar vacíos y validar formato URL básico
+        const cleaned = socialLinks
+            .filter(l => typeof l === 'string' && l.trim().length > 0)
+            .map(l => l.trim())
+            .slice(0, 4);
+
+        const urlRegex = /^https?:\/\/.+/i;
+        const invalid  = cleaned.find(l => !urlRegex.test(l));
+        if (invalid) return res.status(400).json({ success: false, error: `URL inválida: ${invalid}` });
+
+        await Usuario.updateOne(
+            { usuario: req.usuario.toLowerCase() },
+            { $set: { socialLinks: cleaned } }
+        );
+        res.json({ success: true });
+    } catch (err) {
+        logger.error(`Error en update-social-links: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error al guardar links' });
     }
 });
 
