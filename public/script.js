@@ -2202,6 +2202,11 @@ async function pfLoadHistorial() {
         <div class="pf-item-info">
           <div class="pf-item-title">${item.title||'Sin título'}</div>
           <div class="pf-item-cat" style="color:var(--cy)">Video</div>
+          ${item.featuredItemId ? `
+          <div class="pf-vid-featured-row" id="pf-feat-${item._id}">
+            <ion-icon name="pin" style="color:var(--cy);font-size:.7rem"></ion-icon>
+            <span style="font-size:.68rem;color:var(--txt3)">Cargando entrada destacada…</span>
+          </div>` : ''}
           <div class="pf-item-stats">
             <div class="pf-item-stat"><div class="pf-item-stat-val">${item.descargasEfectivas||0}</div><div class="pf-item-stat-lbl">VISTAS</div></div>
             <div class="pf-item-stat"><div class="pf-item-stat-val" style="color:#ff4d6a">${item.likesCount||0}</div><div class="pf-item-stat-lbl">LIKES</div></div>
@@ -2212,6 +2217,28 @@ async function pfLoadHistorial() {
             <button class="pf-btn-action del" onclick="pfEliminarVideo('${item._id}')"><ion-icon name="trash"></ion-icon> Borrar</button>
           </div>
         </div>`;
+      vidCont.appendChild(card);
+
+      // Cargar nombre de la entrada destacada si existe
+      if (item.featuredItemId) {
+        const rowEl = document.getElementById(`pf-feat-${item._id}`);
+        const cached = todosLosItems.find(i => i._id === item.featuredItemId);
+        const fillRow = (feat) => {
+          if (!rowEl) return;
+          rowEl.innerHTML = `
+            <ion-icon name="pin" style="color:var(--cy);font-size:.7rem;flex-shrink:0"></ion-icon>
+            <img src="${feat.image||''}" alt="" style="width:28px;height:20px;object-fit:cover;border-radius:4px;flex-shrink:0" onerror="this.style.display='none'">
+            <span style="font-size:.68rem;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${feat.title||'Entrada destacada'}</span>`;
+        };
+        if (cached) {
+          fillRow(cached);
+        } else {
+          fetch(`${PF_API}/items/${item.featuredItemId}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(d => { if (d && d._id) fillRow(d); else if (rowEl) rowEl.style.display='none'; })
+            .catch(() => { if (rowEl) rowEl.style.display='none'; });
+        }
+      }
       vidCont.appendChild(card);
     });
 

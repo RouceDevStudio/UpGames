@@ -3202,6 +3202,20 @@ body.nx-open #nxFab {
 }
 .pf-item-card--video { border-color:rgba(0,242,255,.15); }
 
+/* ── Fila de entrada destacada en historial de videos ── */
+.pf-vid-featured-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  margin: 4px 0 2px;
+  background: rgba(0,242,255,.06);
+  border: 1px solid rgba(0,242,255,.14);
+  border-radius: 8px;
+  overflow: hidden;
+  max-width: 100%;
+}
+
 /* ═══════════════════════════════════════════════════════════
    BADGE DE DURACIÓN EN THUMBNAIL (punto 11)
 ═══════════════════════════════════════════════════════════ */
