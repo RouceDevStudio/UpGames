@@ -4180,21 +4180,10 @@ app.post('/chat/enviar', verificarToken, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Mensaje demasiado largo (máx 2000 caracteres)' });
         }
 
-        // Verificar que ambos se siguen mutuamente
-        const [emisor, receptor] = await Promise.all([
-            Usuario.findOne({ usuario: de   }).select('siguiendo').lean(),
-            Usuario.findOne({ usuario: para }).select('listaSeguidores siguiendo').lean()
-        ]);
-
+        // Verificar que el destinatario existe
+        const receptor = await Usuario.findOne({ usuario: para }).select('usuario').lean();
         if (!receptor) {
             return res.status(404).json({ success: false, error: 'Usuario destinatario no existe' });
-        }
-
-        const emisorSigueReceptor  = (emisor?.siguiendo       || []).includes(para);
-        const receptorSigueEmisor  = (receptor?.listaSeguidores || []).includes(de);
-
-        if (!emisorSigueReceptor || !receptorSigueEmisor) {
-            return res.status(403).json({ success: false, error: 'Solo puedes chatear con usuarios que se siguen mutuamente' });
         }
 
         // Guardar mensaje
@@ -4351,6 +4340,76 @@ app.get('/chat/no-leidos', verificarToken, async (req, res) => {
         const total = await Mensaje.countDocuments({ para: yo, leido: false });
         res.json({ success: true, noLeidos: total });
     } catch (err) {
+        res.status(500).json({ success: false, error: 'Error interno' });
+    }
+});
+
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * GET /usuarios/descubrir?limite=10
+ * Devuelve usuarios aleatorios rotados por día (seed = fecha del día).
+ * Excluye al usuario autenticado si hay token.
+ */
+app.get('/usuarios/descubrir', async (req, res) => {
+    try {
+        const limite = Math.min(parseInt(req.query.limite) || 10, 30);
+
+        // Seed diario basado en la fecha (YYYYMMDD) → rotación diaria automática
+        const hoy    = new Date();
+        const seedDia = parseInt(`${hoy.getFullYear()}${String(hoy.getMonth()+1).padStart(2,'0')}${String(hoy.getDate()).padStart(2,'0')}`);
+
+        // Detectar usuario logueado para excluirlo
+        let usuarioActual = null;
+        try {
+            const authHeader = req.headers['authorization'] || '';
+            const token = authHeader.replace('Bearer ', '').trim();
+            if (token) {
+                const decoded = jwt.verify(token, config.JWT_SECRET);
+                usuarioActual = decoded.usuario || decoded.id || null;
+            }
+        } catch (_) { /* sin auth, ok */ }
+
+        const filtro = { activo: { $ne: false } };
+        if (usuarioActual) filtro.usuario = { $ne: usuarioActual };
+
+        const total = await Usuario.countDocuments(filtro);
+        if (total === 0) return res.json({ success: true, usuarios: [] });
+
+        // Skip rotativo diario
+        const skip = seedDia % Math.max(1, total);
+
+        let usuarios = await Usuario.find(filtro)
+            .select('usuario nombre foto listaSeguidores descargas')
+            .skip(skip)
+            .limit(limite)
+            .lean();
+
+        // Wrap-around si no llega al límite
+        if (usuarios.length < limite) {
+            const faltan = limite - usuarios.length;
+            const extra  = await Usuario.find(filtro)
+                .select('usuario nombre foto listaSeguidores descargas')
+                .limit(faltan)
+                .lean();
+            const yaIncluidos = new Set(usuarios.map(u => u.usuario));
+            for (const u of extra) {
+                if (!yaIncluidos.has(u.usuario)) usuarios.push(u);
+            }
+        }
+
+        res.json({
+            success: true,
+            usuarios: usuarios.map(u => ({
+                usuario:    u.usuario,
+                nombre:     u.nombre  || u.usuario,
+                foto:       u.foto    || null,
+                seguidores: (u.listaSeguidores || []).length,
+                descargas:  u.descargas || 0
+            }))
+        });
+    } catch (err) {
+        logger.error(`Error en /usuarios/descubrir: ${err.message}`);
         res.status(500).json({ success: false, error: 'Error interno' });
     }
 });
