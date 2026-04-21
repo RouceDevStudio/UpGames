@@ -3328,8 +3328,100 @@ app.put('/usuarios/update-username', [
 });
 
 // ═══════════════════════════════════════════════════════════
-// ⭐ PUT /usuarios/update-email  — Cambiar email (cooldown 30 días)
+// ⭐ PUT /usuarios/repair-cascade
+//    Recuperación de emergencia: migra publicaciones huérfanas
+//    de un nombre anterior al nombre actual del usuario autenticado.
+//    Solo afecta documentos cuyo "usuario" == oldUsername.
 // ═══════════════════════════════════════════════════════════
+app.put('/usuarios/repair-cascade', [
+    verificarToken,
+    body('oldUsername').trim().isLength({ min: 3, max: 20 }),
+    body('password').notEmpty()
+], async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'Datos inválidos' });
+    try {
+        const { oldUsername, password } = req.body;
+        const currentName = req.usuario.toLowerCase();
+        const oldName     = oldUsername.toLowerCase().trim();
+
+        if (oldName === currentName) {
+            return res.status(400).json({ success: false, error: 'El nombre antiguo y el actual son iguales' });
+        }
+
+        // Verificar contraseña del usuario actual
+        const usuario = await Usuario.findOne({ usuario: currentName });
+        if (!usuario) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+
+        const passOk = await bcrypt.compare(password, usuario.password);
+        if (!passOk) return res.status(401).json({ success: false, error: 'Contraseña incorrecta' });
+
+        // Verificar que existen documentos huérfanos con ese nombre antiguo
+        const countJuegos = await Juego.countDocuments({ usuario: oldName });
+        if (countJuegos === 0) {
+            // Intentar también con el nombre sin normalizar por si acaso
+            const countAlt = await Juego.countDocuments({ usuario: oldUsername.trim() });
+            if (countAlt === 0) {
+                return res.status(404).json({
+                    success: false,
+                    error: `No se encontraron publicaciones con el nombre "@${oldName}". Verifica el nombre anterior exacto.`
+                });
+            }
+        }
+
+        // Ejecutar cascada completa oldName → currentName
+        const [rJuegos, rComents, rNotifDest, rNotifEmis] = await Promise.all([
+            Juego.updateMany(      { usuario: oldName },      { $set: { usuario: currentName } }),
+            Comentario.updateMany( { usuario: oldName },      { $set: { usuario: currentName } }),
+            Notificacion.updateMany({ destinatario: oldName }, { $set: { destinatario: currentName } }),
+            Notificacion.updateMany({ emisor: oldName },       { $set: { emisor: currentName } }),
+        ]);
+
+        // Actualizar arrays de seguidores/siguiendo en otros usuarios
+        await Usuario.updateMany(
+            { listaSeguidores: oldName },
+            { $set: { 'listaSeguidores.$': currentName } }
+        );
+        await Usuario.updateMany(
+            { siguiendo: oldName },
+            { $set: { 'siguiendo.$': currentName } }
+        );
+
+        const resumen = {
+            juegos:        rJuegos.modifiedCount,
+            comentarios:   rComents.modifiedCount,
+            notificaciones: rNotifDest.modifiedCount + rNotifEmis.modifiedCount,
+        };
+
+        logger.info(`[repair-cascade] @${oldName} → @${currentName} | juegos:${resumen.juegos} comments:${resumen.comentarios}`);
+        res.json({ success: true, resumen });
+
+    } catch (err) {
+        logger.error(`Error en repair-cascade: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error interno al reparar' });
+    }
+});
+
+// ═══════════════════════════════════════════════════════════
+// ⭐ GET /usuarios/orphan-check
+//    Diagnóstico: devuelve nombres que tienen juegos en BD
+//    pero NO tienen una cuenta activa — útil para identificar el nombre antiguo
+// ═══════════════════════════════════════════════════════════
+app.get('/usuarios/orphan-check', verificarToken, async (req, res) => {
+    try {
+        // Agrupa todos los nombres de autor distintos en Juegos
+        const autores = await Juego.distinct('usuario');
+        // Filtra los que NO tienen cuenta
+        const resultado = [];
+        for (const autor of autores) {
+            const existe = await Usuario.findOne({ usuario: autor }).lean();
+            if (!existe) resultado.push(autor);
+        }
+        res.json({ success: true, huerfanos: resultado });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
 app.put('/usuarios/update-email', [
     verificarToken,
     body('nuevoEmail').isEmail().normalizeEmail(),
