@@ -515,7 +515,7 @@ setInterval(() => {
 // ========== CONSTANTES DE ECONOMÍA ==========
 const CPM_VALUE                = config.CPM_VALUE;
 const AUTHOR_PERCENTAGE        = config.AUTHOR_PERCENTAGE;
-const MIN_DOWNLOADS_TO_EARN    = 0;
+const MIN_DOWNLOADS_TO_EARN    = config.MIN_DOWNLOADS_TO_EARN;
 const MIN_WITHDRAWAL           = config.MIN_WITHDRAWAL;
 const MAX_DOWNLOADS_PER_IP_PER_DAY = config.MAX_DOWNLOADS_PER_IP_PER_DAY;
 
