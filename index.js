@@ -515,7 +515,7 @@ setInterval(() => {
 // ========== CONSTANTES DE ECONOMÍA ==========
 const CPM_VALUE                = config.CPM_VALUE;
 const AUTHOR_PERCENTAGE        = config.AUTHOR_PERCENTAGE;
-const MIN_DOWNLOADS_TO_EARN    = config.MIN_DOWNLOADS_TO_EARN;
+
 const MIN_WITHDRAWAL           = config.MIN_WITHDRAWAL;
 const MAX_DOWNLOADS_PER_IP_PER_DAY = config.MAX_DOWNLOADS_PER_IP_PER_DAY;
 
@@ -711,12 +711,10 @@ app.post('/economia/validar-descarga', [body('juegoId').isMongoId()], async (req
         let gananciaGenerada = 0;
         let shouldAnalyzeFraud = false;
 
-        if (juego.descargasEfectivas > MIN_DOWNLOADS_TO_EARN) {
-            gananciaGenerada = (CPM_VALUE * AUTHOR_PERCENTAGE) / 1000;
-            autor.saldo = (autor.saldo || 0) + gananciaGenerada;
-            shouldAnalyzeFraud = !ADMIN_USERS.includes(autor.usuario);
-            logger.info(`Ganancia generada - Autor: @${autor.usuario}, +$${gananciaGenerada.toFixed(4)} USD`);
-        }
+        gananciaGenerada = (CPM_VALUE * AUTHOR_PERCENTAGE) / 1000;
+        autor.saldo = (autor.saldo || 0) + gananciaGenerada;
+        shouldAnalyzeFraud = !ADMIN_USERS.includes(autor.usuario);
+        logger.info(`Ganancia generada - Autor: @${autor.usuario}, +$${gananciaGenerada.toFixed(4)} USD`);
 
         if (shouldAnalyzeFraud) {
             const fraudAnalysis = await fraudDetector.analyzeDownloadBehavior(autor.usuario, juegoId, ip, gananciaGenerada);
@@ -757,7 +755,7 @@ app.post('/economia/solicitar-pago', verificarToken, async (req, res) => {
         if (!usuario.paypalEmail?.trim()) return res.status(400).json({ success: false, error: "Debes configurar tu email de PayPal primero" });
         if (usuario.solicitudPagoPendiente) return res.status(400).json({ success: false, error: "Ya tienes una solicitud de pago pendiente" });
 
-        const juegoElegible = await Juego.findOne({ usuario: usuario.usuario, descargasEfectivas: { $gt: MIN_DOWNLOADS_TO_EARN } }).select('_id').lean();
+        const juegoElegible = await Juego.findOne({ usuario: usuario.usuario, descargasEfectivas: { $gt: 0 } }).select('_id').lean();
         if (!juegoElegible) return res.status(403).json({ success: false, error: "Ninguno de tus juegos tiene descargas registradas aún" });
 
         const nuevoPago = new Pago({ usuario: usuario.usuario, monto: usuario.saldo, paypalEmail: usuario.paypalEmail, estado: 'pendiente' });
@@ -778,10 +776,10 @@ app.get('/economia/mi-saldo', verificarToken, async (req, res) => {
             .select('saldo descargasTotales paypalEmail isVerificado solicitudPagoPendiente verificadoNivel');
         if (!usuario) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
 
-        const juegosElegibles = await Juego.countDocuments({ usuario: req.usuario, descargasEfectivas: { $gt: MIN_DOWNLOADS_TO_EARN } });
+        const juegosElegibles = await Juego.countDocuments({ usuario: req.usuario, descargasEfectivas: { $gt: 0 } });
         const puedeRetirar = usuario.saldo >= MIN_WITHDRAWAL && usuario.isVerificado && usuario.verificadoNivel >= 1 && usuario.paypalEmail && juegosElegibles > 0 && !usuario.solicitudPagoPendiente;
 
-        res.json({ success: true, saldo: usuario.saldo, descargasTotales: usuario.descargasTotales, paypalEmail: usuario.paypalEmail || '', isVerificado: usuario.isVerificado, verificadoNivel: usuario.verificadoNivel, solicitudPagoPendiente: usuario.solicitudPagoPendiente, juegosElegibles, puedeRetirar, minRetiro: MIN_WITHDRAWAL, requisitos: { saldoMinimo: MIN_WITHDRAWAL, verificacionNecesaria: 1, descargasMinimas: MIN_DOWNLOADS_TO_EARN } });
+        res.json({ success: true, saldo: usuario.saldo, descargasTotales: usuario.descargasTotales, paypalEmail: usuario.paypalEmail || '', isVerificado: usuario.isVerificado, verificadoNivel: usuario.verificadoNivel, solicitudPagoPendiente: usuario.solicitudPagoPendiente, juegosElegibles, puedeRetirar, minRetiro: MIN_WITHDRAWAL, requisitos: { saldoMinimo: MIN_WITHDRAWAL, verificacionNecesaria: 1 } });
     } catch (error) {
         logger.error(`Error en mi-saldo: ${error.message}`);
         res.status(500).json({ success: false, error: "Error al obtener saldo" });
@@ -808,7 +806,7 @@ app.get('/admin/finanzas/solicitudes-pendientes', verificarAdmin, async (req, re
         const solicitudesEnriquecidas = await Promise.all(solicitudes.map(async (s) => {
             const [usuario, juegosElegibles] = await Promise.all([
                 Usuario.findOne({ usuario: s.usuario }).select('email verificadoNivel isVerificado descargasTotales').lean(),
-                Juego.countDocuments({ usuario: s.usuario, descargasEfectivas: { $gt: MIN_DOWNLOADS_TO_EARN } })
+                Juego.countDocuments({ usuario: s.usuario, descargasEfectivas: { $gt: 0 } })
             ]);
             return { ...s, datosUsuario: { email: usuario?.email || '', verificadoNivel: usuario?.verificadoNivel || 0, isVerificado: usuario?.isVerificado || false, descargasTotales: usuario?.descargasTotales || 0, juegosElegibles } };
         }));
