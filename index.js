@@ -1221,19 +1221,12 @@ app.post('/economia/validar-descarga', [
         let gananciaGenerada = 0;
         let shouldAnalyzeFraud = false;
 
-        // Paso 6: Generar ganancia desde la primera descarga (sin umbral mínimo)
+        // Paso 6: Generar ganancia desde la primera descarga (sin umbral ni restricción de verificación)
         if (juego.descargasEfectivas > MIN_DOWNLOADS_TO_EARN) {
-            // Paso 7: Verificar si el autor está verificado (nivel 1+)
-            if (autor.isVerificado && autor.verificadoNivel >= 1) {
-                // Calcular ganancia
-                gananciaGenerada = (CPM_VALUE * AUTHOR_PERCENTAGE) / 1000;
-                autor.saldo += gananciaGenerada;
-                shouldAnalyzeFraud = true; // Solo analizar fraude si genera ganancia
-                
-                logger.info(`Ganancia generada - Autor: @${autor.usuario}, +$${gananciaGenerada.toFixed(4)} USD`);
-            } else {
-                logger.info(`Autor no verificado - @${autor.usuario} - No se suma saldo`);
-            }
+            gananciaGenerada = (CPM_VALUE * AUTHOR_PERCENTAGE) / 1000;
+            autor.saldo += gananciaGenerada;
+            shouldAnalyzeFraud = true;
+            logger.info(`Ganancia generada - Autor: @${autor.usuario}, +$${gananciaGenerada.toFixed(4)} USD`);
         } else {
             logger.info(`Juego sin descargas aún - No se genera ganancia`);
         }
