@@ -1333,7 +1333,8 @@ function switchTab(t) {
   economiaView.classList.toggle('active', t==='economia');
   profileView.classList.toggle('active',  t==='profile');
   if(t==='favs')     renderFavs();
-  if(t==='economia') renderEconomia();
+  if(t==='economia') { renderEconomia(); pfStartEcoPolling(); }
+  else               { pfStopEcoPolling(); }
   if(t==='profile')  renderProfile();
 }
 
@@ -1412,7 +1413,7 @@ async function renderEconomia() {
     btnPago.addEventListener('click', pfSolicitarPago);
     btnPago._listenerAdded = true;
   }
-  pfLoadEconomia();
+  pfStartEcoPolling();
 }
 
 // ── PROFILE TAB ──────────────────────────────────────────
@@ -1532,7 +1533,8 @@ function pfSwitchTab(tabName, el) {
   if(tabName === 'historial') pfLoadHistorial();
   if(tabName === 'boveda') pfLoadBoveda();
   if(tabName === 'reportes') pfLoadReportes();
-  if(tabName === 'economia') pfLoadEconomia();
+  if(tabName === 'economia') pfStartEcoPolling();
+  else pfStopEcoPolling();
 }
 
 // ── Historial sub-nav ──
@@ -2561,6 +2563,25 @@ async function pfLoadReportes() {
 }
 
 // ── Economía ──
+// ── polling state ──
+let _ecoPollingTimer = null;
+
+function _animateValue(el, from, to, decimals, prefix, duration) {
+  if (!el) return;
+  const start = performance.now();
+  const diff = to - from;
+  if (diff === 0) { el.textContent = prefix + to.toFixed(decimals); return; }
+  function step(now) {
+    const elapsed = now - start;
+    const progress = Math.min(elapsed / duration, 1);
+    const ease = 1 - Math.pow(1 - progress, 3);
+    const current = from + diff * ease;
+    el.textContent = prefix + current.toFixed(decimals);
+    if (progress < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
 async function pfLoadEconomia() {
   const token = LS.get('token');
   if(!token) return;
@@ -2571,9 +2592,27 @@ async function pfLoadEconomia() {
     if(!res.ok) return;
     const d = await res.json();
     if(d.success) {
-      document.getElementById('pf-saldo-display').textContent = `$${d.saldo.toFixed(2)}`;
-      document.getElementById('pf-descargas-totales').textContent = pfFmt(d.descargasTotales);
-      document.getElementById('pf-juegos-elegibles').textContent = d.juegosElegibles;
+      // Saldo — 4 decimales con animacion
+      const saldoEl = document.getElementById('pf-saldo-display');
+      const prevSaldo = parseFloat(saldoEl.dataset.val || '0');
+      const newSaldo = d.saldo || 0;
+      saldoEl.dataset.val = newSaldo;
+      _animateValue(saldoEl, prevSaldo, newSaldo, 4, '$', 800);
+
+      // Descargas totales con animacion
+      const dlEl = document.getElementById('pf-descargas-totales');
+      const prevDl = parseInt(dlEl.dataset.val || '0', 10);
+      const newDl = d.descargasTotales || 0;
+      dlEl.dataset.val = newDl;
+      _animateValue(dlEl, prevDl, newDl, 0, '', 600);
+
+      // Juegos con ganancias con animacion
+      const jgEl = document.getElementById('pf-juegos-elegibles');
+      const prevJg = parseInt(jgEl.dataset.val || '0', 10);
+      const newJg = d.juegosElegibles || 0;
+      jgEl.dataset.val = newJg;
+      _animateValue(jgEl, prevJg, newJg, 0, '', 600);
+
       if(d.paypalEmail) document.getElementById('pf-paypal-email-input').value = d.paypalEmail;
       if(!d.isVerificado||d.verificadoNivel<1) {
         document.getElementById('pf-estado-verificacion').style.display='flex';
@@ -2587,6 +2626,16 @@ async function pfLoadEconomia() {
       }
     }
   } catch(e) { console.error('pfLoadEconomia', e); }
+}
+
+function pfStartEcoPolling() {
+  pfStopEcoPolling();
+  pfLoadEconomia();
+  _ecoPollingTimer = setInterval(pfLoadEconomia, 8000);
+}
+
+function pfStopEcoPolling() {
+  if(_ecoPollingTimer) { clearInterval(_ecoPollingTimer); _ecoPollingTimer = null; }
 }
 function pfFmt(n) {
   if(!n) return '0';
