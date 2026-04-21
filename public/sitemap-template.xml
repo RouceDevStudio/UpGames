@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  UpGames — sitemap.xml
+
+  Este archivo lista las páginas principales para SEO.
+  Para contenido dinámico (items, perfiles) se recomienda generar un sitemap
+  dinámico desde el backend con un endpoint tipo GET /sitemap-dinamico.xml
+  y agregarlo aquí como <sitemap> dentro de un sitemapindex.
+
+  Actualizar <lastmod> al menos cada semana manualmente o automatizarlo en CI.
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+
+  <!-- Página principal / Biblioteca -->
+  <url>
+    <loc>https://roucedevstudio.github.io/UpGames/public/biblioteca.html</loc>
+    <lastmod>2026-01-01</lastmod>
+    <changefreq>hourly</changefreq>
+    <priority>1.0</priority>
+  </url>
+
+  <!-- Perfil público (landing genérica) -->
+  <url>
+    <loc>https://roucedevstudio.github.io/UpGames/public/perfil-publico.html</loc>
+    <lastmod>2026-01-01</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- Chats -->
+  <url>
+    <loc>https://roucedevstudio.github.io/UpGames/public/chats.html</loc>
+    <lastmod>2026-01-01</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <!-- Puente (landing intermedia) -->
+  <url>
+    <loc>https://roucedevstudio.github.io/UpGames/public/puente.html</loc>
+    <lastmod>2026-01-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+
+  <!-- Páginas legales -->
+  <url>
+    <loc>https://roucedevstudio.github.io/UpGames/public/politica-privacidad.html</loc>
+    <lastmod>2026-01-01</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+
+  <url>
+    <loc>https://roucedevstudio.github.io/UpGames/public/terminos&amp;condiciones.html</loc>
+    <lastmod>2026-01-01</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+
+  <!--
+    ======================================================================
+    CONTENIDO DINÁMICO (items, perfiles de creadores)
+    ======================================================================
+
+    Para que Google indexe cada item y perfil, crear un endpoint en el backend:
+
+      GET /sitemap-items.xml  →  Lista items aprobados
+      GET /sitemap-creators.xml → Lista creadores activos
+
+    Ejemplo de entrada dinámica de item:
+
+    <url>
+      <loc>https://roucedevstudio.github.io/UpGames/public/biblioteca.html?item=ABC123</loc>
+      <lastmod>2026-01-15</lastmod>
+      <changefreq>weekly</changefreq>
+      <priority>0.7</priority>
+    </url>
+
+    Ejemplo de perfil de creador:
+
+    <url>
+      <loc>https://roucedevstudio.github.io/UpGames/public/perfil-publico.html?usuario=username</loc>
+      <lastmod>2026-01-15</lastmod>
+      <changefreq>weekly</changefreq>
+      <priority>0.6</priority>
+    </url>
+
+    Luego convierte este archivo en sitemap-index.xml que apunte a los sub-sitemaps.
+    ======================================================================
+  -->
+
+</urlset>

@@ -1,0 +1,73 @@
+{
+  "name": "UpGames — La Nube de Contenido",
+  "short_name": "UpGames",
+  "description": "La primera plataforma gaming con monetización CPM. Descarga, sube y monetiza contenido gaming.",
+  "start_url": "/UpGames/public/biblioteca.html",
+  "scope": "/UpGames/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#07070f",
+  "theme_color": "#07070f",
+  "lang": "es",
+  "dir": "ltr",
+  "categories": ["games", "entertainment", "social"],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "og-cover.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "og-cover.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "og-cover.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "og-cover.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "og-cover.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "UpGames — Marketplace de Contenido Gaming"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Biblioteca",
+      "short_name": "Biblioteca",
+      "description": "Explorar contenido gaming",
+      "url": "/UpGames/public/biblioteca.html",
+      "icons": [{ "src": "og-cover.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Mi Perfil",
+      "short_name": "Perfil",
+      "description": "Gestionar mi contenido",
+      "url": "/UpGames/public/perfil-publico.html",
+      "icons": [{ "src": "og-cover.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Mensajes",
+      "short_name": "Mensajes",
+      "description": "Ver mis mensajes",
+      "url": "/UpGames/public/chats.html",
+      "icons": [{ "src": "og-cover.png", "sizes": "192x192" }]
+    }
+  ]
+}

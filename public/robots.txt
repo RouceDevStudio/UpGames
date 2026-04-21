@@ -1,0 +1,41 @@
+# ========================================
+# UpGames — robots.txt
+# ========================================
+# Permitir a todos los crawlers indexar el contenido público
+# Bloquear panel admin y rutas privadas
+
+User-agent: *
+Allow: /
+Allow: /UpGames/
+Allow: /UpGames/public/
+
+# Bloquear áreas privadas/admin
+Disallow: /UpGames/admin/
+Disallow: /admin/
+Disallow: /public/admin/
+
+# Bloquear rutas sensibles
+Disallow: /*?token=
+Disallow: /*&token=
+Disallow: /api/admin/
+Disallow: /admin/*
+
+# Crawl-delay para bots agresivos (en segundos)
+User-agent: AhrefsBot
+Crawl-delay: 10
+
+User-agent: SemrushBot
+Crawl-delay: 10
+
+User-agent: MJ12bot
+Crawl-delay: 10
+
+# Bloquear bots maliciosos conocidos
+User-agent: PetalBot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+
+# Sitemap
+Sitemap: https://roucedevstudio.github.io/UpGames/public/sitemap.xml
