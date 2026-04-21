@@ -3176,7 +3176,7 @@ const TUT_STEPS = [
   {
     sel: '.pf-eco-stats',
     title: '📈 Estadísticas de Ganancias',
-    body: 'Dos métricas clave:<br>• <strong>Descargas Totales</strong> — suma de todas las descargas en todos tus aportes<br>• <strong>Juegos +2K Vistas</strong> — aportes que superan las 2,000 descargas (los más rentables)'
+    body: 'Dos métricas clave:<br>• <strong>Descargas Totales</strong> — suma de todas las descargas en todos tus aportes<br>• <strong>Juegos con Ganancias</strong> — aportes que han generado al menos una descarga efectiva'
   },
   {
     sel: '.pf-paypal-row',
@@ -3186,7 +3186,7 @@ const TUT_STEPS = [
   {
     sel: '#pf-btn-solicitar-pago',
     title: '💸 Solicitar Pago',
-    body: 'Cuando cumplas los requisitos, este botón se activará (se pone verde). Para cobrar necesitas:<br>• Saldo mínimo de <strong>$10 USD</strong><br>• Verificación nivel 1 o superior<br>• Al menos 1 aporte con +2,000 descargas<br>• Email de PayPal configurado<br><br>Al solicitarlo, el equipo lo revisa en 24-72h y procesa el pago.'
+    body: 'Cuando cumplas los requisitos, este botón se activará (se pone verde). Para cobrar necesitas:<br>• Saldo mínimo de <strong>$10 USD</strong><br>• Verificación nivel 1 o superior<br>• Al menos 1 aporte con descargas efectivas<br>• Email de PayPal configurado<br><br>Al solicitarlo, el equipo lo revisa en 24-72h y procesa el pago.'
   },
   {
     sel: '.pf-eco-info',
