@@ -3246,6 +3246,8 @@ app.put('/usuarios/update-bio', [
 // ═══════════════════════════════════════════════════════════
 // ⭐ PUT /usuarios/update-username  — Cambiar nombre de usuario (cooldown 30 días)
 // ═══════════════════════════════════════════════════════════
+// ⭐ PUT /usuarios/update-username  — Cambiar nombre (cooldown 30d + cascada total)
+// ═══════════════════════════════════════════════════════════
 app.put('/usuarios/update-username', [
     verificarToken,
     body('nuevoUsuario').trim().isLength({ min: 3, max: 20 }).matches(/^[a-z0-9_]+$/),
@@ -3255,33 +3257,70 @@ app.put('/usuarios/update-username', [
     if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'Nombre inválido (3-20 chars, solo letras minúsculas, números y _)' });
     try {
         const { nuevoUsuario, password } = req.body;
-        const usuario = await Usuario.findOne({ usuario: req.usuario.toLowerCase() });
+        const oldName = req.usuario.toLowerCase();
+        const newName = nuevoUsuario.toLowerCase();
+
+        const usuario = await Usuario.findOne({ usuario: oldName });
         if (!usuario) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
 
-        // Verificar contraseña
+        // ── 1. Verificar contraseña ──────────────────────────
         const passOk = await bcrypt.compare(password, usuario.password);
         if (!passOk) return res.status(401).json({ success: false, error: 'Contraseña incorrecta' });
 
-        // Cooldown 30 días
+        // ── 2. Cooldown 30 días ──────────────────────────────
         if (usuario.lastUsernameChange) {
-            const diffMs   = Date.now() - new Date(usuario.lastUsernameChange).getTime();
-            const diffDays = diffMs / (1000 * 60 * 60 * 24);
+            const diffDays = (Date.now() - new Date(usuario.lastUsernameChange).getTime()) / (1000 * 60 * 60 * 24);
             if (diffDays < 30) {
                 const restante = Math.ceil(30 - diffDays);
                 return res.status(429).json({ success: false, error: `Debes esperar ${restante} día${restante !== 1 ? 's' : ''} más para cambiar tu nombre` });
             }
         }
 
-        // Verificar unicidad
-        const existe = await Usuario.findOne({ usuario: nuevoUsuario.toLowerCase() });
+        // ── 3. Verificar unicidad ────────────────────────────
+        const existe = await Usuario.findOne({ usuario: newName });
         if (existe) return res.status(409).json({ success: false, error: 'Ese nombre de usuario ya está en uso' });
 
+        // ── 4. Actualizar documento del usuario ──────────────
         await Usuario.updateOne(
-            { usuario: req.usuario.toLowerCase() },
-            { $set: { usuario: nuevoUsuario.toLowerCase(), lastUsernameChange: new Date() } }
+            { usuario: oldName },
+            { $set: { usuario: newName, lastUsernameChange: new Date() } }
         );
-        logger.info(`Usuario ${req.usuario} cambió su nombre a ${nuevoUsuario}`);
-        res.json({ success: true });
+
+        // ── 5. CASCADA: actualizar todas las colecciones ──────
+        // 5a. Juegos/publicaciones del autor
+        await Juego.updateMany({ usuario: oldName }, { $set: { usuario: newName } });
+
+        // 5b. Comentarios del usuario
+        await Comentario.updateMany({ usuario: oldName }, { $set: { usuario: newName } });
+
+        // 5c. Notificaciones donde es destinatario
+        await Notificacion.updateMany({ destinatario: oldName }, { $set: { destinatario: newName } });
+
+        // 5d. Notificaciones donde es emisor
+        await Notificacion.updateMany({ emisor: oldName }, { $set: { emisor: newName } });
+
+        // 5e. listaSeguidores en otros usuarios (reemplazar elemento en array)
+        await Usuario.updateMany(
+            { listaSeguidores: oldName },
+            { $set: { 'listaSeguidores.$': newName } }
+        );
+
+        // 5f. siguiendo en otros usuarios
+        await Usuario.updateMany(
+            { siguiendo: oldName },
+            { $set: { 'siguiendo.$': newName } }
+        );
+
+        // ── 6. Emitir nuevo JWT con el nombre actualizado ────
+        const nuevoToken = jwt.sign(
+            { usuario: newName, email: usuario.email },
+            JWT_SECRET,
+            { expiresIn: '30d' }
+        );
+
+        logger.info(`[update-username] ${oldName} → ${newName} | Cascada completada`);
+        res.json({ success: true, nuevoToken, nuevoUsuario: newName });
+
     } catch (err) {
         logger.error(`Error en update-username: ${err.message}`);
         res.status(500).json({ success: false, error: 'Error al actualizar nombre' });
@@ -3325,8 +3364,16 @@ app.put('/usuarios/update-email', [
             { usuario: req.usuario.toLowerCase() },
             { $set: { email: nuevoEmail.toLowerCase(), lastEmailChange: new Date(), emailVerificado: false } }
         );
+
+        // Emitir nuevo JWT con el email actualizado
+        const nuevoToken = jwt.sign(
+            { usuario: req.usuario.toLowerCase(), email: nuevoEmail.toLowerCase() },
+            JWT_SECRET,
+            { expiresIn: '30d' }
+        );
+
         logger.info(`Usuario ${req.usuario} cambió su email a ${nuevoEmail}`);
-        res.json({ success: true });
+        res.json({ success: true, nuevoToken });
     } catch (err) {
         logger.error(`Error en update-email: ${err.message}`);
         res.status(500).json({ success: false, error: 'Error al actualizar email' });
