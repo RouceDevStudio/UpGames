@@ -1035,7 +1035,7 @@ const verificarAdmin = (req, res, next) => {
 // ⭐ CONSTANTES DE ECONOMÍA (desde config centralizado)
 const CPM_VALUE = config.CPM_VALUE;
 const AUTHOR_PERCENTAGE = config.AUTHOR_PERCENTAGE;
-const MIN_DOWNLOADS_TO_EARN = config.MIN_DOWNLOADS_TO_EARN;
+const MIN_DOWNLOADS_TO_EARN = 0; // Ganancias desde la primera descarga (sin umbral)
 const MIN_WITHDRAWAL = config.MIN_WITHDRAWAL;
 const MAX_DOWNLOADS_PER_IP_PER_DAY = config.MAX_DOWNLOADS_PER_IP_PER_DAY;
 
@@ -1221,7 +1221,7 @@ app.post('/economia/validar-descarga', [
         let gananciaGenerada = 0;
         let shouldAnalyzeFraud = false;
 
-        // Paso 6: Verificar si el juego ya pasó el umbral de 2,000 descargas
+        // Paso 6: Generar ganancia desde la primera descarga (sin umbral mínimo)
         if (juego.descargasEfectivas > MIN_DOWNLOADS_TO_EARN) {
             // Paso 7: Verificar si el autor está verificado (nivel 1+)
             if (autor.isVerificado && autor.verificadoNivel >= 1) {
@@ -1235,7 +1235,7 @@ app.post('/economia/validar-descarga', [
                 logger.info(`Autor no verificado - @${autor.usuario} - No se suma saldo`);
             }
         } else {
-            logger.info(`Juego aún no alcanza 2,000 descargas - Actual: ${juego.descargasEfectivas}`);
+            logger.info(`Juego sin descargas aún - No se genera ganancia`);
         }
 
         // ⚠️ ANÁLISIS DE FRAUDE: Solo se ejecuta si el juego superó el umbral Y el autor está verificado
@@ -1347,7 +1347,7 @@ app.post('/economia/solicitar-pago', verificarToken, async (req, res) => {
         if (!juegoElegible) {
             return res.status(403).json({ 
                 success: false, 
-                error: `Ninguno de tus juegos ha alcanzado las ${MIN_DOWNLOADS_TO_EARN} descargas necesarias` 
+                error: `Ninguno de tus juegos tiene descargas registradas aún` 
             });
         }
 
