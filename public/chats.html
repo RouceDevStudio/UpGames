@@ -214,6 +214,7 @@ textarea { font-family:inherit; resize:none; }
 #conv-list {
   flex: 1;
   overflow-y: auto;
+  min-height: 0;
 }
 
 .conv-item {
@@ -619,6 +620,171 @@ textarea { font-family:inherit; resize:none; }
 @keyframes toastIn { from{opacity:0;transform:translateY(6px) scale(.95)} to{opacity:1;transform:none} }
 .toast-item.out { animation: toastOut .25s var(--ease) forwards; }
 @keyframes toastOut { to{opacity:0;transform:translateY(3px) scale(.95)} }
+/* ═══════════════════════════════════════════
+   DESCUBRE NUEVOS TALENTOS
+═══════════════════════════════════════════ */
+.discover-section {
+  flex-shrink: 0;
+  padding: 10px 0 4px;
+  border-bottom: 1px solid var(--bd);
+}
+.discover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px 8px;
+}
+.discover-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: .72rem;
+  font-weight: 800;
+  color: var(--txt2);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+}
+.discover-title-icon {
+  width: 22px; height: 22px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, var(--g), var(--cy));
+  display: flex; align-items: center; justify-content: center;
+  font-size: .65rem;
+}
+.discover-badge {
+  font-size: .6rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  background: rgba(94,255,67,.1);
+  border: 1px solid rgba(94,255,67,.2);
+  color: var(--g);
+  border-radius: 999px;
+  font-family: var(--ff-mono);
+}
+.discover-scroll {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 0 14px 10px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.discover-card {
+  flex-shrink: 0;
+  width: 110px;
+  background: var(--bg2);
+  border: 1px solid var(--bd);
+  border-radius: 14px;
+  padding: 12px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  scroll-snap-align: start;
+  cursor: pointer;
+  transition: border-color .2s, background .2s, transform .15s var(--spring);
+  -webkit-tap-highlight-color: transparent;
+  position: relative;
+  overflow: hidden;
+}
+.discover-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(94,255,67,.04), rgba(0,242,255,.04));
+  opacity: 0;
+  transition: opacity .2s;
+}
+.discover-card:active { transform: scale(.95); border-color: var(--bd-g); }
+.discover-card:active::before { opacity: 1; }
+.discover-avatar {
+  width: 46px; height: 46px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--g), var(--cy));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.05rem; font-weight: 900; color: #000;
+  position: relative;
+  flex-shrink: 0;
+}
+.discover-avatar img {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  position: absolute; inset: 0;
+}
+.discover-ring {
+  position: absolute; inset: -2px;
+  border-radius: 50%;
+  border: 1.5px solid var(--g);
+  opacity: .35;
+}
+.discover-name {
+  font-size: .7rem;
+  font-weight: 700;
+  color: var(--txt);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+.discover-stats {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  font-size: .6rem;
+  color: var(--txt3);
+  font-family: var(--ff-mono);
+}
+.discover-stats span { color: var(--g); font-weight: 700; }
+.discover-msg-btn {
+  width: 100%;
+  padding: 5px 0;
+  border-radius: 8px;
+  background: var(--g-dim);
+  border: 1px solid rgba(94,255,67,.15);
+  color: var(--g);
+  font-size: .65rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: background .15s;
+  margin-top: 2px;
+}
+.discover-msg-btn:active { background: rgba(94,255,67,.2); }
+.discover-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 0;
+  color: var(--txt3);
+  font-size: .75rem;
+  width: 100%;
+}
+.discover-skeleton {
+  flex-shrink: 0;
+  width: 110px;
+  height: 148px;
+  background: var(--bg2);
+  border: 1px solid var(--bd);
+  border-radius: 14px;
+  overflow: hidden;
+  position: relative;
+}
+.discover-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.03) 50%, transparent 100%);
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
   </style>
 </head>
 <body>
@@ -655,8 +821,26 @@ textarea { font-family:inherit; resize:none; }
     </button>
   </div>
 
+  <!-- 🎯 DESCUBRE NUEVOS TALENTOS -->
+  <div class="discover-section" id="discover-section">
+    <div class="discover-header">
+      <div class="discover-title">
+        <div class="discover-title-icon">🎮</div>
+        Descubre nuevos talentos
+      </div>
+      <div class="discover-badge" id="discover-rotation-label">Hoy</div>
+    </div>
+    <div class="discover-scroll" id="discover-scroll">
+      <!-- Skeletons de carga -->
+      <div class="discover-skeleton"></div>
+      <div class="discover-skeleton"></div>
+      <div class="discover-skeleton"></div>
+      <div class="discover-skeleton"></div>
+    </div>
+  </div>
+
   <!-- Lista -->
-  <div id="conv-list"></div>
+  <div id="conv-list" style="flex:1;overflow-y:auto;"></div>
 
 </div><!-- /#view-list -->
 
@@ -939,7 +1123,7 @@ async function fetchMessages(username, fullLoad = false) {
       document.getElementById('chat-messages').innerHTML = `
         <div style="margin:auto;text-align:center;padding:40px 20px;color:var(--txt3);font-size:.8rem;line-height:1.6">
           <div style="font-size:2rem;margin-bottom:10px">👋</div>
-          <p>Sois mutuamente seguidores.<br>Empieza la conversación.</p>
+          <p>¡Di hola y empieza la conversación!</p>
         </div>`;
       document.getElementById('chat-contact-status').textContent = 'en línea';
       return;
@@ -1069,11 +1253,7 @@ async function sendMessage() {
       lastMsgTs = tsAnterior;
       inp.value = text;
       const msg = data.error || 'Error al enviar';
-      if (msg.includes('mutuamente')) {
-        toast('⚠️ Solo puedes chatear con seguidores mutuos');
-      } else {
-        toast('❌ ' + msg);
-      }
+      toast('❌ ' + msg);
     } else {
       lastMsgTs = new Date(data.mensaje.fecha).getTime();
     }
@@ -1172,10 +1352,65 @@ function requestNotifPermission() {
 async function init() {
   requestNotifPermission();
   await loadConvList();
+  loadDiscover();
   setInterval(loadConvList, 8000);
 
   const target = new URLSearchParams(window.location.search).get('usuario');
   if (target?.trim()) setTimeout(() => openChat(target.trim()), 120);
+}
+
+// ══════════════════════════════════════════════════════
+// DESCUBRE NUEVOS TALENTOS
+// ══════════════════════════════════════════════════════
+async function loadDiscover() {
+  try {
+    const r = await fetch(`${API_URL}/usuarios/descubrir?limite=10`, {
+      headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    const data = await r.json();
+    if (!data.success || !data.usuarios?.length) {
+      document.getElementById('discover-section').style.display = 'none';
+      return;
+    }
+    renderDiscoverCards(data.usuarios);
+    // Etiqueta con día de la semana para mostrar que rota
+    const dias = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+    const hoy  = new Date();
+    document.getElementById('discover-rotation-label').textContent =
+      dias[hoy.getDay()] + ' · ' + hoy.getDate();
+  } catch (_) {
+    document.getElementById('discover-section').style.display = 'none';
+  }
+}
+
+function renderDiscoverCards(usuarios) {
+  const scroll = document.getElementById('discover-scroll');
+  scroll.innerHTML = '';
+  usuarios.forEach(u => {
+    const card = document.createElement('div');
+    card.className = 'discover-card';
+    const initials = avatarLetter(u.usuario);
+    const fmtNum = n => n >= 1000 ? (n/1000).toFixed(1)+'k' : n;
+    card.innerHTML = `
+      <div class="discover-avatar">
+        ${initials}
+        ${u.foto ? `<img src="${u.foto}" alt="${u.usuario}" loading="lazy" onerror="this.remove()">` : ''}
+        <div class="discover-ring"></div>
+      </div>
+      <div class="discover-name">@${u.usuario}</div>
+      <div class="discover-stats">
+        <span>${fmtNum(u.seguidores)}</span> seg.
+      </div>
+      <button class="discover-msg-btn" onclick="discoverOpenChat('${u.usuario}',event)">
+        <ion-icon name="chatbubble-outline"></ion-icon> Mensaje
+      </button>`;
+    scroll.appendChild(card);
+  });
+}
+
+function discoverOpenChat(username, e) {
+  e.stopPropagation();
+  openChat(username);
 }
 
 document.addEventListener('DOMContentLoaded', init);
