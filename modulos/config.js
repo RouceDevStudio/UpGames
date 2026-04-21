@@ -41,9 +41,8 @@ const config = {
     ],
     
     // ========== ECONOMÍA CPM ==========
-    CPM_VALUE: 2.00,                      // $2.00 por 1,000 descargas
-    AUTHOR_PERCENTAGE: 0.50,              // 50% para el creador
-    MIN_DOWNLOADS_TO_EARN: 2000,          // Umbral mínimo de descargas
+    CPM_VALUE: 1.00,                      // $1.00 por 1,000 descargas
+    AUTHOR_PERCENTAGE: 1.00,              // 100% para el creador
     MIN_WITHDRAWAL: 10,                   // Mínimo $10 USD para retiro
     MAX_DOWNLOADS_PER_IP_PER_DAY: 2,      // Límite anti-bots
     
