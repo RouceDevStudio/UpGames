@@ -2600,6 +2600,49 @@ body.nx-open #nxFab {
   transition: background .2s;
 }
 .pf-link-input { flex: 1; margin-bottom: 0 !important; }
+
+/* ══ Panel de Recuperación de Cuenta ══ */
+.pf-stab--repair { color: #ff9800 !important; }
+.pf-stab--repair.active { color: #ff9800 !important; border-bottom-color: #ff9800 !important; }
+
+.pf-repair-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: rgba(255,152,0,.07);
+  border: 1px solid rgba(255,152,0,.25);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.pf-btn-detect {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px;
+  border-radius: 12px;
+  border: 1.5px dashed var(--bd-g);
+  background: var(--bg2);
+  color: var(--g);
+  font-size: .76rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: background .2s, opacity .2s;
+}
+.pf-btn-detect:hover { background: var(--bg3); }
+.pf-btn-detect:disabled { opacity: .5; cursor: not-allowed; }
+
+.pf-repair-divider {
+  text-align: center;
+  font-size: .7rem;
+  color: var(--txt3);
+  margin: 14px 0;
+}
 .pf-avatar-preview {
   width:120px; height:120px; border-radius:50%;
   background:linear-gradient(135deg,var(--g),var(--cy));

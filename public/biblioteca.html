@@ -574,6 +574,7 @@
         <button class="pf-stab" onclick="pfSwitchSettings('nombre',this)">Nombre</button>
         <button class="pf-stab" onclick="pfSwitchSettings('email',this)">Email</button>
         <button class="pf-stab" onclick="pfSwitchSettings('pass',this)">Contraseña</button>
+        <button class="pf-stab pf-stab--repair" onclick="pfSwitchSettings('repair',this)">⚠️ Recuperar</button>
       </div>
 
       <!-- ── Avatar ── -->
@@ -730,6 +731,43 @@
         <button class="pf-btn-save" onclick="pfSavePassword()">
           <ion-icon name="lock-closed-outline"></ion-icon> CAMBIAR CONTRASEÑA
         </button>
+      </div>
+
+      <!-- ── Recuperar publicaciones huérfanas ── -->
+      <div id="pf-settings-repair" class="pf-scontent">
+        <div class="pf-repair-header">
+          <ion-icon name="build-outline" style="font-size:1.6rem;color:#ff9800"></ion-icon>
+          <div>
+            <div style="font-weight:700;font-size:.85rem;color:#ff9800">RECUPERACIÓN DE CUENTA</div>
+            <div style="font-size:.72rem;color:var(--txt2);margin-top:2px">Si cambiaste de nombre antes del fix, tus publicaciones quedaron con el nombre viejo.</div>
+          </div>
+        </div>
+
+        <!-- Paso 1: Auto-detectar nombre viejo -->
+        <button class="pf-btn-detect" onclick="pfDetectOldName()">
+          <ion-icon name="search-outline"></ion-icon> DETECTAR MI NOMBRE ANTERIOR
+        </button>
+        <div id="pf-detect-result" style="display:none;margin-bottom:12px;padding:10px 12px;background:rgba(94,255,67,.07);border:1px solid var(--bd-g);border-radius:10px;font-size:.75rem;color:var(--txt2)"></div>
+
+        <div class="pf-repair-divider">— o ingresa el nombre manualmente —</div>
+
+        <div class="pf-form-group">
+          <label class="pf-label">Nombre de usuario anterior</label>
+          <input type="text" id="pf-repair-oldname" class="pf-input"
+                 placeholder="Ej: monsterx99"
+                 autocomplete="off"
+                 oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9_]/g,'')">
+          <small style="color:var(--txt3);font-size:.72rem">Exactamente como era tu nombre antes del cambio</small>
+        </div>
+        <div class="pf-form-group">
+          <label class="pf-label">Confirma tu contraseña</label>
+          <input type="password" id="pf-repair-pass" class="pf-input"
+                 placeholder="Tu contraseña actual" autocomplete="current-password">
+        </div>
+        <button class="pf-btn-save" id="pf-btn-repair" style="background:linear-gradient(135deg,#ff9800,#ff5500)" onclick="pfRunRepair()">
+          <ion-icon name="construct-outline"></ion-icon> RESTAURAR MIS PUBLICACIONES
+        </button>
+        <div id="pf-repair-log" style="display:none;margin-top:12px;padding:12px;background:rgba(0,0,0,.3);border-radius:10px;font-size:.72rem;font-family:var(--ff-mono);color:var(--g);line-height:1.8"></div>
       </div>
 
     </div>
@@ -1714,7 +1752,86 @@ async function pfSaveSocialLinks() {
   } catch(e) { showToast('Error de red', 'error'); }
 }
 
-/* ─── Renderizar iconos de redes bajo la bio ─── */
+/* ─── RECUPERACIÓN: detectar nombre anterior automáticamente ─── */
+async function pfDetectOldName() {
+  const btn = document.querySelector('.pf-btn-detect');
+  const res_el = document.getElementById('pf-detect-result');
+  if (btn) { btn.disabled = true; btn.textContent = 'Buscando…'; }
+  try {
+    const token = localStorage.getItem('token');
+    const res   = await fetch(`${API_URL}/usuarios/orphan-check`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data  = await res.json();
+    if (data.success && data.huerfanos && data.huerfanos.length > 0) {
+      res_el.style.display = 'block';
+      res_el.innerHTML = `<strong style="color:var(--g)">Nombres detectados sin cuenta activa:</strong><br>${
+        data.huerfanos.map(n =>
+          `<span style="color:var(--cy);cursor:pointer;text-decoration:underline"
+                 onclick="document.getElementById('pf-repair-oldname').value='${n}'">@${n}</span>`
+        ).join('  ·  ')
+      }<br><small style="color:var(--txt3)">Toca uno para seleccionarlo automáticamente ↑</small>`;
+    } else {
+      res_el.style.display = 'block';
+      res_el.innerHTML = '<span style="color:#ff9800">No se detectaron nombres huérfanos automáticamente. Ingresa el nombre manualmente.</span>';
+    }
+  } catch(e) {
+    res_el.style.display = 'block';
+    res_el.innerHTML = '<span style="color:var(--txt3)">Error de red al detectar.</span>';
+  }
+  if (btn) { btn.disabled = false; btn.innerHTML = '<ion-icon name="search-outline"></ion-icon> DETECTAR MI NOMBRE ANTERIOR'; }
+}
+
+/* ─── RECUPERACIÓN: ejecutar cascada ─── */
+async function pfRunRepair() {
+  const btn      = document.getElementById('pf-btn-repair');
+  const log      = document.getElementById('pf-repair-log');
+  const oldName  = (document.getElementById('pf-repair-oldname')?.value || '').trim();
+  const password = document.getElementById('pf-repair-pass')?.value || '';
+
+  if (!oldName)  { showToast('Ingresa el nombre anterior', 'error');    return; }
+  if (!password) { showToast('Ingresa tu contraseña', 'error');         return; }
+
+  btn.disabled = true; btn.textContent = 'Reparando…';
+  log.style.display = 'none';
+
+  try {
+    const token = localStorage.getItem('token');
+    const res   = await fetch(`${API_URL}/usuarios/repair-cascade`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ oldUsername: oldName, password })
+    });
+    const data = await res.json();
+
+    if (!data.success) {
+      showToast(data.error || 'Error al reparar', 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<ion-icon name="construct-outline"></ion-icon> RESTAURAR MIS PUBLICACIONES';
+      return;
+    }
+
+    const r = data.resumen;
+    log.style.display = 'block';
+    log.innerHTML = [
+      `✅ Reparación completada`,
+      `📦 Publicaciones migradas: ${r.juegos}`,
+      `💬 Comentarios migrados:   ${r.comentarios}`,
+      `🔔 Notificaciones:         ${r.notificaciones}`,
+      ``,
+      `Recargando perfil en 2 s…`
+    ].join('\n');
+
+    showToast(`✅ ${r.juegos} publicaciones restauradas. Recargando…`, 'success');
+    setTimeout(() => location.reload(), 2000);
+
+  } catch(e) {
+    showToast('Error de red — intenta de nuevo', 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<ion-icon name="construct-outline"></ion-icon> RESTAURAR MIS PUBLICACIONES';
+  }
+}
+
 function pfRenderSocialLinks(links) {
   const row = document.getElementById('pf-social-links-row');
   if (!row) return;
