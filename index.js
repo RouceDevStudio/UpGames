@@ -22,6 +22,12 @@ const {
     recalcularTodosLosScores,
 } = require('./modulos/scoreHelpers');
 
+// ========== MÓDULOS DE MEJORAS v2 ==========
+const gamification    = require('./modulos/gamification');
+const recommendations = require('./modulos/recommendations');
+const twoFactor       = require('./modulos/twoFactor');
+// ==========================================
+
 const https = require('https');
 
 // ========================================
@@ -733,6 +739,14 @@ app.post('/economia/validar-descarga', [body('juegoId').isMongoId()], async (req
         }
 
         await autor.save();
+
+        // ── Hooks gamificación & recomendaciones (fire & forget) ──
+        gamification.onDescarga(juego.usuario).catch(() => {});
+        recommendations.invalidateItemCache(juegoId);
+        if (juego.descargasEfectivas === 100 || juego.descargasEfectivas === 1000) {
+            gamification.onItemViral(juego.usuario, juego.descargasEfectivas).catch(() => {});
+        }
+
         logger.info(`Descarga efectiva validada - Juego: ${juego.title}, Total: ${juego.descargasEfectivas}`);
 
         res.json({
@@ -852,6 +866,7 @@ app.post('/admin/finanzas/procesar-pago/:id', verificarAdmin, [param('id').isMon
             usuario.saldo = Math.max(0, usuario.saldo - pago.monto);
             usuario.solicitudPagoPendiente = false;
             await usuario.save();
+            gamification.onPagoRecibido(pago.usuario, pago.monto).catch(() => {});
         }
 
         logger.info(`Pago procesado [${metodoProcesamiento}] - @${pago.usuario}, Monto: $${pago.monto.toFixed(2)}`);
@@ -968,6 +983,12 @@ app.post('/auth/register', [
         await nuevoUsuario.save();
         logger.info(`Nuevo usuario registrado: @${usuario} (${email})`);
 
+        // ── Hook referral (si viene codigoReferral en el body) ──
+        if (req.body.codigoReferral) {
+            const socialFeed = require('./modulos/socialFeed');
+            socialFeed.registrarReferido(req.body.codigoReferral, nuevoUsuario.usuario).catch(() => {});
+        }
+
         const verifLink = `${API_URL_SELF}/auth/verify-email/${verifToken}`;
         sendEmail({ to: email, subject: '✅ Verifica tu email en UpGames', html: emailVerifTemplate(usuario, verifLink) }).catch(() => {});
 
@@ -991,8 +1012,23 @@ app.post('/auth/login', [body('usuario').notEmpty(), body('password').notEmpty()
         const esValida = await bcrypt.compare(password, usuario.password);
         if (!esValida) return res.status(401).json({ success: false, error: "Usuario o contraseña incorrectos" });
 
+        // ── Verificación 2FA (si el usuario lo tiene activo) ──
+        const tieneDFA = await twoFactor.tieneActivo(usuario.usuario);
+        if (tieneDFA) {
+            if (!req.body.token2fa) {
+                return res.status(401).json({ error: 'Se requiere código 2FA', require2FA: true });
+            }
+            const check = await twoFactor.verificar(usuario.usuario, req.body.token2fa);
+            if (!check.ok) {
+                return res.status(401).json({ error: check.error || 'Código 2FA incorrecto' });
+            }
+        }
+
         const token = jwt.sign({ usuario: usuario.usuario, email: usuario.email }, JWT_SECRET, { expiresIn: '30d' });
         logger.info(`Login exitoso: @${usuario.usuario}`);
+
+        // ── Hook gamificación: racha diaria (fire & forget) ──
+        gamification.onLogin(usuario.usuario).catch(() => {});
 
         // Fire & forget — no bloquea la respuesta
         Usuario.updateOne({ usuario: usuario.usuario }, { $set: { ultimoLogin: new Date() } }).catch(() => {});
@@ -1332,6 +1368,8 @@ app.post("/items/add", [verificarToken, body('title').notEmpty().trim().isLength
 
         // Fire & forget
         calcularScoreRecomendacion(nuevoJuego._id).catch(() => {});
+        gamification.onUpload(nuevoJuego.usuario).catch(() => {});
+        recommendations.invalidateTrending();
 
         try {
             const autorData = await Usuario.findOne({ usuario: nuevoJuego.usuario }).select('listaSeguidores').lean();
@@ -1778,6 +1816,7 @@ app.post('/comentarios', [verificarToken, body('itemId').notEmpty(), body('texto
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'Datos inválidos' });
         const nuevo = new Comentario({ ...req.body, usuario: req.usuario });
         await nuevo.save();
+        gamification.onComentario(req.usuario).catch(() => {});
         res.status(201).json({ success: true, comentario: nuevo });
     } catch (error) {
         logger.error(`Error en POST /comentarios: ${error.message}`);
@@ -1805,6 +1844,8 @@ app.post('/favoritos/add', [verificarToken, body('itemId').isMongoId()], async (
         // ⭐ Incrementar + recalcular en paralelo
         await Juego.findByIdAndUpdate(itemId, { $inc: { likesCount: 1 } });
         calcularScoreRecomendacion(itemId).catch(() => {}); // fire & forget
+        gamification.onFavorito(req.usuario).catch(() => {});
+        recommendations.invalidateUserCache(req.usuario);
         res.json({ success: true, ok: true });
     } catch (error) {
         logger.error(`Error en favoritos/add: ${error.message}`);
@@ -2341,6 +2382,11 @@ app.use((err, req, res, next) => {
     logger.error(`Error: ${err?.message || "unknown"}`);
     res.status(500).json({ error: "Error interno del servidor" });
 });
+
+// ========== MEJORAS v2 ==========
+const rutasMejoras = require('./rutas/rutasMejoras');
+rutasMejoras.registrar(app, { verificarToken, verificarAdmin });
+// ================================
 
 // ========== INICIAR SERVIDOR ==========
 const PORT = config.PORT;
