@@ -1179,7 +1179,7 @@ app.post('/economia/validar-descarga', [
 
         // Paso 3: Incrementar descargas efectivas del juego (atómico, sin cargar middleware pre-save)
         await Juego.findByIdAndUpdate(juegoId, { $inc: { descargasEfectivas: 1 } });
-        juego.descargasEfectivas += 1; // Actualizar en memoria
+        juego.descargasEfectivas = (juego.descargasEfectivas || 0) + 1; // Actualizar en memoria (null-safe)
         
         // ⭐ NUEVO: Recalcular score después de incrementar descargas
         await calcularScoreRecomendacion(juegoId);
@@ -1201,7 +1201,7 @@ app.post('/economia/validar-descarga', [
             logger.warn(`Usuario en lista negra detectado: @${autor.usuario} - Descarga NO contabilizada para ganancia`);
             
             // Incrementar contador de descargas pero NO sumar saldo
-            autor.descargasTotales += 1;
+            autor.descargasTotales = (autor.descargasTotales || 0) + 1;
             await autor.save();
             
             return res.json({
@@ -1215,7 +1215,11 @@ app.post('/economia/validar-descarga', [
         }
 
         // Paso 5: Actualizar descargas totales del autor
-        autor.descargasTotales += 1;
+        autor.descargasTotales = (autor.descargasTotales || 0) + 1;
+
+        // Usuarios exentos del fraud detector (admins/dueños de la plataforma)
+        // Configura en .env: ADMIN_USERS=keroxenee,otroadmin
+        const ADMIN_USERS = (process.env.ADMIN_USERS || '').split(',').map(u => u.trim()).filter(Boolean);
 
         // Calcular ganancia potencial
         let gananciaGenerada = 0;
@@ -1224,14 +1228,15 @@ app.post('/economia/validar-descarga', [
         // Paso 6: Generar ganancia desde la primera descarga (sin umbral ni restricción de verificación)
         if (juego.descargasEfectivas > MIN_DOWNLOADS_TO_EARN) {
             gananciaGenerada = (CPM_VALUE * AUTHOR_PERCENTAGE) / 1000;
-            autor.saldo += gananciaGenerada;
-            shouldAnalyzeFraud = true;
+            autor.saldo = (autor.saldo || 0) + gananciaGenerada;
+            // No analizar fraude para cuentas admin (evita auto-flag durante pruebas)
+            shouldAnalyzeFraud = !ADMIN_USERS.includes(autor.usuario);
             logger.info(`Ganancia generada - Autor: @${autor.usuario}, +$${gananciaGenerada.toFixed(4)} USD`);
         } else {
             logger.info(`Juego sin descargas aún - No se genera ganancia`);
         }
 
-        // ⚠️ ANÁLISIS DE FRAUDE: Solo se ejecuta si el juego superó el umbral Y el autor está verificado
+        // ⚠️ ANÁLISIS DE FRAUDE: Solo se ejecuta si el juego superó el umbral Y el autor no es admin
         // (cuando shouldAnalyzeFraud = true). En otros casos no tiene sentido registrar en download_tracking.
         if (shouldAnalyzeFraud) {
             const fraudAnalysis = await fraudDetector.analyzeDownloadBehavior(
@@ -3328,100 +3333,8 @@ app.put('/usuarios/update-username', [
 });
 
 // ═══════════════════════════════════════════════════════════
-// ⭐ PUT /usuarios/repair-cascade
-//    Recuperación de emergencia: migra publicaciones huérfanas
-//    de un nombre anterior al nombre actual del usuario autenticado.
-//    Solo afecta documentos cuyo "usuario" == oldUsername.
+// ⭐ PUT /usuarios/update-email  — Cambiar email (cooldown 30 días)
 // ═══════════════════════════════════════════════════════════
-app.put('/usuarios/repair-cascade', [
-    verificarToken,
-    body('oldUsername').trim().isLength({ min: 3, max: 20 }),
-    body('password').notEmpty()
-], async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'Datos inválidos' });
-    try {
-        const { oldUsername, password } = req.body;
-        const currentName = req.usuario.toLowerCase();
-        const oldName     = oldUsername.toLowerCase().trim();
-
-        if (oldName === currentName) {
-            return res.status(400).json({ success: false, error: 'El nombre antiguo y el actual son iguales' });
-        }
-
-        // Verificar contraseña del usuario actual
-        const usuario = await Usuario.findOne({ usuario: currentName });
-        if (!usuario) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
-
-        const passOk = await bcrypt.compare(password, usuario.password);
-        if (!passOk) return res.status(401).json({ success: false, error: 'Contraseña incorrecta' });
-
-        // Verificar que existen documentos huérfanos con ese nombre antiguo
-        const countJuegos = await Juego.countDocuments({ usuario: oldName });
-        if (countJuegos === 0) {
-            // Intentar también con el nombre sin normalizar por si acaso
-            const countAlt = await Juego.countDocuments({ usuario: oldUsername.trim() });
-            if (countAlt === 0) {
-                return res.status(404).json({
-                    success: false,
-                    error: `No se encontraron publicaciones con el nombre "@${oldName}". Verifica el nombre anterior exacto.`
-                });
-            }
-        }
-
-        // Ejecutar cascada completa oldName → currentName
-        const [rJuegos, rComents, rNotifDest, rNotifEmis] = await Promise.all([
-            Juego.updateMany(      { usuario: oldName },      { $set: { usuario: currentName } }),
-            Comentario.updateMany( { usuario: oldName },      { $set: { usuario: currentName } }),
-            Notificacion.updateMany({ destinatario: oldName }, { $set: { destinatario: currentName } }),
-            Notificacion.updateMany({ emisor: oldName },       { $set: { emisor: currentName } }),
-        ]);
-
-        // Actualizar arrays de seguidores/siguiendo en otros usuarios
-        await Usuario.updateMany(
-            { listaSeguidores: oldName },
-            { $set: { 'listaSeguidores.$': currentName } }
-        );
-        await Usuario.updateMany(
-            { siguiendo: oldName },
-            { $set: { 'siguiendo.$': currentName } }
-        );
-
-        const resumen = {
-            juegos:        rJuegos.modifiedCount,
-            comentarios:   rComents.modifiedCount,
-            notificaciones: rNotifDest.modifiedCount + rNotifEmis.modifiedCount,
-        };
-
-        logger.info(`[repair-cascade] @${oldName} → @${currentName} | juegos:${resumen.juegos} comments:${resumen.comentarios}`);
-        res.json({ success: true, resumen });
-
-    } catch (err) {
-        logger.error(`Error en repair-cascade: ${err.message}`);
-        res.status(500).json({ success: false, error: 'Error interno al reparar' });
-    }
-});
-
-// ═══════════════════════════════════════════════════════════
-// ⭐ GET /usuarios/orphan-check
-//    Diagnóstico: devuelve nombres que tienen juegos en BD
-//    pero NO tienen una cuenta activa — útil para identificar el nombre antiguo
-// ═══════════════════════════════════════════════════════════
-app.get('/usuarios/orphan-check', verificarToken, async (req, res) => {
-    try {
-        // Agrupa todos los nombres de autor distintos en Juegos
-        const autores = await Juego.distinct('usuario');
-        // Filtra los que NO tienen cuenta
-        const resultado = [];
-        for (const autor of autores) {
-            const existe = await Usuario.findOne({ usuario: autor }).lean();
-            if (!existe) resultado.push(autor);
-        }
-        res.json({ success: true, huerfanos: resultado });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
 app.put('/usuarios/update-email', [
     verificarToken,
     body('nuevoEmail').isEmail().normalizeEmail(),
@@ -4272,10 +4185,21 @@ app.post('/chat/enviar', verificarToken, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Mensaje demasiado largo (máx 2000 caracteres)' });
         }
 
-        // Verificar que el destinatario existe
-        const receptor = await Usuario.findOne({ usuario: para }).select('usuario').lean();
+        // Verificar que ambos se siguen mutuamente
+        const [emisor, receptor] = await Promise.all([
+            Usuario.findOne({ usuario: de   }).select('siguiendo').lean(),
+            Usuario.findOne({ usuario: para }).select('listaSeguidores siguiendo').lean()
+        ]);
+
         if (!receptor) {
             return res.status(404).json({ success: false, error: 'Usuario destinatario no existe' });
+        }
+
+        const emisorSigueReceptor  = (emisor?.siguiendo       || []).includes(para);
+        const receptorSigueEmisor  = (receptor?.listaSeguidores || []).includes(de);
+
+        if (!emisorSigueReceptor || !receptorSigueEmisor) {
+            return res.status(403).json({ success: false, error: 'Solo puedes chatear con usuarios que se siguen mutuamente' });
         }
 
         // Guardar mensaje
@@ -4432,76 +4356,6 @@ app.get('/chat/no-leidos', verificarToken, async (req, res) => {
         const total = await Mensaje.countDocuments({ para: yo, leido: false });
         res.json({ success: true, noLeidos: total });
     } catch (err) {
-        res.status(500).json({ success: false, error: 'Error interno' });
-    }
-});
-
-// ══════════════════════════════════════════════════════════════
-
-/**
- * GET /usuarios/descubrir?limite=10
- * Devuelve usuarios aleatorios rotados por día (seed = fecha del día).
- * Excluye al usuario autenticado si hay token.
- */
-app.get('/usuarios/descubrir', async (req, res) => {
-    try {
-        const limite = Math.min(parseInt(req.query.limite) || 10, 30);
-
-        // Seed diario basado en la fecha (YYYYMMDD) → rotación diaria automática
-        const hoy    = new Date();
-        const seedDia = parseInt(`${hoy.getFullYear()}${String(hoy.getMonth()+1).padStart(2,'0')}${String(hoy.getDate()).padStart(2,'0')}`);
-
-        // Detectar usuario logueado para excluirlo
-        let usuarioActual = null;
-        try {
-            const authHeader = req.headers['authorization'] || '';
-            const token = authHeader.replace('Bearer ', '').trim();
-            if (token) {
-                const decoded = jwt.verify(token, config.JWT_SECRET);
-                usuarioActual = decoded.usuario || decoded.id || null;
-            }
-        } catch (_) { /* sin auth, ok */ }
-
-        const filtro = { activo: { $ne: false } };
-        if (usuarioActual) filtro.usuario = { $ne: usuarioActual };
-
-        const total = await Usuario.countDocuments(filtro);
-        if (total === 0) return res.json({ success: true, usuarios: [] });
-
-        // Skip rotativo diario
-        const skip = seedDia % Math.max(1, total);
-
-        let usuarios = await Usuario.find(filtro)
-            .select('usuario nombre foto listaSeguidores descargas')
-            .skip(skip)
-            .limit(limite)
-            .lean();
-
-        // Wrap-around si no llega al límite
-        if (usuarios.length < limite) {
-            const faltan = limite - usuarios.length;
-            const extra  = await Usuario.find(filtro)
-                .select('usuario nombre foto listaSeguidores descargas')
-                .limit(faltan)
-                .lean();
-            const yaIncluidos = new Set(usuarios.map(u => u.usuario));
-            for (const u of extra) {
-                if (!yaIncluidos.has(u.usuario)) usuarios.push(u);
-            }
-        }
-
-        res.json({
-            success: true,
-            usuarios: usuarios.map(u => ({
-                usuario:    u.usuario,
-                nombre:     u.nombre  || u.usuario,
-                foto:       u.foto    || null,
-                seguidores: (u.listaSeguidores || []).length,
-                descargas:  u.descargas || 0
-            }))
-        });
-    } catch (err) {
-        logger.error(`Error en /usuarios/descubrir: ${err.message}`);
         res.status(500).json({ success: false, error: 'Error interno' });
     }
 });
