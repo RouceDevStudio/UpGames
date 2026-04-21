@@ -774,17 +774,28 @@ const Notificacion = mongoose.model('Notificacion', NotificacionSchema);
 
 // ========== MODELO: MENSAJES DE CHAT ==========
 const MensajeSchema = new mongoose.Schema({
-    de:    { type: String, required: true, index: true },   // quien envía
-    para:  { type: String, required: true, index: true },   // quien recibe
-    texto: { type: String, required: true, maxlength: 2000 },
-    leido: { type: Boolean, default: false, index: true },
-    fecha: { type: Date,   default: Date.now, index: true, expires: 90 * 24 * 60 * 60 } // TTL 90 días
+    de:     { type: String, required: true, index: true },   // quien envía
+    para:   { type: String, required: true, index: true },   // quien recibe
+    texto:  { type: String, default: '', maxlength: 2000 },
+    imagen: { type: String, default: '' },                   // URL de imagen adjunta (Cloudinary)
+    leido:  { type: Boolean, default: false, index: true },
+    fecha:  { type: Date,   default: Date.now, index: true, expires: 90 * 24 * 60 * 60 } // TTL 90 días
 }, { collection: 'mensajes', timestamps: false });
 
 // Índice compuesto para cargar conversación entre dos usuarios rápido
 MensajeSchema.index({ de: 1, para: 1, fecha: 1 });
 MensajeSchema.index({ para: 1, leido: 1 });
 const Mensaje = mongoose.model('Mensaje', MensajeSchema);
+
+// ── HISTORIAS (Stories) — TTL 24h ──────────────────────────────────────────
+const StorySchema = new mongoose.Schema({
+    usuario: { type: String, required: true, index: true },
+    imagen:  { type: String, default: '' },       // URL Cloudinary
+    texto:   { type: String, default: '', maxlength: 200 },
+    vistos:  { type: [String], default: [] },
+    fecha:   { type: Date, default: Date.now, index: true, expires: 24 * 60 * 60 }
+}, { collection: 'stories', timestamps: false });
+const Story = mongoose.model('Story', StorySchema);
 
 // ========== MIDDLEWARE DE AUTENTICACIÓN JWT ==========
 const verificarToken = (req, res, next) => {
@@ -4172,16 +4183,19 @@ app.delete('/notificaciones/todas/:usuario', verificarToken, async (req, res) =>
  */
 app.post('/chat/enviar', verificarToken, async (req, res) => {
     try {
-        const { para, texto } = req.body;
+        const { para, texto, imagen } = req.body;
         const de = req.usuario;
 
-        if (!para || !texto || !texto.trim()) {
-            return res.status(400).json({ success: false, error: 'Destinatario y texto requeridos' });
+        if (!para) {
+            return res.status(400).json({ success: false, error: 'Destinatario requerido' });
+        }
+        if (!texto?.trim() && !imagen?.trim()) {
+            return res.status(400).json({ success: false, error: 'Mensaje vacío' });
         }
         if (de === para) {
             return res.status(400).json({ success: false, error: 'No puedes enviarte mensajes a ti mismo' });
         }
-        if (texto.trim().length > 2000) {
+        if (texto && texto.trim().length > 2000) {
             return res.status(400).json({ success: false, error: 'Mensaje demasiado largo (máx 2000 caracteres)' });
         }
 
@@ -4203,7 +4217,7 @@ app.post('/chat/enviar', verificarToken, async (req, res) => {
         }
 
         // Guardar mensaje
-        const msg = new Mensaje({ de, para, texto: texto.trim() });
+        const msg = new Mensaje({ de, para, texto: texto?.trim() || '', imagen: imagen?.trim() || '' });
         await msg.save();
 
         // Crear notificación push para el destinatario (tipo 'mensaje')
@@ -4214,14 +4228,14 @@ app.post('/chat/enviar', verificarToken, async (req, res) => {
                 emisor:       de,
                 itemId:       msg._id.toString(),
                 itemTitle:    `Mensaje de @${de}`,
-                itemImage:    '',
+                itemImage:    imagen || '',
                 leida:        false,
                 fecha:        new Date()
             });
             await notif.save();
         } catch (_) { /* notificación no crítica */ }
 
-        res.json({ success: true, mensaje: { id: msg._id, de, para, texto: msg.texto, leido: false, fecha: msg.fecha } });
+        res.json({ success: true, mensaje: { id: msg._id, de, para, texto: msg.texto, imagen: msg.imagen, leido: false, fecha: msg.fecha } });
     } catch (err) {
         logger.error(`Error enviando mensaje: ${err.message}`);
         res.status(500).json({ success: false, error: 'Error interno' });
@@ -4355,6 +4369,149 @@ app.get('/chat/no-leidos', verificarToken, async (req, res) => {
         const yo = req.usuario;
         const total = await Mensaje.countDocuments({ para: yo, leido: false });
         res.json({ success: true, noLeidos: total });
+    } catch (err) {
+        res.status(500).json({ success: false, error: 'Error interno' });
+    }
+});
+
+// ══════════════════════════════════════════════════════════════
+// DESCUBRE USUARIOS — retorna seguidos mutuos + populares
+// ══════════════════════════════════════════════════════════════
+app.get('/usuarios/descubrir', verificarToken, async (req, res) => {
+    try {
+        const me = req.usuario;
+        const limite = Math.min(parseInt(req.query.limite) || 10, 30);
+        const usuario = await Usuario.findOne({ usuario: me }).select('siguiendo listaSeguidores').lean();
+        if (!usuario) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+
+        const siguiendo = usuario.siguiendo || [];
+        const seguidores = usuario.listaSeguidores || [];
+
+        // Seguidos mutuos (pueden chatear) primero
+        const mutuos = siguiendo.filter(u => seguidores.includes(u));
+
+        // Completar con usuarios populares que no sigo aún
+        let extras = [];
+        if (mutuos.length < limite) {
+            const populares = await Usuario.find({
+                usuario: { $ne: me, $nin: siguiendo }
+            })
+            .select('usuario foto listaSeguidores isVerificado verificadoNivel')
+            .sort({ 'listaSeguidores.length': -1 })
+            .limit(limite - mutuos.length)
+            .lean();
+            extras = populares;
+        }
+
+        const mutuosData = await Usuario.find({ usuario: { $in: mutuos } })
+            .select('usuario foto listaSeguidores isVerificado verificadoNivel')
+            .limit(limite)
+            .lean();
+
+        const todos = [
+            ...mutuosData.map(u => ({ ...u, mutuo: true, seguidores: u.listaSeguidores?.length || 0 })),
+            ...extras.map(u => ({ ...u, mutuo: false, seguidores: u.listaSeguidores?.length || 0 }))
+        ].slice(0, limite);
+
+        res.json({ success: true, usuarios: todos });
+    } catch (err) {
+        logger.error(`Error en descubrir: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error interno' });
+    }
+});
+
+// ══════════════════════════════════════════════════════════════
+// SUBIR IMAGEN AL CHAT — base64 → Cloudinary
+// ══════════════════════════════════════════════════════════════
+app.post('/chat/imagen', verificarToken, async (req, res) => {
+    try {
+        const { imagen } = req.body; // base64 data URL
+        if (!imagen) return res.status(400).json({ success: false, error: 'Imagen requerida' });
+        if (imagen.length > 5 * 1024 * 1024) return res.status(400).json({ success: false, error: 'Imagen demasiado grande (máx 5MB)' });
+
+        const result = await cloudinary.uploader.upload(imagen, {
+            folder: 'chat_images',
+            transformation: [{ width: 1080, height: 1080, crop: 'limit', quality: 'auto:good' }]
+        });
+        res.json({ success: true, url: result.secure_url });
+    } catch (err) {
+        logger.error(`Error subiendo imagen de chat: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error al subir imagen' });
+    }
+});
+
+// ══════════════════════════════════════════════════════════════
+// STORIES
+// ══════════════════════════════════════════════════════════════
+app.post('/stories/crear', verificarToken, async (req, res) => {
+    try {
+        const { imagen, texto } = req.body;
+        if (!imagen && !texto?.trim()) return res.status(400).json({ success: false, error: 'Imagen o texto requerido' });
+
+        let imgUrl = '';
+        if (imagen) {
+            const result = await cloudinary.uploader.upload(imagen, {
+                folder: 'stories',
+                transformation: [{ width: 1080, height: 1920, crop: 'limit', quality: 'auto:good' }]
+            });
+            imgUrl = result.secure_url;
+        }
+
+        const story = new Story({ usuario: req.usuario, imagen: imgUrl, texto: texto?.trim() || '' });
+        await story.save();
+        res.json({ success: true, story: { id: story._id, usuario: story.usuario, imagen: story.imagen, texto: story.texto, fecha: story.fecha } });
+    } catch (err) {
+        logger.error(`Error creando story: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error interno' });
+    }
+});
+
+app.get('/stories/seguidos', verificarToken, async (req, res) => {
+    try {
+        const me = req.usuario;
+        const usuario = await Usuario.findOne({ usuario: me }).select('siguiendo').lean();
+        const seguidos = [...(usuario?.siguiendo || []), me];
+
+        const stories = await Story.find({ usuario: { $in: seguidos } })
+            .sort({ fecha: -1 })
+            .limit(100)
+            .lean();
+
+        // Agrupar por usuario, solo la más reciente
+        const byUser = {};
+        for (const s of stories) {
+            if (!byUser[s.usuario]) {
+                byUser[s.usuario] = { usuario: s.usuario, imagen: s.imagen, texto: s.texto, fecha: s.fecha, id: s._id, visto: s.vistos.includes(me), total: 0 };
+            }
+            byUser[s.usuario].total++;
+        }
+
+        // Ordenar: no vistos primero, luego el propio usuario
+        let result = Object.values(byUser);
+        result.sort((a, b) => {
+            if (a.usuario === me) return -1;
+            if (b.usuario === me) return 1;
+            if (a.visto !== b.visto) return a.visto ? 1 : -1;
+            return new Date(b.fecha) - new Date(a.fecha);
+        });
+
+        // Enriquecer con foto de perfil
+        const usernames = result.map(r => r.usuario);
+        const perfiles = await Usuario.find({ usuario: { $in: usernames } }).select('usuario foto').lean();
+        const fotoMap = Object.fromEntries(perfiles.map(p => [p.usuario, p.foto || '']));
+        result = result.map(r => ({ ...r, foto: fotoMap[r.usuario] || '' }));
+
+        res.json({ success: true, stories: result });
+    } catch (err) {
+        logger.error(`Error obteniendo stories: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error interno' });
+    }
+});
+
+app.post('/stories/:id/ver', verificarToken, async (req, res) => {
+    try {
+        await Story.updateOne({ _id: req.params.id }, { $addToSet: { vistos: req.usuario } });
+        res.json({ success: true });
     } catch (err) {
         res.status(500).json({ success: false, error: 'Error interno' });
     }
