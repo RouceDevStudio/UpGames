@@ -3820,113 +3820,71 @@ body.nx-open #nxFab {
   flex-shrink: 0;
 }
 
+
 /* ══════════════════════════════════════════════════════════════
    🎮 SISTEMA DE DETECCIÓN DE JUEGOS — ESTILOS
    ══════════════════════════════════════════════════════════════ */
 
-/* Badge "Detectado" encima de la miniatura */
+/* Ícono carrito en miniatura de la card (solo indicador visual) */
 .tile-detected-badge {
   position: absolute;
   top: 7px;
   right: 7px;
   background: linear-gradient(120deg, #5EFF43 0%, #00f2ff 100%);
   color: #07070f;
-  padding: 3px 8px;
-  border-radius: 20px;
-  font-size: .6rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  z-index: 6;
-  pointer-events: none;
-  letter-spacing: .03em;
-  animation: detectedIn .35s cubic-bezier(.22,1,.36,1) both;
-}
-.tile-detected-badge ion-icon { font-size: .7rem; }
-
-@keyframes detectedIn {
-  from { opacity:0; transform:translateY(-6px) scale(.92); }
-  to   { opacity:1; transform:translateY(0)    scale(1);   }
-}
-
-/* Nombre del juego detectado bajo el título */
-.tile-detected-name {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: #5EFF43;
-  font-size: .68rem;
-  font-weight: 600;
-  margin: 3px 0 6px;
-  line-height: 1;
-}
-.tile-detected-name ion-icon { font-size: .78rem; flex-shrink: 0; }
-
-/* Contenedor de botones de acción */
-.tile-action-btns {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 6px;
-  margin-top: 8px;
-}
-.tile-action-btns.has-buy {
-  grid-template-columns: 1fr 1fr;
-}
-
-/* Base de botones */
-.tile-btn-cloud,
-.tile-btn-buy {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 7px 6px;
-  border-radius: 8px;
-  font-size: .68rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all .18s ease;
-  border: 1px solid;
-  letter-spacing: .02em;
-  white-space: nowrap;
-  background: transparent;
+  z-index: 6;
+  pointer-events: none;
+  animation: detectedIn .35s cubic-bezier(.22,1,.36,1) both;
+  box-shadow: 0 2px 10px rgba(94,255,67,.4);
 }
-.tile-btn-cloud ion-icon,
-.tile-btn-buy   ion-icon { font-size: .85rem; flex-shrink:0; }
+.tile-detected-badge ion-icon { font-size: .85rem; }
 
-/* Botón "Nube" */
-.tile-btn-cloud {
-  border-color: #00f2ff;
-  color: #00f2ff;
+@keyframes detectedIn {
+  from { opacity:0; transform:scale(.7); }
+  to   { opacity:1; transform:scale(1);  }
 }
-.tile-btn-cloud:hover {
-  background: rgba(0,242,255,.12);
-  box-shadow: 0 0 14px rgba(0,242,255,.25);
-}
-.tile-btn-cloud:active { transform: scale(.95); }
 
-/* Botón "Comprar" */
-.tile-btn-buy {
-  border-color: #5EFF43;
+/* ── BOTÓN COMPRAR EN DETAIL SHEET ────────────────────────── */
+.sheet-buy-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 20px;
+  margin-top: 10px;
+  background: linear-gradient(120deg, #5EFF43 0%, #2affa0 100%);
+  border: none;
+  border-radius: 14px;
   color: #07070f;
-  background: linear-gradient(120deg, #5EFF43 0%, #2dffb0 100%);
-  box-shadow: 0 2px 10px rgba(94,255,67,.2);
-  animation: buyPulse 2.5s ease-in-out infinite;
+  font-size: .95rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(94,255,67,.35);
+  transition: all .2s ease;
+  animation: buySheetPulse 2.5s ease-in-out infinite;
 }
-.tile-btn-buy:hover {
-  background: linear-gradient(120deg, #7fff60 0%, #4fffc0 100%);
-  box-shadow: 0 4px 18px rgba(94,255,67,.45);
+.sheet-buy-btn ion-icon { font-size: 1.2rem; }
+.sheet-buy-btn:hover {
   transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(94,255,67,.55);
+  animation: none;
 }
-.tile-btn-buy:active { transform: scale(.95); animation: none; }
+.sheet-buy-btn:active { transform: scale(.97); }
 
-@keyframes buyPulse {
-  0%,100% { box-shadow: 0 2px 10px rgba(94,255,67,.2); }
-  50%      { box-shadow: 0 2px 18px rgba(94,255,67,.5); }
+@keyframes buySheetPulse {
+  0%,100% { box-shadow: 0 4px 20px rgba(94,255,67,.3); }
+  50%      { box-shadow: 0 4px 30px rgba(94,255,67,.6); }
 }
 
-/* ── MODAL DE COMPRA ─────────────────────────────────────── */
+/* ── MODAL DE COMPRA ──────────────────────────────────────── */
 #buy-modal-overlay {
   position: fixed;
   inset: 0;
@@ -3939,7 +3897,7 @@ body.nx-open #nxFab {
   padding: 16px;
   animation: overlayIn .2s ease both;
 }
-@keyframes overlayIn { from { opacity:0; } to { opacity:1; } }
+@keyframes overlayIn { from{opacity:0} to{opacity:1} }
 
 .buy-modal {
   background: linear-gradient(145deg, #12121f 0%, #1c1c30 100%);
@@ -3949,12 +3907,12 @@ body.nx-open #nxFab {
   max-width: 400px;
   width: 100%;
   position: relative;
-  box-shadow: 0 24px 80px rgba(94,255,67,.18), 0 0 0 1px rgba(0,242,255,.08);
+  box-shadow: 0 24px 80px rgba(94,255,67,.18);
   animation: modalUp .3s cubic-bezier(.22,1,.36,1) both;
 }
 @keyframes modalUp {
   from { opacity:0; transform:translateY(30px) scale(.97); }
-  to   { opacity:1; transform:translateY(0)    scale(1);   }
+  to   { opacity:1; transform:translateY(0) scale(1); }
 }
 
 .buy-modal-close {
@@ -3967,13 +3925,12 @@ body.nx-open #nxFab {
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
   color: #aaa;
-  font-size: 1rem;
   transition: all .15s;
 }
-.buy-modal-close:hover { background: rgba(255,255,255,.16); color:#fff; }
+.buy-modal-close:hover { background:rgba(255,255,255,.16); color:#fff; }
 
 .buy-modal-header { text-align:center; margin-bottom:18px; }
-.buy-modal-icon   { font-size: 2.8rem; margin-bottom:8px; }
+.buy-modal-icon   { font-size:2.8rem; margin-bottom:8px; }
 .buy-modal-title  { color:#fff; font-size:1.15rem; font-weight:800; margin:0 0 6px; }
 .buy-modal-sub    { color:#888; font-size:.82rem; margin:0; }
 .buy-modal-sub strong { color:#b0b0cc; }
@@ -3990,7 +3947,7 @@ body.nx-open #nxFab {
 }
 .buy-modal-benefit {
   display: flex; align-items: center; gap: 8px;
-  color: #c8ffc8; font-size: .82rem; font-weight: 500;
+  color: #c8ffc8; font-size:.82rem; font-weight:500;
 }
 .buy-modal-benefit ion-icon { color:#5EFF43; font-size:1rem; flex-shrink:0; }
 
@@ -4000,44 +3957,33 @@ body.nx-open #nxFab {
   border: 1px solid rgba(0,242,255,.15);
   border-radius: 10px;
   padding: 10px 13px;
-  color: #9abbc0;
-  font-size: .76rem;
-  margin-bottom: 18px;
-  line-height: 1.4;
+  color: #9abbc0; font-size:.76rem;
+  margin-bottom: 18px; line-height:1.4;
 }
 .buy-modal-info ion-icon { color:#00f2ff; font-size:.95rem; flex-shrink:0; margin-top:1px; }
 
-.buy-modal-actions { display: grid; grid-template-columns:1fr 1.5fr; gap:10px; }
+.buy-modal-actions { display:grid; grid-template-columns:1fr 1.5fr; gap:10px; }
 
 .buy-modal-btn-cancel {
   padding: 11px;
   background: rgba(255,255,255,.07);
   border: 1px solid rgba(255,255,255,.15);
   border-radius: 10px;
-  color: #bbb;
-  font-weight: 600;
-  font-size: .85rem;
-  cursor: pointer;
-  transition: all .15s;
+  color: #bbb; font-weight:600; font-size:.85rem;
+  cursor: pointer; transition: all .15s;
 }
 .buy-modal-btn-cancel:hover { background:rgba(255,255,255,.13); color:#fff; }
 
 .buy-modal-btn-go {
   padding: 11px;
-  background: linear-gradient(120deg, #5EFF43 0%, #2dffb0 100%);
-  border: none;
-  border-radius: 10px;
-  color: #07070f;
-  font-weight: 800;
-  font-size: .88rem;
+  background: linear-gradient(120deg,#5EFF43 0%,#2dffb0 100%);
+  border: none; border-radius: 10px;
+  color: #07070f; font-weight:800; font-size:.88rem;
   cursor: pointer;
-  display: flex; align-items: center; justify-content: center; gap: 6px;
+  display: flex; align-items:center; justify-content:center; gap:6px;
   transition: all .2s;
   box-shadow: 0 4px 16px rgba(94,255,67,.3);
 }
-.buy-modal-btn-go:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(94,255,67,.5);
-}
-.buy-modal-btn-go:active { transform: scale(.97); }
-.buy-modal-btn-go ion-icon { font-size: 1rem; }
+.buy-modal-btn-go:hover { transform:translateY(-2px); box-shadow:0 8px 24px rgba(94,255,67,.5); }
+.buy-modal-btn-go:active { transform:scale(.97); }
+.buy-modal-btn-go ion-icon { font-size:1rem; }

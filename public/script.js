@@ -308,42 +308,28 @@ function createTile(item, isFeatured=false) {
         <button class="tile-fav-quick ${isFav?'active':''}" data-id="${item._id}" title="Favorito" aria-label="${isFav?'Quitar de favoritos':'Añadir a favoritos'}">
           <ion-icon name="${isFav?'heart':'heart-outline'}"></ion-icon>
         </button>
-        ${detGame ? `<div class="tile-detected-badge"><ion-icon name="checkmark-circle"></ion-icon> Detectado</div>` : ''}
+        ${detGame ? '<div class="tile-detected-badge"><ion-icon name="cart"></ion-icon></div>' : ''}
       </div>
       <div class="tile-info">
         <div class="tile-cat">${cat}</div>
         ${extraBadges}
         <div class="tile-title">${item.title}</div>
-        ${detGame ? `<div class="tile-detected-name"><ion-icon name="game-controller"></ion-icon> ${detGame.gameName}</div>` : ''}
         <div class="tile-meta">
           <div class="tile-avatar">${avatarLetter(item.usuario)}</div>
           <div class="tile-user">@${item.usuario||'Cloud'}</div>
           ${lk?`<div class="tile-downloads"><ion-icon name="heart"></ion-icon>${fmt(lk)}</div>`:''}
         </div>
-        <div class="tile-action-btns ${detGame ? 'has-buy' : ''}">
-          <button class="tile-btn-cloud" title="Acceder a la nube">
-            <ion-icon name="cloud-download"></ion-icon><span>Nube</span>
-          </button>
-          ${detGame ? `
-          <button class="tile-btn-buy" onclick="event.stopPropagation();handleBuyGame('${item._id}','${detGame.purchaseLink.replace(/'/g,"\\'")}','${detGame.gameName.replace(/'/g,"\\'")}','${detGame.gameKey||''}')" title="Comprar juego oficial">
-            <ion-icon name="cart"></ion-icon><span>Comprar</span>
-          </button>` : ''}
-        </div>
       </div>`;
   }
 
-  el.addEventListener('click',(e)=>{
+    el.addEventListener('click',(e)=>{
     if(e.target.closest('.tile-fav-quick')) return;
-    if(e.target.closest('.tile-btn-buy')) return;
-    if(e.target.closest('.tile-btn-cloud')) { openDetail(item); return; }
     openDetail(item);
   });
   el.querySelector('.tile-fav-quick').addEventListener('click',(e)=>{
     e.stopPropagation();
     fav(item._id);
   });
-  const cloudBtn = el.querySelector('.tile-btn-cloud');
-  if(cloudBtn) cloudBtn.addEventListener('click',(e)=>{ e.stopPropagation(); openDetail(item); });
   return el;
 }
 
@@ -975,6 +961,20 @@ function openDetail(item) {
         }
       }
     };
+
+    // ── Botón Comprar: aparece si el juego fue detectado ──────────
+    const existingBuyBtn = document.getElementById('ds-buy-btn');
+    if(existingBuyBtn) existingBuyBtn.remove();
+    const detGame = item.extraData?.detectedGame;
+    if(detGame && detGame.purchaseLink) {
+      const buyBtn = document.createElement('button');
+      buyBtn.id = 'ds-buy-btn';
+      buyBtn.className = 'sheet-buy-btn';
+      buyBtn.innerHTML = `<ion-icon name="cart-outline"></ion-icon> COMPRAR EN TIENDA OFICIAL`;
+      buyBtn.onclick = () => handleBuyGame(item._id, detGame.purchaseLink, detGame.gameName, detGame.gameKey);
+      dlBtn.parentNode.insertBefore(buyBtn, dlBtn.nextSibling);
+    }
+    // ──────────────────────────────────────────────────────────────
   }
 
   // Fav button
