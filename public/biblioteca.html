@@ -249,7 +249,16 @@
         <!-- Título -->
         <div class="pf-form-group">
           <label class="pf-label">Título <span class="pf-info-icon" onclick="pfToggleTooltip('pf-tooltip-title')">?</span></label>
-          <input type="text" id="pf-addTitle" class="pf-input" placeholder="Ej: GTA V Optimizado">
+          <input type="text" id="pf-addTitle" class="pf-input" placeholder="Ej: GTA V Optimizado" oninput="pfDetectGameRealtime(this.value)">
+          <div id="pf-game-detection-hint" style="display:none;margin-top:8px;padding:10px 12px;background:rgba(94,255,67,.09);border:1px solid rgba(94,255,67,.3);border-radius:10px;">
+            <div style="color:#5EFF43;font-size:.78rem;font-weight:700;display:flex;align-items:center;gap:5px;">
+              <ion-icon name="game-controller"></ion-icon>
+              <span id="pf-detected-game-name"></span>
+            </div>
+            <div style="color:#888;font-size:.72rem;margin-top:4px;">
+              Al publicar aparecerá un botón <strong style="color:#b0ffb0">"Comprar"</strong> en tu card, llevando a la tienda oficial.
+            </div>
+          </div>
         </div>
 
         <!-- Descripción -->

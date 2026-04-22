@@ -298,6 +298,7 @@ function createTile(item, isFeatured=false) {
         </div>
       </div>`;
   } else {
+    const detGame = item.extraData?.detectedGame || null;
     el.innerHTML=`
       <div class="thumb-wrap">
         ${media}
@@ -307,27 +308,42 @@ function createTile(item, isFeatured=false) {
         <button class="tile-fav-quick ${isFav?'active':''}" data-id="${item._id}" title="Favorito" aria-label="${isFav?'Quitar de favoritos':'Añadir a favoritos'}">
           <ion-icon name="${isFav?'heart':'heart-outline'}"></ion-icon>
         </button>
+        ${detGame ? `<div class="tile-detected-badge"><ion-icon name="checkmark-circle"></ion-icon> Detectado</div>` : ''}
       </div>
       <div class="tile-info">
         <div class="tile-cat">${cat}</div>
         ${extraBadges}
         <div class="tile-title">${item.title}</div>
+        ${detGame ? `<div class="tile-detected-name"><ion-icon name="game-controller"></ion-icon> ${detGame.gameName}</div>` : ''}
         <div class="tile-meta">
           <div class="tile-avatar">${avatarLetter(item.usuario)}</div>
           <div class="tile-user">@${item.usuario||'Cloud'}</div>
           ${lk?`<div class="tile-downloads"><ion-icon name="heart"></ion-icon>${fmt(lk)}</div>`:''}
+        </div>
+        <div class="tile-action-btns ${detGame ? 'has-buy' : ''}">
+          <button class="tile-btn-cloud" title="Acceder a la nube">
+            <ion-icon name="cloud-download"></ion-icon><span>Nube</span>
+          </button>
+          ${detGame ? `
+          <button class="tile-btn-buy" onclick="event.stopPropagation();handleBuyGame('${item._id}','${detGame.purchaseLink.replace(/'/g,"\\'")}','${detGame.gameName.replace(/'/g,"\\'")}','${detGame.gameKey||''}')" title="Comprar juego oficial">
+            <ion-icon name="cart"></ion-icon><span>Comprar</span>
+          </button>` : ''}
         </div>
       </div>`;
   }
 
   el.addEventListener('click',(e)=>{
     if(e.target.closest('.tile-fav-quick')) return;
+    if(e.target.closest('.tile-btn-buy')) return;
+    if(e.target.closest('.tile-btn-cloud')) { openDetail(item); return; }
     openDetail(item);
   });
   el.querySelector('.tile-fav-quick').addEventListener('click',(e)=>{
     e.stopPropagation();
     fav(item._id);
   });
+  const cloudBtn = el.querySelector('.tile-btn-cloud');
+  if(cloudBtn) cloudBtn.addEventListener('click',(e)=>{ e.stopPropagation(); openDetail(item); });
   return el;
 }
 
@@ -4252,3 +4268,130 @@ window.switchTab = function(tab) {
     }, 300);
   }
 };
+// ═══════════════════════════════════════════════════════════════
+// 🛒 SISTEMA DE COMPRA - DETECCIÓN AUTOMÁTICA DE JUEGOS
+// ═══════════════════════════════════════════════════════════════
+
+const STORE_ICONS = {
+  steam:      'https://store.steampowered.com/favicon.ico',
+  epic:       'https://www.epicgames.com/favicon.ico',
+  rockstar:   'https://www.rockstargames.com/favicon.ico',
+  xbox:       'https://xbox.com/favicon.ico',
+  playstation:'https://playstation.com/favicon.ico',
+  riot:       'https://riotgames.com/favicon.ico',
+  default:    null
+};
+
+function detectStoreName(url) {
+  if(!url) return { name:'Tienda Oficial', icon: null };
+  if(url.includes('steampowered.com'))  return { name:'Steam', icon: STORE_ICONS.steam };
+  if(url.includes('epicgames.com'))     return { name:'Epic Games', icon: STORE_ICONS.epic };
+  if(url.includes('rockstargames.com')) return { name:'Rockstar Games', icon: STORE_ICONS.rockstar };
+  if(url.includes('xbox.com'))          return { name:'Xbox Store', icon: STORE_ICONS.xbox };
+  if(url.includes('playstation.com'))   return { name:'PlayStation Store', icon: STORE_ICONS.playstation };
+  if(url.includes('riotgames.com') || url.includes('leagueoflegends.com') || url.includes('valorant.com'))
+                                        return { name:'Riot Games', icon: STORE_ICONS.riot };
+  if(url.includes('minecraft.net'))     return { name:'Minecraft.net', icon: null };
+  if(url.includes('play.google.com'))   return { name:'Google Play', icon: null };
+  if(url.includes('apps.apple.com'))    return { name:'App Store', icon: null };
+  return { name:'Tienda Oficial', icon: null };
+}
+
+async function handleBuyGame(itemId, purchaseLink, gameName, gameKey) {
+  // Registrar intención de compra en el backend (no bloqueante)
+  try {
+    const user = LS.get('user_admin');
+    if(user) {
+      fetch(`${API_URL}/items/buy-intent/${itemId}`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ usuario: user, gameName, purchaseLink })
+      }).catch(()=>{});
+    }
+  } catch(_){}
+
+  showBuyModal(itemId, gameName, purchaseLink);
+}
+
+function showBuyModal(itemId, gameName, purchaseLink) {
+  // Eliminar modal anterior si existe
+  document.getElementById('buy-modal-overlay')?.remove();
+
+  const store = detectStoreName(purchaseLink);
+
+  const overlay = document.createElement('div');
+  overlay.id = 'buy-modal-overlay';
+  overlay.innerHTML = `
+    <div class="buy-modal" id="buy-modal-box">
+      <button class="buy-modal-close" onclick="document.getElementById('buy-modal-overlay').remove()">
+        <ion-icon name="close"></ion-icon>
+      </button>
+
+      <div class="buy-modal-header">
+        <div class="buy-modal-icon">🎮</div>
+        <h2 class="buy-modal-title">${gameName}</h2>
+        <p class="buy-modal-sub">Versión oficial disponible en <strong>${store.name}</strong></p>
+      </div>
+
+      <div class="buy-modal-benefits">
+        <div class="buy-modal-benefit"><ion-icon name="shield-checkmark"></ion-icon> Versión 100% original y segura</div>
+        <div class="buy-modal-benefit"><ion-icon name="headset"></ion-icon> Soporte oficial del desarrollador</div>
+        <div class="buy-modal-benefit"><ion-icon name="refresh-circle"></ion-icon> Actualizaciones garantizadas</div>
+        <div class="buy-modal-benefit"><ion-icon name="heart"></ion-icon> Apoya a los creadores del juego</div>
+      </div>
+
+      <div class="buy-modal-info">
+        <ion-icon name="information-circle-outline"></ion-icon>
+        En UpGames encuentras mods y optimizaciones. Para jugar necesitas la versión original.
+      </div>
+
+      <div class="buy-modal-actions">
+        <button class="buy-modal-btn-cancel" onclick="document.getElementById('buy-modal-overlay').remove()">
+          Cancelar
+        </button>
+        <button class="buy-modal-btn-go" onclick="window.open('${purchaseLink}','_blank'); document.getElementById('buy-modal-overlay').remove();">
+          <ion-icon name="cart"></ion-icon> Ir a ${store.name}
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  // Cerrar al hacer click fuera
+  overlay.addEventListener('click', (e) => {
+    if(e.target === overlay) overlay.remove();
+  });
+
+  // Cerrar con ESC
+  const escHandler = (e) => {
+    if(e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', escHandler); }
+  };
+  document.addEventListener('keydown', escHandler);
+}
+
+// ── Detección en tiempo real mientras se escribe el título ──
+let _pfDetectTimer;
+async function pfDetectGameRealtime(titulo) {
+  clearTimeout(_pfDetectTimer);
+  const hint = document.getElementById('pf-game-detection-hint');
+  const nameEl = document.getElementById('pf-detected-game-name');
+  if(!hint || !nameEl) return;
+  if(!titulo || titulo.length < 3) { hint.style.display='none'; return; }
+  _pfDetectTimer = setTimeout(async () => {
+    try {
+      const r = await fetch(`${API_URL}/items/detect-game`, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ title: titulo })
+      });
+      const d = await r.json();
+      if(d.detected) {
+        nameEl.textContent = '¡Detectado! → ' + d.gameName;
+        hint.style.display = 'block';
+      } else {
+        hint.style.display = 'none';
+      }
+    } catch(_) { hint.style.display='none'; }
+  }, 500);
+}
