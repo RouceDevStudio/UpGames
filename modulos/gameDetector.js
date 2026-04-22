@@ -1,280 +1,338 @@
 /**
- * SISTEMA DE DETECCIÓN AUTOMÁTICA DE JUEGOS - UpGames
- * Detecta automáticamente cuando se publica un juego conocido (GTA V, Fortnite, etc.)
- * y agrega un botón "Comprar" con el link oficial de la tienda
+ * SISTEMA DE DETECCIÓN AUTOMÁTICA DE JUEGOS — UpGames
+ * Detecta cuando se publica contenido de un juego conocido
+ * y guarda el link de compra oficial en extraData.detectedGame
  */
 
-// Base de datos de juegos conocidos con sus links oficiales
 const GAMES_DATABASE = {
-  // 🎮 AAA GAMES (Grandes lanzamientos)
+
+  // ── ROCKSTAR ────────────────────────────────────────────
   'GTA V': {
-    name: 'Grand Theft Auto V',
-    platform: 'pc',
-    purchaseLink: 'https://www.rockstargames.com/gta/online/buy',
-    steamLink: 'https://store.steampowered.com/app/271590/Grand_Theft_Auto_V/',
-    epicLink: 'https://www.epicgames.com/store/en-US/p/grand-theft-auto-v',
-    consoleLinks: {
-      ps5: 'https://store.playstation.com/en-us/product/UP1004-PPSA01606_00-GTAVDIGITALCODE0',
-      xbox: 'https://www.xbox.com/en-US/games/store/grand-theft-auto-v/BNZ7F8NQZ59J'
-    },
-    keywords: ['gta 5', 'gtav', 'gta 5', 'grand theft auto 5', 'gta five']
+    name: 'Grand Theft Auto V', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/271590/Grand_Theft_Auto_V/',
+    keywords: ['gta v','gta5','gta 5','grand theft auto v','grand theft auto 5','gtav']
   },
-  'Fortnite': {
-    name: 'Fortnite',
-    platform: 'multi',
-    purchaseLink: 'https://www.fortnite.com/en-US/buy-v-bucks',
-    epicLink: 'https://www.epicgames.com/fortnite/en-US/download',
-    steamLink: 'https://store.steampowered.com/app/1172620/Fortnite/',
-    keywords: ['fortnite', 'battle royale']
+  'GTA San Andreas': {
+    name: 'GTA San Andreas', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/12120/Grand_Theft_Auto_San_Andreas/',
+    keywords: ['gta san andreas','san andreas','gtasa','gta sa']
   },
-  'Valorant': {
-    name: 'Valorant',
-    platform: 'pc',
-    purchaseLink: 'https://playvalorant.com/en-us/buy',
-    epicLink: 'https://www.epicgames.com/games/valorant',
-    keywords: ['valorant', 'riot games']
+  'Red Dead Redemption 2': {
+    name: 'Red Dead Redemption 2', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/1174180/Red_Dead_Redemption_2/',
+    keywords: ['red dead redemption 2','rdr2','red dead 2']
   },
-  'PUBG': {
-    name: 'PLAYERUNKNOWN\'S BATTLEGROUNDS',
-    platform: 'multi',
-    purchaseLink: 'https://www.pubg.com/en-us/buy',
-    steamLink: 'https://store.steampowered.com/app/578080/PLAYERUNKNOWNS_BATTLEGROUNDS/',
-    epicLink: 'https://www.epicgames.com/store/en-US/p/playerunknown-s-battlegrounds',
-    keywords: ['pubg', 'battlegrounds', 'playerunknown']
+
+  // ── FROMSOFT ────────────────────────────────────────────
+  'Dark Souls': {
+    name: 'Dark Souls Remastered', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/570940/DARK_SOULS_REMASTERED/',
+    keywords: ['dark souls','dark souls remastered','dark souls prepare to die','dark souls ptde','darksouls']
   },
-  'Call of Duty': {
-    name: 'Call of Duty',
-    platform: 'multi',
-    purchaseLink: 'https://www.callofduty.com/buy',
-    steamLink: 'https://store.steampowered.com/app/2402360/Call_of_Duty_Modern_Warfare_II/',
-    battleNetLink: 'https://www.blizzard.com/en-us/games/cod/',
-    keywords: ['call of duty', 'cod', 'warzone', 'modern warfare']
+  'Dark Souls II': {
+    name: 'Dark Souls II', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/335300/DARK_SOULS_II_Scholar_of_the_First_Sin/',
+    keywords: ['dark souls 2','dark souls ii','ds2']
   },
-  'Minecraft': {
-    name: 'Minecraft',
-    platform: 'multi',
-    purchaseLink: 'https://www.minecraft.net/en-us/download',
-    microsoftStoreLink: 'https://www.microsoft.com/en-us/store/games/minecraft-launcher',
-    steamLink: 'https://store.steampowered.com/app/432160/Minecraft/',
-    javaLink: 'https://launcher.mojang.com/download/Minecraft.exe',
-    keywords: ['minecraft']
-  },
-  'The Elder Scrolls V': {
-    name: 'The Elder Scrolls V: Skyrim',
-    platform: 'multi',
-    purchaseLink: 'https://www.elderscrolls.com/en-us/',
-    steamLink: 'https://store.steampowered.com/app/72850/The_Elder_Scrolls_V_Skyrim/',
-    epicLink: 'https://www.epicgames.com/store/en-US/p/the-elder-scrolls-v-skyrim',
-    keywords: ['skyrim', 'elder scrolls', 'tes']
+  'Dark Souls III': {
+    name: 'Dark Souls III', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/374320/DARK_SOULS_III/',
+    keywords: ['dark souls 3','dark souls iii','ds3']
   },
   'Elden Ring': {
-    name: 'Elden Ring',
-    platform: 'multi',
-    purchaseLink: 'https://www.eldenring.com/',
-    steamLink: 'https://store.steampowered.com/app/570940/ELDEN_RING/',
-    epicLink: 'https://www.epicgames.com/store/en-US/p/elden-ring',
-    keywords: ['elden ring', 'fromsoft']
+    name: 'Elden Ring', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/1245620/ELDEN_RING/',
+    keywords: ['elden ring','eldenring']
   },
-  'Cyberpunk 2077': {
-    name: 'Cyberpunk 2077',
-    platform: 'multi',
-    purchaseLink: 'https://www.cyberpunk.net/en/buy',
-    steamLink: 'https://store.steampowered.com/app/1091500/Cyberpunk_2077/',
-    epicLink: 'https://www.epicgames.com/store/en-US/p/cyberpunk-2077',
-    goGLink: 'https://www.gog.com/game/cyberpunk_2077',
-    keywords: ['cyberpunk', '2077', 'cd projekt']
+  'Sekiro': {
+    name: 'Sekiro: Shadows Die Twice', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/814380/Sekiro_Shadows_Die_Twice/',
+    keywords: ['sekiro','shadows die twice']
   },
-  'League of Legends': {
-    name: 'League of Legends',
-    platform: 'pc',
-    purchaseLink: 'https://www.leagueoflegends.com/en-us/buy-rp/',
-    riotLink: 'https://www.leagueoflegends.com/en-us/',
-    keywords: ['league of legends', 'lol', 'riot']
-  },
-  'Dota 2': {
-    name: 'Dota 2',
-    platform: 'pc',
-    purchaseLink: 'https://www.dota2.com/store',
-    steamLink: 'https://store.steampowered.com/app/570590/Dota_2/',
-    keywords: ['dota 2', 'dota', 'valve']
-  },
-  'Counter-Strike': {
-    name: 'Counter-Strike 2',
-    platform: 'pc',
-    purchaseLink: 'https://www.counter-strike.net/cs2',
-    steamLink: 'https://store.steampowered.com/app/730/CounterStrike_2/',
-    keywords: ['counter-strike', 'cs2', 'csgo', 'cs:go']
-  },
-  'FIFA': {
-    name: 'EA Sports FC',
-    platform: 'multi',
-    purchaseLink: 'https://www.easportsfc.com/buy',
-    steamLink: 'https://store.steampowered.com/app/2868140/EA_SPORTS_FC_24/',
-    playStationLink: 'https://store.playstation.com/en-us/product/UP0006-PPSA02184_00-EASCF24FULL0000',
-    keywords: ['ea sports fc', 'fifa', 'football', 'soccer']
-  },
-  'Hogwarts Legacy': {
-    name: 'Hogwarts Legacy',
-    platform: 'multi',
-    purchaseLink: 'https://www.hogwartslegacy.com/en-us/buy',
-    steamLink: 'https://store.steampowered.com/app/990080/Hogwarts_Legacy/',
-    epicLink: 'https://www.epicgames.com/store/en-US/p/hogwarts-legacy',
-    keywords: ['hogwarts legacy', 'harry potter', 'wizarding']
-  },
-  'Baldur\'s Gate 3': {
-    name: 'Baldur\'s Gate 3',
-    platform: 'multi',
-    purchaseLink: 'https://baldursgate3.game/',
-    steamLink: 'https://store.steampowered.com/app/1238140/Baldurs_Gate_3/',
-    psLink: 'https://store.playstation.com/en-us/product/UP0839-PPSA02159_00-BG3GAMEPS500XXX',
-    keywords: ['baldur\'s gate 3', 'bg3', 'larian']
+  'Bloodborne': {
+    name: 'Bloodborne', platform: 'ps4',
+    purchaseLink: 'https://store.playstation.com/en-us/product/UP9000-CUSA00900_00-BLOODBORNE0000EU',
+    keywords: ['bloodborne']
   },
 
-  // 🎮 INDIE GAMES
+  // ── NEED FOR SPEED ──────────────────────────────────────
+  'Need for Speed Most Wanted': {
+    name: 'Need for Speed: Most Wanted (2005)', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/13520/Need_for_Speed_Most_Wanted/',
+    keywords: ['need for speed most wanted','nfsmw','nfs most wanted','nfs mw','most wanted 2005','need for speed mw']
+  },
+  'Need for Speed Underground 2': {
+    name: 'Need for Speed: Underground 2', platform: 'pc',
+    purchaseLink: 'https://www.ea.com/games/need-for-speed/need-for-speed-underground-2',
+    keywords: ['need for speed underground 2','nfsu2','nfs underground 2','underground 2']
+  },
+  'Need for Speed Heat': {
+    name: 'Need for Speed Heat', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/1222680/Need_for_Speed_Heat/',
+    keywords: ['need for speed heat','nfs heat']
+  },
+  'Need for Speed Unbound': {
+    name: 'Need for Speed Unbound', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/1846380/Need_for_Speed_Unbound/',
+    keywords: ['need for speed unbound','nfs unbound']
+  },
+
+  // ── SURVIVAL / SANDBOX ──────────────────────────────────
+  'Minecraft': {
+    name: 'Minecraft', platform: 'multi',
+    purchaseLink: 'https://www.minecraft.net/en-us/store/minecraft-java-bedrock-edition-pc',
+    keywords: ['minecraft']
+  },
+  'pixARK': {
+    name: 'pixARK', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/593380/PixARK/',
+    keywords: ['pixark','pix ark']
+  },
+  'ARK Survival Evolved': {
+    name: 'ARK: Survival Evolved', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/346110/ARK_Survival_Evolved/',
+    keywords: ['ark survival evolved','ark: survival','ark survival','ark evolved']
+  },
+  'ARK Survival Ascended': {
+    name: 'ARK: Survival Ascended', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/2399830/ARK_Survival_Ascended/',
+    keywords: ['ark survival ascended','ark ascended']
+  },
+  'Project Zomboid': {
+    name: 'Project Zomboid', platform: 'pc',
+    purchaseLink: 'https://store.steampowered.com/app/108600/Project_Zomboid/',
+    keywords: ['project zomboid','zomboid','zomdroid','project zomdroid']
+  },
   'Terraria': {
-    name: 'Terraria',
-    platform: 'multi',
+    name: 'Terraria', platform: 'multi',
     purchaseLink: 'https://store.steampowered.com/app/105600/Terraria/',
-    steamLink: 'https://store.steampowered.com/app/105600/Terraria/',
-    epicLink: 'https://www.epicgames.com/store/en-US/p/terraria',
-    keywords: ['terraria', '2d minecraft']
+    keywords: ['terraria']
   },
   'Stardew Valley': {
-    name: 'Stardew Valley',
-    platform: 'multi',
+    name: 'Stardew Valley', platform: 'multi',
     purchaseLink: 'https://store.steampowered.com/app/413150/Stardew_Valley/',
-    steamLink: 'https://store.steampowered.com/app/413150/Stardew_Valley/',
-    keywords: ['stardew valley', 'farming game']
+    keywords: ['stardew valley','stardew']
   },
-  'Hollow Knight': {
-    name: 'Hollow Knight',
-    platform: 'multi',
-    purchaseLink: 'https://store.steampowered.com/app/367520/Hollow_Knight/',
-    steamLink: 'https://store.steampowered.com/app/367520/Hollow_Knight/',
-    keywords: ['hollow knight', 'metroidvania']
+  'Valheim': {
+    name: 'Valheim', platform: 'pc',
+    purchaseLink: 'https://store.steampowered.com/app/892970/Valheim/',
+    keywords: ['valheim']
   },
-  'Among Us': {
-    name: 'Among Us',
-    platform: 'multi',
-    purchaseLink: 'https://store.steampowered.com/app/945360/Among_Us/',
-    steamLink: 'https://store.steampowered.com/app/945360/Among_Us/',
-    keywords: ['among us', 'impostor']
+  'Rust': {
+    name: 'Rust', platform: 'pc',
+    purchaseLink: 'https://store.steampowered.com/app/252490/Rust/',
+    keywords: ['rust game','rust survival']
+  },
+  '7 Days to Die': {
+    name: '7 Days to Die', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/251570/7_Days_to_Die/',
+    keywords: ['7 days to die','7dtd']
   },
 
-  // 🎮 JUEGOS MOBILE
-  'PUBG Mobile': {
-    name: 'PUBG Mobile',
-    platform: 'mobile',
-    purchaseLink: 'https://www.pubgmobile.com/en/',
-    googlePlay: 'https://play.google.com/store/apps/details?id=com.tencent.ig',
-    appStore: 'https://apps.apple.com/us/app/pubg-mobile/id1330123141',
-    keywords: ['pubg mobile', 'mobile battle royale']
+  // ── OPEN WORLD / RPG ────────────────────────────────────
+  'Cyberpunk 2077': {
+    name: 'Cyberpunk 2077', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/1091500/Cyberpunk_2077/',
+    keywords: ['cyberpunk 2077','cyberpunk','cp2077']
   },
-  'Candy Crush': {
-    name: 'Candy Crush Saga',
-    platform: 'mobile',
-    purchaseLink: 'https://www.king.com/game/candycrush',
-    googlePlay: 'https://play.google.com/store/apps/details?id=com.king.candycrush',
-    appStore: 'https://apps.apple.com/us/app/candy-crush-saga/id553834731',
-    keywords: ['candy crush']
+  'Skyrim': {
+    name: 'The Elder Scrolls V: Skyrim', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/489830/The_Elder_Scrolls_V_Skyrim_Special_Edition/',
+    keywords: ['skyrim','elder scrolls v','tes v','tesv']
+  },
+  'Witcher 3': {
+    name: 'The Witcher 3: Wild Hunt', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/292030/The_Witcher_3_Wild_Hunt/',
+    keywords: ['witcher 3','the witcher 3','witcher iii']
+  },
+  "Baldur's Gate 3": {
+    name: "Baldur's Gate 3", platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/1086940/Baldurs_Gate_3/',
+    keywords: ["baldur's gate 3","baldurs gate 3","bg3"]
+  },
+  'Hogwarts Legacy': {
+    name: 'Hogwarts Legacy', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/990080/Hogwarts_Legacy/',
+    keywords: ['hogwarts legacy','harry potter game']
+  },
+  'RDR2': {
+    name: 'Red Dead Redemption 2', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/1174180/Red_Dead_Redemption_2/',
+    keywords: ['red dead redemption','rdr']
+  },
+
+  // ── SHOOTERS ────────────────────────────────────────────
+  'Fortnite': {
+    name: 'Fortnite', platform: 'multi',
+    purchaseLink: 'https://www.epicgames.com/fortnite/en-US/download',
+    keywords: ['fortnite']
+  },
+  'PUBG': {
+    name: 'PLAYERUNKNOWN\'S BATTLEGROUNDS', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/578080/PLAYERUNKNOWNS_BATTLEGROUNDS/',
+    keywords: ['pubg','battlegrounds','playerunknown']
+  },
+  'Valorant': {
+    name: 'Valorant', platform: 'pc',
+    purchaseLink: 'https://playvalorant.com/en-us/download/',
+    keywords: ['valorant']
+  },
+  'Counter-Strike': {
+    name: 'Counter-Strike 2', platform: 'pc',
+    purchaseLink: 'https://store.steampowered.com/app/730/CounterStrike_2/',
+    keywords: ['counter-strike','cs2','csgo','cs:go','cs go']
+  },
+  'Call of Duty': {
+    name: 'Call of Duty', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/2602690/Call_of_Duty/',
+    keywords: ['call of duty','cod warzone','warzone','modern warfare','call of duty mw']
+  },
+  'Apex Legends': {
+    name: 'Apex Legends', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/1172470/Apex_Legends/',
+    keywords: ['apex legends','apex']
+  },
+  'Overwatch 2': {
+    name: 'Overwatch 2', platform: 'multi',
+    purchaseLink: 'https://playoverwatch.com/en-us/download/',
+    keywords: ['overwatch 2','overwatch']
+  },
+
+  // ── MOBA / ONLINE ───────────────────────────────────────
+  'League of Legends': {
+    name: 'League of Legends', platform: 'pc',
+    purchaseLink: 'https://signup.leagueoflegends.com/en-us/signup/index',
+    keywords: ['league of legends','lol','league']
+  },
+  'Dota 2': {
+    name: 'Dota 2', platform: 'pc',
+    purchaseLink: 'https://store.steampowered.com/app/570/Dota_2/',
+    keywords: ['dota 2','dota2']
+  },
+
+  // ── RACING / SPORTS ─────────────────────────────────────
+  'Forza Horizon': {
+    name: 'Forza Horizon 5', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/1551360/Forza_Horizon_5/',
+    keywords: ['forza horizon','forza 5','forza horizon 5','fh5']
+  },
+  'EA Sports FC': {
+    name: 'EA Sports FC 25', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/2195250/EA_SPORTS_FC_25/',
+    keywords: ['ea sports fc','ea fc','fifa','fc 25','fc25']
+  },
+  'F1': {
+    name: 'F1 24', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/2488620/F1_24/',
+    keywords: ['f1 24','f1 game','formula 1 game']
+  },
+
+  // ── HORROR / INDIE ──────────────────────────────────────
+  'Resident Evil': {
+    name: 'Resident Evil', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/franchise/residentevil',
+    keywords: ['resident evil','re village','resident evil village','re4','resident evil 4','re2','re3']
+  },
+  'Hollow Knight': {
+    name: 'Hollow Knight', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/367520/Hollow_Knight/',
+    keywords: ['hollow knight']
+  },
+  'Among Us': {
+    name: 'Among Us', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/945360/Among_Us/',
+    keywords: ['among us','among us game']
+  },
+  'Five Nights at Freddy': {
+    name: "Five Nights at Freddy's", platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/319510/Five_Nights_at_Freddys/',
+    keywords: ["five nights at freddy's",'fnaf','five nights at freddy']
+  },
+
+  // ── ANDROID / EMULACIÓN ─────────────────────────────────
+  'PUBG Mobile': {
+    name: 'PUBG Mobile', platform: 'mobile',
+    purchaseLink: 'https://play.google.com/store/apps/details?id=com.tencent.ig',
+    keywords: ['pubg mobile']
   },
   'COD Mobile': {
-    name: 'Call of Duty: Mobile',
-    platform: 'mobile',
-    purchaseLink: 'https://www.callofduty.com/mobile',
-    googlePlay: 'https://play.google.com/store/apps/details?id=com.activision.callofduty.shooter',
-    appStore: 'https://apps.apple.com/us/app/call-of-duty-mobile/id1442393434',
-    keywords: ['cod mobile', 'call of duty mobile']
+    name: 'Call of Duty: Mobile', platform: 'mobile',
+    purchaseLink: 'https://play.google.com/store/apps/details?id=com.activision.callofduty.shooter',
+    keywords: ['cod mobile','call of duty mobile','codm']
+  },
+  'Mobile Legends': {
+    name: 'Mobile Legends: Bang Bang', platform: 'mobile',
+    purchaseLink: 'https://play.google.com/store/apps/details?id=com.mobile.legends',
+    keywords: ['mobile legends','mlbb']
+  },
+  'Free Fire': {
+    name: 'Garena Free Fire', platform: 'mobile',
+    purchaseLink: 'https://play.google.com/store/apps/details?id=com.dts.freefireth',
+    keywords: ['free fire','freefire','garena free fire']
+  },
+  'Genshin Impact': {
+    name: 'Genshin Impact', platform: 'multi',
+    purchaseLink: 'https://genshin.hoyoverse.com/en/download',
+    keywords: ['genshin impact','genshin']
+  },
+
+  // ── PLATAFORMEROS ───────────────────────────────────────
+  'Hollow Knight Silksong': {
+    name: 'Hollow Knight: Silksong', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/1030300/Hollow_Knight_Silksong/',
+    keywords: ['silksong','hollow knight silksong']
+  },
+  'Celeste': {
+    name: 'Celeste', platform: 'multi',
+    purchaseLink: 'https://store.steampowered.com/app/504230/Celeste/',
+    keywords: ['celeste']
+  },
+
+  // ── SIMULADORES ─────────────────────────────────────────
+  'BeamNG.drive': {
+    name: 'BeamNG.drive', platform: 'pc',
+    purchaseLink: 'https://store.steampowered.com/app/284160/BeamNGdrive/',
+    keywords: ['beamng','beamng drive','beam ng']
+  },
+  'Euro Truck Simulator': {
+    name: 'Euro Truck Simulator 2', platform: 'pc',
+    purchaseLink: 'https://store.steampowered.com/app/227300/Euro_Truck_Simulator_2/',
+    keywords: ['euro truck simulator','ets2','ets 2']
   }
 };
 
-/**
- * Detecta si un título coincide con un juego conocido
- * Usa búsqueda difusa para detectar variaciones (mods, optimizados, etc.)
- */
-function detectGame(title, description = '') {
-  if (!title) return null;
+function detectGame(title, description) {
+  if(!title) return null;
+  const text = (title + ' ' + (description||'')).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // quita tildes
 
-  const searchText = (title + ' ' + description).toLowerCase();
-  
-  // Búsqueda exacta primero
-  for (const [gameKey, gameData] of Object.entries(GAMES_DATABASE)) {
-    const keywords = gameData.keywords || [];
-    
-    // Buscar palabras clave exactas
-    for (const keyword of keywords) {
-      if (searchText.includes(keyword)) {
+  for(const [key, data] of Object.entries(GAMES_DATABASE)) {
+    for(const kw of data.keywords) {
+      if(text.includes(kw)) {
         return {
-          detected: true,
-          gameName: gameData.name,
-          gameKey: gameKey,
-          platform: gameData.platform,
-          purchaseLink: gameData.purchaseLink,
-          allLinks: gameData
+          gameName:     data.name,
+          gameKey:      key,
+          platform:     data.platform,
+          purchaseLink: data.purchaseLink
         };
       }
     }
   }
-
-  // Si no encontró coincidencia exacta, retorna null
   return null;
 }
 
-/**
- * Obtiene el link más apropiado según la plataforma del usuario
- */
-function getBestPurchaseLink(gameData, userPlatform = 'pc') {
-  const links = gameData.allLinks;
-  
-  // Prioridad de links según plataforma
-  const priorities = {
-    pc: ['purchaseLink', 'steamLink', 'epicLink', 'goGLink', 'battleNetLink'],
-    mobile: ['googlePlay', 'appStore', 'purchaseLink'],
-    console: ['consoleLinks', 'psLink', 'xboxLink', 'purchaseLink'],
-    multi: ['purchaseLink', 'steamLink', 'epicLink', 'googlePlay', 'appStore']
-  };
-
-  const userPriorities = priorities[userPlatform] || priorities.multi;
-
-  for (const linkType of userPriorities) {
-    if (links[linkType]) {
-      // Si es un objeto (como consoleLinks), retorna el primer value
-      if (typeof links[linkType] === 'object' && links[linkType] !== null) {
-        const firstLink = Object.values(links[linkType])[0];
-        if (firstLink) return firstLink;
-      } else if (typeof links[linkType] === 'string') {
-        return links[linkType];
-      }
-    }
-  }
-
-  return links.purchaseLink || null;
-}
-
-/**
- * Enriquece un documento Juego con info de detección de juego
- */
-function enrichGameData(juegoDocument) {
-  const detected = detectGame(juegoDocument.title, juegoDocument.description);
-  
-  if (detected) {
-    // Agregar al extraData para persistencia
-    juegoDocument.extraData = juegoDocument.extraData || {};
-    juegoDocument.extraData.detectedGame = {
-      gameName: detected.gameName,
-      gameKey: detected.gameKey,
-      platform: detected.platform,
-      purchaseLink: detected.purchaseLink,
-      bestLink: getBestPurchaseLink(detected, 'pc')
+function enrichGameData(doc) {
+  const det = detectGame(doc.title, doc.description);
+  if(det) {
+    doc.extraData = doc.extraData || {};
+    doc.extraData.detectedGame = {
+      gameName:     det.gameName,
+      gameKey:      det.gameKey,
+      platform:     det.platform,
+      purchaseLink: det.purchaseLink
     };
   }
-
-  return juegoDocument;
+  return doc;
 }
 
-module.exports = {
-  detectGame,
-  getBestPurchaseLink,
-  enrichGameData,
-  GAMES_DATABASE
-};
+module.exports = { detectGame, enrichGameData, GAMES_DATABASE };
