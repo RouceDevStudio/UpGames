@@ -26,6 +26,7 @@ const {
 const gamification    = require('./modulos/gamification');
 const recommendations = require('./modulos/recommendations');
 const twoFactor       = require('./modulos/twoFactor');
+const nexusClient     = require('./modulos/nexusClient');
 // ==========================================
 
 const https = require('https');
@@ -1385,6 +1386,23 @@ app.post("/items/add", [verificarToken, body('title').notEmpty().trim().isLength
 
         logger.info(`Nuevo item agregado: ${nuevoJuego.title} por @${nuevoJuego.usuario}`);
         res.status(201).json({ success: true, ok: true, item: nuevoJuego, id: nuevoJuego._id });
+
+        // Fire & forget — Nexus analiza el juego recién publicado y guarda el feedback
+        nexusClient.mentorGame(nuevoJuego.usuario, {
+            titulo:      nuevoJuego.title,
+            descripcion: nuevoJuego.description,
+            tags:        nuevoJuego.tags,
+            categoria:   nuevoJuego.category,
+            precio:      nuevoJuego.precio,
+            imagenes:    nuevoJuego.images?.length || 0,
+        }, req.headers.authorization?.split(' ')[1])
+        .then(m => {
+            if (m?.ok && m.mentor) {
+                Juego.findByIdAndUpdate(nuevoJuego._id, { $set: { nexusMentor: m.mentor } }).catch(() => {});
+                logger.info(`[nexus-mentor] "${nuevoJuego.title}" puntuación=${m.mentor.puntuacion}`);
+            }
+        })
+        .catch(() => {});
     } catch (error) {
         logger.error(`Error: ${error?.message}`);
         res.status(500).json({ success: false, error: "Error al guardar aporte" });
@@ -2372,6 +2390,55 @@ function iniciarJobsAutomaticos() {
 
     logger.info('TODOS LOS JOBS AUTOMÁTICOS INICIADOS');
 }
+
+// ══════════════════════════════════════════════════════════════════
+//  RUTAS NEXUS ↔ UPGAMES
+// ══════════════════════════════════════════════════════════════════
+
+// GET /nexus/mis-analytics — insights predictivos del creador (usuario autenticado)
+app.get('/nexus/mis-analytics', verificarToken, async (req, res) => {
+    try {
+        const data = await nexusClient.getCreatorAnalytics(
+            req.usuario,
+            req.headers.authorization?.split(' ')[1]
+        );
+        if (!data) return res.json({ ok: false, error: 'Nexus no disponible temporalmente' });
+        res.json(data);
+    } catch (err) {
+        logger.error(`[nexus/mis-analytics] ${err.message}`);
+        res.status(500).json({ ok: false, error: 'Error obteniendo analytics' });
+    }
+});
+
+// GET /nexus/mentor/:id — lee el feedback de Nexus guardado en un item
+app.get('/nexus/mentor/:id', verificarToken, async (req, res) => {
+    try {
+        const item = await Juego.findById(req.params.id).select('nexusMentor usuario title').lean();
+        if (!item) return res.status(404).json({ ok: false, error: 'Item no encontrado' });
+        if (item.usuario !== req.usuario) return res.status(403).json({ ok: false, error: 'Sin permiso' });
+        res.json({ ok: true, mentor: item.nexusMentor || null, title: item.title });
+    } catch (err) {
+        res.status(500).json({ ok: false, error: 'Error obteniendo mentor' });
+    }
+});
+
+// POST /admin/nexus/fraud-analyze — análisis de fraude con IA (solo admin)
+app.post('/admin/nexus/fraud-analyze', verificarAdmin, async (req, res) => {
+    try {
+        const { usuario, patrones } = req.body;
+        if (!usuario) return res.status(400).json({ ok: false, error: 'usuario requerido' });
+        const result = await nexusClient.analyzeFraud(
+            usuario,
+            patrones || {},
+            req.headers['x-admin-token']
+        );
+        if (!result) return res.json({ ok: false, error: 'Nexus no disponible temporalmente' });
+        res.json(result);
+    } catch (err) {
+        logger.error(`[admin/nexus/fraud-analyze] ${err.message}`);
+        res.status(500).json({ ok: false, error: 'Error en análisis de fraude' });
+    }
+});
 
 // ========== MANEJO DE ERRORES ==========
 app.use((req, res) => {
