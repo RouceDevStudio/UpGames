@@ -298,7 +298,7 @@ function createTile(item, isFeatured=false) {
         </div>
       </div>`;
   } else {
-    const detGame = item.extraData?.detectedGame || null;
+    const detGame = item.extraData?.detectedGame || clientDetectGame(item.title, item.description);
     el.innerHTML=`
       <div class="thumb-wrap">
         ${media}
@@ -962,10 +962,12 @@ function openDetail(item) {
       }
     };
 
-    // ── Botón Comprar: aparece si el juego fue detectado ──────────
+    // ── Botón Comprar: detección en cliente (funciona para items viejos y nuevos) ──
     const existingBuyBtn = document.getElementById('ds-buy-btn');
     if(existingBuyBtn) existingBuyBtn.remove();
-    const detGame = item.extraData?.detectedGame;
+    // Prioridad: dato guardado en DB → detección en cliente
+    const detGame = item.extraData?.detectedGame
+      || clientDetectGame(item.title, item.description);
     if(detGame && detGame.purchaseLink) {
       const buyBtn = document.createElement('button');
       buyBtn.id = 'ds-buy-btn';
@@ -974,7 +976,7 @@ function openDetail(item) {
       buyBtn.onclick = () => handleBuyGame(item._id, detGame.purchaseLink, detGame.gameName, detGame.gameKey);
       dlBtn.parentNode.insertBefore(buyBtn, dlBtn.nextSibling);
     }
-    // ──────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────
   }
 
   // Fav button
@@ -4295,6 +4297,91 @@ function detectStoreName(url) {
   if(url.includes('play.google.com'))   return { name:'Google Play', icon: null };
   if(url.includes('apps.apple.com'))    return { name:'App Store', icon: null };
   return { name:'Tienda Oficial', icon: null };
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// 🎮 BASE DE DATOS DE JUEGOS — DETECCIÓN EN CLIENTE
+// Funciona para items viejos Y nuevos, sin depender de MongoDB
+// ═══════════════════════════════════════════════════════════════
+const GAMES_DB_CLIENT = [
+  // Rockstar
+  { name:'Grand Theft Auto V',              key:'GTA V',              link:'https://store.steampowered.com/app/271590/',   kw:['gta v','gta5','gta 5','grand theft auto v','grand theft auto 5','gtav'] },
+  { name:'GTA San Andreas',                 key:'GTA SA',             link:'https://store.steampowered.com/app/12120/',    kw:['gta san andreas','san andreas','gtasa','gta sa'] },
+  { name:'Red Dead Redemption 2',           key:'RDR2',               link:'https://store.steampowered.com/app/1174180/',  kw:['red dead redemption 2','rdr2','red dead 2','red dead'] },
+  // From Software
+  { name:'Dark Souls Remastered',           key:'Dark Souls',         link:'https://store.steampowered.com/app/570940/',   kw:['dark souls','darksouls'] },
+  { name:'Dark Souls II',                   key:'Dark Souls II',      link:'https://store.steampowered.com/app/335300/',   kw:['dark souls 2','dark souls ii','ds2'] },
+  { name:'Dark Souls III',                  key:'Dark Souls III',     link:'https://store.steampowered.com/app/374320/',   kw:['dark souls 3','dark souls iii','ds3'] },
+  { name:'Elden Ring',                      key:'Elden Ring',         link:'https://store.steampowered.com/app/1245620/',  kw:['elden ring','eldenring'] },
+  { name:'Sekiro: Shadows Die Twice',       key:'Sekiro',             link:'https://store.steampowered.com/app/814380/',   kw:['sekiro'] },
+  { name:'Bloodborne',                      key:'Bloodborne',         link:'https://store.playstation.com/en-us/product/UP9000-CUSA00900_00-BLOODBORNE0000EU', kw:['bloodborne'] },
+  // NFS
+  { name:'NFS: Most Wanted (2005)',         key:'NFSMW',              link:'https://store.steampowered.com/app/13520/',    kw:['need for speed most wanted','nfsmw','nfs most wanted','nfs mw','most wanted 2005','need for speed mw'] },
+  { name:'NFS: Underground 2',              key:'NFSU2',              link:'https://www.ea.com/games/need-for-speed/need-for-speed-underground-2', kw:['nfs underground 2','nfsu2','underground 2','need for speed underground'] },
+  { name:'NFS: Heat',                       key:'NFS Heat',           link:'https://store.steampowered.com/app/1222680/',  kw:['nfs heat','need for speed heat'] },
+  { name:'NFS: Unbound',                    key:'NFS Unbound',        link:'https://store.steampowered.com/app/1846380/',  kw:['nfs unbound','need for speed unbound'] },
+  // Survival / Sandbox
+  { name:'Minecraft',                       key:'Minecraft',          link:'https://www.minecraft.net/en-us/store/minecraft-java-bedrock-edition-pc', kw:['minecraft'] },
+  { name:'pixARK',                          key:'pixARK',             link:'https://store.steampowered.com/app/593380/',   kw:['pixark','pix ark'] },
+  { name:'ARK: Survival Evolved',           key:'ARK',                link:'https://store.steampowered.com/app/346110/',   kw:['ark survival evolved','ark: survival','ark survival','ark evolved'] },
+  { name:'ARK: Survival Ascended',          key:'ARK Ascended',       link:'https://store.steampowered.com/app/2399830/',  kw:['ark survival ascended','ark ascended'] },
+  { name:'Project Zomboid',                 key:'Zomboid',            link:'https://store.steampowered.com/app/108600/',   kw:['project zomboid','zomboid','zomdroid','project zomdroid'] },
+  { name:'Terraria',                        key:'Terraria',           link:'https://store.steampowered.com/app/105600/',   kw:['terraria'] },
+  { name:'Stardew Valley',                  key:'Stardew',            link:'https://store.steampowered.com/app/413150/',   kw:['stardew valley','stardew'] },
+  { name:'Valheim',                         key:'Valheim',            link:'https://store.steampowered.com/app/892970/',   kw:['valheim'] },
+  { name:'Rust',                            key:'Rust',               link:'https://store.steampowered.com/app/252490/',   kw:['rust game','rust survival'] },
+  { name:'7 Days to Die',                   key:'7DTD',               link:'https://store.steampowered.com/app/251570/',   kw:['7 days to die','7dtd'] },
+  // RPG / Open World
+  { name:'Cyberpunk 2077',                  key:'Cyberpunk',          link:'https://store.steampowered.com/app/1091500/',  kw:['cyberpunk 2077','cyberpunk','cp2077'] },
+  { name:'The Elder Scrolls V: Skyrim',     key:'Skyrim',             link:'https://store.steampowered.com/app/489830/',   kw:['skyrim','elder scrolls v','tesv'] },
+  { name:'The Witcher 3',                   key:'Witcher 3',          link:'https://store.steampowered.com/app/292030/',   kw:['witcher 3','the witcher 3'] },
+  { name:"Baldur's Gate 3",                 key:'BG3',                link:'https://store.steampowered.com/app/1086940/',  kw:["baldur's gate 3","baldurs gate 3","bg3"] },
+  { name:'Hogwarts Legacy',                 key:'Hogwarts',           link:'https://store.steampowered.com/app/990080/',   kw:['hogwarts legacy','harry potter game'] },
+  // Shooters
+  { name:'Fortnite',                        key:'Fortnite',           link:'https://www.epicgames.com/fortnite/en-US/download', kw:['fortnite'] },
+  { name:"PLAYERUNKNOWN'S BATTLEGROUNDS",   key:'PUBG',               link:'https://store.steampowered.com/app/578080/',   kw:['pubg battlegrounds','pubg pc'] },
+  { name:'Valorant',                        key:'Valorant',           link:'https://playvalorant.com/en-us/download/',     kw:['valorant'] },
+  { name:'Counter-Strike 2',                key:'CS2',                link:'https://store.steampowered.com/app/730/',      kw:['counter-strike','cs2','csgo','cs:go','cs go'] },
+  { name:'Call of Duty',                    key:'COD',                link:'https://store.steampowered.com/app/2602690/',  kw:['call of duty','cod warzone','warzone','modern warfare'] },
+  { name:'Apex Legends',                    key:'Apex',               link:'https://store.steampowered.com/app/1172470/',  kw:['apex legends','apex legends'] },
+  { name:'Overwatch 2',                     key:'OW2',                link:'https://playoverwatch.com/en-us/download/',    kw:['overwatch 2','overwatch'] },
+  // MOBA
+  { name:'League of Legends',               key:'LoL',                link:'https://signup.leagueoflegends.com/en-us/signup/', kw:['league of legends','league of legend'] },
+  { name:'Dota 2',                          key:'Dota2',              link:'https://store.steampowered.com/app/570/',      kw:['dota 2','dota2'] },
+  // Racing
+  { name:'Forza Horizon 5',                 key:'FH5',                link:'https://store.steampowered.com/app/1551360/',  kw:['forza horizon','fh5','forza 5'] },
+  { name:'EA Sports FC 25',                 key:'EASFC',              link:'https://store.steampowered.com/app/2195250/',  kw:['ea sports fc','ea fc','fifa','fc 25'] },
+  { name:'BeamNG.drive',                    key:'BeamNG',             link:'https://store.steampowered.com/app/284160/',   kw:['beamng','beam ng'] },
+  // Horror / Indie
+  { name:'Resident Evil',                   key:'RE',                 link:'https://store.steampowered.com/franchise/residentevil', kw:['resident evil','re village','re4','re2','re3'] },
+  { name:'Hollow Knight',                   key:'HK',                 link:'https://store.steampowered.com/app/367520/',   kw:['hollow knight'] },
+  { name:'Five Nights at Freddy's',        key:'FNAF',               link:'https://store.steampowered.com/app/319510/',   kw:['five nights at freddy','fnaf'] },
+  { name:'Among Us',                        key:'AmongUs',            link:'https://store.steampowered.com/app/945360/',   kw:['among us'] },
+  // Mobile
+  { name:'PUBG Mobile',                     key:'PUBGMobile',         link:'https://play.google.com/store/apps/details?id=com.tencent.ig', kw:['pubg mobile'] },
+  { name:'Call of Duty: Mobile',            key:'CODMobile',          link:'https://play.google.com/store/apps/details?id=com.activision.callofduty.shooter', kw:['cod mobile','call of duty mobile','codm'] },
+  { name:'Mobile Legends',                  key:'MLBB',               link:'https://play.google.com/store/apps/details?id=com.mobile.legends', kw:['mobile legends','mlbb'] },
+  { name:'Garena Free Fire',                key:'FreeFire',           link:'https://play.google.com/store/apps/details?id=com.dts.freefireth', kw:['free fire','freefire','garena free fire'] },
+  { name:'Genshin Impact',                  key:'Genshin',            link:'https://genshin.hoyoverse.com/en/download', kw:['genshin impact','genshin'] },
+];
+
+/**
+ * Detección en el cliente — funciona para cualquier item sin importar
+ * si fue subido antes o después de implementar el sistema.
+ */
+function clientDetectGame(title, description) {
+  if(!title) return null;
+  const text = (title + ' ' + (description||'')).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  for(const g of GAMES_DB_CLIENT) {
+    for(const kw of g.kw) {
+      if(text.includes(kw)) {
+        return { gameName: g.name, gameKey: g.key, purchaseLink: g.link };
+      }
+    }
+  }
+  return null;
 }
 
 async function handleBuyGame(itemId, purchaseLink, gameName, gameKey) {
