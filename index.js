@@ -27,6 +27,7 @@ const gamification    = require('./modulos/gamification');
 const recommendations = require('./modulos/recommendations');
 const twoFactor       = require('./modulos/twoFactor');
 const nexusClient     = require('./modulos/nexusClient');
+const gameDetector    = require('./modulos/gameDetector');
 // ==========================================
 
 const https = require('https');
@@ -1365,6 +1366,21 @@ app.post("/items/add", [verificarToken, body('title').notEmpty().trim().isLength
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: "Datos inválidos" });
 
         const nuevoJuego = new Juego({ ...req.body, usuario: req.usuario, status: "aprobado", linkStatus: "revision" });
+
+        // ── Detección automática de juego conocido ──────────────────
+        const deteccion = gameDetector.detectGame(nuevoJuego.title, nuevoJuego.description);
+        if(deteccion) {
+            nuevoJuego.extraData = nuevoJuego.extraData || {};
+            nuevoJuego.extraData.detectedGame = {
+                gameName:     deteccion.gameName,
+                gameKey:      deteccion.gameKey,
+                platform:     deteccion.platform,
+                purchaseLink: deteccion.purchaseLink
+            };
+            logger.info(`[GameDetector] "${nuevoJuego.title}" → ${deteccion.gameName}`);
+        }
+        // ────────────────────────────────────────────────────────────
+
         await nuevoJuego.save();
 
         // Fire & forget
@@ -2439,6 +2455,67 @@ app.post('/admin/nexus/fraud-analyze', verificarAdmin, async (req, res) => {
         res.status(500).json({ ok: false, error: 'Error en análisis de fraude' });
     }
 });
+
+// ========== 🎮 DETECCIÓN DE JUEGOS ==========
+
+// POST /items/detect-game — detecta juego a partir de título (usado en frontend al escribir)
+app.post('/items/detect-game', [body('title').notEmpty().trim()], async (req, res) => {
+    const errors = validationResult(req);
+    if(!errors.isEmpty()) return res.status(400).json({ detected: false });
+    try {
+        const { title = '', description = '' } = req.body;
+        const det = gameDetector.detectGame(title, description);
+        if(det) {
+            return res.json({
+                detected:     true,
+                gameName:     det.gameName,
+                gameKey:      det.gameKey,
+                platform:     det.platform,
+                purchaseLink: det.purchaseLink
+            });
+        }
+        res.json({ detected: false });
+    } catch(err) {
+        logger.error(`[detect-game] ${err.message}`);
+        res.status(500).json({ detected: false });
+    }
+});
+
+// POST /items/buy-intent/:id — registra intención de compra (analytics, no bloqueante)
+app.post('/items/buy-intent/:id', [param('id').isMongoId()], async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if(!errors.isEmpty()) return res.status(400).json({ ok: false });
+        const { usuario, gameName, purchaseLink } = req.body;
+        logger.info(`[BuyIntent] item=${req.params.id} | game="${gameName}" | user=${usuario||'anon'} | link=${purchaseLink}`);
+        // Guardar en extraData del juego para analytics futuros
+        await Juego.findByIdAndUpdate(req.params.id, {
+            $inc: { 'extraData.buyIntentCount': 1 }
+        }).catch(()=>{});
+        res.json({ ok: true });
+    } catch(err) {
+        res.status(500).json({ ok: false });
+    }
+});
+
+// GET /items/detected — lista todos los juegos con detección activa
+app.get('/items/detected', async (req, res) => {
+    try {
+        const juegos = await Juego.find({
+            status: 'aprobado',
+            'extraData.detectedGame': { $exists: true }
+        })
+        .sort({ descargasEfectivas: -1 })
+        .limit(100)
+        .select('title usuario category extraData.detectedGame descargasEfectivas likesCount createdAt');
+        res.json({ success: true, count: juegos.length, data: juegos });
+    } catch(err) {
+        logger.error(`[items/detected] ${err.message}`);
+        res.status(500).json({ success: false });
+    }
+});
+
+// =============================================
 
 // ========== MANEJO DE ERRORES ==========
 app.use((req, res) => {
