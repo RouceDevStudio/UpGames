@@ -940,9 +940,14 @@ function openDetail(item) {
   // Download / Ver video
   const dlBtn = document.getElementById('ds-download');
   if(isVideoItem) {
-    // Video: el player está embebido arriba — el botón de descarga no aplica
+    // Video: el player está embebido arriba — ningún botón de acción aplica
     dlBtn.style.display = 'none';
     dlBtn.onclick = null;
+    // Limpiar wrap y botón comprar que puedan haber quedado de una card anterior
+    const _vWrap = document.getElementById('ds-action-wrap');
+    if(_vWrap) _vWrap.remove();
+    const _vBuy = document.getElementById('ds-buy-btn');
+    if(_vBuy) _vBuy.remove();
   } else {
     dlBtn.style.display = '';
     const _puenteMedia = [item.image, ...(item.images||[])].filter(m=>m&&m.trim()).find(m=>
