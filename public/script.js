@@ -951,7 +951,7 @@ function openDetail(item) {
     const _puenteTitle = encodeURIComponent(item.title||'');
     const _puenteMediaEnc = encodeURIComponent(_puenteMedia);
     dlBtn.href = `puente.html?id=${item._id}&media=${_puenteMediaEnc}&title=${_puenteTitle}`;
-    dlBtn.innerHTML = '<ion-icon name="cloud-download-outline"></ion-icon> ACCEDER A LA NUBE';
+    dlBtn.innerHTML = '<ion-icon name="cloud-download-outline"></ion-icon> OBTENER LINK';
     dlBtn.onclick = function(e) {
       if(ls === 'caido') {
         e.preventDefault();

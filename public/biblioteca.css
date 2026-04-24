@@ -3826,7 +3826,7 @@ body.nx-open #nxFab {
    🎮 SISTEMA DE DETECCIÓN DE JUEGOS — ESTILOS
    ══════════════════════════════════════════════════════════════ */
 
-/* Wrapper flex: Acceder + Comprar lado a lado */
+/* Wrapper: dos botones lado a lado, misma altura */
 .ds-action-wrap {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -3834,33 +3834,42 @@ body.nx-open #nxFab {
   margin-top: 0;
 }
 
-/* El botón nube clonado dentro del wrapper */
+/* Botón OBTENER LINK — mismo alto que COMPRAR */
 .ds-action-wrap .sheet-download {
   margin-top: 0;
+  margin-bottom: 0;
+  height: 52px;
   font-size: .82rem;
-  padding: 14px 8px;
+  padding: 0 10px;
+  border-radius: 16px;
+  letter-spacing: .06em;
+  gap: 7px;
 }
+.ds-action-wrap .sheet-download ion-icon { font-size: 1.15rem; flex-shrink: 0; }
 
 /* Botón COMPRAR EN TIENDA OFICIAL */
 .sheet-buy-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 14px 8px;
+  gap: 7px;
+  height: 52px;
+  padding: 0 10px;
   background: linear-gradient(120deg, #5EFF43 0%, #2affa0 100%);
   border: none;
-  border-radius: 14px;
+  border-radius: 16px;
   color: #07070f;
   font-size: .82rem;
   font-weight: 800;
-  letter-spacing: .03em;
+  letter-spacing: .06em;
+  text-transform: uppercase;
   cursor: pointer;
   box-shadow: 0 4px 20px rgba(94,255,67,.35);
   transition: all .2s ease;
   animation: buySheetPulse 2.5s ease-in-out infinite;
+  width: 100%;
 }
-.sheet-buy-btn ion-icon { font-size: 1.1rem; flex-shrink: 0; }
+.sheet-buy-btn ion-icon { font-size: 1.15rem; flex-shrink: 0; }
 .sheet-buy-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 28px rgba(94,255,67,.55);
