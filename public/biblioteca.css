@@ -3821,57 +3821,46 @@ body.nx-open #nxFab {
 }
 
 
+
 /* ══════════════════════════════════════════════════════════════
    🎮 SISTEMA DE DETECCIÓN DE JUEGOS — ESTILOS
    ══════════════════════════════════════════════════════════════ */
 
-/* Ícono carrito en miniatura de la card (solo indicador visual) */
-.tile-detected-badge {
-  position: absolute;
-  top: 7px;
-  right: 7px;
-  background: linear-gradient(120deg, #5EFF43 0%, #00f2ff 100%);
-  color: #07070f;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 6;
-  pointer-events: none;
-  animation: detectedIn .35s cubic-bezier(.22,1,.36,1) both;
-  box-shadow: 0 2px 10px rgba(94,255,67,.4);
-}
-.tile-detected-badge ion-icon { font-size: .85rem; }
-
-@keyframes detectedIn {
-  from { opacity:0; transform:scale(.7); }
-  to   { opacity:1; transform:scale(1);  }
+/* Wrapper flex: Acceder + Comprar lado a lado */
+.ds-action-wrap {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 0;
 }
 
-/* ── BOTÓN COMPRAR EN DETAIL SHEET ────────────────────────── */
+/* El botón nube clonado dentro del wrapper */
+.ds-action-wrap .sheet-download {
+  margin-top: 0;
+  font-size: .82rem;
+  padding: 14px 8px;
+}
+
+/* Botón COMPRAR EN TIENDA OFICIAL */
 .sheet-buy-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  width: 100%;
-  padding: 14px 20px;
-  margin-top: 10px;
+  gap: 6px;
+  padding: 14px 8px;
   background: linear-gradient(120deg, #5EFF43 0%, #2affa0 100%);
   border: none;
   border-radius: 14px;
   color: #07070f;
-  font-size: .95rem;
+  font-size: .82rem;
   font-weight: 800;
-  letter-spacing: .04em;
+  letter-spacing: .03em;
   cursor: pointer;
   box-shadow: 0 4px 20px rgba(94,255,67,.35);
   transition: all .2s ease;
   animation: buySheetPulse 2.5s ease-in-out infinite;
 }
-.sheet-buy-btn ion-icon { font-size: 1.2rem; }
+.sheet-buy-btn ion-icon { font-size: 1.1rem; flex-shrink: 0; }
 .sheet-buy-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 28px rgba(94,255,67,.55);
@@ -3895,9 +3884,7 @@ body.nx-open #nxFab {
   justify-content: center;
   z-index: 9999;
   padding: 16px;
-  animation: overlayIn .2s ease both;
 }
-@keyframes overlayIn { from{opacity:0} to{opacity:1} }
 
 .buy-modal {
   background: linear-gradient(145deg, #12121f 0%, #1c1c30 100%);
@@ -3943,24 +3930,13 @@ body.nx-open #nxFab {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 18px;
 }
 .buy-modal-benefit {
   display: flex; align-items: center; gap: 8px;
   color: #c8ffc8; font-size:.82rem; font-weight:500;
 }
 .buy-modal-benefit ion-icon { color:#5EFF43; font-size:1rem; flex-shrink:0; }
-
-.buy-modal-info {
-  display: flex; align-items: flex-start; gap: 7px;
-  background: rgba(0,242,255,.07);
-  border: 1px solid rgba(0,242,255,.15);
-  border-radius: 10px;
-  padding: 10px 13px;
-  color: #9abbc0; font-size:.76rem;
-  margin-bottom: 18px; line-height:1.4;
-}
-.buy-modal-info ion-icon { color:#00f2ff; font-size:.95rem; flex-shrink:0; margin-top:1px; }
 
 .buy-modal-actions { display:grid; grid-template-columns:1fr 1.5fr; gap:10px; }
 
