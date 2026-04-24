@@ -4356,7 +4356,7 @@ const GAMES_DB_CLIENT = [
   // Horror / Indie
   { name:'Resident Evil',                   key:'RE',                 link:'https://store.steampowered.com/franchise/residentevil', kw:['resident evil','re village','re4','re2','re3'] },
   { name:'Hollow Knight',                   key:'HK',                 link:'https://store.steampowered.com/app/367520/',   kw:['hollow knight'] },
-  { name:'Five Nights at Freddy's',        key:'FNAF',               link:'https://store.steampowered.com/app/319510/',   kw:['five nights at freddy','fnaf'] },
+  { name:"Five Nights at Freddy's",        key:'FNAF',               link:'https://store.steampowered.com/app/319510/',   kw:['five nights at freddy','fnaf'] },
   { name:'Among Us',                        key:'AmongUs',            link:'https://store.steampowered.com/app/945360/',   kw:['among us'] },
   // Mobile
   { name:'PUBG Mobile',                     key:'PUBGMobile',         link:'https://play.google.com/store/apps/details?id=com.tencent.ig', kw:['pubg mobile'] },
