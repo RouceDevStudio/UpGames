@@ -426,7 +426,18 @@ const UsuarioSchema = new mongoose.Schema({
     resetPasswordExpires:{ type: Date, default: null },
     socialLinks: { type: [String], default: [], validate: { validator: v => v.length <= 4, message: 'Máximo 4 links sociales' } },
     lastUsernameChange: { type: Date, default: null },
-    lastEmailChange:    { type: Date, default: null }
+    lastEmailChange:    { type: Date, default: null },
+    tarjetas: [{
+        alias:         { type: String, maxlength: 40, default: '' },
+        titular:       { type: String, required: true, maxlength: 100 },
+        ultimos4:      { type: String, required: true, match: /^\d{4}$/ },
+        mesExp:        { type: String, required: true },
+        anioExp:       { type: String, required: true },
+        tipo:          { type: String, enum: ['visa', 'mastercard', 'amex', 'otro'], default: 'otro' },
+        proposito:     { type: String, enum: ['cobros', 'pagos', 'ambos'], default: 'ambos' },
+        esPrincipal:   { type: Boolean, default: false },
+        fechaAgregada: { type: Date, default: Date.now }
+    }]
 }, { collection: 'usuarios', timestamps: true });
 
 UsuarioSchema.pre('save', function(next) {
@@ -813,6 +824,150 @@ app.put('/economia/actualizar-paypal', [verificarToken, body('paypalEmail').isEm
     } catch (error) {
         logger.error(`Error en actualizar-paypal: ${error.message}`);
         res.status(500).json({ success: false, error: "Error al actualizar PayPal" });
+    }
+});
+
+// ── TARJETAS ──────────────────────────────────────────────────────────────────
+
+// GET /economia/mis-tarjetas — listar tarjetas del usuario
+app.get('/economia/mis-tarjetas', verificarToken, async (req, res) => {
+    try {
+        const usuario = await Usuario.findOne({ usuario: req.usuario }).select('tarjetas').lean();
+        if (!usuario) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+        res.json({ success: true, tarjetas: usuario.tarjetas || [] });
+    } catch (error) {
+        logger.error(`Error en mis-tarjetas: ${error.message}`);
+        res.status(500).json({ success: false, error: 'Error al obtener tarjetas' });
+    }
+});
+
+// POST /economia/agregar-tarjeta — registrar una nueva tarjeta (solo últimos 4 dígitos)
+app.post('/economia/agregar-tarjeta', [
+    verificarToken,
+    body('ultimos4').isLength({ min: 4, max: 4 }).isNumeric(),
+    body('titular').trim().isLength({ min: 2, max: 100 }),
+    body('mesExp').isLength({ min: 1, max: 2 }).isNumeric(),
+    body('anioExp').isLength({ min: 2, max: 2 }).isNumeric(),
+    body('tipo').optional().isIn(['visa','mastercard','amex','otro']),
+    body('proposito').optional().isIn(['cobros','pagos','ambos']),
+    body('alias').optional().trim().isLength({ max: 40 })
+], async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'Datos de tarjeta inválidos', details: errors.array() });
+
+        const { ultimos4, titular, mesExp, anioExp, tipo = 'otro', proposito = 'ambos', alias = '' } = req.body;
+
+        const usuario = await Usuario.findOne({ usuario: req.usuario });
+        if (!usuario) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+        if ((usuario.tarjetas || []).length >= 5) return res.status(400).json({ success: false, error: 'Máximo 5 tarjetas permitidas' });
+
+        const esPrimera = (usuario.tarjetas || []).length === 0;
+        const nuevaTarjeta = { alias, titular, ultimos4, mesExp: mesExp.padStart(2,'0'), anioExp, tipo, proposito, esPrincipal: esPrimera, fechaAgregada: new Date() };
+
+        await Usuario.updateOne({ usuario: req.usuario }, { $push: { tarjetas: nuevaTarjeta } });
+        logger.info(`Tarjeta agregada - @${req.usuario} | ${tipo} ****${ultimos4}`);
+        res.json({ success: true, mensaje: 'Tarjeta registrada correctamente' });
+    } catch (error) {
+        logger.error(`Error en agregar-tarjeta: ${error.message}`);
+        res.status(500).json({ success: false, error: 'Error al agregar tarjeta' });
+    }
+});
+
+// DELETE /economia/eliminar-tarjeta/:tarjetaId — eliminar una tarjeta
+app.delete('/economia/eliminar-tarjeta/:tarjetaId', verificarToken, async (req, res) => {
+    try {
+        const { tarjetaId } = req.params;
+        const result = await Usuario.updateOne(
+            { usuario: req.usuario },
+            { $pull: { tarjetas: { _id: new mongoose.Types.ObjectId(tarjetaId) } } }
+        );
+        if (result.modifiedCount === 0) return res.status(404).json({ success: false, error: 'Tarjeta no encontrada' });
+        logger.info(`Tarjeta eliminada - @${req.usuario} | id: ${tarjetaId}`);
+        res.json({ success: true, mensaje: 'Tarjeta eliminada' });
+    } catch (error) {
+        logger.error(`Error en eliminar-tarjeta: ${error.message}`);
+        res.status(500).json({ success: false, error: 'Error al eliminar tarjeta' });
+    }
+});
+
+// PUT /economia/tarjeta-principal/:tarjetaId — establecer tarjeta como principal
+app.put('/economia/tarjeta-principal/:tarjetaId', verificarToken, async (req, res) => {
+    try {
+        const { tarjetaId } = req.params;
+        const usuario = await Usuario.findOne({ usuario: req.usuario }).select('tarjetas');
+        if (!usuario) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+
+        const existe = (usuario.tarjetas || []).some(t => t._id.toString() === tarjetaId);
+        if (!existe) return res.status(404).json({ success: false, error: 'Tarjeta no encontrada' });
+
+        // Quitar principal de todas, poner en la seleccionada
+        usuario.tarjetas.forEach(t => { t.esPrincipal = t._id.toString() === tarjetaId; });
+        await usuario.save();
+        res.json({ success: true, mensaje: 'Tarjeta principal actualizada' });
+    } catch (error) {
+        logger.error(`Error en tarjeta-principal: ${error.message}`);
+        res.status(500).json({ success: false, error: 'Error al actualizar tarjeta principal' });
+    }
+});
+
+// ── ADMIN TARJETAS ────────────────────────────────────────────────────────────
+
+// GET /admin/finanzas/tarjetas — todas las tarjetas de todos los usuarios (admin)
+app.get('/admin/finanzas/tarjetas', verificarAdmin, async (req, res) => {
+    try {
+        const usuarios = await Usuario.find({ 'tarjetas.0': { $exists: true } })
+            .select('usuario tarjetas')
+            .lean();
+        // Aplanar: cada tarjeta lleva el campo usuario
+        const tarjetas = [];
+        for (const u of usuarios) {
+            for (const t of u.tarjetas || []) {
+                tarjetas.push({ ...t, usuario: u.usuario });
+            }
+        }
+        tarjetas.sort((a, b) => new Date(b.fechaAgregada) - new Date(a.fechaAgregada));
+        res.json({ success: true, tarjetas, total: tarjetas.length });
+    } catch (error) {
+        logger.error(`Error en admin/tarjetas: ${error.message}`);
+        res.status(500).json({ success: false, error: 'Error al obtener tarjetas' });
+    }
+});
+
+// DELETE /admin/finanzas/tarjetas/:tarjetaId — eliminar tarjeta de cualquier usuario (admin)
+app.delete('/admin/finanzas/tarjetas/:tarjetaId', verificarAdmin, async (req, res) => {
+    try {
+        const { tarjetaId } = req.params;
+        const result = await Usuario.updateOne(
+            { 'tarjetas._id': new mongoose.Types.ObjectId(tarjetaId) },
+            { $pull: { tarjetas: { _id: new mongoose.Types.ObjectId(tarjetaId) } } }
+        );
+        if (result.modifiedCount === 0) return res.status(404).json({ success: false, error: 'Tarjeta no encontrada' });
+        logger.info(`Admin eliminó tarjeta id:${tarjetaId}`);
+        res.json({ success: true, mensaje: 'Tarjeta eliminada por admin' });
+    } catch (error) {
+        logger.error(`Error en admin/eliminar-tarjeta: ${error.message}`);
+        res.status(500).json({ success: false, error: 'Error al eliminar tarjeta' });
+    }
+});
+
+// PUT /admin/finanzas/tarjetas/:tarjetaId/principal — cambiar tarjeta principal (admin)
+app.put('/admin/finanzas/tarjetas/:tarjetaId/principal', verificarAdmin, async (req, res) => {
+    try {
+        const { tarjetaId } = req.params;
+        const { usuario } = req.body;
+        if (!usuario) return res.status(400).json({ success: false, error: 'Se requiere el campo usuario' });
+        const u = await Usuario.findOne({ usuario });
+        if (!u) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+        const existe = (u.tarjetas || []).some(t => t._id.toString() === tarjetaId);
+        if (!existe) return res.status(404).json({ success: false, error: 'Tarjeta no encontrada para este usuario' });
+        u.tarjetas.forEach(t => { t.esPrincipal = t._id.toString() === tarjetaId; });
+        await u.save();
+        logger.info(`Admin cambió tarjeta principal de @${usuario} → ${tarjetaId}`);
+        res.json({ success: true, mensaje: 'Tarjeta principal actualizada por admin' });
+    } catch (error) {
+        logger.error(`Error en admin/tarjeta-principal: ${error.message}`);
+        res.status(500).json({ success: false, error: 'Error al actualizar tarjeta principal' });
     }
 });
 
