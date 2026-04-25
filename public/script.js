@@ -1484,6 +1484,7 @@ function pfInit(user) {
     pfLoadUserData();
     pfLoadHistorial();
     pfLoadEconomia();
+    pfLoadTarjetas();
     return;
   }
   pfInitialized = true;
@@ -1491,6 +1492,7 @@ function pfInit(user) {
   pfLoadHistorial();
   pfLoadBoveda();
   pfLoadEconomia();
+  pfLoadTarjetas();
   pfInitForm();
 }
 
@@ -2714,6 +2716,191 @@ async function pfSolicitarPago() {
     });
     const d = await res.json();
     if(d.success) { toast('✅ '+d.mensaje); pfLoadEconomia(); }
+    else toast('❌ '+(d.error||'Error'));
+  } catch(e) { toast('❌ Error de conexión'); }
+}
+
+// ── TARJETAS ──────────────────────────────────────────────
+let _tarjetaFormVisible = false;
+
+function _detectarTipoTarjeta(num) {
+  const n = num.replace(/\D/g,'');
+  if (/^4/.test(n)) return 'visa';
+  if (/^5[1-5]/.test(n) || /^2(2[2-9]|[3-6]\d|7[01]\d|720)/.test(n)) return 'mastercard';
+  if (/^3[47]/.test(n)) return 'amex';
+  return 'otro';
+}
+
+function _luhnCheck(num) {
+  const digits = num.replace(/\D/g,'').split('').reverse().map(Number);
+  const sum = digits.reduce((acc, d, i) => {
+    if (i % 2 === 1) { d *= 2; if (d > 9) d -= 9; }
+    return acc + d;
+  }, 0);
+  return sum % 10 === 0;
+}
+
+function _onCardNumInput(input) {
+  const raw = input.value.replace(/\D/g,'').substring(0, 16);
+  input.value = raw.replace(/(.{4})/g,'$1 ').trim();
+  const tipo = _detectarTipoTarjeta(raw);
+  const tipoEl = document.getElementById('pf-tarjeta-tipo-detected');
+  if (tipoEl) {
+    const names = { visa:'VISA', mastercard:'MC', amex:'AMEX', otro:'' };
+    tipoEl.textContent = names[tipo] || '';
+    tipoEl.className = `pf-tipo-badge pf-tipo-badge--${tipo}`;
+  }
+}
+
+function pfMostrarFormTarjeta() {
+  const form = document.getElementById('pf-form-tarjeta');
+  if (!form) return;
+  _tarjetaFormVisible = !_tarjetaFormVisible;
+  form.style.display = _tarjetaFormVisible ? 'block' : 'none';
+  const btn = document.getElementById('pf-btn-add-tarjeta');
+  if (btn) btn.innerHTML = _tarjetaFormVisible
+    ? '<ion-icon name="close-outline"></ion-icon> CANCELAR'
+    : '<ion-icon name="add-circle-outline"></ion-icon> AGREGAR';
+  if (_tarjetaFormVisible) {
+    setTimeout(() => form.scrollIntoView({ behavior:'smooth', block:'nearest' }), 100);
+  }
+}
+
+async function pfLoadTarjetas() {
+  const token = LS.get('token');
+  if (!token) return;
+  const list = document.getElementById('pf-tarjetas-list');
+  if (!list) return;
+  try {
+    const res = await fetch(`${PF_API}/economia/mis-tarjetas`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) return;
+    const d = await res.json();
+    if (!d.success || !d.tarjetas?.length) {
+      list.innerHTML = `<div class="pf-tarjetas-empty">
+        <ion-icon name="card-outline"></ion-icon>
+        <p>No tienes tarjetas registradas</p>
+      </div>`;
+      return;
+    }
+    const logos = { visa:'VISA', mastercard:'MC', amex:'AMEX', otro:'···' };
+    const propLabel = { cobros:'↓ Cobros', pagos:'↑ Pagos', ambos:'↕ Ambos' };
+    list.innerHTML = d.tarjetas.map(t => `
+      <div class="pf-tarjeta-card${t.esPrincipal ? ' principal' : ''}" data-id="${t._id}">
+        <div class="pf-tarjeta-left">
+          <div class="pf-tarjeta-logo pf-tarjeta-logo--${t.tipo}">${logos[t.tipo]||'···'}</div>
+          <div class="pf-tarjeta-info">
+            <div class="pf-tarjeta-num">•••• •••• •••• ${t.ultimos4}</div>
+            <div class="pf-tarjeta-titular">${t.titular}</div>
+            <div class="pf-tarjeta-meta">
+              <span class="pf-tarjeta-exp">Exp: ${t.mesExp}/${t.anioExp}</span>
+              <span class="pf-tarjeta-prop pf-tarjeta-prop--${t.proposito}">${propLabel[t.proposito]||'↕ Ambos'}</span>
+            </div>
+            ${t.alias ? `<div class="pf-tarjeta-alias">${t.alias}</div>` : ''}
+          </div>
+        </div>
+        <div class="pf-tarjeta-actions">
+          ${!t.esPrincipal
+            ? `<button class="pf-tarjeta-btn principal-btn" onclick="pfSetTarjetaPrincipal('${t._id}')" title="Principal"><ion-icon name="star-outline"></ion-icon></button>`
+            : `<span class="pf-tarjeta-principal-badge" title="Tarjeta principal"><ion-icon name="star"></ion-icon></span>`
+          }
+          <button class="pf-tarjeta-btn del-btn" onclick="pfEliminarTarjeta('${t._id}')" title="Eliminar"><ion-icon name="trash-outline"></ion-icon></button>
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    list.innerHTML = `<div class="pf-tarjetas-empty" style="color:#ff4343"><p>Error al cargar tarjetas</p></div>`;
+  }
+}
+
+async function pfGuardarTarjeta() {
+  const numEl   = document.getElementById('pf-input-card-num');
+  const titEl   = document.getElementById('pf-input-card-tit');
+  const mesEl   = document.getElementById('pf-input-card-mes');
+  const anioEl  = document.getElementById('pf-input-card-anio');
+  const propEl  = document.getElementById('pf-input-card-prop');
+  const aliasEl = document.getElementById('pf-input-card-alias');
+  if (!numEl) return;
+
+  const rawNum  = numEl.value.replace(/\D/g,'');
+  const titular = titEl.value.trim();
+  const mes     = mesEl.value.trim();
+  const anio    = anioEl.value.trim();
+  const prop    = propEl.value;
+  const alias   = aliasEl.value.trim();
+
+  if (rawNum.length < 13 || rawNum.length > 19) { toast('⚠️ Número de tarjeta inválido'); return; }
+  if (!_luhnCheck(rawNum)) { toast('⚠️ Número de tarjeta incorrecto'); return; }
+  if (!titular) { toast('⚠️ Ingresa el nombre del titular'); return; }
+  const mesN = parseInt(mes, 10);
+  if (!mes || mesN < 1 || mesN > 12) { toast('⚠️ Mes inválido (01-12)'); return; }
+  const anioN = parseInt(anio, 10);
+  const now = new Date();
+  const nowYear = now.getFullYear() % 100;
+  const nowMonth = now.getMonth() + 1;
+  if (!anio || anioN < nowYear || (anioN === nowYear && mesN < nowMonth)) { toast('⚠️ Tarjeta vencida'); return; }
+
+  const ultimos4 = rawNum.slice(-4);
+  const tipo = _detectarTipoTarjeta(rawNum);
+  const token = LS.get('token');
+
+  const btn = document.getElementById('pf-btn-guardar-tarjeta');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+
+  try {
+    const res = await fetch(`${PF_API}/economia/agregar-tarjeta`, {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
+      body: JSON.stringify({ ultimos4, titular, mesExp: mes.padStart(2,'0'), anioExp: anio, tipo, proposito: prop, alias })
+    });
+    const d = await res.json();
+    if (d.success) {
+      toast('✅ Tarjeta registrada');
+      numEl.value=''; titEl.value=''; mesEl.value=''; anioEl.value=''; aliasEl.value=''; propEl.value='ambos';
+      const tipoEl = document.getElementById('pf-tarjeta-tipo-detected');
+      if (tipoEl) { tipoEl.textContent=''; tipoEl.className='pf-tipo-badge'; }
+      if (_tarjetaFormVisible) pfMostrarFormTarjeta();
+      await pfLoadTarjetas();
+    } else {
+      toast('❌ '+(d.error||'Error al guardar'));
+    }
+  } catch(e) {
+    toast('❌ Error de conexión');
+  } finally {
+    if (btn) { btn.disabled=false; btn.innerHTML='<ion-icon name="save-outline"></ion-icon> GUARDAR TARJETA'; }
+  }
+}
+
+async function pfEliminarTarjeta(tarjetaId) {
+  const ok = await customConfirm({
+    icon: '🗑️',
+    title: 'Eliminar tarjeta',
+    msg: '¿Confirmas que deseas eliminar esta tarjeta?',
+    okText: 'Eliminar',
+    okDanger: true
+  });
+  if (!ok) return;
+  const token = LS.get('token');
+  try {
+    const res = await fetch(`${PF_API}/economia/eliminar-tarjeta/${tarjetaId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const d = await res.json();
+    if (d.success) { toast('✅ Tarjeta eliminada'); pfLoadTarjetas(); }
+    else toast('❌ '+(d.error||'Error'));
+  } catch(e) { toast('❌ Error de conexión'); }
+}
+
+async function pfSetTarjetaPrincipal(tarjetaId) {
+  const token = LS.get('token');
+  try {
+    const res = await fetch(`${PF_API}/economia/tarjeta-principal/${tarjetaId}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    const d = await res.json();
+    if (d.success) { toast('⭐ Tarjeta principal actualizada'); pfLoadTarjetas(); }
     else toast('❌ '+(d.error||'Error'));
   } catch(e) { toast('❌ Error de conexión'); }
 }

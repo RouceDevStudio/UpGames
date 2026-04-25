@@ -545,6 +545,90 @@
       <button class="pf-paypal-save" id="pf-btn-guardar-paypal">GUARDAR</button>
     </div>
 
+    <!-- Divisor Métodos de Pago -->
+    <div class="pf-eco-divider">
+      <ion-icon name="card-outline"></ion-icon>
+      <span>TARJETAS REGISTRADAS</span>
+    </div>
+
+    <!-- Header tarjetas -->
+    <div class="pf-tarjetas-header">
+      <span class="pf-tarjetas-hint">Para cobrar y pagar juegos</span>
+      <button class="pf-add-tarjeta-btn" id="pf-btn-add-tarjeta" onclick="pfMostrarFormTarjeta()">
+        <ion-icon name="add-circle-outline"></ion-icon> AGREGAR
+      </button>
+    </div>
+
+    <!-- Lista de tarjetas -->
+    <div id="pf-tarjetas-list">
+      <div class="pf-tarjetas-empty">
+        <ion-icon name="card-outline"></ion-icon>
+        <p>No tienes tarjetas registradas</p>
+      </div>
+    </div>
+
+    <!-- Formulario agregar tarjeta (colapsable) -->
+    <div class="pf-tarjeta-form" id="pf-form-tarjeta" style="display:none">
+      <div class="pf-tarjeta-form-title">
+        <ion-icon name="card-outline"></ion-icon> NUEVA TARJETA
+      </div>
+
+      <!-- Número de tarjeta -->
+      <div class="pf-form-group">
+        <label class="pf-label">Número de Tarjeta</label>
+        <div class="pf-card-num-wrap">
+          <input type="text" id="pf-input-card-num" class="pf-input pf-card-num-input"
+                 placeholder="0000 0000 0000 0000" maxlength="19" inputmode="numeric"
+                 oninput="_onCardNumInput(this)">
+          <span id="pf-tarjeta-tipo-detected" class="pf-tipo-badge"></span>
+        </div>
+        <small class="pf-card-hint">Solo guardamos los últimos 4 dígitos</small>
+      </div>
+
+      <!-- Titular -->
+      <div class="pf-form-group">
+        <label class="pf-label">Nombre del Titular</label>
+        <input type="text" id="pf-input-card-tit" class="pf-input"
+               placeholder="Como aparece en la tarjeta" maxlength="100" autocomplete="cc-name">
+      </div>
+
+      <!-- Expiración -->
+      <div class="pf-card-row2">
+        <div class="pf-form-group">
+          <label class="pf-label">Mes (MM)</label>
+          <input type="text" id="pf-input-card-mes" class="pf-input"
+                 placeholder="12" maxlength="2" inputmode="numeric">
+        </div>
+        <div class="pf-form-group">
+          <label class="pf-label">Año (AA)</label>
+          <input type="text" id="pf-input-card-anio" class="pf-input"
+                 placeholder="28" maxlength="2" inputmode="numeric">
+        </div>
+      </div>
+
+      <!-- Propósito -->
+      <div class="pf-form-group">
+        <label class="pf-label">Propósito</label>
+        <select id="pf-input-card-prop" class="pf-input pf-select">
+          <option value="ambos">↕ Para cobros y pagos</option>
+          <option value="cobros">↓ Solo cobros (recibir)</option>
+          <option value="pagos">↑ Solo pagos (comprar)</option>
+        </select>
+      </div>
+
+      <!-- Alias (opcional) -->
+      <div class="pf-form-group">
+        <label class="pf-label">Alias (opcional)</label>
+        <input type="text" id="pf-input-card-alias" class="pf-input"
+               placeholder="Ej: Mi Visa personal" maxlength="40">
+      </div>
+
+      <button class="pf-paypal-save" style="width:100%;margin-top:4px;padding:14px;font-size:.85rem"
+              id="pf-btn-guardar-tarjeta" onclick="pfGuardarTarjeta()">
+        <ion-icon name="save-outline"></ion-icon> GUARDAR TARJETA
+      </button>
+    </div>
+
     <!-- Solicitar pago -->
     <button class="pf-solicitar-btn" id="pf-btn-solicitar-pago" disabled>
       SOLICITAR PAGO (Mínimo $10 USD)

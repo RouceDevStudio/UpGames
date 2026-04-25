@@ -2473,6 +2473,102 @@ body.nx-open #nxFab {
   margin-top:10px; font-family:var(--ff-mono);
 }
 
+/* ── Tarjetas ── */
+.pf-eco-divider {
+  display:flex; align-items:center; gap:8px;
+  font-size:.62rem; font-weight:800; letter-spacing:1.5px; text-transform:uppercase;
+  color:var(--txt3); margin:16px 0 10px;
+}
+.pf-eco-divider::before,.pf-eco-divider::after {
+  content:''; flex:1; height:1px; background:rgba(255,255,255,.07);
+}
+.pf-tarjetas-header {
+  display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;
+}
+.pf-tarjetas-hint { font-size:.62rem; color:var(--txt3); }
+.pf-add-tarjeta-btn {
+  display:flex; align-items:center; gap:4px;
+  background:rgba(0,242,255,.12); border:1px solid rgba(0,242,255,.3);
+  color:var(--cy); border-radius:8px; padding:6px 10px;
+  font-size:.65rem; font-weight:700; letter-spacing:.5px; cursor:pointer;
+  transition:background .15s;
+}
+.pf-add-tarjeta-btn:active { background:rgba(0,242,255,.22); }
+.pf-tarjetas-empty {
+  text-align:center; padding:18px 0; color:var(--txt3);
+  font-size:.72rem; display:flex; flex-direction:column; align-items:center; gap:6px;
+}
+.pf-tarjetas-empty ion-icon { font-size:2rem; opacity:.4; }
+/* Tarjeta individual */
+.pf-tarjeta-card {
+  display:flex; align-items:center; justify-content:space-between;
+  background:var(--bg2); border:1px solid rgba(255,255,255,.07);
+  border-radius:12px; padding:10px 12px; margin-bottom:8px;
+  transition:border-color .2s;
+}
+.pf-tarjeta-card.principal {
+  border-color:rgba(255,204,0,.35); background:rgba(255,204,0,.05);
+}
+.pf-tarjeta-left { display:flex; align-items:center; gap:10px; flex:1; min-width:0; }
+.pf-tarjeta-logo {
+  width:40px; height:26px; border-radius:5px; display:flex;
+  align-items:center; justify-content:center; font-size:.6rem;
+  font-weight:900; letter-spacing:.5px; flex-shrink:0; background:var(--bg3);
+  color:var(--txt3);
+}
+.pf-tarjeta-logo--visa       { background:#1a1f71; color:#fff; }
+.pf-tarjeta-logo--mastercard { background:#252525; color:#eb001b; }
+.pf-tarjeta-logo--amex       { background:#007bc1; color:#fff; }
+.pf-tarjeta-info { flex:1; min-width:0; }
+.pf-tarjeta-num  { font-family:var(--ff-mono); font-size:.75rem; color:var(--txt1); letter-spacing:1px; }
+.pf-tarjeta-titular { font-size:.62rem; color:var(--txt3); margin-top:1px; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pf-tarjeta-meta { display:flex; gap:8px; align-items:center; margin-top:3px; flex-wrap:wrap; }
+.pf-tarjeta-exp  { font-size:.6rem; color:var(--txt3); font-family:var(--ff-mono); }
+.pf-tarjeta-alias { font-size:.6rem; color:var(--cy); margin-top:2px; font-style:italic; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pf-tarjeta-prop {
+  font-size:.55rem; font-weight:800; letter-spacing:.5px; padding:1px 5px;
+  border-radius:4px; text-transform:uppercase;
+}
+.pf-tarjeta-prop--ambos  { background:rgba(0,242,255,.12); color:var(--cy); }
+.pf-tarjeta-prop--cobros { background:rgba(94,255,67,.12);  color:var(--g); }
+.pf-tarjeta-prop--pagos  { background:rgba(255,204,0,.12);  color:#ffcc00; }
+.pf-tarjeta-actions { display:flex; gap:6px; align-items:center; flex-shrink:0; margin-left:8px; }
+.pf-tarjeta-btn {
+  background:none; border:1px solid rgba(255,255,255,.1); border-radius:7px;
+  padding:5px 7px; color:var(--txt3); cursor:pointer; font-size:.9rem;
+  display:flex; align-items:center; transition:all .15s;
+}
+.pf-tarjeta-btn.del-btn:active     { border-color:rgba(255,67,67,.5); color:#ff4343; }
+.pf-tarjeta-btn.principal-btn:active { border-color:rgba(255,204,0,.5); color:#ffcc00; }
+.pf-tarjeta-principal-badge { color:#ffcc00; font-size:1rem; display:flex; align-items:center; }
+/* Formulario agregar tarjeta */
+.pf-tarjeta-form {
+  background:var(--bg2); border:1px solid rgba(0,242,255,.15);
+  border-radius:14px; padding:14px; margin-top:4px; margin-bottom:8px;
+}
+.pf-tarjeta-form-title {
+  font-size:.72rem; font-weight:800; letter-spacing:1px; color:var(--cy);
+  display:flex; align-items:center; gap:6px; margin-bottom:12px;
+}
+.pf-card-num-wrap { position:relative; display:flex; align-items:center; }
+.pf-card-num-input { padding-right:64px !important; }
+.pf-tipo-badge {
+  position:absolute; right:10px; font-size:.58rem; font-weight:900;
+  letter-spacing:.5px; padding:2px 6px; border-radius:4px; pointer-events:none;
+}
+.pf-tipo-badge--visa       { background:#1a1f71; color:#fff; }
+.pf-tipo-badge--mastercard { background:#252525; color:#eb001b; }
+.pf-tipo-badge--amex       { background:#007bc1; color:#fff; }
+.pf-tipo-badge--otro       { background:var(--bg3); color:var(--txt3); }
+.pf-card-hint { font-size:.6rem; color:var(--txt3); margin-top:3px; display:block; }
+.pf-card-row2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.pf-select {
+  appearance:none; -webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");
+  background-repeat:no-repeat; background-position:right 12px center;
+  padding-right:30px !important; cursor:pointer;
+}
+
 /* Modals de perfil */
 .pf-modal-overlay {
   position:fixed; inset:0;
