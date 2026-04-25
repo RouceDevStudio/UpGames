@@ -505,32 +505,220 @@
 </div><!-- /#profile-view -->
 
 <!-- ══════════════════════════════════
-  ECONOMIA VIEW (vista independiente)
+  ECONOMIA VIEW — CREATOR STUDIO DASHBOARD
 ══════════════════════════════════ -->
 <div id="economia-view">
-  <div class="favs-header"><ion-icon name="cash-outline"></ion-icon> Mi Economía</div>
-  <div class="pf-economia">
 
-    <!-- Saldo -->
-    <div class="pf-saldo-box">
-      <div class="pf-saldo-lbl">SALDO DISPONIBLE</div>
-      <div class="pf-saldo-val" id="pf-saldo-display">$0.00</div>
-      <div class="pf-saldo-cur">USD</div>
+  <!-- Studio Topbar -->
+  <div class="eco-topbar">
+    <div class="eco-topbar-brand">
+      <ion-icon name="analytics-outline"></ion-icon>
+      <span>Creator <strong>Studio</strong></span>
+    </div>
+    <div class="eco-live-badge">
+      <span class="eco-live-dot"></span>LIVE
+    </div>
+  </div>
+
+  <!-- Period Selector -->
+  <div class="eco-period-strip">
+    <button class="eco-period-btn active" data-period="7"  onclick="ecoSetPeriod(7,this)">7D</button>
+    <button class="eco-period-btn"        data-period="30" onclick="ecoSetPeriod(30,this)">30D</button>
+    <button class="eco-period-btn"        data-period="90" onclick="ecoSetPeriod(90,this)">90D</button>
+    <button class="eco-period-btn"        data-period="365" onclick="ecoSetPeriod(365,this)">1A</button>
+    <button class="eco-period-btn"        data-period="0"  onclick="ecoSetPeriod(0,this)">TODO</button>
+  </div>
+
+  <!-- ══ HERO: Saldo + Progress Ring ══ -->
+  <div class="eco-hero-card">
+    <div class="eco-hero-glow"></div>
+    <div class="eco-hero-left">
+      <div class="eco-hero-eyebrow"><ion-icon name="wallet-outline"></ion-icon> SALDO DISPONIBLE</div>
+      <div class="eco-hero-saldo" id="pf-saldo-display" data-val="0">$0.0000</div>
+      <div class="eco-hero-currency">USD &nbsp;·&nbsp; En tiempo real</div>
+      <div id="eco-trend-badge" class="eco-trend-chip eco-trend-up">
+        <ion-icon name="trending-up"></ion-icon>
+        <span id="eco-trend-txt">Actualizando…</span>
+      </div>
+    </div>
+    <div class="eco-hero-right">
+      <svg viewBox="0 0 120 120" class="eco-ring-svg">
+        <defs>
+          <linearGradient id="eco-ring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#5EFF43"/>
+            <stop offset="100%" stop-color="#00f2ff"/>
+          </linearGradient>
+        </defs>
+        <circle cx="60" cy="60" r="50" class="eco-ring-bg"/>
+        <circle cx="60" cy="60" r="50" class="eco-ring-fill" id="eco-ring-fill"
+                stroke="url(#eco-ring-grad)"
+                stroke-dasharray="314.16" stroke-dashoffset="314.16"
+                transform="rotate(-90 60 60)"/>
+        <text x="60" y="58" class="eco-ring-pct" id="eco-ring-pct">0%</text>
+        <text x="60" y="72" class="eco-ring-lbl">de $10</text>
+      </svg>
+      <div class="eco-ring-caption">Meta retiro</div>
+    </div>
+  </div>
+
+  <!-- ══ KPI STRIP ══ -->
+  <div class="eco-kpi-strip">
+    <div class="eco-kpi-card eco-kpi--green">
+      <div class="eco-kpi-icon"><ion-icon name="cloud-download-outline"></ion-icon></div>
+      <div class="eco-kpi-val" id="pf-descargas-totales" data-val="0">0</div>
+      <div class="eco-kpi-lbl">Descargas</div>
+      <div class="eco-kpi-delta" id="eco-kpi-dl-delta">— este período</div>
+    </div>
+    <div class="eco-kpi-card eco-kpi--cyan">
+      <div class="eco-kpi-icon"><ion-icon name="albums-outline"></ion-icon></div>
+      <div class="eco-kpi-val" id="pf-juegos-elegibles" data-val="0">0</div>
+      <div class="eco-kpi-lbl">Monetizados</div>
+      <div class="eco-kpi-delta" id="eco-kpi-content-total">de — pubs.</div>
+    </div>
+    <div class="eco-kpi-card eco-kpi--yellow">
+      <div class="eco-kpi-icon"><ion-icon name="cash-outline"></ion-icon></div>
+      <div class="eco-kpi-val" id="eco-kpi-rpm">$0.000</div>
+      <div class="eco-kpi-lbl">$/Descarga</div>
+      <div class="eco-kpi-delta">Tasa real</div>
+    </div>
+    <div class="eco-kpi-card eco-kpi--pink">
+      <div class="eco-kpi-icon"><ion-icon name="people-outline"></ion-icon></div>
+      <div class="eco-kpi-val" id="eco-kpi-followers">0</div>
+      <div class="eco-kpi-lbl">Seguidores</div>
+      <div class="eco-kpi-delta">Alcance</div>
+    </div>
+  </div>
+
+  <!-- ══ CHART ══ -->
+  <div class="eco-panel">
+    <div class="eco-panel-hdr">
+      <div class="eco-panel-title"><ion-icon name="bar-chart-outline"></ion-icon> DESCARGAS POR DÍA</div>
+      <div class="eco-panel-badge" id="eco-chart-badge">— total</div>
+    </div>
+    <div class="eco-chart-wrap">
+      <canvas id="eco-bar-chart" height="130"></canvas>
+    </div>
+    <div class="eco-chart-legend">
+      <span class="eco-legend-dot" style="background:var(--g)"></span>Descargas
+      <span class="eco-legend-dot" style="background:var(--cy);margin-left:14px"></span>Tendencia
+    </div>
+  </div>
+
+  <!-- ══ 3-COL INSIGHTS ══ -->
+  <div class="eco-insights-row">
+
+    <!-- Health Score -->
+    <div class="eco-insight-panel">
+      <div class="eco-panel-hdr">
+        <div class="eco-panel-title"><ion-icon name="shield-checkmark-outline"></ion-icon> SALUD</div>
+      </div>
+      <div class="eco-gauge-wrap">
+        <svg viewBox="0 0 140 85" class="eco-gauge-svg">
+          <path d="M18 72 A52 52 0 0 1 122 72" class="eco-gauge-track" fill="none"/>
+          <path d="M18 72 A52 52 0 0 1 122 72" class="eco-gauge-arc"   fill="none"
+                id="eco-gauge-arc" stroke-dasharray="163.4" stroke-dashoffset="0"/>
+        </svg>
+        <div class="eco-gauge-overlay">
+          <div class="eco-gauge-val" id="eco-health-val">—</div>
+          <div class="eco-gauge-grade" id="eco-health-grade">—</div>
+        </div>
+      </div>
+      <div class="eco-health-rows" id="eco-health-rows">
+        <div class="eco-health-row"><span>Reportes</span><span id="eco-h-reports" class="eco-hv eco-hv--good">0</span></div>
+        <div class="eco-health-row"><span>Activos</span><span id="eco-h-active"  class="eco-hv eco-hv--good">—</span></div>
+        <div class="eco-health-row"><span>Links caídos</span><span id="eco-h-caidos" class="eco-hv eco-hv--good">0</span></div>
+      </div>
     </div>
 
-    <!-- Stats eco -->
-    <div class="pf-eco-stats">
-      <div class="pf-eco-stat">
-        <div class="pf-eco-stat-val" id="pf-descargas-totales">0</div>
-        <div class="pf-eco-stat-lbl">Descargas Totales</div>
+    <!-- Category Breakdown -->
+    <div class="eco-insight-panel">
+      <div class="eco-panel-hdr">
+        <div class="eco-panel-title"><ion-icon name="pie-chart-outline"></ion-icon> CATEGORÍAS</div>
       </div>
-      <div class="pf-eco-stat">
-        <div class="pf-eco-stat-val" id="pf-juegos-elegibles">0</div>
-        <div class="pf-eco-stat-lbl">Juegos con Ganancias</div>
+      <div class="eco-cat-list" id="eco-cat-list">
+        <div class="eco-spin"><ion-icon name="sync-outline"></ion-icon></div>
       </div>
     </div>
 
-    <!-- Verificación warning -->
+    <!-- Conversion Funnel -->
+    <div class="eco-insight-panel">
+      <div class="eco-panel-hdr">
+        <div class="eco-panel-title"><ion-icon name="funnel-outline"></ion-icon> CONVERSIÓN</div>
+      </div>
+      <div class="eco-funnel-list">
+        <div class="eco-funnel-item">
+          <div class="eco-fi-label">Visitas est.</div>
+          <div class="eco-fi-bar-wrap"><div class="eco-fi-bar eco-fi--a" id="eco-rb-views" style="width:100%"></div></div>
+          <div class="eco-fi-val" id="eco-rv-views">—</div>
+        </div>
+        <div class="eco-funnel-item">
+          <div class="eco-fi-label">Interacciones</div>
+          <div class="eco-fi-bar-wrap"><div class="eco-fi-bar eco-fi--b" id="eco-rb-interact" style="width:75%"></div></div>
+          <div class="eco-fi-val" id="eco-rv-interact">—</div>
+        </div>
+        <div class="eco-funnel-item">
+          <div class="eco-fi-label">Descargas</div>
+          <div class="eco-fi-bar-wrap"><div class="eco-fi-bar eco-fi--c" id="eco-rb-dl" style="width:50%"></div></div>
+          <div class="eco-fi-val" id="eco-rv-dl">—</div>
+        </div>
+        <div class="eco-funnel-item">
+          <div class="eco-fi-label">Monetizados</div>
+          <div class="eco-fi-bar-wrap"><div class="eco-fi-bar eco-fi--d" id="eco-rb-earn" style="width:25%"></div></div>
+          <div class="eco-fi-val" id="eco-rv-earn">—</div>
+        </div>
+        <div class="eco-cvr-row">
+          <span>CVR real</span>
+          <strong id="eco-cvr">—%</strong>
+        </div>
+        <div class="eco-funnel-note">*Estimaciones basadas en conversión promedio</div>
+      </div>
+    </div>
+
+  </div><!-- /.eco-insights-row -->
+
+  <!-- ══ TOP LEADERBOARD ══ -->
+  <div class="eco-panel">
+    <div class="eco-panel-hdr">
+      <div class="eco-panel-title"><ion-icon name="podium-outline"></ion-icon> TOP CONTENIDO</div>
+      <div class="eco-panel-badge">Por descargas</div>
+    </div>
+    <div id="eco-leaderboard">
+      <div class="eco-spin"><ion-icon name="sync-outline"></ion-icon></div>
+    </div>
+  </div>
+
+  <!-- ══ GOALS ══ -->
+  <div class="eco-panel">
+    <div class="eco-panel-hdr">
+      <div class="eco-panel-title"><ion-icon name="flag-outline"></ion-icon> HITOS Y METAS</div>
+    </div>
+    <div class="eco-goals-grid" id="eco-goals">
+      <div class="eco-spin"><ion-icon name="sync-outline"></ion-icon></div>
+    </div>
+  </div>
+
+  <!-- ══ ALL CONTENT TABLE ══ -->
+  <div class="eco-panel">
+    <div class="eco-panel-hdr">
+      <div class="eco-panel-title"><ion-icon name="list-outline"></ion-icon> TODAS LAS PUBLICACIONES</div>
+      <div class="eco-panel-badge" id="eco-table-count">— items</div>
+    </div>
+    <div id="eco-content-table">
+      <div class="eco-spin"><ion-icon name="sync-outline"></ion-icon></div>
+    </div>
+  </div>
+
+  <!-- ══ SECTION DIVIDER ══ -->
+  <div class="eco-divider-section">
+    <div class="eco-div-line"></div>
+    <div class="eco-div-label"><ion-icon name="card-outline"></ion-icon>&nbsp;CENTRO DE PAGOS</div>
+    <div class="eco-div-line"></div>
+  </div>
+
+  <!-- ══ PAYOUT PANEL ══ -->
+  <div class="eco-payout-panel">
+
+    <!-- Verification warning -->
     <div class="pf-eco-warn" id="pf-estado-verificacion" style="display:none">
       <ion-icon name="alert-circle"></ion-icon>
       <span>Necesitas verificación nivel 1+ para monetizar</span>
@@ -545,21 +733,17 @@
       <button class="pf-paypal-save" id="pf-btn-guardar-paypal">GUARDAR</button>
     </div>
 
-    <!-- Divisor Métodos de Pago -->
+    <!-- Cards -->
     <div class="pf-eco-divider">
       <ion-icon name="card-outline"></ion-icon>
       <span>TARJETAS REGISTRADAS</span>
     </div>
-
-    <!-- Header tarjetas -->
     <div class="pf-tarjetas-header">
       <span class="pf-tarjetas-hint">Para cobrar y pagar juegos</span>
       <button class="pf-add-tarjeta-btn" id="pf-btn-add-tarjeta" onclick="pfMostrarFormTarjeta()">
         <ion-icon name="add-circle-outline"></ion-icon> AGREGAR
       </button>
     </div>
-
-    <!-- Lista de tarjetas -->
     <div id="pf-tarjetas-list">
       <div class="pf-tarjetas-empty">
         <ion-icon name="card-outline"></ion-icon>
@@ -567,13 +751,11 @@
       </div>
     </div>
 
-    <!-- Formulario agregar tarjeta (colapsable) -->
+    <!-- Card form -->
     <div class="pf-tarjeta-form" id="pf-form-tarjeta" style="display:none">
       <div class="pf-tarjeta-form-title">
         <ion-icon name="card-outline"></ion-icon> NUEVA TARJETA
       </div>
-
-      <!-- Número de tarjeta -->
       <div class="pf-form-group">
         <label class="pf-label">Número de Tarjeta</label>
         <div class="pf-card-num-wrap">
@@ -584,29 +766,21 @@
         </div>
         <small class="pf-card-hint">Solo guardamos los últimos 4 dígitos</small>
       </div>
-
-      <!-- Titular -->
       <div class="pf-form-group">
         <label class="pf-label">Nombre del Titular</label>
         <input type="text" id="pf-input-card-tit" class="pf-input"
                placeholder="Como aparece en la tarjeta" maxlength="100" autocomplete="cc-name">
       </div>
-
-      <!-- Expiración -->
       <div class="pf-card-row2">
         <div class="pf-form-group">
           <label class="pf-label">Mes (MM)</label>
-          <input type="text" id="pf-input-card-mes" class="pf-input"
-                 placeholder="12" maxlength="2" inputmode="numeric">
+          <input type="text" id="pf-input-card-mes" class="pf-input" placeholder="12" maxlength="2" inputmode="numeric">
         </div>
         <div class="pf-form-group">
           <label class="pf-label">Año (AA)</label>
-          <input type="text" id="pf-input-card-anio" class="pf-input"
-                 placeholder="28" maxlength="2" inputmode="numeric">
+          <input type="text" id="pf-input-card-anio" class="pf-input" placeholder="28" maxlength="2" inputmode="numeric">
         </div>
       </div>
-
-      <!-- Propósito -->
       <div class="pf-form-group">
         <label class="pf-label">Propósito</label>
         <select id="pf-input-card-prop" class="pf-input pf-select">
@@ -615,32 +789,24 @@
           <option value="pagos">↑ Solo pagos (comprar)</option>
         </select>
       </div>
-
-      <!-- Alias (opcional) -->
       <div class="pf-form-group">
         <label class="pf-label">Alias (opcional)</label>
-        <input type="text" id="pf-input-card-alias" class="pf-input"
-               placeholder="Ej: Mi Visa personal" maxlength="40">
+        <input type="text" id="pf-input-card-alias" class="pf-input" placeholder="Ej: Mi Visa personal" maxlength="40">
       </div>
-
       <button class="pf-paypal-save" style="width:100%;margin-top:4px;padding:14px;font-size:.85rem"
               id="pf-btn-guardar-tarjeta" onclick="pfGuardarTarjeta()">
         <ion-icon name="save-outline"></ion-icon> GUARDAR TARJETA
       </button>
     </div>
 
-    <!-- Solicitar pago -->
+    <!-- Request payment -->
     <button class="pf-solicitar-btn" id="pf-btn-solicitar-pago" disabled>
       SOLICITAR PAGO (Mínimo $10 USD)
     </button>
-
-    <!-- Solicitud pendiente -->
     <div class="pf-eco-pending" id="pf-solicitud-pendiente" style="display:none">
       <ion-icon name="checkmark-circle"></ion-icon>
       <span>Tienes una solicitud de pago pendiente de revisión</span>
     </div>
-
-    <!-- Info requisitos -->
     <div class="pf-eco-info">
       <strong style="color:var(--g)">💡 Requisitos para cobrar:</strong><br>
       • Saldo mínimo: $10 USD<br>
@@ -648,8 +814,9 @@
       • Al menos 1 descarga en tus aportes<br>
       • Email de PayPal configurado
     </div>
-  </div>
-</div>
+  </div><!-- /.eco-payout-panel -->
+
+</div><!-- /#economia-view -->
 
 <!-- ══ Modal: Configuración (Avatar/Bio/Nombre/Email/Contraseña/Links) ══ -->
 <div class="pf-modal-overlay" id="pf-settingsModal">

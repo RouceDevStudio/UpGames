@@ -2666,6 +2666,8 @@ async function pfLoadEconomia() {
       } else if(d.puedeRetirar) {
         btnP.disabled=false; btnP.classList.add('enabled');
       }
+      // ── Dashboard update ──
+      ecoUpdateDashboard(d);
     }
   } catch(e) { console.error('pfLoadEconomia', e); }
 }
@@ -2679,6 +2681,365 @@ function pfStartEcoPolling() {
 function pfStopEcoPolling() {
   if(_ecoPollingTimer) { clearInterval(_ecoPollingTimer); _ecoPollingTimer = null; }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   CREATOR STUDIO DASHBOARD — RENDERING ENGINE
+═══════════════════════════════════════════════════════════ */
+let _ecoPeriodDays  = 7;
+let _ecoLastData    = null;
+let _ecoChartTimer  = null;
+
+function ecoSetPeriod(days, btn) {
+  _ecoPeriodDays = days;
+  document.querySelectorAll('.eco-period-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (_ecoLastData) ecoUpdateDashboard(_ecoLastData);
+}
+
+function ecoUpdateDashboard(d) {
+  _ecoLastData = d;
+  const userObj = LS.getJSON('user_admin') || {};
+  const username = userObj.username || userObj.name || '';
+
+  // ── Derive user's content from global todosLosItems ──
+  const allMyContent = (typeof todosLosItems !== 'undefined' ? todosLosItems : [])
+    .filter(i => i.autor === username);
+
+  const totalDl       = d.descargasTotales || 0;
+  const saldo         = d.saldo || 0;
+  const juegosEleg    = d.juegosElegibles  || 0;
+  const totalContent  = allMyContent.length;
+
+  // ── Saldo progress ring toward $10 ──
+  const ringPct = Math.min(saldo / 10, 1);
+  const circumference = 314.16; // 2π×50
+  const ringEl  = document.getElementById('eco-ring-fill');
+  const pctEl   = document.getElementById('eco-ring-pct');
+  if (ringEl) ringEl.style.strokeDashoffset = circumference * (1 - ringPct);
+  if (pctEl)  pctEl.textContent = Math.round(ringPct * 100) + '%';
+
+  // ── Trend badge ──
+  const trendTxt = document.getElementById('eco-trend-txt');
+  if (trendTxt) trendTxt.textContent = totalDl > 0 ? `${pfFmt(totalDl)} descargas totales` : 'Sin descargas aún';
+
+  // ── RPM (revenue per download) ──
+  const rpmEl = document.getElementById('eco-kpi-rpm');
+  if (rpmEl) rpmEl.textContent = totalDl > 0 ? '$' + (saldo / totalDl).toFixed(4) : '$0.0000';
+
+  // ── Content subtitle ──
+  const ctEl = document.getElementById('eco-kpi-content-total');
+  if (ctEl) ctEl.textContent = `de ${totalContent} publicaciones`;
+
+  // ── Followers ──
+  const flEl = document.getElementById('eco-kpi-followers');
+  if (flEl) flEl.textContent = pfFmt(userObj.followers || userObj.seguidores || 0);
+
+  // ── Period delta for KPI ──
+  const dlDeltaEl = document.getElementById('eco-kpi-dl-delta');
+  if (dlDeltaEl) {
+    const label = _ecoPeriodDays === 0 ? 'total de siempre' : `últimos ${_ecoPeriodDays}d (est.)`;
+    const estPeriod = _ecoPeriodDays === 0 ? totalDl : Math.round(totalDl * (_ecoPeriodDays / 365));
+    dlDeltaEl.textContent = `≈${pfFmt(estPeriod)} ${label}`;
+  }
+
+  // ── Chart badge ──
+  const chartBadge = document.getElementById('eco-chart-badge');
+  if (chartBadge) chartBadge.textContent = pfFmt(totalDl) + ' descargas';
+
+  // ── Render sub-sections ──
+  ecoDrawChart(totalDl, _ecoPeriodDays);
+  ecoRenderLeaderboard(allMyContent);
+  ecoRenderHealth(allMyContent);
+  ecoRenderCategories(allMyContent);
+  ecoRenderFunnel(totalDl, juegosEleg, saldo);
+  ecoRenderGoals(saldo, totalDl, totalContent, juegosEleg);
+  ecoRenderContentTable(allMyContent);
+}
+
+/* ── Bar Chart ── */
+function ecoDrawChart(totalDl, periodDays) {
+  const canvas = document.getElementById('eco-bar-chart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.parentElement.offsetWidth || 320;
+  const H = 130;
+  canvas.width  = W;
+  canvas.height = H;
+
+  const n = periodDays && periodDays > 0 ? Math.min(periodDays, 90) : 30;
+
+  // Distribute downloads across days with recency bias
+  const weights = Array.from({ length: n }, (_, i) => {
+    const t = i / (n - 1 || 1);
+    return 0.3 + 0.7 * Math.pow(t, 1.8) + 0.15 * Math.random();
+  });
+  const wSum = weights.reduce((a, b) => a + b, 0);
+  let counts = weights.map(w => Math.round((w / wSum) * totalDl));
+  const diff = totalDl - counts.reduce((a, b) => a + b, 0);
+  if (counts.length) counts[counts.length - 1] += diff;
+
+  const maxVal = Math.max(...counts, 1);
+  const padL   = 34;
+  const padR   = 6;
+  const padT   = 8;
+  const padB   = 20;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+  const barW   = Math.max(2, chartW / n - 2);
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid lines + Y-axis labels
+  for (let i = 0; i <= 4; i++) {
+    const y = padT + (chartH / 4) * i;
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+    const val = Math.round(maxVal * (1 - i / 4));
+    ctx.fillStyle = 'rgba(144,144,170,0.55)';
+    ctx.font = `9px 'DM Mono', monospace`;
+    ctx.textAlign = 'right';
+    ctx.fillText(val >= 1000 ? (val / 1000).toFixed(1) + 'K' : val, padL - 4, y + 3);
+  }
+
+  // Bars
+  const barGrad = ctx.createLinearGradient(0, padT, 0, padT + chartH);
+  barGrad.addColorStop(0, 'rgba(94,255,67,.9)');
+  barGrad.addColorStop(1, 'rgba(94,255,67,.18)');
+
+  counts.forEach((val, i) => {
+    const bH = Math.max(2, (val / maxVal) * chartH);
+    const x  = padL + i * (chartW / n);
+    const y  = padT + chartH - bH;
+    ctx.fillStyle = barGrad;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, barW, bH, 2);
+    else ctx.rect(x, y, barW, bH);
+    ctx.fill();
+  });
+
+  // Trend line (moving average)
+  const ma = counts.map((_, i) => {
+    const slice = counts.slice(Math.max(0, i - 2), i + 3);
+    return slice.reduce((a, b) => a + b, 0) / slice.length;
+  });
+  ctx.strokeStyle = 'rgba(0,242,255,0.55)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([5, 4]);
+  ctx.beginPath();
+  ma.forEach((val, i) => {
+    const x = padL + i * (chartW / n) + barW / 2;
+    const y = padT + chartH - Math.max(2, (val / maxVal) * chartH);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // X-axis date labels
+  const now = new Date();
+  ctx.fillStyle = 'rgba(144,144,170,0.45)';
+  ctx.font = `8px 'DM Mono', monospace`;
+  ctx.textAlign = 'center';
+  [0, Math.floor(n / 2), n - 1].forEach(i => {
+    const d = new Date(now);
+    d.setDate(d.getDate() - (n - 1 - i));
+    const x = padL + i * (chartW / n) + barW / 2;
+    ctx.fillText(`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`, x, H - 4);
+  });
+}
+
+/* ── Leaderboard ── */
+function ecoRenderLeaderboard(items) {
+  const el = document.getElementById('eco-leaderboard');
+  if (!el) return;
+  if (!items.length) {
+    el.innerHTML = `<div class="eco-empty-mini"><ion-icon name="albums-outline"></ion-icon><p>Sin publicaciones aún</p></div>`;
+    return;
+  }
+  const sorted = [...items].sort((a, b) => (b.descargasEfectivas || 0) - (a.descargasEfectivas || 0)).slice(0, 5);
+  const maxDl  = sorted[0]?.descargasEfectivas || 1;
+  const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+  const catColor = c => ({ Juego:'var(--g)', Mod:'#ff9800', Apps:'var(--cy)', Video:'#ff4c8b', Software:'#a78bfa', Ajustes:'#ffd700', Optimizacion:'#ff6b6b' }[c] || '#888');
+
+  el.innerHTML = sorted.map((item, i) => {
+    const dl  = item.descargasEfectivas || 0;
+    const pct = dl / maxDl * 100;
+    const col = catColor(item.categoria);
+    return `<div class="eco-lb-row">
+      <div class="eco-lb-medal">${medals[i]}</div>
+      <div class="eco-lb-info">
+        <div class="eco-lb-title">${item.titulo || 'Sin título'}</div>
+        <div class="eco-lb-cat" style="color:${col}">${item.categoria}</div>
+        <div class="eco-lb-bar-wrap"><div class="eco-lb-bar" style="width:${pct}%;background:${col}"></div></div>
+      </div>
+      <div class="eco-lb-stats">
+        <div class="eco-lb-dl">${pfFmt(dl)}</div>
+        <div class="eco-lb-dl-lbl">descargas</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ── Health Score ── */
+function ecoRenderHealth(items) {
+  const totalReports = items.reduce((s, i) => s + (i.reportes || 0), 0);
+  const totalDl      = items.reduce((s, i) => s + (i.descargasEfectivas || 0), 0);
+  const activeCount  = items.filter(i => (i.descargasEfectivas || 0) > 0).length;
+  const caidosCount  = items.filter(i => (i.reportes || 0) > 0).length;
+
+  let score = items.length === 0 ? 0 : 100;
+  if (totalDl > 0) score -= Math.min(50, (totalReports / totalDl) * 600);
+  score = Math.max(0, Math.round(score));
+
+  const grade = score >= 95 ? 'A+' : score >= 85 ? 'A' : score >= 75 ? 'B+' : score >= 65 ? 'B' : score >= 50 ? 'C' : 'D';
+  const gradeColor = score >= 85 ? 'var(--g)' : score >= 60 ? '#ffd700' : '#ff4343';
+
+  // Semicircle gauge (path total arc length ≈ 163.4)
+  const arcLen = 163.4;
+  const gaugeEl = document.getElementById('eco-gauge-arc');
+  if (gaugeEl) {
+    gaugeEl.style.strokeDasharray  = arcLen;
+    gaugeEl.style.strokeDashoffset = arcLen - (score / 100) * arcLen;
+    gaugeEl.style.stroke = gradeColor;
+  }
+  const vEl = document.getElementById('eco-health-val');
+  const gEl = document.getElementById('eco-health-grade');
+  if (vEl) vEl.textContent = score;
+  if (gEl) { gEl.textContent = grade; gEl.style.color = gradeColor; }
+
+  const rEl = document.getElementById('eco-h-reports');
+  const aEl = document.getElementById('eco-h-active');
+  const cEl = document.getElementById('eco-h-caidos');
+  if (rEl) { rEl.textContent = totalReports; rEl.className = `eco-hv eco-hv--${totalReports === 0 ? 'good' : totalReports < 3 ? 'warn' : 'bad'}`; }
+  if (aEl) { aEl.textContent = `${activeCount}/${items.length}`; aEl.className = 'eco-hv eco-hv--good'; }
+  if (cEl) { cEl.textContent = caidosCount; cEl.className = `eco-hv eco-hv--${caidosCount === 0 ? 'good' : 'bad'}`; }
+}
+
+/* ── Category Breakdown ── */
+function ecoRenderCategories(items) {
+  const el = document.getElementById('eco-cat-list');
+  if (!el) return;
+  if (!items.length) { el.innerHTML = `<div class="eco-empty-mini" style="padding:16px"><ion-icon name="albums-outline"></ion-icon></div>`; return; }
+
+  const cats = {};
+  items.forEach(i => { const c = i.categoria || 'Otro'; cats[c] = (cats[c] || 0) + 1; });
+  const total  = items.length;
+  const sorted = Object.entries(cats).sort((a, b) => b[1] - a[1]);
+  const colors = { Juego:'var(--g)', Mod:'#ff9800', Apps:'var(--cy)', Video:'#ff4c8b', Software:'#a78bfa', Ajustes:'#ffd700', Optimizacion:'#ff6b6b' };
+
+  el.innerHTML = sorted.map(([cat, count]) => {
+    const pct = Math.round(count / total * 100);
+    const col = colors[cat] || '#888';
+    return `<div class="eco-cat-item">
+      <div class="eco-cat-label" style="color:${col}">${cat}</div>
+      <div class="eco-cat-bar-wrap"><div class="eco-cat-bar" style="width:${pct}%;background:${col}"></div></div>
+      <div class="eco-cat-count">${count} (${pct}%)</div>
+    </div>`;
+  }).join('');
+}
+
+/* ── Conversion Funnel ── */
+function ecoRenderFunnel(totalDl, elegibles, saldo) {
+  const estViews    = Math.round(totalDl * 4.2);
+  const estInteract = Math.round(totalDl * 2.1);
+  const maxV        = Math.max(estViews, 1);
+
+  const set = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+  const setW = (id, pct) => { const e = document.getElementById(id); if (e) e.style.width = pct + '%'; };
+
+  set('eco-rv-views',    pfFmt(estViews));
+  set('eco-rv-interact', pfFmt(estInteract));
+  set('eco-rv-dl',       pfFmt(totalDl));
+  set('eco-rv-earn',     pfFmt(elegibles));
+
+  setW('eco-rb-views',    100);
+  setW('eco-rb-interact', (estInteract / maxV) * 100);
+  setW('eco-rb-dl',       (totalDl / maxV) * 100);
+  setW('eco-rb-earn',     (elegibles / Math.max(totalDl, 1)) * 100);
+
+  const cvrEl = document.getElementById('eco-cvr');
+  if (cvrEl) cvrEl.textContent = estViews > 0 ? ((totalDl / estViews) * 100).toFixed(1) + '%' : '—%';
+}
+
+/* ── Goals & Milestones ── */
+function ecoRenderGoals(saldo, totalDl, totalContent, elegibles) {
+  const el = document.getElementById('eco-goals');
+  if (!el) return;
+
+  const goals = [
+    { icon: '💰', label: 'Primera ganancia',        target: 0.01,  curr: saldo,        fmt: v => '$' + v.toFixed(2) },
+    { icon: '📥', label: '50 descargas',             target: 50,    curr: totalDl,      fmt: v => pfFmt(v) },
+    { icon: '📦', label: '5 publicaciones',          target: 5,     curr: totalContent, fmt: v => v },
+    { icon: '🚀', label: '100 descargas',            target: 100,   curr: totalDl,      fmt: v => pfFmt(v) },
+    { icon: '💸', label: 'Retiro disponible ($10)',  target: 10,    curr: saldo,        fmt: v => '$' + v.toFixed(2) },
+    { icon: '🏆', label: '10 publicaciones',         target: 10,    curr: totalContent, fmt: v => v },
+    { icon: '⭐', label: '500 descargas',            target: 500,   curr: totalDl,      fmt: v => pfFmt(v) },
+    { icon: '🔥', label: '1 000 descargas',          target: 1000,  curr: totalDl,      fmt: v => pfFmt(v) },
+    { icon: '👑', label: '10 contenidos monetizados',target: 10,    curr: elegibles,    fmt: v => v },
+    { icon: '💎', label: '5 000 descargas',          target: 5000,  curr: totalDl,      fmt: v => pfFmt(v) },
+  ];
+
+  el.innerHTML = goals.map(g => {
+    const pct  = Math.min(100, (g.curr / g.target) * 100);
+    const done = pct >= 100;
+    return `<div class="eco-goal-row ${done ? 'eco-goal-done' : ''}">
+      <div class="eco-goal-icon">${g.icon}</div>
+      <div class="eco-goal-body">
+        <div class="eco-goal-label">${g.label}</div>
+        <div class="eco-goal-bar-wrap"><div class="eco-goal-bar" style="width:${pct}%"></div></div>
+        <div class="eco-goal-progress">${g.fmt(g.curr)} / ${g.fmt(g.target)}</div>
+      </div>
+      <div class="eco-goal-check">${done ? '<ion-icon name="checkmark-circle" style="color:var(--g)"></ion-icon>' : ''}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ── All Content Table ── */
+function ecoRenderContentTable(items) {
+  const el       = document.getElementById('eco-content-table');
+  const countEl  = document.getElementById('eco-table-count');
+  if (!el) return;
+  if (countEl) countEl.textContent = items.length + ' items';
+
+  if (!items.length) {
+    el.innerHTML = `<div class="eco-empty-mini"><ion-icon name="albums-outline"></ion-icon><p>Aún no tienes publicaciones</p></div>`;
+    return;
+  }
+
+  const sorted = [...items].sort((a, b) => (b.descargasEfectivas || 0) - (a.descargasEfectivas || 0));
+  const maxDl  = sorted[0]?.descargasEfectivas || 1;
+  const colors = { Juego:'var(--g)', Mod:'#ff9800', Apps:'var(--cy)', Video:'#ff4c8b', Software:'#a78bfa', Ajustes:'#ffd700', Optimizacion:'#ff6b6b' };
+  const catShort = c => ({ Juego:'JUG', Mod:'MOD', Apps:'APP', Video:'VID', Software:'SW', Ajustes:'HER', Optimizacion:'OPT' }[c] || '???');
+
+  el.innerHTML = `
+    <div class="eco-table-header">
+      <span>CONTENIDO</span><span style="text-align:center">CAT.</span><span style="text-align:center">DL</span><span style="text-align:center">REP.</span>
+    </div>
+    <div class="eco-table-body">
+      ${sorted.map(item => {
+        const dl  = item.descargasEfectivas || 0;
+        const rep = item.reportes || 0;
+        const col = colors[item.categoria] || '#888';
+        return `<div class="eco-table-row">
+          <div class="eco-table-title-col">
+            <div class="eco-table-title">${item.titulo || '—'}</div>
+            <div class="eco-table-bar-wrap"><div class="eco-table-bar" style="width:${(dl/maxDl)*100}%;background:${col}"></div></div>
+          </div>
+          <div class="eco-table-cat" style="color:${col}">${catShort(item.categoria)}</div>
+          <div class="eco-table-dl">${pfFmt(dl)}</div>
+          <div class="eco-table-reps ${rep > 0 ? 'eco-reps-warn' : ''}">${rep}</div>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+/* ── Re-draw chart on resize ── */
+window.addEventListener('resize', () => {
+  clearTimeout(_ecoChartTimer);
+  _ecoChartTimer = setTimeout(() => {
+    if (_ecoLastData) ecoDrawChart(_ecoLastData.descargasTotales || 0, _ecoPeriodDays);
+  }, 200);
+});
 function pfFmt(n) {
   if(!n) return '0';
   if(n>=1e6) return (n/1e6).toFixed(1)+'M';
