@@ -52,7 +52,7 @@ body{background:var(--bg);color:#fff;font-family:'Segoe UI',system-ui,-apple-sys
 .hbtn.bulk-active{background:rgba(255,204,0,.1);border-color:var(--yellow);color:var(--yellow);}
 
 /* ── TABS ── */
-.tabs{display:grid;grid-template-columns:repeat(8,1fr);padding:0 4px 8px;gap:2px;}
+.tabs{display:grid;grid-template-columns:repeat(9,1fr);padding:0 4px 8px;gap:2px;}
 .tab{padding:9px 1px;text-align:center;cursor:pointer;border-bottom:2px solid transparent;transition:var(--tx);opacity:.4;border-radius:6px 6px 0 0;position:relative;}
 .tab.active{opacity:1;border-bottom:2px solid var(--neon);background:rgba(94,255,67,.04);}
 .tab-n{font-size:.85rem;font-weight:800;display:block;}
@@ -390,6 +390,85 @@ body{background:var(--bg);color:#fff;font-family:'Segoe UI',system-ui,-apple-sys
 }
 .item-card:hover .vid-play-overlay { opacity:1; }
 .vid-play-overlay ion-icon { font-size:2rem; color:#fff; drop-shadow(0 2px 6px rgba(0,0,0,.9)); }
+
+/* ══════════════ TARJETAS ══════════════ */
+.tarj-stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;}
+.tarj-stat{background:var(--card);border:1px solid #1e1e1e;border-radius:11px;padding:10px;text-align:center;position:relative;overflow:hidden;}
+.tarj-stat::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.tarj-stat.t-visa::before{background:#1a1f71;}
+.tarj-stat.t-mc::before{background:#eb001b;}
+.tarj-stat.t-amex::before{background:#007bc1;}
+.tarj-stat.t-tot::before{background:var(--neon);}
+.tarj-stat-n{font-size:1.3rem;font-weight:900;line-height:1;}
+.tarj-stat.t-visa .tarj-stat-n{color:#4d6cff;}
+.tarj-stat.t-mc .tarj-stat-n{color:#ff5b5b;}
+.tarj-stat.t-amex .tarj-stat-n{color:#34a8d4;}
+.tarj-stat.t-tot .tarj-stat-n{color:var(--neon);}
+.tarj-stat-l{font-size:.55rem;color:#444;text-transform:uppercase;font-weight:700;margin-top:3px;letter-spacing:.3px;}
+
+.tarj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:11px;}
+.tarj-card{background:var(--card);border:1px solid #1e1e1e;border-radius:13px;padding:13px;position:relative;transition:border-color .2s,transform .15s;}
+.tarj-card:hover{transform:translateY(-1px);border-color:#2a2a2a;}
+.tarj-card.principal{border-color:rgba(255,204,0,.35);box-shadow:0 0 12px rgba(255,204,0,.06);}
+.tarj-hdr{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.tarj-logo{width:46px;height:30px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:.62rem;font-weight:900;letter-spacing:.5px;flex-shrink:0;background:#222;color:#888;}
+.tarj-logo.visa{background:#1a1f71;color:#fff;}
+.tarj-logo.mastercard{background:#252525;color:#eb001b;}
+.tarj-logo.amex{background:#007bc1;color:#fff;}
+.tarj-num{flex:1;font-family:monospace;font-size:.85rem;color:#ccc;letter-spacing:1.5px;font-weight:700;}
+.tarj-star{color:var(--yellow);font-size:1rem;}
+.tarj-info{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:10px;font-size:.7rem;}
+.tarj-info-i{display:flex;flex-direction:column;gap:1px;}
+.tarj-info-l{font-size:.55rem;color:#3a3a3a;text-transform:uppercase;font-weight:700;letter-spacing:.3px;}
+.tarj-info-v{color:#aaa;font-size:.7rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tarj-info-v.titular{color:#ccc;font-weight:600;}
+.tarj-user{font-size:.78rem;color:var(--neon);font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;}
+.tarj-user:hover{text-decoration:underline;}
+.tarj-prop-badge{font-size:.55rem;font-weight:800;letter-spacing:.5px;padding:2px 6px;border-radius:5px;text-transform:uppercase;display:inline-block;margin-top:3px;}
+.tarj-prop-ambos{background:rgba(0,212,255,.1);color:var(--cyan);border:1px solid rgba(0,212,255,.25);}
+.tarj-prop-cobros{background:rgba(94,255,67,.1);color:var(--neon);border:1px solid rgba(94,255,67,.25);}
+.tarj-prop-pagos{background:rgba(255,204,0,.1);color:var(--yellow);border:1px solid rgba(255,204,0,.25);}
+.tarj-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;border-top:1px solid #1a1a1a;padding-top:10px;margin-top:6px;}
+.tarj-btn{padding:7px;border:1px solid #2a2a2a;background:#181818;color:#888;border-radius:7px;cursor:pointer;font-size:.65rem;font-weight:700;display:flex;align-items:center;justify-content:center;gap:4px;transition:var(--tx);}
+.tarj-btn:active{transform:scale(.97);}
+.tarj-btn.btn-set{color:var(--yellow);border-color:rgba(255,204,0,.3);}
+.tarj-btn.btn-set:hover{background:rgba(255,204,0,.05);}
+.tarj-btn.btn-del{color:var(--danger);border-color:rgba(255,62,62,.3);}
+.tarj-btn.btn-del:hover{background:rgba(255,62,62,.05);}
+.tarj-empty{text-align:center;padding:50px 20px;color:#333;grid-column:1/-1;}
+.tarj-empty ion-icon{font-size:3rem;display:block;margin:0 auto 10px;opacity:.15;}
+
+/* Tarjetas embebidas en modal de detalle de usuario */
+.detail-tarj-section{margin:16px 0 13px;padding:12px;background:#0d0d0d;border:1px solid #1a1a1a;border-radius:10px;}
+.detail-tarj-title{font-size:.6rem;color:#444;text-transform:uppercase;font-weight:700;letter-spacing:.5px;margin-bottom:9px;display:flex;align-items:center;gap:5px;}
+.detail-tarj-mini{display:flex;align-items:center;gap:9px;padding:8px 10px;background:#161616;border:1px solid #1f1f1f;border-radius:8px;margin-bottom:6px;font-size:.7rem;}
+.detail-tarj-mini.principal{border-color:rgba(255,204,0,.3);}
+.detail-tarj-mini-logo{width:32px;height:21px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:.5rem;font-weight:900;flex-shrink:0;background:#222;color:#888;}
+.detail-tarj-mini-logo.visa{background:#1a1f71;color:#fff;}
+.detail-tarj-mini-logo.mastercard{background:#252525;color:#eb001b;}
+.detail-tarj-mini-logo.amex{background:#007bc1;color:#fff;}
+.detail-tarj-mini-num{flex:1;color:#ccc;font-family:monospace;letter-spacing:1px;}
+.detail-tarj-mini-del{background:none;border:none;color:var(--danger);cursor:pointer;font-size:.95rem;padding:4px;display:flex;align-items:center;}
+.detail-tarj-empty-mini{font-size:.65rem;color:#3a3a3a;font-style:italic;text-align:center;padding:6px 0;}
+
+/* Indicador de tarjetas en card de usuario */
+.uc-tarj-ind{display:inline-flex;align-items:center;gap:3px;font-size:.55rem;color:#666;margin-left:5px;background:#1a1a1a;border:1px solid #252525;padding:2px 6px;border-radius:6px;}
+.uc-tarj-ind.has{color:var(--cyan);border-color:rgba(0,212,255,.25);background:rgba(0,212,255,.06);}
+
+/* Filtro Sin Tarjetas */
+.filter-chip.fc-tarj.active{border-color:var(--cyan);color:var(--cyan);background:rgba(0,212,255,.06);}
+
+/* Pago method selector dentro de pago modal */
+.pay-method-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+.pay-method{padding:10px;border:2px solid #2a2a2a;border-radius:10px;background:#161616;cursor:pointer;text-align:center;transition:var(--tx);}
+.pay-method.active{border-color:var(--neon);background:rgba(94,255,67,.06);}
+.pay-method-i{font-size:1.3rem;margin-bottom:3px;}
+.pay-method-l{font-size:.7rem;font-weight:800;color:#ccc;}
+.pay-method-s{font-size:.55rem;color:#444;margin-top:2px;text-transform:uppercase;}
+
+/* Dashboard stat tarjetas */
+.dash-card.cyan2::before{background:var(--cyan);}
+.cyan2 .dc-main{color:var(--cyan);}
 </style>
 </head>
 <body>
@@ -456,6 +535,10 @@ body{background:var(--bg);color:#fff;font-family:'Segoe UI',system-ui,-apple-sys
       <span class="tab-l">💰 Pagos</span>
       <div class="tab-dot" id="dotPay"></div>
     </div>
+    <div class="tab" id="tabTarj" onclick="setTab('tarj')">
+      <span class="tab-n" id="cTarj">0</span>
+      <span class="tab-l">💳 Tarjetas</span>
+    </div>
     <div class="tab" id="tabReport" onclick="setTab('reportes')">
       <span class="tab-n" id="cReport">0</span>
       <span class="tab-l">Reportes</span>
@@ -507,6 +590,8 @@ body{background:var(--bg);color:#fff;font-family:'Segoe UI',system-ui,-apple-sys
       <div class="filter-chip fn" onclick="setUF('neg',this)">🚫 Negra</div>
       <div class="filter-chip" onclick="setUF('saldo',this)">💰 Saldo</div>
       <div class="filter-chip" onclick="setUF('sinpp',this)">Sin PayPal</div>
+      <div class="filter-chip fc-tarj" onclick="setUF('sintarj',this)">Sin Tarjetas</div>
+      <div class="filter-chip fc-tarj" onclick="setUF('contarj',this)">Con Tarjetas</div>
       <select id="uSort" class="u-sort" onchange="filtrar()">
         <option value="fecha">↕ Fecha reg.</option>
         <option value="saldo">↕ Saldo</option>
@@ -525,6 +610,48 @@ body{background:var(--bg);color:#fff;font-family:'Segoe UI',system-ui,-apple-sys
     </div>
     <div id="pagosList"></div>
     <div id="histPagos" style="display:none"></div>
+  </div>
+
+  <!-- TARJETAS -->
+  <div id="view-tarj" class="view">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px;">
+      <div>
+        <h2 style="margin:0;font-size:1.3rem;font-weight:900;letter-spacing:-0.5px;">💳 TARJETAS REGISTRADAS</h2>
+        <p style="margin:3px 0 0;font-size:.7rem;color:#555;">Métodos de pago de los usuarios — solo se almacenan los últimos 4 dígitos</p>
+      </div>
+      <button class="hbtn green" onclick="syncTarjetas()"><ion-icon name="refresh"></ion-icon> ACTUALIZAR</button>
+    </div>
+
+    <div class="tarj-stats-row">
+      <div class="tarj-stat t-tot">
+        <div class="tarj-stat-n" id="tStatTot">0</div>
+        <div class="tarj-stat-l">Total tarjetas</div>
+      </div>
+      <div class="tarj-stat t-visa">
+        <div class="tarj-stat-n" id="tStatVisa">0</div>
+        <div class="tarj-stat-l">Visa</div>
+      </div>
+      <div class="tarj-stat t-mc">
+        <div class="tarj-stat-n" id="tStatMc">0</div>
+        <div class="tarj-stat-l">Mastercard</div>
+      </div>
+      <div class="tarj-stat t-amex">
+        <div class="tarj-stat-n" id="tStatAmex">0</div>
+        <div class="tarj-stat-l">Amex</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+      <div class="filter-chip active" onclick="setTarjF('all',this)">Todas</div>
+      <div class="filter-chip" onclick="setTarjF('visa',this)">VISA</div>
+      <div class="filter-chip" onclick="setTarjF('mastercard',this)">MasterCard</div>
+      <div class="filter-chip" onclick="setTarjF('amex',this)">Amex</div>
+      <div class="filter-chip" onclick="setTarjF('cobros',this)">↓ Cobros</div>
+      <div class="filter-chip" onclick="setTarjF('pagos',this)">↑ Pagos</div>
+      <div class="filter-chip" onclick="setTarjF('principal',this)">⭐ Principales</div>
+    </div>
+
+    <div id="tarjList" class="tarj-grid"></div>
   </div>
 
   <!-- REVISIÓN -->
@@ -793,7 +920,7 @@ body{background:var(--bg);color:#fff;font-family:'Segoe UI',system-ui,-apple-sys
 
 <script>
 const API = "https://upgames-production.up.railway.app";
-let D = { items:[], users:[], comments:[], pagos:[] };
+let D = { items:[], users:[], comments:[], pagos:[], tarjetas:[] };
 
 // ==========================================
 // 🔐 SISTEMA DE AUTENTICACIÓN ADMIN
@@ -963,7 +1090,7 @@ document.addEventListener('DOMContentLoaded', () => {
 let dash = null;
 let fT; // filter debounce
 let eSt='pendiente', eLS='online'; // edit modal state
-let uFilter='all', pFilter='pend';
+let uFilter='all', pFilter='pend', tarjF='all';
 let notasT={};
 // modales
 let verifUid,verifUname;
@@ -978,23 +1105,36 @@ let bulkMode=false, selIds=new Set();
 // ==========================================
 async function sync() {
   try {
-    const [iR,uR,cR,pR,dR] = await Promise.all([
+    const [iR,uR,cR,pR,dR,tR] = await Promise.all([
       fetch(`${API}/admin/items`, {headers: adminHeaders()}).then(r=>r.json()).catch(()=>({items:[]})),
       fetch(`${API}/auth/users`, {headers: adminHeaders()}).then(r=>r.json()).catch(()=>[]),
       fetch(`${API}/comentarios`, {headers: adminHeaders()}).then(r=>r.json()).catch(()=>[]),
       fetch(`${API}/admin/finanzas/solicitudes-pendientes`, {headers: adminHeaders()}).then(r=>r.json()).catch(()=>({solicitudes:[]})),
-      fetch(`${API}/admin/stats/dashboard`, {headers: adminHeaders()}).then(r=>r.json()).catch(()=>({success:false}))
+      fetch(`${API}/admin/stats/dashboard`, {headers: adminHeaders()}).then(r=>r.json()).catch(()=>({success:false})),
+      fetch(`${API}/admin/finanzas/tarjetas`, {headers: adminHeaders()}).then(r=>r.json()).catch(()=>({tarjetas:[]}))
     ]);
     D = {
       items: Array.isArray(iR.items)?iR.items:(Array.isArray(iR)?iR:[]),
       users: Array.isArray(uR)?uR:[],
       comments: Array.isArray(cR)?cR:[],
-      pagos: Array.isArray(pR.solicitudes)?pR.solicitudes:[]
+      pagos: Array.isArray(pR.solicitudes)?pR.solicitudes:[],
+      tarjetas: Array.isArray(tR.tarjetas)?tR.tarjetas:[]
     };
     if(dR.success) dash = dR.dashboard;
     updCounters(); filtrar();
     toast("✓ Sincronizado");
   } catch(e){ toast("ERROR DE RED","err"); }
+}
+
+async function syncTarjetas() {
+  try {
+    const r = await fetch(`${API}/admin/finanzas/tarjetas`, { headers: adminHeaders() });
+    const d = await r.json();
+    D.tarjetas = Array.isArray(d.tarjetas) ? d.tarjetas : [];
+    updCounters();
+    if(document.querySelector('.tab.active')?.id === 'tabTarj') renderTarjetas('');
+    toast("✓ Tarjetas sincronizadas");
+  } catch(e) { toast("Error al sincronizar tarjetas","err"); }
 }
 
 function updCounters(){
@@ -1009,6 +1149,7 @@ function updCounters(){
   document.getElementById('cRev').innerText = rev;
   document.getElementById('cVid').innerText = vids;
   document.getElementById('cReport').innerText = D.items.filter(i=>i.reportes>0).length;
+  document.getElementById('cTarj').innerText = D.tarjetas.length;
   // dots
   document.getElementById('dotPay').classList.toggle('show', D.pagos.length > 0);
   document.getElementById('dotRev').classList.toggle('show', rev > 0);
@@ -1018,7 +1159,7 @@ function updCounters(){
 
 function setTab(t){
   document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
-  const map={dash:'tabDB',apro:'tabA',comt:'tabC',usrs:'tabU',pays:'tabPay',revn:'tabRev',reportes:'tabReport',vids:'tabVid'};
+  const map={dash:'tabDB',apro:'tabA',comt:'tabC',usrs:'tabU',pays:'tabPay',revn:'tabRev',reportes:'tabReport',vids:'tabVid',tarj:'tabTarj'};
   if(map[t]) document.getElementById(map[t]).classList.add('active');
   document.querySelectorAll('.view').forEach(s=>s.classList.remove('active'));
   document.getElementById(`view-${t}`).classList.add('active');
@@ -1039,6 +1180,7 @@ function filtrar(){
   else if(tab==='tabRev') renderRevision(q);
   else if(tab==='tabReport') renderReportes(q);
   else if(tab==='tabVid') renderVideos();
+  else if(tab==='tabTarj') renderTarjetas(q);
 }
 
 // ==========================================
@@ -1084,6 +1226,12 @@ function renderDash(){
       <div class="dc-main">${D.items.filter(i=>i.linkStatus==='revision').length}</div>
       <div class="dc-sub">Links en revisión</div>
       <div class="dc-detail">Solicitudes de pago: <span>${D.pagos.length}</span></div>
+    </div>
+    <div class="dash-card cyan2">
+      <ion-icon class="dc-ico" name="card-outline"></ion-icon>
+      <div class="dc-main">${D.tarjetas.length}</div>
+      <div class="dc-sub">Tarjetas registradas</div>
+      <div class="dc-detail">Visa: <span>${D.tarjetas.filter(t=>t.tipo==='visa').length}</span> · MC: <span>${D.tarjetas.filter(t=>t.tipo==='mastercard').length}</span> · Amex: <span>${D.tarjetas.filter(t=>t.tipo==='amex').length}</span></div>
     </div>
     ${d.topUploaders&&d.topUploaders.length?`
     <div class="dash-card dash-wide">
@@ -1213,6 +1361,8 @@ function renderUsers(q){
     else if(uFilter==='neg') mf=!!u.listaNegraAdmin;
     else if(uFilter==='saldo') mf=u.saldo>0;
     else if(uFilter==='sinpp') mf=!u.paypalEmail||u.paypalEmail.trim()==='';
+    else if(uFilter==='sintarj') mf=!u.tarjetas||u.tarjetas.length===0;
+    else if(uFilter==='contarj') mf=!!(u.tarjetas&&u.tarjetas.length>0);
     if(!mq||!mf) return; cnt++;
 
     const neg=!!u.listaNegraAdmin;
@@ -1229,6 +1379,7 @@ function renderUsers(q){
           <ion-icon name="person-circle-outline" style="color:#252525;font-size:1.1rem;flex-shrink:0"></ion-icon>
           <span class="uc-name">${(u.usuario||'???').toUpperCase()}</span>
           ${vBadge(u.verificadoNivel)}
+          <span class="uc-tarj-ind ${(u.tarjetas&&u.tarjetas.length>0)?'has':''}"><ion-icon name="card-outline"></ion-icon>${(u.tarjetas&&u.tarjetas.length)||0}</span>
         </div>
         <div class="uc-date">REGISTRO: ${fecha}</div>
       </div>
@@ -1327,6 +1478,20 @@ function renderPagos(q){
   D.pagos.forEach(p=>{
     if(q!==''&&!(p.usuario||'').toLowerCase().includes(q)&&!(p.paypalEmail||'').toLowerCase().includes(q)) return;
     const du=p.datosUsuario||{};
+    const uTarj=(D.tarjetas||[]).filter(t=>t.usuario===p.usuario&&(t.proposito==='cobros'||t.proposito==='ambos'));
+    const hasTarj=uTarj.length>0;
+    const tarjP=uTarj.find(t=>t.esPrincipal)||uTarj[0];
+    const logos={visa:'VISA',mastercard:'MC',amex:'AMEX',otro:'···'};
+    const tarjBlock=hasTarj?`
+      <div style="margin-bottom:11px">
+        <div style="font-size:.58rem;color:#3a3a5a;margin-bottom:5px;text-transform:uppercase;font-weight:700">💳 TARJETAS DE COBRO:</div>
+        ${uTarj.slice(0,3).map(t=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:#0d0d1a;border:1px solid rgba(0,212,255,.15);border-radius:8px;margin-bottom:4px;font-size:.7rem;">
+          <span style="background:${t.tipo==='visa'?'#1a1f71':t.tipo==='mastercard'?'#252525':t.tipo==='amex'?'#007bc1':'#222'};color:${t.tipo==='mastercard'?'#eb001b':'#fff'};padding:2px 6px;border-radius:4px;font-size:.55rem;font-weight:900;flex-shrink:0">${logos[t.tipo]||'···'}</span>
+          <span style="font-family:monospace;color:#ccc;flex:1;letter-spacing:1px">•••• •••• •••• ${t.ultimos4}</span>
+          ${t.esPrincipal?'<span style="color:var(--yellow)">⭐</span>':''} 
+          <span style="font-size:.55rem;color:#555;text-transform:uppercase">${t.proposito}</span>
+        </div>`).join('')}
+      </div>`:`<div style="background:rgba(255,62,62,.06);border:1px solid rgba(255,62,62,.15);border-radius:8px;padding:8px 11px;font-size:.68rem;color:#664444;margin-bottom:11px">⚠️ Sin tarjetas de cobro registradas</div>`;
     c.innerHTML+=`<div class="pago-card">
       <div class="pago-hdr">
         <div class="pago-u"><ion-icon name="person-outline"></ion-icon>@${p.usuario}
@@ -1334,14 +1499,30 @@ function renderPagos(q){
         <div class="pago-m">$${(p.monto||0).toFixed(2)}</div>
       </div>
       <div class="pago-info">
-        <div class="pi-i"><div class="pi-l">Email cuenta</div><div class="pi-v" style="cursor:pointer" onclick="cp('${du.email||''}')">${du.email||'N/A'}</div></div>
+        <div class="pi-i"><div class="pi-l">Email cuenta</div><div class="pi-v" style="cursor:pointer" onclick="cp('${du.email||''}' )">${du.email||'N/A'}</div></div>
         <div class="pi-i"><div class="pi-l">Descargas</div><div class="pi-v">${du.descargasTotales||0}</div></div>
         <div class="pi-i"><div class="pi-l">Juegos +2K</div><div class="pi-v">${du.juegosElegibles||0}</div></div>
         <div class="pi-i"><div class="pi-l">Verificación</div><div class="pi-v">Nivel ${du.verificadoNivel||0}</div></div>
       </div>
       <div class="pago-pp" onclick="cp('${p.paypalEmail||''}')">
-        <div style="font-size:.58rem;color:#3a6a3a;margin-bottom:3px">💳 PAYPAL:</div>
-        ${p.paypalEmail||'Sin configurar'}
+        <div style="font-size:.58rem;color:#3a6a3a;margin-bottom:3px">🅿️ PAYPAL:</div>
+        ${p.paypalEmail||'<span style="color:#555;font-style:italic">Sin configurar</span>'}
+      </div>
+      ${tarjBlock}
+      <div style="margin-bottom:9px">
+        <div style="font-size:.58rem;color:#444;margin-bottom:5px;text-transform:uppercase;font-weight:700;letter-spacing:.3px">Método de pago:</div>
+        <div class="pay-method-grid">
+          <div class="pay-method ${p.paypalEmail?'active':''}" id="pm-pp-${p._id}" onclick="selectPayMethod('${p._id}','paypal')">
+            <div class="pay-method-i">🅿️</div>
+            <div class="pay-method-l">PayPal</div>
+            <div class="pay-method-s">${p.paypalEmail?p.paypalEmail.slice(0,20)+'…':'No configurado'}</div>
+          </div>
+          <div class="pay-method ${(!p.paypalEmail&&hasTarj)?'active':''}" id="pm-tarj-${p._id}" onclick="selectPayMethod('${p._id}','tarjeta')">
+            <div class="pay-method-i">💳</div>
+            <div class="pay-method-l">Tarjeta</div>
+            <div class="pay-method-s">${hasTarj?`${logos[tarjP.tipo]||'···'} ••••${tarjP.ultimos4}`:'Sin tarjeta'}</div>
+          </div>
+        </div>
       </div>
       <div class="pago-btns">
         <button class="pbtn ok" onclick="doPago('${p._id}','${p.usuario}',${p.monto})"><ion-icon name="checkmark-circle"></ion-icon> PAGADO</button>
@@ -1352,6 +1533,125 @@ function renderPagos(q){
   if(!c.innerHTML) c.innerHTML=`<div style="text-align:center;padding:50px 20px;color:#333">
     <ion-icon name="wallet-outline" style="font-size:3rem;display:block;margin-bottom:10px;opacity:.15"></ion-icon>
     <div>No hay pagos pendientes</div></div>`;
+}
+
+function selectPayMethod(pagoId,method){
+  const ppEl=document.getElementById(`pm-pp-${pagoId}`);
+  const tarjEl=document.getElementById(`pm-tarj-${pagoId}`);
+  if(!ppEl||!tarjEl) return;
+  ppEl.classList.toggle('active',method==='paypal');
+  tarjEl.classList.toggle('active',method==='tarjeta');
+}
+
+
+// ==========================================
+// TARJETAS
+// ==========================================
+function setTarjF(f,el){
+  tarjF=f;
+  document.querySelectorAll('#view-tarj .filter-chip').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  renderTarjetas(document.getElementById('gSearch').value.toLowerCase().trim());
+}
+
+function renderTarjetas(q){
+  const c=document.getElementById('tarjList'); if(!c) return;
+  const all=D.tarjetas||[];
+
+  // stats
+  const totEl=document.getElementById('tStatTot');
+  const visaEl=document.getElementById('tStatVisa');
+  const mcEl=document.getElementById('tStatMc');
+  const amexEl=document.getElementById('tStatAmex');
+  if(totEl) totEl.innerText=all.length;
+  if(visaEl) visaEl.innerText=all.filter(t=>t.tipo==='visa').length;
+  if(mcEl) mcEl.innerText=all.filter(t=>t.tipo==='mastercard').length;
+  if(amexEl) amexEl.innerText=all.filter(t=>t.tipo==='amex').length;
+
+  let filtered=all;
+  if(tarjF==='visa')       filtered=all.filter(t=>t.tipo==='visa');
+  else if(tarjF==='mastercard') filtered=all.filter(t=>t.tipo==='mastercard');
+  else if(tarjF==='amex')  filtered=all.filter(t=>t.tipo==='amex');
+  else if(tarjF==='cobros') filtered=all.filter(t=>t.proposito==='cobros'||t.proposito==='ambos');
+  else if(tarjF==='pagos')  filtered=all.filter(t=>t.proposito==='pagos'||t.proposito==='ambos');
+  else if(tarjF==='principal') filtered=all.filter(t=>t.esPrincipal);
+
+  if(q) filtered=filtered.filter(t=>(t.usuario||'').toLowerCase().includes(q)||(t.titular||'').toLowerCase().includes(q)||(t.ultimos4||'').includes(q));
+
+  c.innerHTML='';
+  if(!filtered.length){
+    c.innerHTML=`<div class="tarj-empty"><ion-icon name="card-outline"></ion-icon><div style="font-size:.85rem">Sin tarjetas que coincidan</div></div>`;
+    return;
+  }
+
+  const logos={visa:'VISA',mastercard:'MC',amex:'AMEX',otro:'···'};
+  const propLabel={cobros:'↓ Cobros',pagos:'↑ Pagos',ambos:'↕ Ambos'};
+
+  filtered.forEach(t=>{
+    const logoClass=t.tipo||'otro';
+    const propClass=`tarj-prop-${t.proposito||'ambos'}`;
+    c.innerHTML+=`<div class="tarj-card${t.esPrincipal?' principal':''}" id="tc-${t._id}">
+      <div class="tarj-hdr">
+        <div class="tarj-logo ${logoClass}">${logos[t.tipo]||'···'}</div>
+        <div class="tarj-num">•••• •••• •••• ${t.ultimos4}</div>
+        ${t.esPrincipal?'<ion-icon name="star" class="tarj-star"></ion-icon>':'<ion-icon name="star-outline" style="color:#333;font-size:1rem"></ion-icon>'}
+      </div>
+      <div class="tarj-info">
+        <div class="tarj-info-i">
+          <span class="tarj-info-l">Titular</span>
+          <span class="tarj-info-v titular">${t.titular||'N/A'}</span>
+        </div>
+        <div class="tarj-info-i">
+          <span class="tarj-info-l">Vence</span>
+          <span class="tarj-info-v">${t.mesExp||'??'} / ${t.anioExp||'??'}</span>
+        </div>
+        <div class="tarj-info-i">
+          <span class="tarj-info-l">Tipo</span>
+          <span class="tarj-info-v" style="text-transform:capitalize">${t.tipo||'otro'}</span>
+        </div>
+        <div class="tarj-info-i">
+          <span class="tarj-info-l">Propósito</span>
+          <span class="tarj-prop-badge ${propClass}">${propLabel[t.proposito]||'↕ Ambos'}</span>
+        </div>
+      </div>
+      ${t.alias?`<div style="font-size:.62rem;color:var(--cyan);margin-bottom:8px;font-style:italic">${t.alias}</div>`:''}
+      <div class="tarj-user" onclick="setTab('usrs');document.getElementById('gSearch').value='${t.usuario||''}';filtrar()">
+        <ion-icon name="person-outline"></ion-icon>@${t.usuario||'N/A'}
+      </div>
+      <div style="font-size:.58rem;color:#333;margin-top:3px">Agregada: ${t.fechaAgregada?new Date(t.fechaAgregada).toLocaleDateString('es-ES'):'?'}</div>
+      <div class="tarj-actions">
+        <button class="tarj-btn btn-set" onclick="setTarjetaPrincipalAdmin('${t.usuario}','${t._id}')" ${t.esPrincipal?'disabled style="opacity:.35;cursor:default"':''}><ion-icon name="star-outline"></ion-icon>${t.esPrincipal?'Principal':'Marcar principal'}</button>
+        <button class="tarj-btn btn-del" onclick="delTarjetaAdmin('${t.usuario}','${t._id}','${t.ultimos4}')"><ion-icon name="trash-outline"></ion-icon>Eliminar</button>
+      </div>
+    </div>`;
+  });
+}
+
+async function delTarjetaAdmin(usuario, tarjetaId, ultimos4){
+  if(!confirm(`¿Eliminar tarjeta ****${ultimos4} de @${usuario}?\nEsta acción es permanente.`)) return;
+  try {
+    const r=await fetch(`${API}/admin/finanzas/tarjetas/${tarjetaId}`,{method:'DELETE',headers:adminHeaders()});
+    const d=await r.json();
+    if(d.success){
+      toast(`✓ Tarjeta ****${ultimos4} eliminada`);
+      D.tarjetas=D.tarjetas.filter(t=>t._id!==tarjetaId);
+      updCounters();
+      renderTarjetas(document.getElementById('gSearch').value.toLowerCase().trim());
+    } else toast('Error: '+(d.error||'Fallo al eliminar'),'err');
+  } catch(e){ toast('ERROR DE RED','err'); }
+}
+
+async function setTarjetaPrincipalAdmin(usuario, tarjetaId){
+  try {
+    const r=await fetch(`${API}/admin/finanzas/tarjetas/${tarjetaId}/principal`,{method:'PUT',headers:adminHeaders(),body:JSON.stringify({usuario})});
+    const d=await r.json();
+    if(d.success){
+      toast('⭐ Tarjeta principal actualizada');
+      // actualizar local
+      D.tarjetas.forEach(t=>{ if(t.usuario===usuario) t.esPrincipal=(t._id===tarjetaId); });
+      renderTarjetas(document.getElementById('gSearch').value.toLowerCase().trim());
+    } else toast('Error: '+(d.error||'Fallo'),'err');
+  } catch(e){ toast('ERROR DE RED','err'); }
 }
 
 // ==========================================
@@ -1552,6 +1852,12 @@ function omDetail(uid){
   const u=D.users.find(x=>x._id===uid); if(!u) return;
   document.getElementById('mDetailT').innerText='@'+(u.usuario||'').toUpperCase();
   const nivL=['Sin verificar','🥉 Bronce','🥇 Oro','👑 Élite'];
+
+  // Tarjetas del usuario desde D.tarjetas
+  const uTarj=(D.tarjetas||[]).filter(t=>t.usuario===u.usuario);
+  const logos={visa:'VISA',mastercard:'MC',amex:'AMEX',otro:'···'};
+  const propLabel={cobros:'↓ Cobros',pagos:'↑ Pagos',ambos:'↕ Ambos'};
+
   let html=`<div class="dg">
     ${dr('Usuario','@'+(u.usuario||'N/A'))}
     ${dr('Verificación',nivL[u.verificadoNivel||0])}
@@ -1560,19 +1866,39 @@ function omDetail(uid){
     ${dr('IP Registro',u.registrationIP||'No registrada')}
     ${dr('Saldo','$'+(u.saldo||0).toFixed(2))}
     ${dr('Descargas',(u.descargasTotales||0).toString())}
+    ${dr('Tarjetas',uTarj.length+' registradas')}
     ${dr('Sol. Pago',u.solicitudPagoPendiente?'⏳ Pendiente':'No')}
     ${dr('Registro',u.fecha?new Date(u.fecha).toLocaleString('es-ES'):'N/A')}
     ${dr('Lista Negra',u.listaNegraAdmin?('🚫 Sí'+(u.fechaListaNegra?' ('+new Date(u.fechaListaNegra).toLocaleDateString('es-ES')+')':'')):'No')}
   </div>`;
+
   if(u.notasAdmin) html+=`<div style="background:#191919;border:1px solid #222;border-radius:9px;padding:11px;margin-bottom:13px">
     <div style="font-size:.58rem;color:#333;text-transform:uppercase;font-weight:700;margin-bottom:5px">📝 Notas Admin</div>
     <div style="font-size:.75rem;color:#777">${u.notasAdmin}</div>
   </div>`;
+
+  // Sección tarjetas embebidas
+  html+=`<div class="detail-tarj-section">
+    <div class="detail-tarj-title"><ion-icon name="card-outline"></ion-icon>TARJETAS REGISTRADAS (${uTarj.length})</div>
+    ${uTarj.length===0
+      ? '<div class="detail-tarj-empty-mini">Sin tarjetas registradas</div>'
+      : uTarj.map(t=>`
+        <div class="detail-tarj-mini${t.esPrincipal?' principal':''}">
+          <div class="detail-tarj-mini-logo ${t.tipo||'otro'}">${logos[t.tipo]||'···'}</div>
+          <div class="detail-tarj-mini-num">•••• ${t.ultimos4}</div>
+          <div style="font-size:.58rem;color:#555;text-transform:uppercase;flex-shrink:0">${propLabel[t.proposito]||'↕'}</div>
+          ${t.esPrincipal?'<ion-icon name="star" style="color:var(--yellow);font-size:.9rem;flex-shrink:0"></ion-icon>':''}
+          <button class="detail-tarj-mini-del" onclick="delTarjetaAdmin('${u.usuario}','${t._id}','${t.ultimos4}')" title="Eliminar tarjeta"><ion-icon name="trash-outline"></ion-icon></button>
+        </div>`).join('')
+    }
+  </div>`;
+
   html+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
     <button class="bs" onclick="cm('mDetail');omVerif('${u._id}','${u.usuario}')">Cambiar verificación</button>
     <button class="bs" style="background:var(--yellow);color:#000" onclick="cm('mDetail');omSaldo('${u._id}','${u.usuario}',${u.saldo||0})">Ajustar saldo</button>
     <button class="bs-o" onclick="cm('mDetail');omNeg('${u._id}','${u.usuario}',${!!u.listaNegraAdmin})">${u.listaNegraAdmin?'Quitar de negra':'Agregar a negra'}</button>
-    <button class="bc" onclick="cm('mDetail')">CERRAR</button>
+    <button class="bc" style="background:rgba(0,212,255,.08);border:1px solid rgba(0,212,255,.2);color:var(--cyan)" onclick="cm('mDetail');setTab('tarj');document.getElementById('gSearch').value='${u.usuario||''}';filtrar()">Ver tarjetas</button>
+    <button class="bc" style="grid-column:span 2" onclick="cm('mDetail')">CERRAR</button>
   </div>`;
   document.getElementById('mDetailBody').innerHTML=html;
   om('mDetail');
@@ -2258,11 +2584,12 @@ var STEPS=[
   {e:'☑️',t:'Selección Múltiple (Bulk)',b:'<p>Activa el modo <strong>selección múltiple</strong> desde el ícono de checkmarks arriba a la derecha. Aparece una casilla en cada card.</p><ul><li><strong>Rechazar varios</strong> simultáneamente</li><li><span class="cr">Eliminar varios</span> en una sola acción</li></ul><span class="tip">💡 Útil para limpiar contenido de un mismo usuario de un solo golpe.</span>'},
   {e:'💬',t:'Comentarios',b:'<p>Todos los comentarios dejados en las entradas. Podés <span class="cr">eliminar</span> los que sean spam, ofensivos o que violen las normas de comunidad.</p><span class="tip">⚠️ Un comentario negativo no es razón suficiente. Solo eliminá spam claro o insultos directos.</span>'},
   {e:'👥',t:'Usuarios',b:'<p>Gestión completa de cuentas. Acciones disponibles:</p><ul><li><strong>Verificar</strong> — asignar nivel Bronce / Oro / Élite</li><li><span class="co">Lista negra</span> — suspender ganancias sin avisar</li><li><span class="cw">Ajustar saldo</span> — modificar manualmente</li><li><span class="cr">Eliminar</span> — borra la cuenta <strong>Y todas sus publicaciones</strong></li></ul><span class="tip">⚠️ El borrado de usuario es permanente e incluye todo su contenido. No hay vuelta atrás.</span>'},
-  {e:'💰',t:'Pagos Pendientes',b:'<p>Solicitudes de cobro de usuarios que superaron el umbral de ganancias.</p><ul><li><strong>PAGADO</strong> — marcarlo después de transferir el dinero</li><li><span class="cr">RECHAZAR</span> — con motivo (PayPal inválido, fraude, etc.)</li><li>📋 <strong>Historial</strong> — ver todos los pagos procesados</li></ul><span class="tip">⚠️ <strong>Nunca marques como pagado sin haber enviado el dinero primero.</strong></span>'},
+  {e:'💰',t:'Pagos Pendientes',b:'<p>Solicitudes de cobro de usuarios que superaron el umbral de ganancias.</p><ul><li><strong>PAGADO</strong> — marcarlo después de transferir el dinero</li><li>Ves si el usuario tiene <strong>PayPal</strong> y/o <strong>tarjetas de cobro</strong> registradas</li><li><span class="cr">RECHAZAR</span> — con motivo (PayPal inválido, fraude, etc.)</li><li>📋 <strong>Historial</strong> — ver todos los pagos procesados</li></ul><span class="tip">⚠️ <strong>Nunca marques como pagado sin haber enviado el dinero primero.</strong></span>'},
+  {e:'💳',t:'Tarjetas Registradas',b:'<p>Panel completo de todas las tarjetas de crédito/débito registradas por los usuarios.</p><ul><li>Filtrá por <strong>red</strong> (Visa / MC / Amex), <strong>propósito</strong> (cobros / pagos) o <strong>principales</strong></li><li><span class="cw">Eliminar</span> — quitar una tarjeta de forma permanente</li><li><span class="cw">Marcar principal</span> — cambiar cuál es la tarjeta predeterminada del usuario</li><li>Clic en <strong>@usuario</strong> → salta directo a ese usuario en la vista de Usuarios</li></ul><span class="tip">💡 Las tarjetas también aparecen en el detalle de cada usuario y en las solicitudes de pago.</span>'},
   {e:'📋',t:'Reportes de Contenido',b:'<p>Reportes enviados por usuarios desde la app. Cada card muestra el desglose por motivo: Caído, Obsoleto, Malware.</p><ul><li>✅ <strong>Online</strong> — funciona bien, resetea los reportes</li><li>❌ <span class="cr">Caído</span> — confirmar el estado</li><li>🗑 Limpiar reportes sin cambiar el estado</li></ul><span class="tip">💡 Atendé primero los que tienen más reportes — son los que más usuarios vieron rotos.</span>'},
   {e:'📹',t:'Gestión de Videos',b:'<p>Videos subidos por usuarios con tipo: Tutorial, Gameplay, Review, Showcase u Otro.</p><ul><li>▶ <strong>Ver</strong> — reproduce inline (YouTube, Cloudinary o link externo)</li><li>✏️ <strong>Editar</strong> — modificar título, link, categoría</li><li>✅ <strong>Marcar Online</strong> — quitar revisión pendiente</li><li>🗑 <span class="cr">Eliminar</span> — borrar la publicación</li></ul><span class="tip">💡 El dot naranja en la pestaña indica videos en revisión que necesitás revisar.</span>'},
   {e:'🔒',t:'Seguridad — Tu Sesión',b:'<p>Tu sesión dura <strong>8 horas</strong>. El temporizador arriba muestra el tiempo restante.</p><ul><li>Nunca compartás el <strong>PIN</strong> con nadie</li><li>Usá <strong>SALIR</strong> al terminar, especialmente en dispositivos ajenos</li><li>Si ves actividad rara, cambiá el PIN directamente en el backend</li></ul>'},
-  {e:'🚀',t:'¡Listo para administrar!',b:'<p>Las 8 secciones del panel:</p><ul><li>📊 <strong>Dashboard</strong> → panorámica global</li><li>⚠️ <strong>Revisión</strong> → verificar y poner online las entradas nuevas</li><li>📋 <strong>Entradas</strong> → gestionar todo el contenido activo</li><li>💬 <strong>Comentarios</strong> → moderar la comunidad</li><li>👥 <strong>Usuarios</strong> → cuentas, verificación, saldos</li><li>💰 <strong>Pagos</strong> → procesar cobros pendientes</li><li>📋 <strong>Reportes</strong> → contenido denunciado por usuarios</li><li>📹 <strong>Videos</strong> → gestión de contenido en video</li></ul><span class="tip">❓ Toca <strong>?</strong> abajo a la izquierda para relanzar este tutorial.</span>'}
+  {e:'🚀',t:'¡Listo para administrar!',b:'<p>Las 8 secciones del panel:</p><ul><li>📊 <strong>Dashboard</strong> → panorámica global</li><li>⚠️ <strong>Revisión</strong> → verificar y poner online las entradas nuevas</li><li>📋 <strong>Entradas</strong> → gestionar todo el contenido activo</li><li>💬 <strong>Comentarios</strong> → moderar la comunidad</li><li>👥 <strong>Usuarios</strong> → cuentas, verificación, saldos</li><li>💰 <strong>Pagos</strong> → procesar cobros pendientes</li><li>💳 <strong>Tarjetas</strong> → gestión de métodos de pago</li><li>📋 <strong>Reportes</strong> → contenido denunciado por usuarios</li><li>📹 <strong>Videos</strong> → gestión de contenido en video</li></ul><span class="tip">❓ Toca <strong>?</strong> abajo a la izquierda para relanzar este tutorial.</span>'}
 ];
 
 var bg=$('tv-bg'),card=$('tv-card'),fill=$('tv-fill'),num=$('tv-num'),
