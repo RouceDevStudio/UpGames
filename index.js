@@ -2239,7 +2239,7 @@ app.get('/chat/mensajes/:otroUsuario', verificarToken, async (req, res) => {
         const mensajes = await Mensaje.find(filtro).sort({ fecha: 1 }).limit(200).lean();
         const idsNoLeidos = mensajes.filter(m => m.para === yo && !m.leido).map(m => m._id);
         if (idsNoLeidos.length) await Mensaje.updateMany({ _id: { $in: idsNoLeidos } }, { $set: { leido: true } });
-        res.json({ success: true, mensajes: mensajes.map(m => ({ id: m._id, de: m.de, para: m.para, texto: m.texto, leido: m.leido, fecha: m.fecha })) });
+        res.json({ success: true, mensajes: mensajes.map(m => ({ id: m._id, de: m.de, para: m.para, texto: m.texto, imagen: m.imagen || '', leido: m.leido, fecha: m.fecha })) });
     } catch (err) {
         logger.error(`Error cargando mensajes: ${err.message}`);
         res.status(500).json({ success: false, error: 'Error interno' });
@@ -2278,10 +2278,11 @@ app.get('/chat/conversaciones', verificarToken, async (req, res) => {
             {
                 $group: {
                     _id: '$contacto',
-                    ultimoTexto: { $first: '$texto' },
-                    ultimoDe:    { $first: '$de' },
-                    ultimaFecha: { $first: '$fecha' },
-                    noLeidos:    { $sum: { $cond: ['$esNoLeido', 1, 0] } }
+                    ultimoTexto:  { $first: '$texto' },
+                    ultimaImagen: { $first: '$imagen' },
+                    ultimoDe:     { $first: '$de' },
+                    ultimaFecha:  { $first: '$fecha' },
+                    noLeidos:     { $sum: { $cond: ['$esNoLeido', 1, 0] } }
                 }
             },
             { $sort: { ultimaFecha: -1 } },
@@ -2289,8 +2290,8 @@ app.get('/chat/conversaciones', verificarToken, async (req, res) => {
             {
                 $project: {
                     _id: 0,
-                    contacto:    '$_id',
-                    ultimoMensaje: { texto: '$ultimoTexto', de: '$ultimoDe', fecha: '$ultimaFecha' },
+                    contacto:      '$_id',
+                    ultimoMensaje: { texto: '$ultimoTexto', imagen: '$ultimaImagen', de: '$ultimoDe', fecha: '$ultimaFecha' },
                     noLeidos: 1
                 }
             }
@@ -2343,6 +2344,34 @@ app.get('/usuarios/descubrir', verificarToken, async (req, res) => {
     } catch (err) {
         logger.error(`Error en descubrir: ${err.message}`);
         res.status(500).json({ success: false, error: 'Error interno' });
+    }
+});
+
+// ── FIX: Búsqueda de usuarios para el chat ──────────────────────────────────
+app.get('/usuarios/buscar', verificarToken, async (req, res) => {
+    try {
+        const q  = (req.query.q || '').trim();
+        const me = req.usuario;
+        if (!q || q.length < 2) return res.json({ success: true, usuarios: [] });
+        const usuarios = await Usuario
+            .find({ usuario: { $regex: q, $options: 'i', $ne: me } })
+            .select('usuario foto isVerificado verificadoNivel listaSeguidores ultimoLogin')
+            .limit(15)
+            .lean();
+        res.json({
+            success: true,
+            usuarios: usuarios.map(u => ({
+                usuario:         u.usuario,
+                foto:            u.foto || '',
+                isVerificado:    u.isVerificado,
+                verificadoNivel: u.verificadoNivel,
+                seguidores:      (u.listaSeguidores || []).length,
+                ultimoLogin:     u.ultimoLogin || null
+            }))
+        });
+    } catch (err) {
+        logger.error(`Error buscando usuarios: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error al buscar usuarios' });
     }
 });
 
