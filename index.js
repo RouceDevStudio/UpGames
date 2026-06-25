@@ -1895,37 +1895,16 @@ app.put('/usuarios/update-avatar', [verificarToken, body('avatarUrl').optional()
     }
 });
 
-// ── Subir imagen: patrón IDÉNTICO a chat_images (JSON + base64, sin dependencias extra) ──
-app.post('/upload/imagen', [verificarToken, body('imagen').notEmpty(), body('folder').optional()], async (req, res) => {
+// ── Firma unificada: imágenes Y videos suben DIRECTO desde el navegador a Cloudinary ──
+// Payload mínimo (solo JSON pequeño), sin límite de tamaño, sin multer, sin dependencias extra
+app.get('/upload/sign', verificarToken, (req, res) => {
     try {
-        const { imagen, folder } = req.body;
-        if (!imagen) return res.status(400).json({ success: false, error: 'Imagen requerida' });
-
-        const carpeta  = ['avatars','covers','thumbnails'].includes(folder) ? folder : 'covers';
-        const opciones = { folder: carpeta, resource_type: 'image' };
-
-        if (carpeta === 'avatars') {
-            opciones.transformation = [{ width: 400, height: 400, crop: 'fill', gravity: 'face', quality: 'auto:good', fetch_format: 'auto' }];
-        } else {
-            opciones.transformation = [{ width: 1280, height: 720, crop: 'limit', quality: 'auto:good', fetch_format: 'auto' }];
-        }
-
-        const result = await cloudinary.uploader.upload(imagen, opciones);
-        logger.info(`[upload/imagen] @${req.usuario} → ${carpeta}: ${result.secure_url}`);
-        res.json({ success: true, url: result.secure_url });
-    } catch (err) {
-        logger.error(`Error en upload/imagen: ${err.message}`);
-        res.status(500).json({ success: false, error: err.message || 'Error al subir imagen' });
-    }
-});
-
-// ── Firma para subir video DIRECTO a Cloudinary desde el frontend (sin pasar por Railway) ──
-app.get('/upload/video-sign', verificarToken, (req, res) => {
-    try {
-        const folder    = ['videos','covers'].includes(req.query.folder) ? req.query.folder : 'videos';
+        const validFolders = ['avatars','covers','thumbnails','videos'];
+        const folder    = validFolders.includes(req.query.folder) ? req.query.folder : 'covers';
         const timestamp = Math.round(Date.now() / 1000);
         const params    = { timestamp, folder };
         const signature = cloudinary.utils.api_sign_request(params, process.env.CLOUDINARY_API_SECRET);
+        logger.info(`[upload/sign] @${req.usuario} firma para: ${folder}`);
         res.json({
             signature,
             timestamp,
@@ -1934,8 +1913,8 @@ app.get('/upload/video-sign', verificarToken, (req, res) => {
             folder
         });
     } catch (err) {
-        logger.error(`Error en video-sign: ${err.message}`);
-        res.status(500).json({ success: false, error: 'Error generando firma' });
+        logger.error(`Error en upload/sign: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error generando firma de subida' });
     }
 });
 
