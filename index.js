@@ -1898,33 +1898,43 @@ app.put('/usuarios/update-avatar', [verificarToken, body('avatarUrl').optional()
 });
 
 // ── Subida de imágenes a Cloudinary (avatar, portadas, miniaturas) ──
-app.post('/upload/imagen', verificarToken, async (req, res) => {
+// ── Instancia multer para imágenes ──
+const imageUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 15 * 1024 * 1024 }, // 15MB
+    fileFilter: (req, file, cb) => {
+        const allowed = ['image/jpeg','image/jpg','image/png','image/webp','image/gif'];
+        if(allowed.includes(file.mimetype)) cb(null, true);
+        else cb(new Error('Formato de imagen no soportado'), false);
+    }
+});
+
+app.post('/upload/imagen', verificarToken, imageUpload.single('imagen'), async (req, res) => {
     try {
-        const { imagen, folder } = req.body;
-        if (!imagen) return res.status(400).json({ success: false, error: 'Imagen requerida' });
+        if(!req.file) return res.status(400).json({ success: false, error: 'Imagen requerida' });
 
-        // Aceptar base64 o URL remota
-        const esBase64 = imagen.startsWith('data:image');
-        const esUrl    = imagen.startsWith('http');
-        if (!esBase64 && !esUrl) return res.status(400).json({ success: false, error: 'Formato de imagen inválido' });
+        const carpeta  = ['avatars','covers','thumbnails'].includes(req.body.folder) ? req.body.folder : 'covers';
+        const opciones = { folder: carpeta, resource_type: 'image' };
 
-        const carpeta   = ['avatars','covers','thumbnails'].includes(folder) ? folder : 'covers';
-        const opciones  = { folder: carpeta, resource_type: 'image' };
-
-        if (carpeta === 'avatars') {
+        if(carpeta === 'avatars') {
             opciones.transformation = [{ width: 400, height: 400, crop: 'fill', gravity: 'face', quality: 'auto:good', fetch_format: 'auto' }];
-        } else if (carpeta === 'thumbnails') {
-            opciones.transformation = [{ width: 1280, height: 720, crop: 'limit', quality: 'auto:good', fetch_format: 'auto' }];
         } else {
             opciones.transformation = [{ width: 1280, height: 720, crop: 'limit', quality: 'auto:good', fetch_format: 'auto' }];
         }
 
-        const result = await cloudinary.uploader.upload(imagen, opciones);
+        const uploadDesdeBuffer = (buffer, opts) => new Promise((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream(opts, (err, result) => {
+                if(err) reject(err); else resolve(result);
+            });
+            Readable.from(buffer).pipe(stream);
+        });
+
+        const result = await uploadDesdeBuffer(req.file.buffer, opciones);
         logger.info(`[upload/imagen] @${req.usuario} → ${carpeta}: ${result.secure_url}`);
         res.json({ success: true, url: result.secure_url });
     } catch (err) {
         logger.error(`Error en upload/imagen: ${err.message}`);
-        res.status(500).json({ success: false, error: 'Error al subir imagen a Cloudinary' });
+        res.status(500).json({ success: false, error: err.message || 'Error al subir imagen' });
     }
 });
 
