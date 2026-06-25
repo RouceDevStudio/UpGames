@@ -695,7 +695,14 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    // Guardar datos en localStorage
+                    // Validar que el token es una cadena real antes de guardar
+                    if (!data.token || typeof data.token !== 'string' || data.token.length < 20) {
+                        showMsg("❌ Error de autenticación — intenta de nuevo", "#ff4343");
+                        setLoading(false);
+                        return;
+                    }
+                    // Limpiar sesión anterior antes de guardar la nueva
+                    localStorage.clear();
                     localStorage.setItem("token", data.token);
                     localStorage.setItem("user_admin", data.usuario);
                     localStorage.setItem("email", data.email);
@@ -731,7 +738,14 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    // Guardar datos en localStorage
+                    // Validar que el token es una cadena real antes de guardar
+                    if (!data.token || typeof data.token !== 'string' || data.token.length < 20) {
+                        showMsg("❌ Error de autenticación — intenta de nuevo", "#ff4343");
+                        setLoading(false);
+                        return;
+                    }
+                    // Limpiar sesión anterior antes de guardar la nueva
+                    localStorage.clear();
                     localStorage.setItem("token", data.token);
                     localStorage.setItem("user_admin", data.usuario);
                     localStorage.setItem("email", data.email);

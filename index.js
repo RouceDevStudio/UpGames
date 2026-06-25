@@ -508,15 +508,33 @@ const Story = mongoose.model('Story', StorySchema);
 
 // ========== MIDDLEWARE JWT ==========
 const verificarToken = (req, res, next) => {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) return res.status(401).json({ success: false, error: "Token no proporcionado" });
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.split(' ')[1];
+
+    // Detectar "Bearer null" o "Bearer undefined" que llegan del frontend
+    if (!token || token === 'null' || token === 'undefined' || token.length < 20) {
+        return res.status(401).json({ success: false, error: "Sesión no iniciada", code: "NO_TOKEN" });
+    }
+
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
         req.usuario = decoded.usuario;
         req.userTokenData = decoded;
+
+        // Actualizar ultimoLogin en background (sin bloquear la respuesta)
+        Usuario.updateOne(
+            { usuario: decoded.usuario },
+            { $set: { ultimoLogin: new Date() } }
+        ).catch(() => {});
+
         next();
     } catch (error) {
-        return res.status(401).json({ success: false, error: "Token inválido o expirado" });
+        // Distinguir expirado vs firma inválida
+        const code = error.name === 'TokenExpiredError' ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID';
+        const msg  = code === 'TOKEN_EXPIRED'
+            ? 'Tu sesión expiró, vuelve a iniciar sesión'
+            : 'Sesión inválida, vuelve a iniciar sesión';
+        return res.status(401).json({ success: false, error: msg, code });
     }
 };
 
