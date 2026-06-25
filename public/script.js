@@ -3311,10 +3311,17 @@ async function pfSaveAvatar() {
 // ══════════════════════════════════════════════════
 
 // Abre selector nativo y devuelve el File
+// ════════════════════════════════════════════════════════════
+// UPLOAD DIRECTO A CLOUDINARY — imágenes y videos
+// El archivo nunca pasa por Railway: frontend pide firma al
+// backend (JSON pequeño), luego sube directo a Cloudinary.
+// Sin multer, sin base64, sin límites de body.
+// ════════════════════════════════════════════════════════════
+
 function pfPickFile(accept, maxMB) {
   return new Promise((resolve) => {
     const input = document.createElement('input');
-    input.type  = 'file';
+    input.type   = 'file';
     input.accept = accept;
     input.style.display = 'none';
     const cleanup = () => { try { document.body.removeChild(input); } catch(_){} };
@@ -3334,50 +3341,34 @@ function pfPickFile(accept, maxMB) {
   });
 }
 
-// Lee File como base64 dataURI
-function pfFileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload  = e => resolve(e.target.result);
-    reader.onerror = () => reject(new Error('Error leyendo archivo'));
-    reader.readAsDataURL(file);
-  });
-}
-
-// Sube imagen: base64 JSON → /upload/imagen (mismo patrón que chat_images, funciona)
-async function pfSubirImagen(file, folder) {
-  const base64 = await pfFileToBase64(file);
-  const token  = LS.get('token');
-  const res    = await fetch(`${PF_API}/upload/imagen`, {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-    body:    JSON.stringify({ imagen: base64, folder: folder || 'covers' })
-  });
-  return res.json();
-}
-
-// Sube video: firma backend → sube DIRECTO a Cloudinary (no pasa por Railway)
-function pfUploadVideoFile(file, folder, onProgress) {
+// Firma el upload en el backend (request ligero ~200 bytes)
+// y luego sube el archivo DIRECTO a Cloudinary con XHR (progreso real)
+function pfUploadToCloudinary(file, folder, resourceType, onProgress) {
   return new Promise(async (resolve, reject) => {
     try {
-      // 1. Obtener firma del backend
-      const token   = LS.get('token');
-      const sigRes  = await fetch(`${PF_API}/upload/video-sign?folder=${folder || 'videos'}`, {
+      // 1. Pedir firma al backend
+      const token  = LS.get('token');
+      const sigRes = await fetch(`${PF_API}/upload/sign?folder=${encodeURIComponent(folder)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
+      if(!sigRes.ok) {
+        const txt = await sigRes.text();
+        throw new Error(`Firma fallida (${sigRes.status}): ${txt.slice(0,100)}`);
+      }
       const sig = await sigRes.json();
-      if(!sig.signature) throw new Error(sig.error || 'Error obteniendo firma');
+      if(!sig.signature) throw new Error(sig.error || 'Sin firma de Cloudinary');
 
-      // 2. Subir directo a Cloudinary con XHR (para tener progreso)
+      // 2. Subir directo a Cloudinary
       const fd = new FormData();
       fd.append('file',      file);
       fd.append('api_key',   sig.api_key);
-      fd.append('timestamp', sig.timestamp);
+      fd.append('timestamp', String(sig.timestamp));
       fd.append('signature', sig.signature);
       fd.append('folder',    sig.folder);
 
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', `https://api.cloudinary.com/v1_1/${sig.cloud_name}/video/upload`);
+      const cldUrl = `https://api.cloudinary.com/v1_1/${sig.cloud_name}/${resourceType}/upload`;
+      const xhr    = new XMLHttpRequest();
+      xhr.open('POST', cldUrl);
 
       xhr.upload.onprogress = (e) => {
         if(e.lengthComputable && onProgress) onProgress(Math.round(e.loaded / e.total * 100));
@@ -3386,14 +3377,21 @@ function pfUploadVideoFile(file, folder, onProgress) {
         try {
           const d = JSON.parse(xhr.responseText);
           if(d.secure_url) resolve({ success: true, url: d.secure_url });
-          else reject(new Error(d.error?.message || 'Error Cloudinary'));
-        } catch(e) { reject(new Error('Respuesta inválida')); }
+          else reject(new Error(d.error?.message || `Cloudinary error ${xhr.status}`));
+        } catch(e) { reject(new Error('Respuesta inválida de Cloudinary')); }
       };
-      xhr.onerror = () => reject(new Error('Error de red'));
+      xhr.onerror   = () => reject(new Error('Sin conexión a Cloudinary'));
+      xhr.ontimeout = () => reject(new Error('Timeout de Cloudinary'));
       xhr.send(fd);
     } catch(e) { reject(e); }
   });
 }
+
+// Wrappers específicos
+const pfSubirImagen     = (file, folder) => pfUploadToCloudinary(file, folder || 'covers', 'image');
+const pfUploadVideoFile = (file, folder, onProgress) => pfUploadToCloudinary(file, folder || 'videos', 'video', onProgress);
+
+
 
 
 // ── Estados visuales: Avatar upload zone ──
