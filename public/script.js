@@ -1907,61 +1907,64 @@ function pfClearFeaturedItem() {
   pfRenderFeaturedList(pfFeaturedItems);
 }
 
-// ── Cloudinary Widget ──
-function pfOpenCloudinaryWidget() {
-  if(!pfCloudinaryWidget) {
-    pfCloudinaryWidget = cloudinary.createUploadWidget({
-      cloudName: CLOUDINARY_CLOUD_NAME,
-      uploadPreset: CLOUDINARY_UPLOAD_PRESET,
-      sources: ['local','url'],
-      resourceType: 'video',
-      maxFileSize: 524288000, // 500MB
-      clientAllowedFormats: ['mp4','webm','mov','avi'],
-      showAdvancedOptions: false,
-      cropping: false,
-      multiple: false,
-      showSkipCropButton: false,
-      styles: {
-        palette: {
-          window: '#07070f',
-          windowBorder: '#5EFF43',
-          tabIcon: '#5EFF43',
-          menuIcons: '#9090aa',
-          textDark: '#f0f0f8',
-          textLight: '#f0f0f8',
-          link: '#5EFF43',
-          action: '#5EFF43',
-          inactiveTabIcon: '#555570',
-          error: '#ff4343',
-          inProgress: '#00f2ff',
-          complete: '#5EFF43',
-          sourceBg: '#0d0d1a'
-        },
-        fonts: { default: null, "'Manrope', sans-serif": { url: 'https://fonts.googleapis.com/css2?family=Manrope:wght@400;700&display=swap', active: true } }
-      }
-    }, (error, result) => {
-      if(error) {
-        toast('❌ Error al subir video: ' + (error.message || error.statusText || 'Error'));
-        pfCldShowIdle();
-        return;
-      }
-      if(result.event === 'upload-added') {
-        pfCldShowUploading();
-      }
-      if(result.event === 'progress') {
-        const pct = Math.round(result.info.progress || 0);
-        const fill = document.getElementById('pf-cld-progress-fill');
-        if(fill) fill.style.width = pct + '%';
-      }
-      if(result.event === 'success') {
-        pfVideoUrl = result.info.secure_url;
+// ── Video form: selector nativo con progreso XHR ──
+function pfOpenCloudinaryWidget() { pfOpenVideoUpload(); } // alias por compatibilidad
+
+function pfOpenVideoUpload() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'video/mp4,video/webm,video/quicktime,video/x-msvideo,video/x-matroska';
+  input.style.display = 'none';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    document.body.removeChild(input);
+    if(!file) return;
+    if(file.size > 524288000) { toast('⚠️ El video debe ser menor a 500MB'); return; }
+    pfCldShowUploading();
+    pfSubirVideoXHR(file, 'videos');
+  };
+  document.body.appendChild(input);
+  input.click();
+}
+
+function pfSubirVideoXHR(file, folder) {
+  const token = LS.get('token');
+  const formData = new FormData();
+  formData.append('video', file);
+  formData.append('folder', folder || 'videos');
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', `${PF_API}/upload/video`);
+  xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+  xhr.upload.onprogress = (e) => {
+    if(e.lengthComputable) {
+      const pct = Math.round((e.loaded / e.total) * 100);
+      const fill = document.getElementById('pf-cld-progress-fill');
+      if(fill) fill.style.width = pct + '%';
+    }
+  };
+
+  xhr.onload = () => {
+    try {
+      const data = JSON.parse(xhr.responseText);
+      if(data.success) {
+        pfVideoUrl = data.url;
         document.getElementById('pf-vid-url').value = pfVideoUrl;
         pfCldShowDone(pfVideoUrl);
         toast('✅ Video subido a la nube');
+      } else {
+        toast('❌ ' + (data.error || 'Error al subir video'));
+        pfCldShowIdle();
       }
-    });
-  }
-  pfCloudinaryWidget.open();
+    } catch(e) {
+      toast('❌ Error inesperado al procesar respuesta');
+      pfCldShowIdle();
+    }
+  };
+
+  xhr.onerror = () => { toast('❌ Error de conexión'); pfCldShowIdle(); };
+  xhr.send(formData);
 }
 
 function pfCldShowIdle() {
@@ -2060,8 +2063,6 @@ async function pfSubirVideo() {
       document.getElementById('pf-vid-url').value = '';
       pfVideoUrl = '';
       pfCldShowIdle();
-      pfCloudinaryWidget = null;
-      pfThumbnailWidget = null;
       pfUpdateVideoPreview();
       // Reset featured selector
       pfFeaturedItems = [];
@@ -3440,32 +3441,76 @@ async function pfSaveAvatarFromCloud() {
   } catch(e) { toast('❌ Error de conexión'); }
 }
 
-// ── Portadas: subir imagen a slot (0-3) ──
+// ── Portadas: subir imagen O video a slot (0-3) ──
 function pfOpenCoverWidget(slot) {
   pfCoverTargetSlot = slot;
-  pfPickImage('image/jpeg,image/png,image/webp,image/gif', 10, async (base64) => {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,video/x-msvideo';
+  input.style.display = 'none';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    document.body.removeChild(input);
+    if(!file) return;
+
+    const esVideo  = file.type.startsWith('video/');
+    const maxBytes = esVideo ? 524288000 : 10485760;
+    if(file.size > maxBytes) {
+      toast(`⚠️ Máximo ${esVideo ? '500MB para video' : '10MB para imagen'}`);
+      return;
+    }
+
     const ids = ['pf-addImage','pf-addImage2','pf-addImage3','pf-addImage4'];
     const btn = document.querySelector(`[onclick="pfOpenCoverWidget(${slot})"]`);
     const origHTML = btn ? btn.innerHTML : '';
     if(btn) { btn.innerHTML = '<ion-icon name="sync-outline" style="animation:spin .8s linear infinite"></ion-icon>'; btn.disabled = true; }
+
     try {
-      const data = await pfSubirImagen(base64, 'covers');
-      if(data.success) {
-        const inp = document.getElementById(ids[slot]);
-        if(inp) {
-          inp.value = data.url;
-          inp.dispatchEvent(new Event('input'));
-        }
-        toast('✅ Imagen subida a Cloudinary');
+      let url;
+      if(esVideo) {
+        // Vídeo → FormData → /upload/video
+        url = await new Promise((resolve, reject) => {
+          const token = LS.get('token');
+          const fd = new FormData();
+          fd.append('video', file);
+          fd.append('folder', 'covers');
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', `${PF_API}/upload/video`);
+          xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+          xhr.onload = () => {
+            try {
+              const d = JSON.parse(xhr.responseText);
+              if(d.success) resolve(d.url);
+              else reject(new Error(d.error));
+            } catch(ex) { reject(ex); }
+          };
+          xhr.onerror = () => reject(new Error('Error de red'));
+          xhr.send(fd);
+        });
       } else {
-        toast('❌ ' + (data.error || 'Error al subir'));
+        // Imagen → base64 → /upload/imagen
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = ev => resolve(ev.target.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+        const data = await pfSubirImagen(base64, 'covers');
+        if(!data.success) throw new Error(data.error);
+        url = data.url;
       }
-    } catch(e) {
-      toast('❌ Error al subir imagen');
+
+      const inp = document.getElementById(ids[pfCoverTargetSlot]);
+      if(inp) { inp.value = url; inp.dispatchEvent(new Event('input')); }
+      toast(`✅ ${esVideo ? 'Video' : 'Imagen'} subido a Cloudinary`);
+    } catch(err) {
+      toast('❌ ' + (err.message || 'Error al subir'));
     } finally {
       if(btn) { btn.innerHTML = origHTML; btn.disabled = false; }
     }
-  });
+  };
+  document.body.appendChild(input);
+  input.click();
 }
 
 // ── Miniatura de Video: subir imagen ──
