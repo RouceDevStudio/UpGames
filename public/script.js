@@ -3307,14 +3307,14 @@ async function pfSaveAvatar() {
 }
 
 // ══════════════════════════════════════════════════
-// UPLOAD HELPERS — FormData, sin base64, sin límites
+// UPLOAD — imágenes: base64 JSON | videos: firma → Cloudinary directo
 // ══════════════════════════════════════════════════
 
-// Abre selector nativo y devuelve el File seleccionado
+// Abre selector nativo y devuelve el File
 function pfPickFile(accept, maxMB) {
   return new Promise((resolve) => {
     const input = document.createElement('input');
-    input.type = 'file';
+    input.type  = 'file';
     input.accept = accept;
     input.style.display = 'none';
     const cleanup = () => { try { document.body.removeChild(input); } catch(_){} };
@@ -3334,48 +3334,67 @@ function pfPickFile(accept, maxMB) {
   });
 }
 
-// Sube imagen vía FormData → /upload/imagen (sin base64, sin límite 2MB)
-function pfSubirImagen(file, folder) {
+// Lee File como base64 dataURI
+function pfFileToBase64(file) {
   return new Promise((resolve, reject) => {
-    const token = LS.get('token');
-    const fd = new FormData();
-    fd.append('imagen', file);
-    fd.append('folder', folder || 'covers');
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${PF_API}/upload/imagen`);
-    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-    xhr.onload = () => {
-      try { resolve(JSON.parse(xhr.responseText)); }
-      catch(e) { reject(new Error('Respuesta inválida del servidor')); }
-    };
-    xhr.onerror = () => reject(new Error('Error de red'));
-    xhr.send(fd);
+    const reader = new FileReader();
+    reader.onload  = e => resolve(e.target.result);
+    reader.onerror = () => reject(new Error('Error leyendo archivo'));
+    reader.readAsDataURL(file);
   });
 }
 
-// Sube video vía FormData → /upload/video (con progreso)
+// Sube imagen: base64 JSON → /upload/imagen (mismo patrón que chat_images, funciona)
+async function pfSubirImagen(file, folder) {
+  const base64 = await pfFileToBase64(file);
+  const token  = LS.get('token');
+  const res    = await fetch(`${PF_API}/upload/imagen`, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body:    JSON.stringify({ imagen: base64, folder: folder || 'covers' })
+  });
+  return res.json();
+}
+
+// Sube video: firma backend → sube DIRECTO a Cloudinary (no pasa por Railway)
 function pfUploadVideoFile(file, folder, onProgress) {
-  return new Promise((resolve, reject) => {
-    const token = LS.get('token');
-    const fd = new FormData();
-    fd.append('video', file);
-    fd.append('folder', folder || 'videos');
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', `${PF_API}/upload/video`);
-    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-    if(onProgress) {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // 1. Obtener firma del backend
+      const token   = LS.get('token');
+      const sigRes  = await fetch(`${PF_API}/upload/video-sign?folder=${folder || 'videos'}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const sig = await sigRes.json();
+      if(!sig.signature) throw new Error(sig.error || 'Error obteniendo firma');
+
+      // 2. Subir directo a Cloudinary con XHR (para tener progreso)
+      const fd = new FormData();
+      fd.append('file',      file);
+      fd.append('api_key',   sig.api_key);
+      fd.append('timestamp', sig.timestamp);
+      fd.append('signature', sig.signature);
+      fd.append('folder',    sig.folder);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `https://api.cloudinary.com/v1_1/${sig.cloud_name}/video/upload`);
+
       xhr.upload.onprogress = (e) => {
-        if(e.lengthComputable) onProgress(Math.round(e.loaded / e.total * 100));
+        if(e.lengthComputable && onProgress) onProgress(Math.round(e.loaded / e.total * 100));
       };
-    }
-    xhr.onload = () => {
-      try { resolve(JSON.parse(xhr.responseText)); }
-      catch(e) { reject(new Error('Respuesta inválida del servidor')); }
-    };
-    xhr.onerror = () => reject(new Error('Error de red'));
-    xhr.send(fd);
+      xhr.onload = () => {
+        try {
+          const d = JSON.parse(xhr.responseText);
+          if(d.secure_url) resolve({ success: true, url: d.secure_url });
+          else reject(new Error(d.error?.message || 'Error Cloudinary'));
+        } catch(e) { reject(new Error('Respuesta inválida')); }
+      };
+      xhr.onerror = () => reject(new Error('Error de red'));
+      xhr.send(fd);
+    } catch(e) { reject(e); }
   });
 }
+
 
 // ── Estados visuales: Avatar upload zone ──
 function pfAvCldShowIdle() {
