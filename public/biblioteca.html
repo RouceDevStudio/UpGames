@@ -1912,9 +1912,10 @@ function pfCheckCooldown(type, lastChange) {
 
 /* ─── Guardar nuevo nombre de usuario ─── */
 async function pfSaveUsername() {
-  const newUser  = (document.getElementById('pf-input-username')?.value || '').trim();
+  const newUser  = (document.getElementById('pf-input-username')?.value || '').trim().toLowerCase();
   const password = document.getElementById('pf-input-username-pass')?.value || '';
   if (!newUser || newUser.length < 3) { showToast('El nombre debe tener al menos 3 caracteres', 'error'); return; }
+  if (!/^[a-z0-9_]+$/.test(newUser)) { showToast('Solo letras minúsculas, números y _', 'error'); return; }
   if (!password) { showToast('Ingresa tu contraseña para confirmar', 'error'); return; }
   const token = localStorage.getItem('token');
   try {
@@ -1925,12 +1926,14 @@ async function pfSaveUsername() {
     });
     const data = await res.json();
     if (!data.success) { showToast(data.error || 'Error al cambiar nombre', 'error'); return; }
+    /* Guardar el nuevo token con el nombre actualizado */
+    if (data.nuevoToken) localStorage.setItem('token', data.nuevoToken);
     /* Actualizar localStorage */
     const u = JSON.parse(localStorage.getItem('user_admin') || '{}');
-    u.usuario = newUser;
+    u.usuario = data.nuevoUsuario || newUser;
     u.lastUsernameChange = new Date().toISOString();
     localStorage.setItem('user_admin', JSON.stringify(u));
-    document.getElementById('pf-username').textContent = '@' + newUser;
+    document.getElementById('pf-username').textContent = '@' + (data.nuevoUsuario || newUser);
     document.getElementById('pf-input-username').value = '';
     document.getElementById('pf-input-username-pass').value = '';
     pfCheckCooldown('nombre', u.lastUsernameChange);
