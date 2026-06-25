@@ -1907,64 +1907,34 @@ function pfClearFeaturedItem() {
   pfRenderFeaturedList(pfFeaturedItems);
 }
 
-// ── Video form: selector nativo con progreso XHR ──
-function pfOpenCloudinaryWidget() { pfOpenVideoUpload(); } // alias por compatibilidad
+// ── Video form: selector nativo con progreso ──
+function pfOpenCloudinaryWidget() { pfOpenVideoUpload(); }
 
-function pfOpenVideoUpload() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'video/mp4,video/webm,video/quicktime,video/x-msvideo,video/x-matroska';
-  input.style.display = 'none';
-  input.onchange = (e) => {
-    const file = e.target.files[0];
-    document.body.removeChild(input);
-    if(!file) return;
-    if(file.size > 524288000) { toast('⚠️ El video debe ser menor a 500MB'); return; }
-    pfCldShowUploading();
-    pfSubirVideoXHR(file, 'videos');
-  };
-  document.body.appendChild(input);
-  input.click();
-}
-
-function pfSubirVideoXHR(file, folder) {
-  const token = LS.get('token');
-  const formData = new FormData();
-  formData.append('video', file);
-  formData.append('folder', folder || 'videos');
-
-  const xhr = new XMLHttpRequest();
-  xhr.open('POST', `${PF_API}/upload/video`);
-  xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-
-  xhr.upload.onprogress = (e) => {
-    if(e.lengthComputable) {
-      const pct = Math.round((e.loaded / e.total) * 100);
+async function pfOpenVideoUpload() {
+  const file = await pfPickFile(
+    'video/mp4,video/webm,video/quicktime,video/x-msvideo,video/x-matroska',
+    500
+  );
+  if(!file) return;
+  pfCldShowUploading();
+  try {
+    const data = await pfUploadVideoFile(file, 'videos', (pct) => {
       const fill = document.getElementById('pf-cld-progress-fill');
       if(fill) fill.style.width = pct + '%';
-    }
-  };
-
-  xhr.onload = () => {
-    try {
-      const data = JSON.parse(xhr.responseText);
-      if(data.success) {
-        pfVideoUrl = data.url;
-        document.getElementById('pf-vid-url').value = pfVideoUrl;
-        pfCldShowDone(pfVideoUrl);
-        toast('✅ Video subido a la nube');
-      } else {
-        toast('❌ ' + (data.error || 'Error al subir video'));
-        pfCldShowIdle();
-      }
-    } catch(e) {
-      toast('❌ Error inesperado al procesar respuesta');
+    });
+    if(data.success) {
+      pfVideoUrl = data.url;
+      document.getElementById('pf-vid-url').value = pfVideoUrl;
+      pfCldShowDone(pfVideoUrl);
+      toast('✅ Video subido a la nube');
+    } else {
+      toast('❌ ' + (data.error || 'Error al subir video'));
       pfCldShowIdle();
     }
-  };
-
-  xhr.onerror = () => { toast('❌ Error de conexión'); pfCldShowIdle(); };
-  xhr.send(formData);
+  } catch(e) {
+    toast('❌ ' + e.message);
+    pfCldShowIdle();
+  }
 }
 
 function pfCldShowIdle() {
@@ -3336,45 +3306,75 @@ async function pfSaveAvatar() {
   } catch(e) { toast('❌ Error de conexión'); }
 }
 
-// ── Helper: abre file input y devuelve base64 ──
-function pfPickImage(accept, maxMB, callback) {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = accept || 'image/jpeg,image/png,image/webp,image/gif';
-  input.style.display = 'none';
-  input.onchange = (e) => {
-    const file = e.target.files[0];
-    if(!file) { document.body.removeChild(input); return; }
-    const maxBytes = (maxMB || 10) * 1024 * 1024;
-    if(file.size > maxBytes) {
-      toast(`⚠️ La imagen debe ser menor a ${maxMB || 10}MB`);
-      document.body.removeChild(input);
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      document.body.removeChild(input);
-      callback(ev.target.result);
+// ══════════════════════════════════════════════════
+// UPLOAD HELPERS — FormData, sin base64, sin límites
+// ══════════════════════════════════════════════════
+
+// Abre selector nativo y devuelve el File seleccionado
+function pfPickFile(accept, maxMB) {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = accept;
+    input.style.display = 'none';
+    const cleanup = () => { try { document.body.removeChild(input); } catch(_){} };
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      cleanup();
+      if(!file) { resolve(null); return; }
+      if(file.size > maxMB * 1024 * 1024) {
+        toast(`⚠️ Máximo ${maxMB}MB permitido`);
+        resolve(null); return;
+      }
+      resolve(file);
     };
-    reader.onerror = () => {
-      document.body.removeChild(input);
-      toast('❌ No se pudo leer el archivo');
-    };
-    reader.readAsDataURL(file);
-  };
-  document.body.appendChild(input);
-  input.click();
+    input.addEventListener('cancel', () => { cleanup(); resolve(null); });
+    document.body.appendChild(input);
+    input.click();
+  });
 }
 
-// ── Helper: sube imagen al backend → Cloudinary ──
-async function pfSubirImagen(base64, folder) {
-  const token = LS.get('token');
-  const res = await fetch(`${PF_API}/upload/imagen`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-    body: JSON.stringify({ imagen: base64, folder: folder || 'covers' })
+// Sube imagen vía FormData → /upload/imagen (sin base64, sin límite 2MB)
+function pfSubirImagen(file, folder) {
+  return new Promise((resolve, reject) => {
+    const token = LS.get('token');
+    const fd = new FormData();
+    fd.append('imagen', file);
+    fd.append('folder', folder || 'covers');
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${PF_API}/upload/imagen`);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.onload = () => {
+      try { resolve(JSON.parse(xhr.responseText)); }
+      catch(e) { reject(new Error('Respuesta inválida del servidor')); }
+    };
+    xhr.onerror = () => reject(new Error('Error de red'));
+    xhr.send(fd);
   });
-  return res.json();
+}
+
+// Sube video vía FormData → /upload/video (con progreso)
+function pfUploadVideoFile(file, folder, onProgress) {
+  return new Promise((resolve, reject) => {
+    const token = LS.get('token');
+    const fd = new FormData();
+    fd.append('video', file);
+    fd.append('folder', folder || 'videos');
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `${PF_API}/upload/video`);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    if(onProgress) {
+      xhr.upload.onprogress = (e) => {
+        if(e.lengthComputable) onProgress(Math.round(e.loaded / e.total * 100));
+      };
+    }
+    xhr.onload = () => {
+      try { resolve(JSON.parse(xhr.responseText)); }
+      catch(e) { reject(new Error('Respuesta inválida del servidor')); }
+    };
+    xhr.onerror = () => reject(new Error('Error de red'));
+    xhr.send(fd);
+  });
 }
 
 // ── Estados visuales: Avatar upload zone ──
@@ -3395,31 +3395,31 @@ function pfAvCldShowDone() {
 }
 
 // ── Avatar: seleccionar y subir foto ──
-function pfOpenAvatarWidget() {
-  pfPickImage('image/jpeg,image/png,image/webp,image/gif', 10, async (base64) => {
-    pfAvCldShowUploading();
-    try {
-      const data = await pfSubirImagen(base64, 'avatars');
-      if(data.success) {
-        document.getElementById('pf-av-cld-url').value = data.url;
-        const prev = document.getElementById('pf-preview-avatar');
-        if(prev) prev.innerHTML = `<img src="${data.url}" alt="Avatar">`;
-        pfAvCldShowDone();
-        const saveBtn = document.getElementById('pf-av-upload-save-btn');
-        if(saveBtn) saveBtn.style.display = '';
-        toast('✅ Foto lista — presiona GUARDAR');
-      } else {
-        toast('❌ ' + (data.error || 'Error al subir'));
-        pfAvCldShowIdle();
-      }
-    } catch(e) {
-      toast('❌ Error al subir imagen');
+async function pfOpenAvatarWidget() {
+  const file = await pfPickFile('image/jpeg,image/jpg,image/png,image/webp,image/gif', 15);
+  if(!file) return;
+  pfAvCldShowUploading();
+  try {
+    const data = await pfSubirImagen(file, 'avatars');
+    if(data.success) {
+      document.getElementById('pf-av-cld-url').value = data.url;
+      const prev = document.getElementById('pf-preview-avatar');
+      if(prev) prev.innerHTML = `<img src="${data.url}" alt="Avatar">`;
+      pfAvCldShowDone();
+      const saveBtn = document.getElementById('pf-av-upload-save-btn');
+      if(saveBtn) saveBtn.style.display = '';
+      toast('✅ Foto lista — presiona GUARDAR');
+    } else {
+      toast('❌ ' + (data.error || 'Error al subir'));
       pfAvCldShowIdle();
     }
-  });
+  } catch(e) {
+    toast('❌ ' + e.message);
+    pfAvCldShowIdle();
+  }
 }
 
-// ── Guardar avatar subido desde Cloudinary ──
+// ── Guardar avatar subido ──
 async function pfSaveAvatarFromCloud() {
   const url = document.getElementById('pf-av-cld-url').value.trim();
   if(!url) { toast('⚠️ Primero sube una foto'); return; }
@@ -3442,102 +3442,106 @@ async function pfSaveAvatarFromCloud() {
 }
 
 // ── Portadas: subir imagen O video a slot (0-3) ──
-function pfOpenCoverWidget(slot) {
+async function pfOpenCoverWidget(slot) {
   pfCoverTargetSlot = slot;
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,video/x-msvideo';
-  input.style.display = 'none';
-  input.onchange = async (e) => {
-    const file = e.target.files[0];
-    document.body.removeChild(input);
-    if(!file) return;
+  const file = await pfPickFile(
+    'image/jpeg,image/jpg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,video/x-msvideo',
+    500
+  );
+  if(!file) return;
 
-    const esVideo  = file.type.startsWith('video/');
-    const maxBytes = esVideo ? 524288000 : 10485760;
-    if(file.size > maxBytes) {
-      toast(`⚠️ Máximo ${esVideo ? '500MB para video' : '10MB para imagen'}`);
-      return;
+  const esVideo  = file.type.startsWith('video/');
+  const maxBytes = esVideo ? 500 * 1024 * 1024 : 15 * 1024 * 1024;
+  if(file.size > maxBytes) {
+    toast(`⚠️ Máximo ${esVideo ? '500MB para video' : '15MB para imagen'}`);
+    return;
+  }
+
+  const ids    = ['pf-addImage','pf-addImage2','pf-addImage3','pf-addImage4'];
+  const btn    = document.querySelector(`[onclick="pfOpenCoverWidget(${slot})"]`);
+  const orig   = btn ? btn.innerHTML : '';
+  if(btn) { btn.innerHTML='<ion-icon name="sync-outline" style="animation:spin .8s linear infinite"></ion-icon>'; btn.disabled=true; }
+
+  try {
+    let data;
+    if(esVideo) {
+      data = await pfUploadVideoFile(file, 'covers');
+    } else {
+      data = await pfSubirImagen(file, 'covers');
     }
-
-    const ids = ['pf-addImage','pf-addImage2','pf-addImage3','pf-addImage4'];
-    const btn = document.querySelector(`[onclick="pfOpenCoverWidget(${slot})"]`);
-    const origHTML = btn ? btn.innerHTML : '';
-    if(btn) { btn.innerHTML = '<ion-icon name="sync-outline" style="animation:spin .8s linear infinite"></ion-icon>'; btn.disabled = true; }
-
-    try {
-      let url;
-      if(esVideo) {
-        // Vídeo → FormData → /upload/video
-        url = await new Promise((resolve, reject) => {
-          const token = LS.get('token');
-          const fd = new FormData();
-          fd.append('video', file);
-          fd.append('folder', 'covers');
-          const xhr = new XMLHttpRequest();
-          xhr.open('POST', `${PF_API}/upload/video`);
-          xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-          xhr.onload = () => {
-            try {
-              const d = JSON.parse(xhr.responseText);
-              if(d.success) resolve(d.url);
-              else reject(new Error(d.error));
-            } catch(ex) { reject(ex); }
-          };
-          xhr.onerror = () => reject(new Error('Error de red'));
-          xhr.send(fd);
-        });
-      } else {
-        // Imagen → base64 → /upload/imagen
-        const base64 = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = ev => resolve(ev.target.result);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-        const data = await pfSubirImagen(base64, 'covers');
-        if(!data.success) throw new Error(data.error);
-        url = data.url;
-      }
-
-      const inp = document.getElementById(ids[pfCoverTargetSlot]);
-      if(inp) { inp.value = url; inp.dispatchEvent(new Event('input')); }
-      toast(`✅ ${esVideo ? 'Video' : 'Imagen'} subido a Cloudinary`);
-    } catch(err) {
-      toast('❌ ' + (err.message || 'Error al subir'));
-    } finally {
-      if(btn) { btn.innerHTML = origHTML; btn.disabled = false; }
-    }
-  };
-  document.body.appendChild(input);
-  input.click();
+    if(!data.success) throw new Error(data.error);
+    const inp = document.getElementById(ids[pfCoverTargetSlot]);
+    if(inp) { inp.value = data.url; inp.dispatchEvent(new Event('input')); }
+    toast(`✅ ${esVideo ? 'Video' : 'Imagen'} subido a Cloudinary`);
+  } catch(err) {
+    toast('❌ ' + (err.message || 'Error al subir'));
+  } finally {
+    if(btn) { btn.innerHTML=orig; btn.disabled=false; }
+  }
 }
 
 // ── Miniatura de Video: subir imagen ──
-function pfOpenThumbnailWidget() {
-  pfPickImage('image/jpeg,image/png,image/webp', 5, async (base64) => {
-    const btn = document.querySelector('[onclick="pfOpenThumbnailWidget()"]');
-    const origHTML = btn ? btn.innerHTML : '';
-    if(btn) { btn.innerHTML = '<ion-icon name="sync-outline" style="animation:spin .8s linear infinite"></ion-icon>'; btn.disabled = true; }
-    try {
-      const data = await pfSubirImagen(base64, 'thumbnails');
-      if(data.success) {
-        const inp = document.getElementById('pf-vid-thumbnail');
-        if(inp) {
-          inp.value = data.url;
-          inp.dispatchEvent(new Event('input'));
-        }
-        toast('✅ Miniatura subida a Cloudinary');
-      } else {
-        toast('❌ ' + (data.error || 'Error al subir'));
-      }
-    } catch(e) {
-      toast('❌ Error al subir miniatura');
-    } finally {
-      if(btn) { btn.innerHTML = origHTML; btn.disabled = false; }
-    }
-  });
+async function pfOpenThumbnailWidget() {
+  const file = await pfPickFile('image/jpeg,image/jpg,image/png,image/webp', 15);
+  if(!file) return;
+  const btn  = document.querySelector('[onclick="pfOpenThumbnailWidget()"]');
+  const orig = btn ? btn.innerHTML : '';
+  if(btn) { btn.innerHTML='<ion-icon name="sync-outline" style="animation:spin .8s linear infinite"></ion-icon>'; btn.disabled=true; }
+  try {
+    const data = await pfSubirImagen(file, 'thumbnails');
+    if(!data.success) throw new Error(data.error);
+    const inp = document.getElementById('pf-vid-thumbnail');
+    if(inp) { inp.value = data.url; inp.dispatchEvent(new Event('input')); }
+    toast('✅ Miniatura subida a Cloudinary');
+  } catch(err) {
+    toast('❌ ' + (err.message || 'Error al subir miniatura'));
+  } finally {
+    if(btn) { btn.innerHTML=orig; btn.disabled=false; }
+  }
 }
+
+
+// ── Cambio de modo Avatar: URL vs Subir ──
+function pfSwitchAvatarMode(mode) {
+  const urlDiv    = document.getElementById('pf-av-mode-url');
+  const uploadDiv = document.getElementById('pf-av-mode-upload');
+  const tabUrl    = document.getElementById('pf-av-tab-url');
+  const tabUp     = document.getElementById('pf-av-tab-upload');
+  if(mode === 'url') {
+    urlDiv.style.display    = '';
+    uploadDiv.style.display = 'none';
+    tabUrl.classList.add('active');
+    tabUp.classList.remove('active');
+  } else {
+    urlDiv.style.display    = 'none';
+    uploadDiv.style.display = '';
+    tabUrl.classList.remove('active');
+    tabUp.classList.add('active');
+  }
+}
+
+// ── Guardar avatar desde URL ──
+async function pfSaveAvatar() {
+  const url = document.getElementById('pf-input-avatar-url').value.trim();
+  if(!url) { toast('⚠️ Ingresa una URL de avatar'); return; }
+  try {
+    const _avatarToken = LS.get('token');
+    const res = await fetch(`${PF_API}/usuarios/update-avatar`,{
+      method:'PUT',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${_avatarToken}`},
+      body: JSON.stringify({ nuevaFoto:url })
+    });
+    if(res.ok) {
+      toast('✅ Avatar actualizado');
+      const img = document.getElementById('pf-avatar-img');
+      img.src=url; img.style.display='block';
+      document.getElementById('pf-avatar-icon').style.display='none';
+      pfCloseSettings();
+    } else toast('❌ Error al actualizar avatar');
+  } catch(e) { toast('❌ Error de conexión'); }
+}
+
+// ── Helper: abre file input y devuelve base64 ──
 async function pfSaveBio() {
   const bio = document.getElementById('pf-input-bio').value.trim();
   if(!bio) { toast('⚠️ La bio no puede estar vacía'); return; }
