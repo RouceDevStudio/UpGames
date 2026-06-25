@@ -1114,6 +1114,11 @@ display:block;
                         alert(`✅ Ahora sigues a @${usuarioViendo}`);
                     }
                     await cargarPerfilUsuario();
+                } else if (response.status === 401) {
+                    // Sesión expirada — limpiar y redirigir con aviso claro
+                    localStorage.clear();
+                    alert('Tu sesión expiró. Por favor vuelve a iniciar sesión.');
+                    window.location.replace('../index.html');
                 } else {
                     throw new Error(data.error || "Error al seguir");
                 }
@@ -1148,6 +1153,10 @@ display:block;
                         alert(`💔 Dejaste de seguir a @${usuarioViendo}`);
                     }
                     await cargarPerfilUsuario();
+                } else if (response.status === 401) {
+                    localStorage.clear();
+                    alert('Tu sesión expiró. Por favor vuelve a iniciar sesión.');
+                    window.location.replace('../index.html');
                 } else {
                     throw new Error(data.error || "Error al dejar de seguir");
                 }
