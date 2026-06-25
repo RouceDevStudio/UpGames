@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
-const { Readable } = require('stream');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
@@ -1922,14 +1921,10 @@ app.post('/upload/imagen', verificarToken, imageUpload.single('imagen'), async (
             opciones.transformation = [{ width: 1280, height: 720, crop: 'limit', quality: 'auto:good', fetch_format: 'auto' }];
         }
 
-        const uploadDesdeBuffer = (buffer, opts) => new Promise((resolve, reject) => {
-            const stream = cloudinary.uploader.upload_stream(opts, (err, result) => {
-                if(err) reject(err); else resolve(result);
-            });
-            Readable.from(buffer).pipe(stream);
-        });
+        // Convertir buffer a data URI y usar upload() — igual que chat_images (probado y funciona)
+        const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+        const result  = await cloudinary.uploader.upload(dataUri, opciones);
 
-        const result = await uploadDesdeBuffer(req.file.buffer, opciones);
         logger.info(`[upload/imagen] @${req.usuario} → ${carpeta}: ${result.secure_url}`);
         res.json({ success: true, url: result.secure_url });
     } catch (err) {
@@ -1956,18 +1951,13 @@ app.post('/upload/video', verificarToken, videoUpload.single('video'), async (re
 
         const carpeta = ['videos','covers','thumbnails'].includes(req.body.folder) ? req.body.folder : 'videos';
 
-        const uploadDesdeBuffer = (buffer, opciones) => new Promise((resolve, reject) => {
-            const stream = cloudinary.uploader.upload_stream(opciones, (error, result) => {
-                if(error) reject(error);
-                else resolve(result);
-            });
-            Readable.from(buffer).pipe(stream);
-        });
-
-        const result = await uploadDesdeBuffer(req.file.buffer, {
+        // Convertir buffer a data URI y usar upload() — mismo patrón que upload/imagen
+        const mimeType = req.file.mimetype || 'video/mp4';
+        const dataUri  = `data:${mimeType};base64,${req.file.buffer.toString('base64')}`;
+        const result   = await cloudinary.uploader.upload(dataUri, {
             folder: carpeta,
             resource_type: 'video',
-            transformation: [{ quality: 'auto:good', fetch_format: 'auto' }]
+            transformation: [{ quality: 'auto:good' }]
         });
 
         logger.info(`[upload/video] @${req.usuario} → ${carpeta}: ${result.secure_url}`);
