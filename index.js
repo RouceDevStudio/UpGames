@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cloudinary = require('cloudinary').v2;
+const multer = require('multer');
+const { Readable } = require('stream');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
@@ -1923,6 +1925,46 @@ app.post('/upload/imagen', verificarToken, async (req, res) => {
     } catch (err) {
         logger.error(`Error en upload/imagen: ${err.message}`);
         res.status(500).json({ success: false, error: 'Error al subir imagen a Cloudinary' });
+    }
+});
+
+// ── Instancia multer para videos (memoria, sin disco) ──
+const videoUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 524288000 }, // 500MB
+    fileFilter: (req, file, cb) => {
+        const allowed = ['video/mp4','video/webm','video/quicktime','video/x-msvideo','video/x-matroska'];
+        if(allowed.includes(file.mimetype)) cb(null, true);
+        else cb(new Error('Formato de video no soportado'), false);
+    }
+});
+
+// ── Subida de videos a Cloudinary (formulario de publicación + portadas) ──
+app.post('/upload/video', verificarToken, videoUpload.single('video'), async (req, res) => {
+    try {
+        if(!req.file) return res.status(400).json({ success: false, error: 'Video requerido' });
+
+        const carpeta = ['videos','covers','thumbnails'].includes(req.body.folder) ? req.body.folder : 'videos';
+
+        const uploadDesdeBuffer = (buffer, opciones) => new Promise((resolve, reject) => {
+            const stream = cloudinary.uploader.upload_stream(opciones, (error, result) => {
+                if(error) reject(error);
+                else resolve(result);
+            });
+            Readable.from(buffer).pipe(stream);
+        });
+
+        const result = await uploadDesdeBuffer(req.file.buffer, {
+            folder: carpeta,
+            resource_type: 'video',
+            transformation: [{ quality: 'auto:good', fetch_format: 'auto' }]
+        });
+
+        logger.info(`[upload/video] @${req.usuario} → ${carpeta}: ${result.secure_url}`);
+        res.json({ success: true, url: result.secure_url, public_id: result.public_id });
+    } catch (err) {
+        logger.error(`Error en upload/video: ${err.message}`);
+        res.status(500).json({ success: false, error: err.message || 'Error al subir video a Cloudinary' });
     }
 });
 
