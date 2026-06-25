@@ -1895,6 +1895,37 @@ app.put('/usuarios/update-avatar', [verificarToken, body('avatarUrl').optional()
     }
 });
 
+// ── Subida de imágenes a Cloudinary (avatar, portadas, miniaturas) ──
+app.post('/upload/imagen', verificarToken, async (req, res) => {
+    try {
+        const { imagen, folder } = req.body;
+        if (!imagen) return res.status(400).json({ success: false, error: 'Imagen requerida' });
+
+        // Aceptar base64 o URL remota
+        const esBase64 = imagen.startsWith('data:image');
+        const esUrl    = imagen.startsWith('http');
+        if (!esBase64 && !esUrl) return res.status(400).json({ success: false, error: 'Formato de imagen inválido' });
+
+        const carpeta   = ['avatars','covers','thumbnails'].includes(folder) ? folder : 'covers';
+        const opciones  = { folder: carpeta, resource_type: 'image' };
+
+        if (carpeta === 'avatars') {
+            opciones.transformation = [{ width: 400, height: 400, crop: 'fill', gravity: 'face', quality: 'auto:good', fetch_format: 'auto' }];
+        } else if (carpeta === 'thumbnails') {
+            opciones.transformation = [{ width: 1280, height: 720, crop: 'limit', quality: 'auto:good', fetch_format: 'auto' }];
+        } else {
+            opciones.transformation = [{ width: 1280, height: 720, crop: 'limit', quality: 'auto:good', fetch_format: 'auto' }];
+        }
+
+        const result = await cloudinary.uploader.upload(imagen, opciones);
+        logger.info(`[upload/imagen] @${req.usuario} → ${carpeta}: ${result.secure_url}`);
+        res.json({ success: true, url: result.secure_url });
+    } catch (err) {
+        logger.error(`Error en upload/imagen: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error al subir imagen a Cloudinary' });
+    }
+});
+
 app.put('/usuarios/update-bio', [verificarToken, body('bio').isLength({ max: 200 })], async (req, res) => {
     try {
         await Usuario.updateOne({ usuario: req.usuario.toLowerCase() }, { $set: { bio: req.body.bio || '' } });
