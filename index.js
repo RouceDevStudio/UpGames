@@ -1,7 +1,6 @@
 require('dotenv').config();
 const express = require('express');
 const cloudinary = require('cloudinary').v2;
-const multer = require('multer');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
@@ -163,8 +162,8 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-token']
 }));
 
-app.use(express.json({ limit: '2mb' }));
-app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
 // ========== RATE LIMITING ==========
 const generalLimiter = rateLimit({
@@ -1896,35 +1895,22 @@ app.put('/usuarios/update-avatar', [verificarToken, body('avatarUrl').optional()
     }
 });
 
-// ── Subida de imágenes a Cloudinary (avatar, portadas, miniaturas) ──
-// ── Instancia multer para imágenes ──
-const imageUpload = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 15 * 1024 * 1024 }, // 15MB
-    fileFilter: (req, file, cb) => {
-        const allowed = ['image/jpeg','image/jpg','image/png','image/webp','image/gif'];
-        if(allowed.includes(file.mimetype)) cb(null, true);
-        else cb(new Error('Formato de imagen no soportado'), false);
-    }
-});
-
-app.post('/upload/imagen', verificarToken, imageUpload.single('imagen'), async (req, res) => {
+// ── Subir imagen: patrón IDÉNTICO a chat_images (JSON + base64, sin dependencias extra) ──
+app.post('/upload/imagen', [verificarToken, body('imagen').notEmpty(), body('folder').optional()], async (req, res) => {
     try {
-        if(!req.file) return res.status(400).json({ success: false, error: 'Imagen requerida' });
+        const { imagen, folder } = req.body;
+        if (!imagen) return res.status(400).json({ success: false, error: 'Imagen requerida' });
 
-        const carpeta  = ['avatars','covers','thumbnails'].includes(req.body.folder) ? req.body.folder : 'covers';
+        const carpeta  = ['avatars','covers','thumbnails'].includes(folder) ? folder : 'covers';
         const opciones = { folder: carpeta, resource_type: 'image' };
 
-        if(carpeta === 'avatars') {
+        if (carpeta === 'avatars') {
             opciones.transformation = [{ width: 400, height: 400, crop: 'fill', gravity: 'face', quality: 'auto:good', fetch_format: 'auto' }];
         } else {
             opciones.transformation = [{ width: 1280, height: 720, crop: 'limit', quality: 'auto:good', fetch_format: 'auto' }];
         }
 
-        // Convertir buffer a data URI y usar upload() — igual que chat_images (probado y funciona)
-        const dataUri = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
-        const result  = await cloudinary.uploader.upload(dataUri, opciones);
-
+        const result = await cloudinary.uploader.upload(imagen, opciones);
         logger.info(`[upload/imagen] @${req.usuario} → ${carpeta}: ${result.secure_url}`);
         res.json({ success: true, url: result.secure_url });
     } catch (err) {
@@ -1933,40 +1919,26 @@ app.post('/upload/imagen', verificarToken, imageUpload.single('imagen'), async (
     }
 });
 
-// ── Instancia multer para videos (memoria, sin disco) ──
-const videoUpload = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 524288000 }, // 500MB
-    fileFilter: (req, file, cb) => {
-        const allowed = ['video/mp4','video/webm','video/quicktime','video/x-msvideo','video/x-matroska'];
-        if(allowed.includes(file.mimetype)) cb(null, true);
-        else cb(new Error('Formato de video no soportado'), false);
-    }
-});
-
-// ── Subida de videos a Cloudinary (formulario de publicación + portadas) ──
-app.post('/upload/video', verificarToken, videoUpload.single('video'), async (req, res) => {
+// ── Firma para subir video DIRECTO a Cloudinary desde el frontend (sin pasar por Railway) ──
+app.get('/upload/video-sign', verificarToken, (req, res) => {
     try {
-        if(!req.file) return res.status(400).json({ success: false, error: 'Video requerido' });
-
-        const carpeta = ['videos','covers','thumbnails'].includes(req.body.folder) ? req.body.folder : 'videos';
-
-        // Convertir buffer a data URI y usar upload() — mismo patrón que upload/imagen
-        const mimeType = req.file.mimetype || 'video/mp4';
-        const dataUri  = `data:${mimeType};base64,${req.file.buffer.toString('base64')}`;
-        const result   = await cloudinary.uploader.upload(dataUri, {
-            folder: carpeta,
-            resource_type: 'video',
-            transformation: [{ quality: 'auto:good' }]
+        const folder    = ['videos','covers'].includes(req.query.folder) ? req.query.folder : 'videos';
+        const timestamp = Math.round(Date.now() / 1000);
+        const params    = { timestamp, folder };
+        const signature = cloudinary.utils.api_sign_request(params, process.env.CLOUDINARY_API_SECRET);
+        res.json({
+            signature,
+            timestamp,
+            api_key:    process.env.CLOUDINARY_API_KEY,
+            cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+            folder
         });
-
-        logger.info(`[upload/video] @${req.usuario} → ${carpeta}: ${result.secure_url}`);
-        res.json({ success: true, url: result.secure_url, public_id: result.public_id });
     } catch (err) {
-        logger.error(`Error en upload/video: ${err.message}`);
-        res.status(500).json({ success: false, error: err.message || 'Error al subir video a Cloudinary' });
+        logger.error(`Error en video-sign: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error generando firma' });
     }
 });
+
 
 app.put('/usuarios/update-bio', [verificarToken, body('bio').isLength({ max: 200 })], async (req, res) => {
     try {
