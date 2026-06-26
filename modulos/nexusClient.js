@@ -137,9 +137,27 @@ function sendEvento(usuario, tipo, datos = {}) {
     if (!usuario || !tipo) return;
     request(
         'POST',
-        `${NEXUS_API}/api/upgames/evento`,
+        `${NEXUS_API}/api/nexus/events`,
         { usuario, tipo, datos, ts: new Date().toISOString() }
     ).catch(err => logger.debug(`[nexusClient] sendEvento: ${err.message}`));
+}
+
+/**
+ * Pide a Nexus que modere un item antes de publicarlo.
+ * Retorna { decision, confianza, razones, sugerencias, calidad_estimada } o null.
+ */
+async function moderarItem(itemData, userJwt) {
+    try {
+        return await request(
+            'POST',
+            `${NEXUS_API}/api/nexus/moderar-item`,
+            itemData,
+            authHeader(userJwt)
+        );
+    } catch (err) {
+        logger.warn(`[nexusClient] moderarItem: ${err.message}`);
+        return null;
+    }
 }
 
 /**
@@ -162,5 +180,6 @@ module.exports = {
     analyzeFraud,
     getCreatorAnalytics,
     sendEvento,
+    moderarItem,
     getUserProfile,
 };
