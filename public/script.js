@@ -1546,6 +1546,22 @@ async function pfLoadUserData() {
       document.getElementById('pf-stat-uploads').textContent = aprobados;
     }
   } catch(e) {}
+
+  // Gamificación — XP y nivel en header de perfil
+  try {
+    const token = LS.get('token');
+    if(token) {
+      const gr = await fetch(`${PF_API}/gamification/profile/${encodeURIComponent(pfUser)}`, { headers: { Authorization: `Bearer ${token}` } });
+      if(gr.ok) {
+        const gd = await gr.json();
+        const g = gd.gamification || gd;
+        if(g && g.nivel) {
+          const xpEl = document.getElementById('pf-stat-xp');
+          if(xpEl) { xpEl.textContent = `Nv.${g.nivel} · ${(g.xp||0).toLocaleString()} XP`; }
+        }
+      }
+    }
+  } catch(_) {}
 }
 
 // ── Inner tab switching ──
@@ -1559,6 +1575,9 @@ function pfSwitchTab(tabName, el) {
   if(tabName === 'historial') pfLoadHistorial();
   if(tabName === 'boveda') pfLoadBoveda();
   if(tabName === 'reportes') pfLoadReportes();
+  if(tabName === 'analytics') pfLoadAnalytics();
+  if(tabName === 'pagos') pfLoadHistorialPagos();
+  if(tabName === 'logros') pfLoadLogros();
   if(tabName === 'economia') pfStartEcoPolling();
   else pfStopEcoPolling();
 }
@@ -5106,3 +5125,198 @@ function showBuyModal(itemId, gameName, purchaseLink) {
   document.body.appendChild(overlay);
   overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
 }
+
+// ═══════════════════════════════════════════════════════════
+// ANALYTICS TAB — Nexus creator insights
+// ═══════════════════════════════════════════════════════════
+let _analyticsLoaded = false;
+async function pfLoadAnalytics() {
+  if(_analyticsLoaded) return;
+  _analyticsLoaded = true;
+  const el = document.getElementById('pf-analytics-content');
+  if(!el) return;
+  const token = LS.get('token');
+  if(!token) { el.innerHTML = '<div class="pf-empty"><ion-icon name="lock-closed"></ion-icon><p>Inicia sesión para ver tus analytics</p></div>'; return; }
+  try {
+    const r = await fetch(`${PF_API}/nexus/mis-analytics`, { headers: { Authorization: `Bearer ${token}` } });
+    const d = await r.json();
+    if(!r.ok || d.error) { el.innerHTML = '<div class="pf-empty"><ion-icon name="cloud-offline"></ion-icon><p>Nexus no disponible ahora. Intenta más tarde.</p></div>'; return; }
+    const insights = d.insights || d.data || d;
+    el.innerHTML = `
+      <div style="display:grid;gap:12px;padding:4px 0">
+        ${insights.puntuacion !== undefined ? `
+        <div class="pf-info-box" style="border-color:rgba(94,255,67,.3)">
+          <ion-icon name="star" style="color:#5EFF43;font-size:28px"></ion-icon>
+          <div>
+            <h4 style="color:#5EFF43">Puntuación de Creador: ${insights.puntuacion}/100</h4>
+            <p>${insights.resumen || 'Análisis completado por Nexus IA'}</p>
+          </div>
+        </div>` : ''}
+        ${(insights.recomendaciones || []).length > 0 ? `
+        <div class="pf-section-title" style="margin-top:8px"><ion-icon name="bulb"></ion-icon> RECOMENDACIONES DE NEXUS</div>
+        ${insights.recomendaciones.map(r => `
+          <div class="pf-info-box">
+            <ion-icon name="arrow-forward-circle" style="color:#00f2ff"></ion-icon>
+            <div><p>${r}</p></div>
+          </div>`).join('')}` : ''}
+        ${(insights.categorias || []).length > 0 ? `
+        <div class="pf-section-title" style="margin-top:8px"><ion-icon name="pie-chart"></ion-icon> CATEGORÍAS TOP</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          ${insights.categorias.map(c => `<span style="background:rgba(94,255,67,.1);border:1px solid rgba(94,255,67,.3);padding:4px 12px;border-radius:20px;font-size:12px;color:#5EFF43">${c}</span>`).join('')}
+        </div>` : ''}
+        <div class="pf-info-box" style="opacity:.6;margin-top:4px">
+          <ion-icon name="information-circle"></ion-icon>
+          <div><p style="font-size:11px">Analytics calculados por Nexus IA en base a tu actividad y la de tus seguidores.</p></div>
+        </div>
+      </div>`;
+  } catch(e) {
+    el.innerHTML = '<div class="pf-empty"><ion-icon name="cloud-offline"></ion-icon><p>No se pudo conectar con Nexus.</p></div>';
+    _analyticsLoaded = false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// PAGOS TAB — historial de retiros del creador
+// ═══════════════════════════════════════════════════════════
+let _pagosLoaded = false;
+async function pfLoadHistorialPagos() {
+  if(_pagosLoaded) return;
+  _pagosLoaded = true;
+  const el = document.getElementById('pf-pagos-content');
+  if(!el) return;
+  const token = LS.get('token');
+  if(!token) { el.innerHTML = '<div class="pf-empty"><ion-icon name="lock-closed"></ion-icon><p>Inicia sesión para ver tus retiros</p></div>'; return; }
+  try {
+    const r = await fetch(`${PF_API}/economia/historial-pagos`, { headers: { Authorization: `Bearer ${token}` } });
+    const d = await r.json();
+    if(!d.success || !d.historial.length) {
+      el.innerHTML = '<div class="pf-empty"><ion-icon name="cash-outline"></ion-icon><p>Aún no tienes solicitudes de retiro</p></div>';
+      return;
+    }
+    const colorEstado = { completado:'#5EFF43', pendiente:'#ffd23f', rechazado:'#ff4d6d', procesado:'#00f2ff' };
+    el.innerHTML = `
+      <div style="display:grid;gap:10px;padding:4px 0">
+        ${d.historial.map(p => `
+          <div style="background:#1a1a28;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:14px 16px;display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-weight:700;font-size:16px;color:#f0f0f8">$${parseFloat(p.monto).toFixed(2)} <span style="font-size:11px;color:#60607a">USD</span></div>
+              <div style="font-size:11px;color:#60607a;margin-top:3px">${new Date(p.fecha).toLocaleDateString('es-ES',{year:'numeric',month:'short',day:'numeric'})}</div>
+              ${p.paypalEmail ? `<div style="font-size:11px;color:#60607a">→ ${p.paypalEmail}</div>` : ''}
+              ${p.notas ? `<div style="font-size:11px;color:#a0a0b8;margin-top:4px">${p.notas}</div>` : ''}
+            </div>
+            <span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(0,0,0,.3);color:${colorEstado[p.estado]||'#aaa'};border:1px solid ${colorEstado[p.estado]||'#aaa'}">${(p.estado||'').toUpperCase()}</span>
+          </div>`).join('')}
+      </div>`;
+  } catch(e) {
+    el.innerHTML = '<div class="pf-empty"><ion-icon name="warning"></ion-icon><p>Error al cargar historial</p></div>';
+    _pagosLoaded = false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// LOGROS TAB — gamificación (XP, badges, level)
+// ═══════════════════════════════════════════════════════════
+let _logrosLoaded = false;
+async function pfLoadLogros() {
+  if(_logrosLoaded) return;
+  _logrosLoaded = true;
+  const el = document.getElementById('pf-logros-content');
+  if(!el) return;
+  const token = LS.get('token');
+  const user  = LS.get('user_admin');
+  if(!token || !user) { el.innerHTML = '<div class="pf-empty"><ion-icon name="lock-closed"></ion-icon><p>Inicia sesión para ver tus logros</p></div>'; return; }
+  try {
+    const r = await fetch(`${PF_API}/gamification/profile/${encodeURIComponent(user)}`, { headers: { Authorization: `Bearer ${token}` } });
+    if(!r.ok) throw new Error('no-data');
+    const d = await r.json();
+    const g = d.gamification || d;
+    const xp = g.xp || 0;
+    const nivel = g.nivel || 1;
+    const xpNext = nivel * 500;
+    const pct = Math.min(100, Math.round((xp % xpNext) / xpNext * 100));
+    const badges = g.badges || [];
+    el.innerHTML = `
+      <div style="display:grid;gap:16px;padding:4px 0">
+        <div style="background:linear-gradient(135deg,#1a1a28,#0f0f18);border:1px solid rgba(94,255,67,.2);border-radius:14px;padding:20px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div>
+              <div style="font-size:11px;color:#60607a;letter-spacing:.1em">NIVEL</div>
+              <div style="font-size:32px;font-weight:900;color:#5EFF43">${nivel}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:11px;color:#60607a">XP TOTAL</div>
+              <div style="font-size:20px;font-weight:700;color:#f0f0f8">${xp.toLocaleString()}</div>
+            </div>
+          </div>
+          <div style="background:rgba(255,255,255,.06);border-radius:8px;height:8px;overflow:hidden">
+            <div style="background:linear-gradient(90deg,#5EFF43,#00f2ff);height:100%;width:${pct}%;border-radius:8px;transition:width .5s"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:#60607a">
+            <span>${xp % xpNext} XP</span><span>${xpNext} XP para nivel ${nivel+1}</span>
+          </div>
+        </div>
+        ${g.racha > 0 ? `
+        <div class="pf-info-box" style="border-color:rgba(255,210,63,.3)">
+          <ion-icon name="flame" style="color:#ffd23f;font-size:28px"></ion-icon>
+          <div><h4 style="color:#ffd23f">Racha: ${g.racha} días</h4><p>¡Sigue así! Cada día de actividad suma XP extra.</p></div>
+        </div>` : ''}
+        ${badges.length > 0 ? `
+        <div class="pf-section-title"><ion-icon name="medal"></ion-icon> BADGES DESBLOQUEADOS (${badges.length})</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px">
+          ${badges.map(b => `
+            <div style="background:#1a1a28;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:12px 8px;text-align:center" title="${b.descripcion||b.id}">
+              <div style="font-size:26px">${b.emoji||'🏅'}</div>
+              <div style="font-size:10px;color:#a0a0b8;margin-top:4px;word-break:break-word">${b.nombre||b.id}</div>
+            </div>`).join('')}
+        </div>` : '<div class="pf-empty"><ion-icon name="medal-outline"></ion-icon><p>Aún no tienes badges. ¡Sube contenido y participa!</p></div>'}
+      </div>`;
+  } catch(e) {
+    el.innerHTML = '<div class="pf-empty"><ion-icon name="trophy-outline"></ion-icon><p>Logros no disponibles aún.</p></div>';
+    _logrosLoaded = false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// SEARCH AUTOCOMPLETE
+// ═══════════════════════════════════════════════════════════
+(function initAutocomplete() {
+  const input = document.getElementById('buscador');
+  const drop  = document.getElementById('autocomplete-dropdown');
+  if(!input || !drop) return;
+
+  let _acTimer = null;
+
+  function closeDropdown() { drop.style.display = 'none'; drop.innerHTML = ''; }
+
+  input.addEventListener('input', function() {
+    const q = this.value.trim();
+    clearTimeout(_acTimer);
+    if(q.length < 2) { closeDropdown(); return; }
+    _acTimer = setTimeout(async () => {
+      try {
+        const r = await fetch(`${API_URL}/search/autocomplete?q=${encodeURIComponent(q)}&limit=6`);
+        if(!r.ok) return;
+        const d = await r.json();
+        const sugs = d.suggestions || d.results || [];
+        if(!sugs.length) { closeDropdown(); return; }
+        drop.innerHTML = sugs.map(s => `
+          <div class="ac-item" onclick="document.getElementById('buscador').value='${(s.title||s).replace(/'/g,"\\'")}';document.getElementById('buscador').dispatchEvent(new Event('input'));document.getElementById('autocomplete-dropdown').style.display='none'" style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.05);transition:background .15s" onmouseover="this.style.background='rgba(94,255,67,.07)'" onmouseout="this.style.background=''">
+            ${s.image ? `<img src="${s.image}" style="width:32px;height:32px;border-radius:6px;object-fit:cover" onerror="this.style.display='none'">` : '<ion-icon name="search-outline" style="color:#60607a;font-size:18px"></ion-icon>'}
+            <div>
+              <div style="font-size:13px;color:#f0f0f8">${s.title||s}</div>
+              ${s.category ? `<div style="font-size:10px;color:#60607a">${s.category}</div>` : ''}
+            </div>
+          </div>`).join('');
+        drop.style.display = 'block';
+      } catch(_) {}
+    }, 250);
+  });
+
+  document.addEventListener('click', function(e) {
+    if(!drop.contains(e.target) && e.target !== input) closeDropdown();
+  });
+
+  input.addEventListener('keydown', function(e) {
+    if(e.key === 'Escape') closeDropdown();
+  });
+})();
