@@ -28,6 +28,7 @@ const recommendations = require('./modulos/recommendations');
 const twoFactor       = require('./modulos/twoFactor');
 const nexusClient     = require('./modulos/nexusClient');
 const gameDetector    = require('./modulos/gameDetector');
+const searchModule    = require('./modulos/search');
 // ==========================================
 
 const https = require('https');
@@ -151,7 +152,7 @@ app.options('*', cors());
 app.use(cors({
     origin: (origin, callback) => {
         if (!origin) return callback(null, true);
-        if (allowedOrigins.some(allowed => origin.startsWith(allowed))) {
+        if (allowedOrigins.some(allowed => origin === allowed || origin.startsWith(allowed + '/'))) {
             callback(null, true);
         } else {
             callback(new Error(`CORS: Origen no permitido → ${origin}`));
@@ -380,7 +381,8 @@ const JuegoSchema = new mongoose.Schema({
     scoreRecomendacion: { type: Number, default: 0 },
     videoType:          { type: String, default: '' },
     featuredItemId:     { type: String, default: '' },
-    extraData:          { type: mongoose.Schema.Types.Mixed, default: {} }
+    extraData:          { type: mongoose.Schema.Types.Mixed, default: {} },
+    nexusMentor:        { type: mongoose.Schema.Types.Mixed, default: null }
 }, { timestamps: true, strict: false });
 
 JuegoSchema.index({ usuario: 1, status: 1 });
@@ -1026,13 +1028,14 @@ app.put('/admin/finanzas/tarjetas/:tarjetaId/principal', verificarAdmin, async (
 app.get('/admin/finanzas/solicitudes-pendientes', verificarAdmin, async (req, res) => {
     try {
         const solicitudes = await Pago.find({ estado: 'pendiente' }).sort({ fecha: -1 }).lean();
-        const solicitudesEnriquecidas = await Promise.all(solicitudes.map(async (s) => {
-            const [usuario, juegosElegibles] = await Promise.all([
-                Usuario.findOne({ usuario: s.usuario }).select('email verificadoNivel isVerificado descargasTotales').lean(),
-                Juego.countDocuments({ usuario: s.usuario, descargasEfectivas: { $gt: 0 } })
-            ]);
-            return { ...s, datosUsuario: { email: usuario?.email || '', verificadoNivel: usuario?.verificadoNivel || 0, isVerificado: usuario?.isVerificado || false, descargasTotales: usuario?.descargasTotales || 0, juegosElegibles } };
-        }));
+        const usernames = solicitudes.map(s => s.usuario);
+        const [usuariosData, juegosAgg] = await Promise.all([
+            Usuario.find({ usuario: { $in: usernames } }).select('usuario email verificadoNivel isVerificado descargasTotales').lean(),
+            Juego.aggregate([{ $match: { usuario: { $in: usernames }, descargasEfectivas: { $gt: 0 } } }, { $group: { _id: '$usuario', count: { $sum: 1 } } }])
+        ]);
+        const usuarioMap = Object.fromEntries(usuariosData.map(u => [u.usuario, u]));
+        const juegosMap  = Object.fromEntries(juegosAgg.map(j => [j._id, j.count]));
+        const solicitudesEnriquecidas = solicitudes.map(s => ({ ...s, datosUsuario: { email: usuarioMap[s.usuario]?.email || '', verificadoNivel: usuarioMap[s.usuario]?.verificadoNivel || 0, isVerificado: usuarioMap[s.usuario]?.isVerificado || false, descargasTotales: usuarioMap[s.usuario]?.descargasTotales || 0, juegosElegibles: juegosMap[s.usuario] || 0 } }));
         res.json({ success: true, solicitudes: solicitudesEnriquecidas, total: solicitudesEnriquecidas.length });
     } catch (error) {
         logger.error(`Error en solicitudes-pendientes: ${error.message}`);
@@ -1117,6 +1120,21 @@ app.get('/admin/finanzas/historial', verificarAdmin, async (req, res) => {
     }
 });
 
+// GET /economia/historial-pagos — historial de retiros del creador autenticado
+app.get('/economia/historial-pagos', verificarToken, async (req, res) => {
+    try {
+        const historial = await Pago.find({ usuario: req.usuario })
+            .sort({ fecha: -1 })
+            .limit(50)
+            .select('monto paypalEmail estado fecha notas')
+            .lean();
+        res.json({ success: true, historial, total: historial.length });
+    } catch (error) {
+        logger.error(`Error en historial-pagos: ${error.message}`);
+        res.status(500).json({ success: false, error: 'Error al cargar historial' });
+    }
+});
+
 app.get('/admin/finanzas/estadisticas', verificarAdmin, async (req, res) => {
     try {
         const [totalSolicitado, totalPagado, totalUsuariosConSaldo, totalUsuariosVerificados, solicitudesPendientes] = await Promise.all([
@@ -1191,6 +1209,8 @@ app.post('/auth/register', [
         });
         await nuevoUsuario.save();
         logger.info(`Nuevo usuario registrado: @${usuario} (${email})`);
+        // Nexus — registra el evento de registro (fire & forget)
+        nexusClient.sendEvento(nuevoUsuario.usuario, 'registro', { email: nuevoUsuario.email, ts: new Date().toISOString() });
 
         // ── Hook referral (si viene codigoReferral en el body) ──
         if (req.body.codigoReferral) {
@@ -1433,9 +1453,19 @@ app.put("/admin/items/:id", verificarAdmin, [
 
 app.get("/admin/items", verificarAdmin, async (req, res) => {
     try {
-        const items = await Juego.find().sort({ createdAt: -1 }).lean();
-        const itemsWithInfo = items.map(item => ({ ...item, diasDesdeCreacion: Math.floor((Date.now() - new Date(item.createdAt).getTime()) / (1000 * 60 * 60 * 24)), necesitaRevision: item.reportes >= 3 || item.linkStatus === 'revision' }));
-        res.json({ success: true, count: items.length, items: itemsWithInfo });
+        const page  = Math.max(1, parseInt(req.query.page)  || 1);
+        const limit = Math.min(200, Math.max(1, parseInt(req.query.limit) || 100));
+        const skip  = (page - 1) * limit;
+        const filtro = {};
+        if (req.query.status)     filtro.status     = req.query.status;
+        if (req.query.linkStatus) filtro.linkStatus = req.query.linkStatus;
+        const [total, items] = await Promise.all([
+            Juego.countDocuments(filtro),
+            Juego.find(filtro).sort({ createdAt: -1 }).skip(skip).limit(limit).lean()
+        ]);
+        const now = Date.now();
+        const itemsWithInfo = items.map(item => ({ ...item, diasDesdeCreacion: Math.floor((now - new Date(item.createdAt).getTime()) / (1000 * 60 * 60 * 24)), necesitaRevision: item.reportes >= 3 || item.linkStatus === 'revision' }));
+        res.json({ success: true, total, page, limit, pages: Math.ceil(total / limit), count: items.length, items: itemsWithInfo });
     } catch (error) {
         logger.error(`Error: ${error?.message}`);
         res.status(500).json({ success: false, error: "Error al obtener items" });
@@ -1466,21 +1496,6 @@ app.put("/admin/items/:id/link-status", verificarAdmin, [param('id').isMongoId()
     }
 });
 
-app.put('/items/download/:id', [param('id').isMongoId()], async (req, res) => {
-    try {
-        const errors = validationResult(req);
-        if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'ID inválido' });
-        const { tipo } = req.body;
-        if (tipo !== 'vista') return res.status(400).json({ success: false, error: 'Tipo inválido' });
-        const juego = await Juego.findByIdAndUpdate(req.params.id, { $inc: { descargasEfectivas: 1 } }, { new: true, select: 'descargasEfectivas' });
-        if (!juego) return res.status(404).json({ success: false, error: 'Item no encontrado' });
-        logger.info(`Vista registrada — ID: ${req.params.id}, Total: ${juego.descargasEfectivas}`);
-        res.json({ success: true, descargasEfectivas: juego.descargasEfectivas });
-    } catch (error) {
-        logger.error(`Error registrando vista: ${error.message}`);
-        res.status(500).json({ success: false });
-    }
-});
 
 app.put("/items/report/:id", [param('id').isMongoId(), body('motivo').isIn(['caido', 'viejo', 'malware'])], async (req, res) => {
     try {
@@ -1540,6 +1555,8 @@ app.put('/items/vistas/:id', [param('id').isMongoId()], async (req, res) => {
         const updated = await Juego.findByIdAndUpdate(juegoId, { $inc: { descargasEfectivas: 1 } }, { new: true }).select('descargasEfectivas');
         logger.info(`Vista registrada — Video: ${juego.title} | IP: ${ip} | Total: ${updated.descargasEfectivas}`);
         res.json({ success: true, duplicada: false, descargasEfectivas: updated.descargasEfectivas });
+        // Nexus — registra el evento de vista para análisis de gustos (fire & forget)
+        nexusClient.sendEvento('anon', 'vista', { itemId: juegoId, categoria: juego.category, total: updated.descargasEfectivas });
     } catch (error) {
         logger.error(`Error en PUT /items/vistas: ${error.message}`);
         res.status(500).json({ success: false, error: 'Error al registrar vista' });
@@ -1796,8 +1813,15 @@ app.get('/auth/users/public', async (req, res) => {
 
 app.get('/auth/users', verificarAdmin, async (req, res) => {
     try {
-        const users = await Usuario.find().select('-password').sort({ fecha: -1 }).lean();
-        res.json(users);
+        const page  = Math.max(1, parseInt(req.query.page)  || 1);
+        const limit = Math.min(500, Math.max(1, parseInt(req.query.limit) || 100));
+        const skip  = (page - 1) * limit;
+        const q     = req.query.q ? { usuario: { $regex: req.query.q, $options: 'i' } } : {};
+        const [total, users] = await Promise.all([
+            Usuario.countDocuments(q),
+            Usuario.find(q).select('-password').sort({ fecha: -1 }).skip(skip).limit(limit).lean()
+        ]);
+        res.json({ users, total, page, limit, pages: Math.ceil(total / limit) });
     } catch (error) {
         res.status(500).json([]);
     }
@@ -2002,6 +2026,9 @@ app.put('/usuarios/update-username', [verificarToken, body('nuevoUsuario').trim(
             Comentario.updateMany({ usuario: oldName }, { $set: { usuario: newName } }),
             Notificacion.updateMany({ destinatario: oldName }, { $set: { destinatario: newName } }),
             Notificacion.updateMany({ emisor: oldName }, { $set: { emisor: newName } }),
+            Mensaje.updateMany({ de: oldName }, { $set: { de: newName } }),
+            Mensaje.updateMany({ para: oldName }, { $set: { para: newName } }),
+            Story.updateMany({ usuario: oldName }, { $set: { usuario: newName } }),
             Usuario.updateMany({ listaSeguidores: oldName }, { $set: { 'listaSeguidores.$': newName } }),
             Usuario.updateMany({ siguiendo: oldName }, { $set: { 'siguiendo.$': newName } })
         ]);
@@ -2029,10 +2056,13 @@ app.put('/usuarios/update-email', [verificarToken, body('nuevoEmail').isEmail().
         }
         const existe = await Usuario.findOne({ email: nuevoEmail.toLowerCase() }).select('_id').lean();
         if (existe) return res.status(409).json({ success: false, error: 'Ese email ya está en uso' });
-        await Usuario.updateOne({ usuario: req.usuario.toLowerCase() }, { $set: { email: nuevoEmail.toLowerCase(), lastEmailChange: new Date(), emailVerificado: false } });
+        const verifToken = crypto.randomBytes(32).toString('hex');
+        await Usuario.updateOne({ usuario: req.usuario.toLowerCase() }, { $set: { email: nuevoEmail.toLowerCase(), lastEmailChange: new Date(), emailVerificado: false, emailVerifToken: verifToken, emailVerifExpires: new Date(Date.now() + 24 * 60 * 60 * 1000) } });
         const nuevoToken = jwt.sign({ usuario: req.usuario.toLowerCase(), email: nuevoEmail.toLowerCase() }, JWT_SECRET, { expiresIn: '30d' });
         logger.info(`Usuario ${req.usuario} cambió su email a ${nuevoEmail}`);
-        res.json({ success: true, nuevoToken });
+        const verifLink = `${API_URL_SELF}/auth/verify-email/${verifToken}`;
+        sendEmail({ to: nuevoEmail, subject: '✅ Verifica tu nuevo email en UpGames', html: emailVerifTemplate(req.usuario.toLowerCase(), verifLink) }).catch(() => {});
+        res.json({ success: true, nuevoToken, mensaje: 'Email actualizado. Revisa tu bandeja para verificar el nuevo email.' });
     } catch (err) {
         logger.error(`Error en update-email: ${err.message}`);
         res.status(500).json({ success: false, error: 'Error al actualizar email' });
@@ -2095,7 +2125,8 @@ app.post('/comentarios', [verificarToken, body('itemId').notEmpty(), body('texto
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'Datos inválidos' });
-        const nuevo = new Comentario({ ...req.body, usuario: req.usuario });
+        const textoLimpio = (req.body.texto || '').replace(/<[^>]*>/g, '').trim();
+        const nuevo = new Comentario({ ...req.body, texto: textoLimpio, usuario: req.usuario });
         await nuevo.save();
         gamification.onComentario(req.usuario).catch(() => {});
         res.status(201).json({ success: true, comentario: nuevo });
@@ -2271,7 +2302,7 @@ app.get('/notificaciones/count/:usuario', verificarToken, async (req, res) => {
     } catch (err) { res.status(500).json({ success: false, error: 'Error' }); }
 });
 
-app.post('/notificaciones', async (req, res) => {
+app.post('/notificaciones', verificarToken, async (req, res) => {
     try {
         const { usuario, tipo, emisor, itemId, itemTitle, itemImage } = req.body;
         if (!usuario || !tipo) return res.status(400).json({ success: false, error: 'usuario y tipo requeridos' });
@@ -2360,8 +2391,10 @@ app.get('/chat/mensajes/:otroUsuario', verificarToken, async (req, res) => {
         if (desde) filtro.fecha = { $gt: desde };
         const mensajes = await Mensaje.find(filtro).sort({ fecha: 1 }).limit(200).lean();
         const idsNoLeidos = mensajes.filter(m => m.para === yo && !m.leido).map(m => m._id);
-        if (idsNoLeidos.length) await Mensaje.updateMany({ _id: { $in: idsNoLeidos } }, { $set: { leido: true } });
-        res.json({ success: true, mensajes: mensajes.map(m => ({ id: m._id, de: m.de, para: m.para, texto: m.texto, imagen: m.imagen || '', leido: m.leido, fecha: m.fecha })) });
+        // mark-as-read en background — no bloquea la respuesta
+        if (idsNoLeidos.length) Mensaje.updateMany({ _id: { $in: idsNoLeidos } }, { $set: { leido: true } }).catch(() => {});
+        const idSet = new Set(idsNoLeidos.map(id => id.toString()));
+        res.json({ success: true, mensajes: mensajes.map(m => ({ id: m._id, de: m.de, para: m.para, texto: m.texto, imagen: m.imagen || '', leido: idSet.has(m._id.toString()) ? true : m.leido, fecha: m.fecha })) });
     } catch (err) {
         logger.error(`Error cargando mensajes: ${err.message}`);
         res.status(500).json({ success: false, error: 'Error interno' });
@@ -2822,6 +2855,61 @@ app.get('/items/detected', async (req, res) => {
 });
 
 // =============================================
+
+// ─── Búsqueda avanzada ───────────────────────────────────────────────────────
+
+app.get('/search/autocomplete', async (req, res) => {
+    try {
+        const q     = (req.query.q || '').trim();
+        const limit = Math.min(10, Math.max(1, parseInt(req.query.limit) || 6));
+        if (q.length < 2) return res.json({ success: true, items: [], creadores: [], categorias: [] });
+        const resultado = await searchModule.autocomplete(q, limit);
+        res.json({ success: true, ...resultado });
+    } catch (err) {
+        logger.error(`[search/autocomplete] ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error en autocomplete' });
+    }
+});
+
+app.get('/search/query', async (req, res) => {
+    try {
+        const q          = (req.query.q || '').trim();
+        const categoria  = req.query.categoria  || null;
+        const usuario    = req.query.usuario    || null;
+        const orden      = req.query.orden      || 'relevancia';
+        const page       = Math.max(1, parseInt(req.query.page)  || 1);
+        const limit      = Math.min(50, Math.max(1, parseInt(req.query.limit) || 20));
+        const minLikes   = parseInt(req.query.minLikes)   || 0;
+        const minDescargas = parseInt(req.query.minDescargas) || 0;
+        const desde      = req.query.desde || null;
+        const hasta      = req.query.hasta || null;
+
+        const resultado = await searchModule.buscar({ q, categoria, usuario, orden, page, limit, minLikes, minDescargas, desde, hasta, incluirFacets: req.query.facets === '1' });
+
+        if (q.length >= 2) {
+            searchModule.registrarBusqueda(q);
+            const userId = req.headers.authorization?.split(' ')[1] ? (() => { try { return require('jsonwebtoken').verify(req.headers.authorization.split(' ')[1], JWT_SECRET).usuario; } catch { return 'anon'; } })() : 'anon';
+            nexusClient.sendEvento(userId, 'busqueda', { q, categoria: categoria || 'all', orden, resultados: resultado.total });
+        }
+
+        res.json({ success: true, ...resultado });
+    } catch (err) {
+        logger.error(`[search/query] ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error en búsqueda' });
+    }
+});
+
+app.get('/search/populares', async (req, res) => {
+    try {
+        const limit = Math.min(20, Math.max(1, parseInt(req.query.limit) || 10));
+        res.json({ success: true, busquedas: searchModule.busquedasPopulares(limit) });
+    } catch (err) {
+        logger.error(`[search/populares] ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error' });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ========== MANEJO DE ERRORES ==========
 app.use((req, res) => {
