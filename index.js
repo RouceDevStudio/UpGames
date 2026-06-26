@@ -474,16 +474,36 @@ const Favorito = mongoose.model('Favoritos', FavoritosSchema);
 
 const NotificacionSchema = new mongoose.Schema({
     destinatario: { type: String, required: true, index: true },
-    tipo:     { type: String, enum: ['nueva_publicacion', 'favorito', 'descarga', 'sistema', 'comentario'], required: true },
+    tipo:     { type: String, enum: ['nueva_publicacion', 'favorito', 'descarga', 'sistema', 'comentario', 'seguidor', 'logro'], required: true },
     emisor:   { type: String, required: true },
     itemId:   { type: String, default: '' },
     itemTitle:{ type: String, default: '' },
     itemImage:{ type: String, default: '' },
+    mensaje:  { type: String, default: '' },
     leida:    { type: Boolean, default: false, index: true },
     fecha:    { type: Date, default: Date.now, index: true, expires: 30 * 24 * 60 * 60 }
 }, { collection: 'notificaciones', timestamps: false });
 NotificacionSchema.index({ destinatario: 1, leida: 1, fecha: -1 });
 const Notificacion = mongoose.model('Notificacion', NotificacionSchema);
+
+/**
+ * Helper unificado para crear notificaciones de forma segura (fire-and-forget).
+ * Evita auto-notificarse y nunca lanza errores que rompan la petición principal.
+ */
+function crearNotif({ destinatario, tipo, emisor = '', itemId = '', itemTitle = '', itemImage = '', mensaje = '' }) {
+    try {
+        if (!destinatario || !tipo) return;
+        if (emisor && destinatario.toLowerCase() === emisor.toLowerCase()) return; // no auto-notificar
+        new Notificacion({
+            destinatario: destinatario.toLowerCase(),
+            tipo, emisor, itemId: itemId || '', itemTitle: itemTitle || '',
+            itemImage: itemImage || '', mensaje: mensaje || '',
+            leida: false, fecha: new Date()
+        }).save().catch(err => logger.debug(`[crearNotif] ${err.message}`));
+    } catch (err) {
+        logger.debug(`[crearNotif] ${err.message}`);
+    }
+}
 
 const MensajeSchema = new mongoose.Schema({
     de:     { type: String, required: true, index: true },
@@ -774,6 +794,20 @@ app.post('/economia/validar-descarga', [body('juegoId').isMongoId()], async (req
         // ── Hooks gamificación & recomendaciones (fire & forget) ──
         gamification.onDescarga(juego.usuario).catch(() => {});
         recommendations.invalidateItemCache(juegoId);
+
+        // Nexus — registra el evento de descarga para análisis de gustos
+        nexusClient.sendEvento(juego.usuario, 'descarga_recibida', {
+            itemId: juegoId, categoria: juego.category, tags: juego.tags || [], total: juego.descargasEfectivas
+        });
+
+        // Hitos de descargas: avisa al autor (gamificación + notificación)
+        if ([10, 50, 100, 500, 1000, 5000].includes(juego.descargasEfectivas)) {
+            crearNotif({
+                destinatario: juego.usuario, tipo: 'logro', emisor: 'UpGames',
+                itemId: juegoId, itemTitle: juego.title, itemImage: juego.image || '',
+                mensaje: `🎉 ¡"${juego.title}" alcanzó ${juego.descargasEfectivas} descargas!`
+            });
+        }
         if (juego.descargasEfectivas === 100 || juego.descargasEfectivas === 1000) {
             gamification.onItemViral(juego.usuario, juego.descargasEfectivas).catch(() => {});
         }
@@ -1576,6 +1610,15 @@ app.post("/items/add", [verificarToken, body('title').notEmpty().trim().isLength
         logger.info(`Nuevo item agregado: ${nuevoJuego.title} por @${nuevoJuego.usuario}`);
         res.status(201).json({ success: true, ok: true, item: nuevoJuego, id: nuevoJuego._id });
 
+        // Nexus — registra el evento de publicación para análisis de comportamiento
+        nexusClient.sendEvento(nuevoJuego.usuario, 'publicacion', {
+            itemId:    nuevoJuego._id.toString(),
+            categoria: nuevoJuego.category,
+            tags:      nuevoJuego.tags || [],
+            titulo:    nuevoJuego.title,
+            esVideo:   nuevoJuego.category === 'Video'
+        });
+
         // Fire & forget — Nexus analiza el juego recién publicado y guarda el feedback
         nexusClient.mentorGame(nuevoJuego.usuario, {
             titulo:      nuevoJuego.title,
@@ -1877,6 +1920,13 @@ app.put('/usuarios/toggle-seguir/:actual/:objetivo', verificarToken, async (req,
                 Usuario.updateOne({ usuario: objetivo }, { $addToSet: { listaSeguidores: actual } })
             ]);
             res.json({ success: true, siguiendo: true });
+            // Notificar al usuario seguido + registrar evento en Nexus (fire & forget)
+            crearNotif({
+                destinatario: objetivo, tipo: 'seguidor', emisor: actual,
+                mensaje: `@${actual} empezó a seguirte`
+            });
+            nexusClient.sendEvento(actual, 'seguir', { objetivo });
+            return;
         }
     } catch (err) {
         res.status(500).json({ success: false, error: "Error al actualizar" });
@@ -2049,6 +2099,21 @@ app.post('/comentarios', [verificarToken, body('itemId').notEmpty(), body('texto
         await nuevo.save();
         gamification.onComentario(req.usuario).catch(() => {});
         res.status(201).json({ success: true, comentario: nuevo });
+
+        // Notificar al autor del contenido + registrar evento en Nexus (fire & forget)
+        Juego.findById(req.body.itemId).select('usuario title image category tags').lean()
+            .then(item => {
+                if (!item) return;
+                crearNotif({
+                    destinatario: item.usuario, tipo: 'comentario', emisor: req.usuario,
+                    itemId: req.body.itemId, itemTitle: item.title, itemImage: item.image || '',
+                    mensaje: `@${req.usuario} comentó en "${item.title}"`
+                });
+                nexusClient.sendEvento(req.usuario, 'comentario', {
+                    itemId: req.body.itemId, categoria: item.category, autor: item.usuario
+                });
+            })
+            .catch(() => {});
     } catch (error) {
         logger.error(`Error en POST /comentarios: ${error.message}`);
         res.status(500).json({ success: false, error: 'Error al guardar comentario' });
@@ -2078,6 +2143,21 @@ app.post('/favoritos/add', [verificarToken, body('itemId').isMongoId()], async (
         gamification.onFavorito(req.usuario).catch(() => {});
         recommendations.invalidateUserCache(req.usuario);
         res.json({ success: true, ok: true });
+
+        // Notificar al autor + registrar evento en Nexus (fire & forget, server-side)
+        Juego.findById(itemId).select('usuario title image category tags').lean()
+            .then(item => {
+                if (!item) return;
+                crearNotif({
+                    destinatario: item.usuario, tipo: 'favorito', emisor: req.usuario,
+                    itemId, itemTitle: item.title, itemImage: item.image || '',
+                    mensaje: `@${req.usuario} guardó "${item.title}" en favoritos`
+                });
+                nexusClient.sendEvento(req.usuario, 'favorito', {
+                    itemId, categoria: item.category, tags: item.tags || [], autor: item.usuario
+                });
+            })
+            .catch(() => {});
     } catch (error) {
         logger.error(`Error en favoritos/add: ${error.message}`);
         res.status(500).json({ success: false, error: 'Error al guardar favorito' });
