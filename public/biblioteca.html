@@ -51,6 +51,7 @@
   <div class="search-bar">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
     <input type="text" id="buscador" placeholder="Buscar juegos, mods, apps..." autocomplete="off">
+    <div id="autocomplete-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#1a1a28;border:1px solid rgba(94,255,67,.2);border-radius:0 0 12px 12px;z-index:1000;max-height:280px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.5)"></div>
   </div>
   <div class="hdr-actions">
     <button class="hdr-btn" onclick="switchTab('profile')" title="Subir contenido" aria-label="Subir contenido">
@@ -162,6 +163,10 @@
         <div class="profile-stat-val" id="pf-stat-following">0</div>
         <div class="profile-stat-lbl">Siguiendo</div>
       </div>
+      <div class="profile-stat-box">
+        <div class="profile-stat-val" id="pf-stat-xp" style="font-size:13px">—</div>
+        <div class="profile-stat-lbl">Nivel / XP</div>
+      </div>
     </div>
 
     <!-- ── Action Shortcuts ── -->
@@ -190,10 +195,18 @@
       <button class="perfil-tab" data-pftab="historial" onclick="pfSwitchTab('historial',this)">
         <ion-icon name="time"></ion-icon> Historial
       </button>
-<button class="perfil-tab" data-pftab="reportes" onclick="pfSwitchTab('reportes',this)">
+      <button class="perfil-tab" data-pftab="analytics" onclick="pfSwitchTab('analytics',this)">
+        <ion-icon name="analytics"></ion-icon> Analytics
+      </button>
+      <button class="perfil-tab" data-pftab="pagos" onclick="pfSwitchTab('pagos',this)">
+        <ion-icon name="cash"></ion-icon> Pagos
+      </button>
+      <button class="perfil-tab" data-pftab="logros" onclick="pfSwitchTab('logros',this)">
+        <ion-icon name="trophy"></ion-icon> Logros
+      </button>
+      <button class="perfil-tab" data-pftab="reportes" onclick="pfSwitchTab('reportes',this)">
         <ion-icon name="flag"></ion-icon> Reportes
       </button>
-
     </div>
 
     <!-- ══ TAB: PUBLICAR ══ -->
@@ -490,6 +503,30 @@
         </div>
       </div>
 
+    </div>
+
+    <!-- ══ TAB: ANALYTICS ══ -->
+    <div id="pf-tab-analytics" class="perfil-tab-content">
+      <div class="pf-section-title"><ion-icon name="analytics"></ion-icon> ANALYTICS DE CREADOR — NEXUS IA</div>
+      <div id="pf-analytics-content">
+        <div class="pf-empty"><ion-icon name="sync-outline"></ion-icon><p>Cargando analytics...</p></div>
+      </div>
+    </div>
+
+    <!-- ══ TAB: HISTORIAL DE PAGOS ══ -->
+    <div id="pf-tab-pagos" class="perfil-tab-content">
+      <div class="pf-section-title"><ion-icon name="cash"></ion-icon> HISTORIAL DE RETIROS</div>
+      <div id="pf-pagos-content">
+        <div class="pf-empty"><ion-icon name="sync-outline"></ion-icon><p>Cargando historial...</p></div>
+      </div>
+    </div>
+
+    <!-- ══ TAB: LOGROS ══ -->
+    <div id="pf-tab-logros" class="perfil-tab-content">
+      <div class="pf-section-title"><ion-icon name="trophy"></ion-icon> LOGROS Y GAMIFICACIÓN</div>
+      <div id="pf-logros-content">
+        <div class="pf-empty"><ion-icon name="sync-outline"></ion-icon><p>Cargando logros...</p></div>
+      </div>
     </div>
 
     <!-- ══ TAB: BÓVEDA ══ -->
