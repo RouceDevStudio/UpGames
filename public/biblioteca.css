@@ -4766,77 +4766,31 @@ body.nx-open #nxFab {
 .eco-empty-mini ion-icon { font-size: 1.6rem; }
 
 
-/* ══════════════════════════════════════════════════════════════
-   AVATAR: Tabs URL / Subir Foto
-   ══════════════════════════════════════════════════════════════ */
+/* ── Avatar: tabs URL / Subir ── */
 .pf-av-mode-tabs {
-  display: flex;
-  gap: 6px;
-  margin: 0 0 16px;
-  background: var(--bg2);
-  border-radius: 12px;
-  padding: 4px;
+  display: flex; gap: 6px; margin: 0 0 16px;
+  background: var(--bg2); border-radius: 12px; padding: 4px;
 }
 .pf-av-mode-tab {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 9px 12px;
-  background: transparent;
-  border: none;
-  border-radius: 9px;
-  color: var(--txt3);
-  font-size: .77rem;
-  font-weight: 700;
-  letter-spacing: .3px;
-  cursor: pointer;
-  transition: background .18s, color .18s;
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 9px 12px; background: transparent; border: none; border-radius: 9px;
+  color: var(--txt3); font-size: .77rem; font-weight: 700; letter-spacing: .3px;
+  cursor: pointer; transition: background .18s, color .18s;
 }
 .pf-av-mode-tab ion-icon { font-size: .95rem; }
-.pf-av-mode-tab.active {
-  background: var(--g);
-  color: #000;
-}
-.pf-av-mode-tab:not(.active):hover {
-  background: var(--bg3);
-  color: var(--txt2);
-}
+.pf-av-mode-tab.active { background: var(--g); color: #000; }
+.pf-av-mode-tab:not(.active):hover { background: var(--bg3); color: var(--txt2); }
 
-/* ══════════════════════════════════════════════════════════════
-   IMAGE SLOTS: fila URL + botón de upload
-   ══════════════════════════════════════════════════════════════ */
-.pf-img-slot-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.pf-img-slot-row .pf-input {
-  flex: 1;
-  min-width: 0;
-}
+/* ── Image slot: input + botón subir ── */
+.pf-img-slot-row { display: flex; align-items: center; gap: 6px; }
+.pf-img-slot-row .pf-input { flex: 1; min-width: 0; }
 .pf-img-upload-btn {
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg3);
-  border: 1px solid var(--bd);
-  border-radius: 10px;
-  color: var(--cy);
-  cursor: pointer;
+  flex-shrink: 0; width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg3); border: 1px solid var(--bd); border-radius: 10px;
+  color: var(--cy); cursor: pointer; font-size: 1rem;
   transition: background .18s, border-color .18s, color .18s;
-  font-size: 1rem;
 }
-.pf-img-upload-btn:hover {
-  background: var(--cy);
-  border-color: var(--cy);
-  color: #000;
-}
-.pf-img-upload-btn:active {
-  opacity: .8;
-  transform: scale(.95);
-}
+.pf-img-upload-btn:hover { background: var(--cy); border-color: var(--cy); color: #000; }
+.pf-img-upload-btn:active { opacity: .8; transform: scale(.95); }
+.pf-img-upload-btn:disabled { opacity: .6; cursor: wait; }

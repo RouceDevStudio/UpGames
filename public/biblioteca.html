@@ -26,7 +26,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
 <link rel="stylesheet" href="biblioteca.css">
-  <!-- Cloudinary widget removido - uploads vía backend nativo -->
+<script src="https://upload-widget.cloudinary.com/global/all.js" type="text/javascript"></script>
 
 </head>
 <body>
@@ -284,9 +284,7 @@
               <div class="pf-image-slot-label"><ion-icon name="image"></ion-icon> Portada</div>
               <div class="pf-img-slot-row">
                 <input type="url" id="pf-addImage" class="pf-input" placeholder="URL imagen o YouTube..." oninput="pfUpdatePreview();pfPreviewSlot(0)">
-                <button class="pf-img-upload-btn" onclick="pfOpenCoverWidget(0)" title="Subir imagen a Cloudinary">
-                  <ion-icon name="cloud-upload-outline"></ion-icon>
-                </button>
+                <button class="pf-img-upload-btn" onclick="pfOpenCoverWidget(0)" title="Subir a la nube"><ion-icon name="cloud-upload-outline"></ion-icon></button>
               </div>
               <div class="pf-img-preview-mini" id="pf-slot-prev-0"><img src="" alt=""></div>
             </div>
@@ -294,9 +292,7 @@
               <div class="pf-image-slot-label"><ion-icon name="images"></ion-icon> Media 2</div>
               <div class="pf-img-slot-row">
                 <input type="url" id="pf-addImage2" class="pf-input" placeholder="URL imagen o YouTube..." oninput="pfPreviewSlot(1)">
-                <button class="pf-img-upload-btn" onclick="pfOpenCoverWidget(1)" title="Subir imagen a Cloudinary">
-                  <ion-icon name="cloud-upload-outline"></ion-icon>
-                </button>
+                <button class="pf-img-upload-btn" onclick="pfOpenCoverWidget(1)" title="Subir a la nube"><ion-icon name="cloud-upload-outline"></ion-icon></button>
               </div>
               <div class="pf-img-preview-mini" id="pf-slot-prev-1"><img src="" alt=""></div>
             </div>
@@ -304,9 +300,7 @@
               <div class="pf-image-slot-label"><ion-icon name="images"></ion-icon> Media 3</div>
               <div class="pf-img-slot-row">
                 <input type="url" id="pf-addImage3" class="pf-input" placeholder="URL imagen o YouTube..." oninput="pfPreviewSlot(2)">
-                <button class="pf-img-upload-btn" onclick="pfOpenCoverWidget(2)" title="Subir imagen a Cloudinary">
-                  <ion-icon name="cloud-upload-outline"></ion-icon>
-                </button>
+                <button class="pf-img-upload-btn" onclick="pfOpenCoverWidget(2)" title="Subir a la nube"><ion-icon name="cloud-upload-outline"></ion-icon></button>
               </div>
               <div class="pf-img-preview-mini" id="pf-slot-prev-2"><img src="" alt=""></div>
             </div>
@@ -314,9 +308,7 @@
               <div class="pf-image-slot-label"><ion-icon name="images"></ion-icon> Media 4</div>
               <div class="pf-img-slot-row">
                 <input type="url" id="pf-addImage4" class="pf-input" placeholder="URL imagen o YouTube..." oninput="pfPreviewSlot(3)">
-                <button class="pf-img-upload-btn" onclick="pfOpenCoverWidget(3)" title="Subir imagen a Cloudinary">
-                  <ion-icon name="cloud-upload-outline"></ion-icon>
-                </button>
+                <button class="pf-img-upload-btn" onclick="pfOpenCoverWidget(3)" title="Subir a la nube"><ion-icon name="cloud-upload-outline"></ion-icon></button>
               </div>
               <div class="pf-img-preview-mini" id="pf-slot-prev-3"><img src="" alt=""></div>
             </div>
@@ -418,7 +410,7 @@
               <ion-icon name="cloud-upload-outline"></ion-icon>
               <p>Sube tu video directamente a la nube</p>
               <span>MP4, WebM, MOV — máx. 500MB</span>
-              <button class="pf-cld-btn" id="pf-cld-open-btn" onclick="pfOpenVideoUpload()">
+              <button class="pf-cld-btn" id="pf-cld-open-btn" onclick="pfOpenCloudinaryWidget()">
                 <ion-icon name="videocam"></ion-icon> SELECCIONAR VIDEO
               </button>
             </div>
@@ -431,7 +423,7 @@
               <ion-icon name="checkmark-circle" style="color:var(--g);font-size:2rem"></ion-icon>
               <p class="pf-cld-done-label">¡Video subido!</p>
               <video id="pf-vid-preview" controls playsinline muted style="width:100%;border-radius:10px;margin-top:8px;max-height:200px;object-fit:cover"></video>
-              <button class="pf-cld-change-btn" onclick="pfOpenVideoUpload()">
+              <button class="pf-cld-change-btn" onclick="pfOpenCloudinaryWidget()">
                 <ion-icon name="refresh"></ion-icon> Cambiar video
               </button>
             </div>
@@ -444,9 +436,7 @@
           <label class="pf-label"><ion-icon name="image"></ion-icon> Miniatura (opcional)</label>
           <div class="pf-img-slot-row">
             <input type="url" id="pf-vid-thumbnail" class="pf-input" placeholder="URL de imagen o déjalo vacío para auto-generar" oninput="pfUpdateVideoPreview()">
-            <button class="pf-img-upload-btn" onclick="pfOpenThumbnailWidget()" title="Subir miniatura a Cloudinary">
-              <ion-icon name="cloud-upload-outline"></ion-icon>
-            </button>
+            <button class="pf-img-upload-btn" onclick="pfOpenThumbnailWidget()" title="Subir a la nube"><ion-icon name="cloud-upload-outline"></ion-icon></button>
           </div>
           <div class="pf-img-preview-mini" id="pf-vid-thumb-prev"><img src="" alt=""></div>
         </div>
@@ -864,12 +854,10 @@
 
       <!-- ── Avatar ── -->
       <div id="pf-settings-avatar" class="pf-scontent active">
-        <!-- Preview circular -->
         <div class="pf-avatar-preview" id="pf-preview-avatar">
           <ion-icon name="person"></ion-icon>
         </div>
 
-        <!-- Tabs: URL / Subir -->
         <div class="pf-av-mode-tabs">
           <button class="pf-av-mode-tab active" id="pf-av-tab-url" onclick="pfSwitchAvatarMode('url')">
             <ion-icon name="link-outline"></ion-icon> URL
@@ -879,7 +867,6 @@
           </button>
         </div>
 
-        <!-- ── Modo URL ── -->
         <div id="pf-av-mode-url">
           <div class="pf-form-group">
             <label class="pf-label">URL de Avatar</label>
@@ -892,36 +879,14 @@
           </button>
         </div>
 
-        <!-- ── Modo Subir (Cloudinary) ── -->
         <div id="pf-av-mode-upload" style="display:none">
-          <div class="pf-cloudinary-zone" id="pf-av-cld-zone">
-            <div class="pf-cld-idle" id="pf-av-cld-idle">
-              <ion-icon name="person-circle-outline"></ion-icon>
-              <p>Sube tu foto de perfil</p>
-              <span>JPG, PNG, WEBP — máx. 10MB</span>
-              <button class="pf-cld-btn" onclick="pfOpenAvatarWidget()">
-                <ion-icon name="cloud-upload"></ion-icon> SELECCIONAR FOTO
-              </button>
-            </div>
-            <div class="pf-cld-uploading" id="pf-av-cld-uploading" style="display:none">
-              <div class="pf-cld-spinner"></div>
-              <p>Subiendo foto...</p>
-              <div class="pf-cld-progress-bar">
-                <div class="pf-cld-progress-fill" id="pf-av-cld-progress"></div>
-              </div>
-            </div>
-            <div class="pf-cld-done" id="pf-av-cld-done" style="display:none">
-              <ion-icon name="checkmark-circle" style="color:var(--g);font-size:2rem"></ion-icon>
-              <p class="pf-cld-done-label">¡Foto lista!</p>
-              <button class="pf-cld-change-btn" onclick="pfOpenAvatarWidget()">
-                <ion-icon name="refresh"></ion-icon> Cambiar foto
-              </button>
-            </div>
-          </div>
-          <input type="hidden" id="pf-av-cld-url" value="">
-          <button class="pf-btn-save" id="pf-av-upload-save-btn" onclick="pfSaveAvatarFromCloud()" style="display:none;margin-top:12px">
-            <ion-icon name="save"></ion-icon> GUARDAR AVATAR
+          <button class="pf-btn-save" id="pf-av-upload-btn" onclick="pfUploadAvatar()">
+            <ion-icon name="cloud-upload"></ion-icon> SELECCIONAR Y SUBIR FOTO
           </button>
+          <p class="pf-settings-hint" style="margin-top:10px">
+            <ion-icon name="information-circle-outline"></ion-icon>
+            La foto se sube a la nube y se guarda automáticamente.
+          </p>
         </div>
       </div>
 
