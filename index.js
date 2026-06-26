@@ -1897,6 +1897,31 @@ app.put('/auth/admin/verificacion/:username', verificarAdmin, [body('nivel').isI
 
 // ========== PERFIL ==========
 
+// Endpoint dedicado para Nexus — devuelve solo las stats que necesita, sin bajar lista completa
+app.get('/usuarios/nexus-stats/:usuario', async (req, res) => {
+    try {
+        const username = req.params.usuario.toLowerCase().trim();
+        const user = await Usuario.findOne({ usuario: username })
+            .select('usuario verificadoNivel isVerificado descargasTotales listaSeguidores siguiendo saldo')
+            .lean();
+        if (!user) return res.json({ success: true, stats: null });
+        res.json({
+            success: true,
+            stats: {
+                usuario: user.usuario,
+                verificadoNivel: user.verificadoNivel || 0,
+                isVerificado: user.isVerificado || false,
+                seguidores: (user.listaSeguidores || []).length,
+                siguiendo: (user.siguiendo || []).length,
+                descargasTotales: user.descargasTotales || 0,
+            }
+        });
+    } catch (err) {
+        logger.error(`[nexus-stats] ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error' });
+    }
+});
+
 app.get('/usuarios/perfil-publico/:usuario', async (req, res) => {
     try {
         const username = req.params.usuario.toLowerCase().trim();
