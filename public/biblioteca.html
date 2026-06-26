@@ -1106,19 +1106,31 @@
         <div class="pf-images-grid">
           <div class="pf-image-slot">
             <div class="pf-image-slot-label"><ion-icon name="image"></ion-icon> Portada</div>
-            <input type="url" id="pf-edit-image" class="pf-input" placeholder="URL portada..." oninput="pfValidateEditImage()">
+            <div class="pf-img-slot-row">
+              <input type="url" id="pf-edit-image" class="pf-input" placeholder="URL imagen/video o YouTube..." oninput="pfValidateEditImage()">
+              <button class="pf-img-upload-btn" onclick="pfOpenEditCoverWidget(0)" title="Subir a la nube"><ion-icon name="cloud-upload-outline"></ion-icon></button>
+            </div>
           </div>
           <div class="pf-image-slot">
             <div class="pf-image-slot-label"><ion-icon name="images"></ion-icon> Media 2</div>
-            <input type="url" id="pf-edit-image2" class="pf-input" placeholder="URL media 2...">
+            <div class="pf-img-slot-row">
+              <input type="url" id="pf-edit-image2" class="pf-input" placeholder="URL imagen/video...">
+              <button class="pf-img-upload-btn" onclick="pfOpenEditCoverWidget(1)" title="Subir a la nube"><ion-icon name="cloud-upload-outline"></ion-icon></button>
+            </div>
           </div>
           <div class="pf-image-slot">
             <div class="pf-image-slot-label"><ion-icon name="images"></ion-icon> Media 3</div>
-            <input type="url" id="pf-edit-image3" class="pf-input" placeholder="URL media 3...">
+            <div class="pf-img-slot-row">
+              <input type="url" id="pf-edit-image3" class="pf-input" placeholder="URL imagen/video...">
+              <button class="pf-img-upload-btn" onclick="pfOpenEditCoverWidget(2)" title="Subir a la nube"><ion-icon name="cloud-upload-outline"></ion-icon></button>
+            </div>
           </div>
           <div class="pf-image-slot">
             <div class="pf-image-slot-label"><ion-icon name="images"></ion-icon> Media 4</div>
-            <input type="url" id="pf-edit-image4" class="pf-input" placeholder="URL media 4...">
+            <div class="pf-img-slot-row">
+              <input type="url" id="pf-edit-image4" class="pf-input" placeholder="URL imagen/video...">
+              <button class="pf-img-upload-btn" onclick="pfOpenEditCoverWidget(3)" title="Subir a la nube"><ion-icon name="cloud-upload-outline"></ion-icon></button>
+            </div>
           </div>
         </div>
         <small style="color:var(--txt3);font-size:.7rem" id="pf-edit-image-hint"></small>
@@ -1170,8 +1182,11 @@
       </div>
       <div class="pf-form-group">
         <label class="pf-label">Miniatura</label>
-        <input type="url" id="pf-edit-vid-thumb" class="pf-input" placeholder="URL de miniatura..."
-          oninput="var p=document.getElementById('pf-edit-vid-thumb-prev');p.src=this.value;p.style.display=this.value?'block':'none'">
+        <div class="pf-img-slot-row">
+          <input type="url" id="pf-edit-vid-thumb" class="pf-input" placeholder="URL de miniatura..."
+            oninput="var p=document.getElementById('pf-edit-vid-thumb-prev');p.src=this.value;p.style.display=this.value?'block':'none'">
+          <button class="pf-img-upload-btn" onclick="pfOpenEditVideoThumbWidget()" title="Subir a la nube"><ion-icon name="cloud-upload-outline"></ion-icon></button>
+        </div>
         <img id="pf-edit-vid-thumb-prev" src="" alt="preview" style="display:none;width:100%;border-radius:10px;margin-top:8px;max-height:140px;object-fit:cover">
       </div>
       <button class="pf-btn-save" id="pf-edit-vid-save-btn" style="background:linear-gradient(135deg,var(--cy),#0084ff);color:#fff" onclick="pfSaveEditVideo()">
@@ -1903,18 +1918,35 @@ window.pfOpenSettings = function() {
   pfLoadSettingsExtras();
 };
 
+/* ─────────────────────────────────────────────────────────────
+   user_admin es SIEMPRE un string plano (el nombre de usuario),
+   tal como lo guarda el login. Los metadatos del perfil (cooldowns,
+   links sociales) viven en una clave aparte 'user_meta' para no
+   corromper user_admin — de lo contrario se rompen las notificaciones
+   y el dashboard, que usan user_admin como nombre de usuario.
+   ───────────────────────────────────────────────────────────── */
+function pfGetMeta() {
+  try { return JSON.parse(localStorage.getItem('user_meta') || '{}'); }
+  catch(_) { return {}; }
+}
+function pfSetMeta(patch) {
+  const m = pfGetMeta();
+  Object.assign(m, patch);
+  try { localStorage.setItem('user_meta', JSON.stringify(m)); } catch(_) {}
+  return m;
+}
+
 function pfLoadSettingsExtras() {
-  const userRaw = localStorage.getItem('user_admin');
-  if (!userRaw) return;
+  if (!localStorage.getItem('user_admin')) return;
   try {
-    const u = JSON.parse(userRaw);
+    const m = pfGetMeta();
 
     /* ── Cooldown de nombre ── */
-    pfCheckCooldown('nombre', u.lastUsernameChange);
+    pfCheckCooldown('nombre', m.lastUsernameChange);
     /* ── Cooldown de email ── */
-    pfCheckCooldown('email', u.lastEmailChange);
+    pfCheckCooldown('email', m.lastEmailChange);
     /* ── Cargar links existentes ── */
-    const links = u.socialLinks || [];
+    const links = m.socialLinks || [];
     for (let i = 0; i < 4; i++) {
       const el = document.getElementById(`pf-link-${i}`);
       if (el) { el.value = links[i] || ''; pfDetectLinkIcon(i); }
@@ -1962,15 +1994,15 @@ async function pfSaveUsername() {
     });
     const data = await res.json();
     if (!data.success) { showToast(data.error || 'Error al cambiar nombre', 'error'); return; }
-    /* Actualizar localStorage */
-    const u = JSON.parse(localStorage.getItem('user_admin') || '{}');
-    u.usuario = newUser;
-    u.lastUsernameChange = new Date().toISOString();
-    localStorage.setItem('user_admin', JSON.stringify(u));
+    /* Actualizar localStorage — user_admin es un string plano */
+    localStorage.setItem('user_admin', newUser);
+    if (data.nuevoToken) localStorage.setItem('token', data.nuevoToken);
+    const lastUsernameChange = new Date().toISOString();
+    pfSetMeta({ lastUsernameChange });
     document.getElementById('pf-username').textContent = '@' + newUser;
     document.getElementById('pf-input-username').value = '';
     document.getElementById('pf-input-username-pass').value = '';
-    pfCheckCooldown('nombre', u.lastUsernameChange);
+    pfCheckCooldown('nombre', lastUsernameChange);
     showToast('¡Nombre actualizado!', 'success');
   } catch(e) { showToast('Error de red', 'error'); }
 }
@@ -1990,13 +2022,12 @@ async function pfSaveEmail() {
     });
     const data = await res.json();
     if (!data.success) { showToast(data.error || 'Error al cambiar email', 'error'); return; }
-    const u = JSON.parse(localStorage.getItem('user_admin') || '{}');
-    u.email = newEmail;
-    u.lastEmailChange = new Date().toISOString();
-    localStorage.setItem('user_admin', JSON.stringify(u));
+    localStorage.setItem('email', newEmail);
+    const lastEmailChange = new Date().toISOString();
+    pfSetMeta({ lastEmailChange });
     document.getElementById('pf-input-newemail').value = '';
     document.getElementById('pf-input-newemail-pass').value = '';
-    pfCheckCooldown('email', u.lastEmailChange);
+    pfCheckCooldown('email', lastEmailChange);
     showToast('¡Email actualizado!', 'success');
   } catch(e) { showToast('Error de red', 'error'); }
 }
@@ -2041,9 +2072,7 @@ async function pfSaveSocialLinks() {
     });
     const data = await res.json();
     if (!data.success) { showToast(data.error || 'Error al guardar links', 'error'); return; }
-    const u = JSON.parse(localStorage.getItem('user_admin') || '{}');
-    u.socialLinks = links;
-    localStorage.setItem('user_admin', JSON.stringify(u));
+    pfSetMeta({ socialLinks: links });
     pfRenderSocialLinks(links);
     showToast('¡Links guardados!', 'success');
   } catch(e) { showToast('Error de red', 'error'); }
@@ -2153,14 +2182,14 @@ const _pfLoadProfileOrig = typeof pfLoadProfile === 'function' ? pfLoadProfile :
 if (_pfLoadProfileOrig) {
   window.pfLoadProfile = async function(...args) {
     await _pfLoadProfileOrig.apply(this, args);
-    const u = JSON.parse(localStorage.getItem('user_admin') || '{}');
-    if (u.socialLinks) pfRenderSocialLinks(u.socialLinks);
+    const m = pfGetMeta();
+    if (m.socialLinks) pfRenderSocialLinks(m.socialLinks);
   };
 } else {
   /* Si pfLoadProfile no está definida aún, escuchar DOMContentLoaded */
   document.addEventListener('DOMContentLoaded', () => {
-    const u = JSON.parse(localStorage.getItem('user_admin') || '{}');
-    if (u.socialLinks) pfRenderSocialLinks(u.socialLinks);
+    const m = pfGetMeta();
+    if (m.socialLinks) pfRenderSocialLinks(m.socialLinks);
   });
 }
 </script>

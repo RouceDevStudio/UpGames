@@ -1219,23 +1219,7 @@ async function fav(id) {
       toast('❤️ Añadido a favoritos');
       let local=LS.getJSON('favoritos', []);
       if(!local.includes(id)){local.push(id); LS.setJSON('favoritos', local);}
-      // Notify author — usa el endpoint real
-      const item=todosLosItems.find(i=>i._id===id);
-      if(item&&item.usuario!==user) {
-        fetch(`${API_URL}/notificaciones`,{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({
-            usuario:   item.usuario,
-            tipo:      'favorito',
-            emisor:    user,
-            itemId:    item._id,
-            itemTitle: item.title,
-            itemImage: item.image||'',
-            mensaje:   `@${user} guardó tu contenido: "${item.title}"`
-          })
-        }).catch(()=>{});
-      }
+      // La notificación al autor ahora la crea el backend en /favoritos/add
     }
     // Update all heart buttons for this id
     document.querySelectorAll(`[data-id="${id}"] .tile-fav-quick`).forEach(b=>{
@@ -2717,12 +2701,12 @@ function ecoSetPeriod(days, btn) {
 
 function ecoUpdateDashboard(d) {
   _ecoLastData = d;
-  const userObj = LS.getJSON('user_admin') || {};
-  const username = userObj.username || userObj.name || '';
+  // user_admin es un string plano con el nombre de usuario
+  const username = LS.get('user_admin', '');
 
   // ── Derive user's content from global todosLosItems ──
   const allMyContent = (typeof todosLosItems !== 'undefined' ? todosLosItems : [])
-    .filter(i => i.autor === username);
+    .filter(i => i.usuario === username);
 
   const totalDl       = d.descargasTotales || 0;
   const saldo         = d.saldo || 0;
@@ -3408,6 +3392,45 @@ async function pfOpenThumbnailWidget() {
     const data = await pfWidgetUpload();
     if(data.success) {
       const inp = document.getElementById('pf-vid-thumbnail');
+      if(inp) { inp.value = data.url; inp.dispatchEvent(new Event('input')); }
+      toast('✅ Miniatura subida a la nube');
+    }
+  } catch(e) {
+    toast('❌ ' + e.message);
+  } finally {
+    if(btn) { btn.innerHTML = orig; btn.disabled = false; }
+  }
+}
+
+// ── EDITAR PUBLICACIÓN: subir imagen/video directo a la nube (no solo links) ──
+async function pfOpenEditCoverWidget(slot) {
+  const ids = ['pf-edit-image','pf-edit-image2','pf-edit-image3','pf-edit-image4'];
+  const btn = document.querySelector(`[onclick="pfOpenEditCoverWidget(${slot})"]`);
+  const orig = btn ? btn.innerHTML : '';
+  if(btn) { btn.innerHTML = '<ion-icon name="sync-outline" style="animation:spin .8s linear infinite"></ion-icon>'; btn.disabled = true; }
+  try {
+    const data = await pfWidgetUpload();
+    if(data.success) {
+      const inp = document.getElementById(ids[slot]);
+      if(inp) { inp.value = data.url; inp.dispatchEvent(new Event('input')); }
+      toast('✅ Media subida a la nube');
+    }
+  } catch(e) {
+    toast('❌ ' + e.message);
+  } finally {
+    if(btn) { btn.innerHTML = orig; btn.disabled = false; }
+  }
+}
+
+// ── EDITAR VIDEO: subir miniatura directo a la nube ──
+async function pfOpenEditVideoThumbWidget() {
+  const btn = document.querySelector('[onclick="pfOpenEditVideoThumbWidget()"]');
+  const orig = btn ? btn.innerHTML : '';
+  if(btn) { btn.innerHTML = '<ion-icon name="sync-outline" style="animation:spin .8s linear infinite"></ion-icon>'; btn.disabled = true; }
+  try {
+    const data = await pfWidgetUpload();
+    if(data.success) {
+      const inp = document.getElementById('pf-edit-vid-thumb');
       if(inp) { inp.value = data.url; inp.dispatchEvent(new Event('input')); }
       toast('✅ Miniatura subida a la nube');
     }
@@ -4727,6 +4750,25 @@ function _toggleNotifPanel() {
   if (!visible) _cargarNotificaciones();
 }
 
+// Devuelve {accent, icon, line} según el tipo de notificación
+function _notifMeta(n) {
+  const e   = n.emisor || '';
+  const tag = (txt, color) => `<span style="color:${color}">@${e}</span> ${txt}`;
+  switch (n.tipo) {
+    case 'favorito':   return { accent:'#ff4d6d', icon:'heart',              line: n.mensaje || tag('guardó tu publicación', '#ff4d6d') };
+    case 'comentario': return { accent:'#00f2ff', icon:'chatbubble',         line: n.mensaje || tag('comentó tu publicación', '#00f2ff') };
+    case 'seguidor':   return { accent:'#b16bff', icon:'person-add',         line: n.mensaje || tag('empezó a seguirte', '#b16bff') };
+    case 'logro':      return { accent:'#ffd23f', icon:'trophy',             line: n.mensaje || '🎉 ¡Nuevo logro desbloqueado!' };
+    case 'descarga':   return { accent:'#5EFF43', icon:'download',           line: n.mensaje || tag('descargó tu contenido', '#5EFF43') };
+    case 'sistema':
+      if ((n.itemTitle || '').startsWith('Mensaje'))
+                       return { accent:'#00f2ff', icon:'mail',              line: n.mensaje || tag('te envió un mensaje', '#00f2ff') };
+                       return { accent:'#8888aa', icon:'information-circle', line: n.mensaje || 'Notificación del sistema' };
+    case 'nueva_publicacion':
+    default:           return { accent:'#5EFF43', icon:'cloud-upload',       line: n.mensaje || tag('publicó algo nuevo', '#5EFF43') };
+  }
+}
+
 async function _cargarNotificaciones() {
   const usuario = LS.get('user_admin');
   const token   = LS.get('token');
@@ -4756,34 +4798,35 @@ async function _cargarNotificaciones() {
       const timeAgo = _timeAgo(new Date(n.fecha));
       const unread  = !n.leida;
       const nId     = n._id || '';
+      const meta    = _notifMeta(n);
+      const unreadBg = `${meta.accent}14`; // ~8% alpha en hex
       return `
         <div style="
             display:flex;align-items:center;gap:10px;
             padding:10px 14px;
-            background:${unread ? 'rgba(94,255,67,.05)' : 'transparent'};
-            border-left:${unread ? '3px solid #5EFF43' : '3px solid transparent'};
+            background:${unread ? unreadBg : 'transparent'};
+            border-left:${unread ? `3px solid ${meta.accent}` : '3px solid transparent'};
             transition:background .2s;
             position:relative;
           "
           onmouseover="this.style.background='rgba(255,255,255,.04)';this.querySelector('.notif-del-btn').style.opacity='1'"
-          onmouseout="this.style.background='${unread ? 'rgba(94,255,67,.05)' : 'transparent'}';this.querySelector('.notif-del-btn').style.opacity='0'">
+          onmouseout="this.style.background='${unread ? unreadBg : 'transparent'}';this.querySelector('.notif-del-btn').style.opacity='0'">
           <div onclick="_abrirItemDesdeNotif('${n.itemId}')" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer;">
-            ${n.itemImage
-              ? `<img src="${n.itemImage}" style="width:44px;height:32px;object-fit:cover;border-radius:6px;flex-shrink:0;"
-                  onerror="this.style.display='none'">`
-              : `<div style="width:44px;height:32px;background:#1a1a1a;border-radius:6px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
-                   <ion-icon name="game-controller" style="color:#555;font-size:.9rem;"></ion-icon>
-                 </div>`
-            }
+            <div style="position:relative;width:44px;height:32px;flex-shrink:0;">
+              <div style="position:absolute;inset:0;background:${meta.accent}1f;border-radius:6px;display:flex;align-items:center;justify-content:center;">
+                <ion-icon name="${meta.icon}" style="color:${meta.accent};font-size:1rem;"></ion-icon>
+              </div>
+              ${n.itemImage
+                ? `<img src="${n.itemImage}" style="position:absolute;inset:0;width:44px;height:32px;object-fit:cover;border-radius:6px;" onerror="this.style.display='none'">`
+                : ''}
+            </div>
             <div style="flex:1;min-width:0;">
               <div style="font-size:.78rem;color:${unread ? '#fff' : '#aaa'};font-weight:${unread ? '600' : '400'};
                 white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                ${n.tipo === 'sistema' && n.itemTitle?.startsWith('Mensaje')
-                  ? `<span style="color:#00f2ff">@${n.emisor}</span> te envió un mensaje`
-                  : `<span style="color:#5EFF43">@${n.emisor}</span> publicó`}
+                ${meta.line}
               </div>
               <div style="font-size:.74rem;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                ${n.itemTitle || 'Nueva publicación'}
+                ${n.itemTitle || ''}
               </div>
             </div>
             <span style="font-size:.68rem;color:#444;flex-shrink:0;margin-right:4px;">${timeAgo}</span>
