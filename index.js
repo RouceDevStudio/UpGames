@@ -2375,29 +2375,6 @@ app.get('/usuarios/stats-seguimiento/:usuario', async (req, res) => {
     }
 });
 
-// Endpoint ligero para polling de Nexus — devuelve stats públicos sin autenticación
-app.get('/usuarios/nexus-stats/:usuario', async (req, res) => {
-    try {
-        const user = await Usuario.findOne({ usuario: req.params.usuario })
-            .select('listaSeguidores siguiendo totalDescargas totalPublicaciones fechaRegistro')
-            .lean();
-        if (!user) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
-        res.json({
-            success: true,
-            stats: {
-                seguidores:          user.listaSeguidores?.length  || 0,
-                siguiendo:           user.siguiendo?.length         || 0,
-                totalDescargas:      user.totalDescargas            || 0,
-                totalPublicaciones:  user.totalPublicaciones        || 0,
-                fechaRegistro:       user.fechaRegistro,
-            },
-        });
-    } catch (err) {
-        logger.error(`Error en nexus-stats: ${err.message}`);
-        res.status(500).json({ success: false, error: 'Error interno' });
-    }
-});
-
 // ========== CHAT ==========
 
 app.post('/chat/enviar', verificarToken, async (req, res) => {
