@@ -137,9 +137,26 @@ function sendEvento(usuario, tipo, datos = {}) {
     if (!usuario || !tipo) return;
     request(
         'POST',
-        `${NEXUS_API}/api/upgames/evento`,
+        `${NEXUS_API}/api/nexus/events`,
         { usuario, tipo, datos, ts: new Date().toISOString() }
     ).catch(err => logger.debug(`[nexusClient] sendEvento: ${err.message}`));
+}
+
+/**
+ * Modera un ítem con IA antes de publicar. Fire-and-forget safe.
+ * @returns {{ aprobado: boolean, razon?: string } | null}
+ */
+async function moderarItem(usuario, item) {
+    try {
+        return await request(
+            'POST',
+            `${NEXUS_API}/api/nexus/moderar-item`,
+            { usuario, item }
+        );
+    } catch (err) {
+        logger.warn(`[nexusClient] moderarItem: ${err.message}`);
+        return null;
+    }
 }
 
 /**
@@ -163,4 +180,5 @@ module.exports = {
     getCreatorAnalytics,
     sendEvento,
     getUserProfile,
+    moderarItem,
 };
