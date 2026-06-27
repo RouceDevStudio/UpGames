@@ -143,15 +143,16 @@ function sendEvento(usuario, tipo, datos = {}) {
 }
 
 /**
- * Modera un ítem con IA antes de publicar. Fire-and-forget safe.
- * @returns {{ aprobado: boolean, razon?: string } | null}
+ * Pide a Nexus que modere un item antes de publicarlo.
+ * Retorna { decision, confianza, razones, sugerencias, calidad_estimada } o null.
  */
-async function moderarItem(usuario, item) {
+async function moderarItem(itemData, userJwt) {
     try {
         return await request(
             'POST',
             `${NEXUS_API}/api/nexus/moderar-item`,
-            { usuario, item }
+            itemData,
+            authHeader(userJwt)
         );
     } catch (err) {
         logger.warn(`[nexusClient] moderarItem: ${err.message}`);
