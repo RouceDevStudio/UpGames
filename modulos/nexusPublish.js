@@ -182,6 +182,11 @@ function registrar(app, deps) {
                           + entry.split('/').map(encodeURIComponent).join('/');
             const url     = origin + relUrl;
 
+            // Visibilidad elegida por el usuario en Nexus antes de publicar.
+            // 'private' → status 'privado' (queda fuera de todo el descubrimiento
+            // público, que filtra status:'aprobado'; solo accesible por link directo).
+            const visibility = String(b.visibility || 'public') === 'private' ? 'private' : 'public';
+
             const extraData = {
                 nexusProject:   true,
                 nexusProjectId,
@@ -201,7 +206,8 @@ function registrar(app, deps) {
                 description: String(b.description || '').slice(0, 1000),
                 link:        url,
                 category:    String(b.category || 'software').slice(0, 40),
-                status:      'aprobado',
+                visibility,
+                status:      visibility === 'private' ? 'privado' : 'aprobado',
                 linkStatus:  'online',
             };
 
@@ -259,6 +265,43 @@ function registrar(app, deps) {
         } catch (e) {
             log.error(`[nexusPublish] project-status: ${e.message}`);
             return res.status(500).json({ error: 'Error actualizando estado de proyectos' });
+        }
+    });
+
+    // ────────────────────────────────────────────────────────────────
+    // POST /api/nexus/project-visibility
+    // El usuario cambia (desde el historial de proyectos de Nexus) si una
+    // publicación ya hecha es pública o privada. No toca linkStatus, así que
+    // respeta el gate de premium (una entrada caída sigue caída).
+    // Body: { userId, projectId, visibility: 'public' | 'private' }
+    // ────────────────────────────────────────────────────────────────
+    app.post('/api/nexus/project-visibility', requireNexusKey, async (req, res) => {
+        try {
+            const { userId, projectId } = req.body || {};
+            const visibility = String((req.body || {}).visibility || 'public') === 'private' ? 'private' : 'public';
+            if (!projectId) return res.status(400).json({ error: 'Se requiere projectId' });
+
+            const filter = { 'extraData.nexusProject': true, 'extraData.nexusProjectId': String(projectId) };
+            if (userId) filter['extraData.nexusUserId'] = String(userId);
+
+            const item = await Juego.findOne(filter);
+            if (!item) return res.status(404).json({ error: 'Proyecto publicado no encontrado' });
+
+            item.visibility = visibility;
+            // Solo alterna entre público/privado; si estaba caído por premium, no lo revive.
+            if (item.status !== 'rechazado' && item.linkStatus !== 'caido') {
+                item.status = visibility === 'private' ? 'privado' : 'aprobado';
+            } else {
+                // Guarda la intención para cuando se reactive (aunque el gate lo mantenga oculto).
+                item.status = visibility === 'private' ? 'privado' : (item.status === 'privado' ? 'aprobado' : item.status);
+            }
+            await item.save();
+
+            log.info(`[nexusPublish] project-visibility ${projectId} → ${visibility}`);
+            return res.json({ ok: true, visibility, id: String(item._id) });
+        } catch (e) {
+            log.error(`[nexusPublish] project-visibility: ${e.message}`);
+            return res.status(500).json({ error: 'Error actualizando visibilidad' });
         }
     });
 

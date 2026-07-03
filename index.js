@@ -366,8 +366,9 @@ const JuegoSchema = new mongoose.Schema({
     image:      { type: String, default: '' },
     images:     { type: [String], default: [], validate: { validator: arr => arr.length <= 4, message: 'Máximo 4 medias adicionales' } },
     link:       { type: String, required: true },
-    status:     { type: String, enum: ["pendiente", "aprobado", "rechazado", "pending"], default: "pendiente" },
+    status:     { type: String, enum: ["pendiente", "aprobado", "rechazado", "pending", "privado"], default: "pendiente" },
     linkStatus: { type: String, enum: ["online", "revision", "caido"], default: "online" },
+    visibility: { type: String, enum: ["public", "private"], default: "public" },
     reportes:   { type: Number, default: 0, min: 0 },
     reportesDesglose: {
         caido:   { type: Number, default: 0 },
@@ -1577,7 +1578,8 @@ app.get("/items", async (req, res) => {
 
 app.get("/items/user/:usuario", async (req, res) => {
     try {
-        const aportes = await Juego.find({ usuario: req.params.usuario }).select('_id title description image images link category usuario reportes reportesDesglose linkStatus descargasEfectivas likesCount status createdAt scoreRecomendacion extraData videoType featuredItemId').sort({ scoreRecomendacion: -1, createdAt: -1 }).lean();
+        // Los proyectos privados (status 'privado') no se listan en el perfil público: solo accesibles por link directo.
+        const aportes = await Juego.find({ usuario: req.params.usuario, status: { $ne: 'privado' } }).select('_id title description image images link category usuario reportes reportesDesglose linkStatus descargasEfectivas likesCount status createdAt scoreRecomendacion extraData videoType featuredItemId').sort({ scoreRecomendacion: -1, createdAt: -1 }).lean();
         res.json(aportes);
     } catch (error) {
         res.status(500).json([]);
