@@ -2936,6 +2936,12 @@ app.get('/search/populares', async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ========== NEXUS: publicación de proyectos (zona de Proyectos → categoría software) ==========
+// Debe registrarse ANTES del handler 404 para que sus rutas y el hosting /u sean alcanzables.
+const nexusPublish = require('./modulos/nexusPublish');
+nexusPublish.registrar(app, { Juego, logger });
+// ================================================================================================
+
 // ========== MANEJO DE ERRORES ==========
 app.use((req, res) => {
     res.status(404).json({ error: "Endpoint no encontrado" });

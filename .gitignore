@@ -46,5 +46,8 @@ out/
 coverage/
 .nyc_output/
 
+# ========== Proyectos publicados desde Nexus (contenido de usuarios) ==========
+user_public/
+
 # ========== Otros ==========
 .cache
