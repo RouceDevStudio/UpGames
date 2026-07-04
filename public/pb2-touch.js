@@ -1,12 +1,11 @@
 /* ==================================================================
-   PLAZMA BURST 2 — Capa de controles táctiles para móvil (UpGames)
-   Se inyecta same-origin sobre el juego original y traduce toques a
+   PLAZMA BURST 2 — Controles táctiles estilo GAMEPAD para móvil (UpGames)
+   Adaptación móvil del juego original. Traduce toques de botones fijos a
    la entrada que el juego ya entiende:
      · pointermove en <body>  -> apuntar (cursor)
      · onmousedown/onmouseup  -> disparar / clicar menús
      · onkeydown/onkeyup      -> mover, saltar, recargar, etc.
      · wheel                  -> cambiar de arma
-   No modifica el juego; solo le habla en su propio idioma.
 ================================================================== */
 (function(){
 "use strict";
@@ -28,18 +27,13 @@ var NW=(function(){
 })();
 var NPointer=NW.PointerEvent||NW.MouseEvent||window.MouseEvent;
 var NWheel=NW.WheelEvent||window.WheelEvent;
+function noop(){}
 
-/* neutralizar bloqueo de puntero (irrelevante en móvil, molesto en escritorio) */
 try{ if('LOCK_CURSOR' in window) window.LOCK_CURSOR=false; }catch(e){}
 try{ Element.prototype.requestPointerLock=function(){}; }catch(e){}
 
-/* ---------- Motor de entrada (híbrido: ruta global + handlers de elemento) ----------
-   El juego usa DOS canales de puntero según la pantalla:
-   · Juego / name_prompt: pointermove global en <body> + window.onmousedown/onmouseup
-   · Menús: cada panel DOM tiene sus propios el.onpointermove / el.onmousedown / el.onclick
-            que leen e.offsetX. Cubrimos ambos en cada acción. */
-var curX=window.innerWidth/2, curY=window.innerHeight/2;
-var mouseIsDown=false;
+/* ================= MOTOR DE ENTRADA (validado) ================= */
+var curX=window.innerWidth/2, curY=window.innerHeight/2, mouseIsDown=false;
 function inOverlay(el){ return !!(el&&el.closest&&el.closest('#pb2t-root')); }
 function mkEvt(el,x,y,type,btn,btns){
   var r=el.getBoundingClientRect();
@@ -79,10 +73,9 @@ function mouseButton(dn,x,y){
     }
   }
 }
-// clic completo con tiempos de fotograma (hover -> press -> release)
 function tapAt(x,y){ moveCursor(x,y); setTimeout(function(){ mouseButton(true,x,y); setTimeout(function(){mouseButton(false,x,y);},160); },90); }
 
-var down={}; // teclas mantenidas
+var down={};
 function keyEvent(isDown,keyCode,code,keyChar){
   var fn=isDown?window.onkeydown:window.onkeyup;
   var e={keyCode:keyCode,code:code,key:keyChar,which:keyCode,charCode:0,location:0,repeat:false,
@@ -93,193 +86,206 @@ function keyEvent(isDown,keyCode,code,keyChar){
 }
 function keyDown(kc,code,ch){ if(down[kc])return; down[kc]=true; keyEvent(true,kc,code,ch); }
 function keyUp(kc,code,ch){ if(!down[kc])return; down[kc]=false; keyEvent(false,kc,code,ch); }
-function tapKey(kc,code,ch){ keyEvent(true,kc,code,ch); setTimeout(function(){keyEvent(false,kc,code,ch);},40); }
+function tapKey(kc,code,ch){ keyEvent(true,kc,code,ch); setTimeout(function(){keyEvent(false,kc,code,ch);},45); }
 function wheel(dir){
-  try{ var e=new NWheel('wheel',{bubbles:true,cancelable:true,view:window,deltaY:dir*100,deltaMode:0,clientX:curX,clientY:curY}); document.dispatchEvent(e);}catch(err){}
+  try{ document.dispatchEvent(new NWheel('wheel',{bubbles:true,cancelable:true,view:window,deltaY:dir*100,deltaMode:0,clientX:curX,clientY:curY})); }catch(err){}
 }
-function noop(){}
+function releaseAll(){ for(var k in down){ if(down[k]){ keyEvent(false,+k,'',''); down[k]=false; } } if(mouseIsDown)mouseButton(false); }
 
-/* ---------- Mapa de teclas (dobles: flechas + WASD, por robustez) ---------- */
+/* teclas (flechas + WASD por robustez) */
 var K={
   left:[[37,'ArrowLeft','ArrowLeft'],[65,'KeyA','a']],
   right:[[39,'ArrowRight','ArrowRight'],[68,'KeyD','d']],
   up:[[38,'ArrowUp','ArrowUp'],[87,'KeyW','w']],
   down:[[40,'ArrowDown','ArrowDown'],[83,'KeyS','s']],
   reload:[[82,'KeyR','r']],
-  use:[[69,'KeyE','e']],
-  selfdestruct:[[81,'KeyQ','q']]
+  use:[[69,'KeyE','e']]
 };
 function holdDir(name,on){ var a=K[name]; for(var i=0;i<a.length;i++){ on?keyDown(a[i][0],a[i][1],a[i][2]):keyUp(a[i][0],a[i][1],a[i][2]); } }
 function tapAction(name){ var k=K[name][0]; tapKey(k[0],k[1],k[2]); }
 
-/* ---------- ¿Estamos dentro de una misión? ---------- */
+/* ---------- modo juego vs menú (lista negra: robusto) ---------- */
 function label(){ try{ return String(typeof currentLabel!=='undefined'?currentLabel:(window.currentLabel||'')); }catch(e){ return ''; } }
-// Etiquetas de escena de JUEGO (solo estas activan el joystick). Cualquier otra = menú.
-var GAME_LABELS=['gaming','playing','ingame','in_game','battle'];
+var MENU_LABELS=['name_prompt','name','menu','main','difch','difficulty','equipment','campaign','custom',
+  'credit','achiev','setting','loading','load','lobby','create','logs','confirm','failed','fail',
+  'faq','multiplayer','official','shop','editor','pause'];
 function inGame(){
   var l=label().toLowerCase();
   if(!l)return false;
-  for(var i=0;i<GAME_LABELS.length;i++){ if(l.indexOf(GAME_LABELS[i])!==-1) return true; }
-  return false;
+  for(var i=0;i<MENU_LABELS.length;i++){ if(l.indexOf(MENU_LABELS[i])!==-1) return false; }
+  return true;
+}
+
+/* ================= AIM + FIRE (anillo de 8 direcciones, autodisparo) ================= */
+var aimVec=null, aimHeld=0, aimTimer=null;
+function aimOrigin(){ return {x:window.innerWidth*0.5, y:window.innerHeight*0.46}; }
+function aimTick(){
+  if(!aimVec)return;
+  var o=aimOrigin(), R=Math.min(window.innerWidth,window.innerHeight)*0.92;
+  moveCursor(o.x+aimVec.x*R, o.y+aimVec.y*R);
+  if(!mouseIsDown) mouseButton(true);
+}
+function aimStart(vx,vy){
+  aimVec={x:vx,y:vy}; aimHeld++;
+  aimTick();
+  if(!aimTimer) aimTimer=setInterval(aimTick,55);
+}
+function aimStop(){
+  aimHeld=Math.max(0,aimHeld-1);
+  if(aimHeld===0){ if(aimTimer){clearInterval(aimTimer);aimTimer=null;} if(mouseIsDown)mouseButton(false); aimVec=null; }
 }
 
 /* ================= UI ================= */
-var root,gameLayer,hint;
+var root, gameLayer, hint, aimBox;
 function el(tag,id,cls,parent){var e=document.createElement(tag);if(id)e.id=id;if(cls)e.className=cls;(parent||root).appendChild(e);return e;}
 
 function build(){
   root=el('div','pb2t-root',null,document.body);
 
-  // aviso de rotación
-  var rot=el('div','pb2t-rotate',null,document.body);
-  rot.className='on'; rot.innerHTML='<div class="ic">📱</div><div style="font-weight:800;letter-spacing:1px">GIRA TU DISPOSITIVO</div><div style="font-size:12px;opacity:.7">Plazma Burst 2 se juega en horizontal</div>';
+  var rot=el('div','pb2t-rotate',null,document.body); rot.className='on';
+  rot.innerHTML='<div class="ic">📱</div><div style="font-weight:800;letter-spacing:1px">GIRA TU DISPOSITIVO</div><div style="font-size:12px;opacity:.7">Plazma Burst 2 se juega en horizontal</div>';
 
-  // barra de sistema (siempre): Menú(ESC) y ayuda
+  // sistema (siempre)
   var sysL=el('div','pb2t-sysL','pb2t-sys');
   var bEsc=el('div',null,'pb2t-syschip',sysL); bEsc.textContent='☰ MENÚ';
   bindTap(bEsc,function(){ tapKey(27,'Escape','Escape'); });
   var bHelp=el('div',null,'pb2t-syschip',sysL); bHelp.textContent='?';
   bindTap(bHelp,function(){ if(hint)hint.style.opacity=(hint.style.opacity==='0'?'1':'0'); });
 
-  // capa de juego (joystick + botones)
+  // capa de juego
   gameLayer=el('div','pb2t-game');
 
-  // zonas
-  var zL=el('div','pb2t-zoneL','pb2t-zone',gameLayer);
-  var zR=el('div','pb2t-zoneR','pb2t-zone',gameLayer);
-  var stL=el('div','pb2t-stickL','pb2t-stick',gameLayer); var nubL=el('div','pb2t-nubL','pb2t-nub',stL);
-  var stR=el('div','pb2t-stickR','pb2t-stick',gameLayer); var nubR=el('div','pb2t-nubR','pb2t-nub',stR);
+  // D-pad de movimiento (izquierda)
+  var dpad=el('div','pb2t-dpad',null,gameLayer);
+  var bL=el('div','pb2t-dL','pb2t-btn',dpad); bL.innerHTML='◀';
+  var bR=el('div','pb2t-dR','pb2t-btn',dpad); bR.innerHTML='▶';
+  bindHold(bL,function(o){ holdDir('left',o); });
+  bindHold(bR,function(o){ holdDir('right',o); });
 
-  // botones
+  // acciones sueltas
   var jump=el('div','pb2t-jump','pb2t-btn',gameLayer); jump.innerHTML='▲<small>salto</small>';
-  var fire=el('div','pb2t-fire','pb2t-btn',gameLayer); fire.innerHTML='🔥<small>fuego</small>';
   var crouch=el('div','pb2t-crouch','pb2t-btn',gameLayer); crouch.innerHTML='▼<small>agach</small>';
-  var use=el('div','pb2t-use','pb2t-btn',gameLayer); use.innerHTML='✋<small>usar</small>';
+  bindHold(jump,function(o){ holdDir('up',o); });
+  bindHold(crouch,function(o){ holdDir('down',o); });
+
+  // utilidades
   var reload=el('div','pb2t-reload','pb2t-btn',gameLayer); reload.innerHTML='⟳<small>recarg</small>';
+  var use=el('div','pb2t-use','pb2t-btn',gameLayer); use.innerHTML='✋<small>usar</small>';
   var wprev=el('div','pb2t-wprev','pb2t-btn',gameLayer); wprev.textContent='‹';
   var wnext=el('div','pb2t-wnext','pb2t-btn',gameLayer); wnext.textContent='›';
+  bindTapBtn(reload,function(){ tapAction('reload'); });
+  bindTapBtn(use,function(){ tapAction('use'); });
+  bindTapBtn(wprev,function(){ wheel(-1); });
+  bindTapBtn(wnext,function(){ wheel(1); });
+
+  // anillo de puntería + disparo (derecha): 8 botones
+  aimBox=el('div','pb2t-aim',null,gameLayer);
+  var hub=el('div','pb2t-aimhub',null,aimBox); hub.innerHTML='APUNTA<br>+FUEGO';
+  var DIRS=[
+    {a:'↑', vx:0,  vy:-1},
+    {a:'↗', vx:0.71, vy:-0.71},
+    {a:'→', vx:1,  vy:0},
+    {a:'↘', vx:0.71, vy:0.71},
+    {a:'↓', vx:0,  vy:1},
+    {a:'↙', vx:-0.71,vy:0.71},
+    {a:'←', vx:-1, vy:0},
+    {a:'↖', vx:-0.71,vy:-0.71}
+  ];
+  aimBox._btns=[];
+  DIRS.forEach(function(d){
+    var bb=el('div',null,'pb2t-btn',aimBox); bb.textContent=d.a; bb._d=d;
+    bindHold(bb,function(o){ o?aimStart(d.vx,d.vy):aimStop(); });
+    aimBox._btns.push(bb);
+  });
 
   hint=el('div','pb2t-hint',null,gameLayer);
-  hint.innerHTML='Izquierda: joystick para <b>moverte</b> y <b>saltar</b> · Derecha: arrastra para <b>apuntar</b> y <b>disparar</b>';
+  hint.innerHTML='<b>◀ ▶</b> mover · <b>▲</b> saltar · <b>▼</b> agacharse · anillo derecho: <b>apunta y dispara</b> en 8 direcciones · <b>‹ ›</b> cambiar arma';
+  setTimeout(function(){ if(hint)hint.style.opacity='0'; },8000);
 
   layout();
   window.addEventListener('resize',layout);
   window.addEventListener('orientationchange',function(){setTimeout(layout,300);});
 
-  bindHold(jump,function(o){ holdDir('up',o); jump.classList.toggle('press',o); });
-  bindHold(crouch,function(o){ holdDir('down',o); crouch.classList.toggle('press',o); });
-  bindHold(fire,function(o){ mouseButton(o); fire.classList.toggle('press',o); });
-  bindTap(use,function(){ tapAction('use'); flashPress(use); });
-  bindTap(reload,function(){ tapAction('reload'); flashPress(reload); });
-  bindTap(wprev,function(){ wheel(-1); flashPress(wprev); });
-  bindTap(wnext,function(){ wheel(1); flashPress(wnext); });
-
-  initStick(zL,stL,nubL,onMove);
-  initAim(zR,stR,nubR);
   initMenuPointer();
-
-  setInterval(updateMode,250);
-  updateMode();
+  setInterval(updateMode,250); updateMode();
 
   window.PB2T={tapAt:tapAt,tapKey:tapKey,holdDir:holdDir,mouseButton:mouseButton,moveCursor:moveCursor,
-    wheel:wheel,inGame:inGame,label:label,setMode:setMode,onMove:onMove,_down:down};
+    wheel:wheel,aimStart:aimStart,aimStop:aimStop,inGame:inGame,label:label,setMode:setMode,_down:down,
+    press:function(id){var e=document.getElementById(id);if(e&&e.__on)e.__on();},
+    release:function(id){var e=document.getElementById(id);if(e&&e.__off)e.__off();}};
 }
-
-function flashPress(b){ b.classList.add('press'); setTimeout(function(){b.classList.remove('press');},110); }
 
 function layout(){
-  var W=window.innerWidth,H=window.innerHeight,sb=safeB(),sr=safeR(),sl=safeL();
-  place('pb2t-jump', W-sr-64, H-sb-70);
-  place('pb2t-fire', W-sr-140, H-sb-118);
-  place('pb2t-crouch', W-sr-150, H-sb-46);
-  place('pb2t-use', sl+94, H-sb-46);
-  place('pb2t-reload', sl+30, H-sb-92);
-  place('pb2t-wprev', W-sr-40, H-sb-198);
-  place('pb2t-wnext', W-sr-40, H-sb-148);
-  var hn=document.getElementById('pb2t-hint'); if(hn){hn.style.left='50%';hn.style.top='62%';hn.style.transform='translateX(-50%)';}
+  var W=window.innerWidth,H=window.innerHeight,sb=envpx('safe-area-inset-bottom')+14,
+      sr=envpx('safe-area-inset-right')+14, sl=envpx('safe-area-inset-left')+14;
+  // D-pad izquierda (◀ ▶ juntos)
+  place('pb2t-dL', sl+42,  H-sb-42);
+  place('pb2t-dR', sl+126, H-sb-42);
+  // salto / agacharse (cerca del pulgar izquierdo, arriba)
+  place('pb2t-jump',   sl+84, H-sb-120);
+  place('pb2t-crouch', sl+178,H-sb-92);
+  // utilidades
+  place('pb2t-reload', sl+26, H-sb-118);
+  place('pb2t-use',    sl+230,H-sb-150);
+  place('pb2t-wprev',  W-sr-172, sb+90);
+  place('pb2t-wnext',  W-sr-172, sb+40);
+  // anillo de puntería (derecha)
+  var cx=W-sr-84, cy=H-sb-84, R=70;
+  var hub=document.getElementById('pb2t-aimhub'); if(hub){hub.style.left=cx+'px';hub.style.top=cy+'px';}
+  if(aimBox&&aimBox._btns){
+    aimBox._btns.forEach(function(bb,i){
+      var ang=-Math.PI/2 + i*(Math.PI/4); // empieza arriba, sentido horario
+      var x=cx+Math.cos(ang)*R, y=cy+Math.sin(ang)*R;
+      bb.style.left=x+'px'; bb.style.top=y+'px';
+    });
+  }
+  var hn=document.getElementById('pb2t-hint'); if(hn){hn.style.left='50%';hn.style.top='11%';hn.style.transform='translateX(-50%)';}
 }
-function place(id,x,y){var e=document.getElementById(id);if(!e)return;e.style.left=x+'px';e.style.top=y+'px';e.style.transform='translate(-50%,-50%)';}
-function safeB(){return envpx('safe-area-inset-bottom')+10;}
-function safeR(){return envpx('safe-area-inset-right')+10;}
-function safeL(){return envpx('safe-area-inset-left')+10;}
+function place(id,x,y){var e=document.getElementById(id);if(!e)return;e.style.left=x+'px';e.style.top=y+'px';}
 function envpx(v){try{var t=document.createElement('div');t.style.cssText='position:fixed;height:env('+v+')';document.body.appendChild(t);var h=t.offsetHeight;document.body.removeChild(t);return h||0;}catch(e){return 0;}}
 
-/* ---------- modo juego / menú ---------- */
+/* ---------- modo ---------- */
 var mode='menu';
 function updateMode(){ setMode(inGame()?'game':'menu'); }
 function setMode(m){
   if(m===mode)return; mode=m;
   gameLayer.classList.toggle('on',m==='game');
-  if(m!=='game'){ for(var k in down){ if(down[k]){ keyEvent(false,+k,'',''); down[k]=false; } } if(mouseIsDown)mouseButton(false); }
+  if(m!=='game'){ releaseAll(); if(aimTimer){clearInterval(aimTimer);aimTimer=null;} aimVec=null; aimHeld=0; }
 }
 
-/* ---------- joystick de movimiento ---------- */
-function initStick(zone,base,nub,cb){
-  var id=null,cx=0,cy=0,R=58;
-  zone.addEventListener('touchstart',function(e){
-    for(var i=0;i<e.changedTouches.length;i++){var t=e.changedTouches[i];
-      if(id!==null)continue; id=t.identifier; cx=t.clientX; cy=t.clientY;
-      base.style.left=cx+'px'; base.style.top=cy+'px'; base.classList.add('on'); hideHint();
-    } e.preventDefault();
-  },{passive:false});
-  window.addEventListener('touchmove',function(e){
-    for(var i=0;i<e.changedTouches.length;i++){var t=e.changedTouches[i]; if(t.identifier!==id)continue;
-      var dx=t.clientX-cx,dy=t.clientY-cy,m=Math.hypot(dx,dy)||1,mm=Math.min(m,R);
-      nub.style.left=(66+dx/m*mm*.5)+'px'; nub.style.top=(66+dy/m*mm*.5)+'px';
-      cb(dx/R,dy/R); e.preventDefault();
-    }
-  },{passive:false});
-  function end(e){ for(var i=0;i<e.changedTouches.length;i++){ if(e.changedTouches[i].identifier===id){ id=null; base.classList.remove('on'); nub.style.left='66px'; nub.style.top='66px'; cb(0,0); } } }
-  window.addEventListener('touchend',end); window.addEventListener('touchcancel',end);
+/* ---------- binding de botones (multitáctil, cada botón independiente) ---------- */
+function bindHold(node,cb){
+  node.__on=function(){ if(node.__pressed)return; node.__pressed=true; node.classList.add('press'); cb(true); };
+  node.__off=function(){ if(!node.__pressed)return; node.__pressed=false; node.classList.remove('press'); cb(false); };
+  node.addEventListener('touchstart',function(e){e.preventDefault();e.stopPropagation();node.__on();},{passive:false});
+  var end=function(e){e.preventDefault();e.stopPropagation();node.__off();};
+  node.addEventListener('touchend',end); node.addEventListener('touchcancel',end);
+  node.addEventListener('mousedown',function(e){e.preventDefault();e.stopPropagation();node.__on();});
+  window.addEventListener('mouseup',function(){node.__off();});
 }
-function onMove(x,y){
-  holdDir('left', x<-.32);
-  holdDir('right', x>.32);
-  holdDir('up', y<-.5);
-  holdDir('down', y>.55);
+function bindTapBtn(node,cb){
+  node.__on=function(){ node.classList.add('press'); cb(); };
+  node.__off=function(){ node.classList.remove('press'); };
+  node.addEventListener('touchstart',function(e){e.preventDefault();e.stopPropagation();node.__on();setTimeout(node.__off,110);},{passive:false});
+  node.addEventListener('mousedown',function(e){e.preventDefault();e.stopPropagation();node.__on();setTimeout(node.__off,110);});
+}
+function bindTap(node,cb){ // chips de sistema
+  node.addEventListener('touchstart',function(e){e.preventDefault();e.stopPropagation();cb();},{passive:false});
+  node.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();cb();});
 }
 
-/* ---------- aim stick (derecha) ---------- */
-function initAim(zone,base,nub){
-  var id=null,cx=0,cy=0,R=64,firing=false;
-  zone.addEventListener('touchstart',function(e){
-    for(var i=0;i<e.changedTouches.length;i++){var t=e.changedTouches[i];
-      if(id!==null)continue; id=t.identifier; cx=t.clientX; cy=t.clientY;
-      base.style.left=cx+'px'; base.style.top=cy+'px'; base.classList.add('on'); hideHint(); aimUpdate(0,0,false);
-    } e.preventDefault();
-  },{passive:false});
-  window.addEventListener('touchmove',function(e){
-    for(var i=0;i<e.changedTouches.length;i++){var t=e.changedTouches[i]; if(t.identifier!==id)continue;
-      var dx=t.clientX-cx,dy=t.clientY-cy,m=Math.hypot(dx,dy)||1,mm=Math.min(m,R);
-      nub.style.left=(66+dx/m*mm*.5)+'px'; nub.style.top=(66+dy/m*mm*.5)+'px';
-      aimUpdate(dx/R,dy/R,m>R*.42); e.preventDefault();
-    }
-  },{passive:false});
-  function end(e){ for(var i=0;i<e.changedTouches.length;i++){ if(e.changedTouches[i].identifier===id){ id=null; base.classList.remove('on'); nub.style.left='66px'; nub.style.top='66px'; if(firing){firing=false;mouseButton(false);} } } }
-  window.addEventListener('touchend',end); window.addEventListener('touchcancel',end);
-  function aimUpdate(dx,dy,shoot){
-    var ox=window.innerWidth*0.5, oy=window.innerHeight*0.46;
-    var rad=Math.min(window.innerWidth,window.innerHeight)*0.9;
-    var len=Math.hypot(dx,dy); if(len<0.001){dx=1;dy=0;len=1;}
-    moveCursor(ox+(dx/len)*rad, oy+(dy/len)*rad);
-    if(shoot&&!firing){firing=true;mouseButton(true);}
-    else if(!shoot&&firing){firing=false;mouseButton(false);}
-  }
-}
-
-/* ---------- puntero de menú ---------- */
+/* ---------- puntero de menú (tap para clicar pantallas del juego) ---------- */
 function initMenuPointer(){
   var sx=0,sy=0,tid=null,downAt=0;
   document.addEventListener('touchstart',function(e){
     if(mode==='game')return;
-    if(e.target.closest&&e.target.closest('.pb2t-syschip'))return;
+    if(e.target.closest&&e.target.closest('#pb2t-root'))return; // no robar toques a chips/botones
     var t=e.changedTouches[0];
-    // tap sobre input DOM -> enfocar (teclado nativo para el nombre)
     var real=document.elementFromPoint(t.clientX,t.clientY);
     if(real&&(real.tagName==='INPUT'||real.tagName==='TEXTAREA'||(real.className&&(''+real.className).indexOf('pb2Input')!==-1))){ tid=null; try{real.focus();}catch(_){}; return; }
     tid=t.identifier; sx=t.clientX; sy=t.clientY; downAt=Date.now();
     moveCursor(sx,sy);
-    setTimeout(function(){ if(tid!==null) mouseButton(true,sx,sy); },70); // hover -> press
+    setTimeout(function(){ if(tid!==null) mouseButton(true,sx,sy); },70);
   },{passive:true});
   document.addEventListener('touchmove',function(e){
     if(mode==='game'||tid===null)return;
@@ -289,27 +295,11 @@ function initMenuPointer(){
     if(mode==='game'||tid===null)return;
     for(var i=0;i<e.changedTouches.length;i++){var t=e.changedTouches[i]; if(t.identifier!==tid)continue;
       tid=null;
-      // duración mínima press->release para que el hit-test del juego lo registre (~150ms tras el press a los 70ms)
       var wait=Math.max(0,230-(Date.now()-downAt));
       setTimeout(function(){ mouseButton(false); },wait);
     }
   },{passive:true});
 }
-
-/* ---------- binding helpers ---------- */
-function bindHold(node,cb){
-  node.addEventListener('touchstart',function(e){e.preventDefault();e.stopPropagation();cb(true);},{passive:false});
-  var up=function(e){e.preventDefault();cb(false);};
-  node.addEventListener('touchend',up); node.addEventListener('touchcancel',up);
-  node.addEventListener('mousedown',function(e){e.preventDefault();e.stopPropagation();cb(true);});
-  window.addEventListener('mouseup',function(){cb(false);});
-}
-function bindTap(node,cb){
-  node.addEventListener('touchstart',function(e){e.preventDefault();e.stopPropagation();cb();},{passive:false});
-  node.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();cb();});
-}
-var hintHidden=false;
-function hideHint(){ if(hintHidden)return; hintHidden=true; if(hint)hint.style.opacity='0'; }
 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);
 else start();
