@@ -10,11 +10,10 @@
    servidor, todo queda en el mismo origen y la capa táctil puede hablarle al
    juego con sus propios eventos (pointermove / onmousedown / onkeydown).
 
-   Nota: el juego es propiedad de Eric Gurt (plazmaburst2.com). Esto es un
-   envoltorio de accesibilidad que reenvía el juego original en vivo; la
-   campaña single-player funciona, el multijugador puede no conectar (su
-   servidor puede rechazar el Origin). Si el juego original deja de estar
-   disponible, este proxy también dejará de funcionar.
+   Nota técnica: es un emulador/adaptación táctil que reenvía el juego H5 en
+   vivo para poder jugarlo en el celular. La campaña single-player funciona;
+   el multijugador puede no conectar (el servidor original puede rechazar el
+   Origin). Si el juego original deja de estar disponible, este proxy también.
    ============================================================================ */
 'use strict';
 const https = require('https');
