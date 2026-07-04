@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05070f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="UpGames Console — emulador táctil de juegos web. Agrega cualquier juego por link y juégalo en el celular.">
+<title>UpGames Console</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{--acc:#4aa3ff;--acc2:#7a5cff}
+html,body{height:100%;background:#05070f;overflow:hidden;position:fixed;inset:0;width:100%;
+  font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;color:#eaf3ff;
+  -webkit-user-select:none;user-select:none;overscroll-behavior:none}
+
+/* fondo animado estilo XMB */
+#bg{position:fixed;inset:0;z-index:0;background:
+  radial-gradient(120% 90% at 20% 0%,rgba(74,163,255,.16),transparent 55%),
+  radial-gradient(120% 90% at 90% 100%,rgba(122,92,255,.16),transparent 55%),
+  linear-gradient(160deg,#070b18,#05070f 60%)}
+#bg::before{content:"";position:absolute;inset:-20%;background:
+  repeating-linear-gradient(115deg,rgba(120,170,255,.05) 0 2px,transparent 2px 60px);
+  animation:drift 22s linear infinite;opacity:.6}
+@keyframes drift{to{transform:translateX(60px)}}
+.wave{position:absolute;left:-10%;right:-10%;height:40vh;filter:blur(2px);opacity:.5;
+  background:radial-gradient(60% 100% at 50% 0%,rgba(74,163,255,.25),transparent 70%)}
+#w1{top:8%;animation:sway 9s ease-in-out infinite}
+#w2{top:40%;animation:sway 13s ease-in-out infinite reverse;opacity:.35}
+@keyframes sway{0%,100%{transform:translateX(-4%) scaleY(1)}50%{transform:translateX(4%) scaleY(1.15)}}
+
+/* topbar */
+#top{position:fixed;top:0;left:0;right:0;z-index:5;display:flex;align-items:center;justify-content:space-between;
+  padding:calc(12px + env(safe-area-inset-top)) 20px 10px;pointer-events:none}
+#brand{font-weight:900;letter-spacing:2px;font-size:15px;display:flex;align-items:center;gap:8px}
+#brand .dot{width:9px;height:9px;border-radius:50%;background:var(--acc);box-shadow:0 0 12px var(--acc)}
+#clock{font-variant-numeric:tabular-nums;font-weight:700;font-size:14px;color:#cfe0ff;text-align:right}
+#clock small{display:block;font-size:10px;color:rgba(207,224,255,.5);font-weight:500;letter-spacing:1px}
+
+/* carrusel */
+#stage{position:fixed;inset:0;z-index:2;display:flex;flex-direction:column;justify-content:center}
+#track{display:flex;gap:26px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;
+  padding:0 calc(50vw - 90px);align-items:center;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+#track::-webkit-scrollbar{display:none}
+.card{flex:0 0 auto;width:180px;height:240px;scroll-snap-align:center;border-radius:18px;position:relative;
+  overflow:hidden;cursor:pointer;transition:transform .28s cubic-bezier(.2,.8,.2,1),box-shadow .28s,opacity .28s;
+  transform:scale(.72);opacity:.5;border:1px solid rgba(150,190,255,.18);background:#0c1426}
+.card.active{transform:scale(1);opacity:1;box-shadow:0 22px 60px rgba(0,0,0,.6),0 0 0 2px rgba(74,163,255,.5),0 0 40px rgba(74,163,255,.35)}
+.card .art{position:absolute;inset:0;background-size:cover;background-position:center;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;padding:16px;gap:8px}
+.card .glyph{font-size:54px;filter:drop-shadow(0 4px 14px rgba(0,0,0,.5))}
+.card .ttl{font-weight:900;font-size:17px;line-height:1.15;letter-spacing:.5px;text-shadow:0 2px 10px rgba(0,0,0,.6)}
+.card .dom{font-size:10px;letter-spacing:1px;color:rgba(255,255,255,.7);text-transform:lowercase}
+.card .sheen{position:absolute;inset:0;background:linear-gradient(160deg,rgba(255,255,255,.14),transparent 40%);pointer-events:none}
+.card.add{background:rgba(120,160,255,.06);border:2px dashed rgba(120,170,255,.4);display:flex;align-items:center;justify-content:center}
+.card.add .plus{font-size:64px;font-weight:300;color:rgba(160,200,255,.85);line-height:1}
+.card.add .lbl{position:absolute;bottom:20px;font-size:11px;letter-spacing:2px;color:rgba(160,200,255,.7);text-transform:uppercase}
+
+/* pie: título del seleccionado + jugar */
+#foot{position:fixed;left:0;right:0;bottom:0;z-index:5;text-align:center;
+  padding:0 20px calc(18px + env(safe-area-inset-bottom));pointer-events:none}
+#selTitle{font-size:clamp(20px,5vw,30px);font-weight:900;letter-spacing:.5px;margin-bottom:4px;
+  text-shadow:0 3px 18px rgba(0,0,0,.6);min-height:1.2em}
+#selDom{font-size:11px;letter-spacing:2px;color:rgba(200,220,255,.55);text-transform:uppercase;margin-bottom:14px;min-height:1em}
+.actions{display:flex;gap:10px;justify-content:center;pointer-events:auto}
+.btn{appearance:none;border:1px solid rgba(74,163,255,.5);background:linear-gradient(180deg,rgba(74,163,255,.2),rgba(74,163,255,.06));
+  color:#eaf3ff;font-weight:800;font-size:14px;letter-spacing:1.5px;padding:12px 30px;border-radius:11px;cursor:pointer;
+  text-transform:uppercase;transition:transform .1s,box-shadow .1s}
+.btn:active{transform:scale(.95);box-shadow:0 0 22px rgba(74,163,255,.4)}
+.btn.ghost{border-color:rgba(200,220,255,.25);background:rgba(255,255,255,.05);color:rgba(220,232,255,.85);font-weight:600;padding:12px 18px}
+.btn.danger{border-color:rgba(255,90,120,.45);background:rgba(255,90,120,.1);color:#ffd6de}
+
+/* overlay agregar */
+#add{position:fixed;inset:0;z-index:40;background:rgba(4,7,15,.82);backdrop-filter:blur(6px);display:none;
+  flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px}
+#add.on{display:flex}
+#add .panel{width:min(460px,92vw);background:linear-gradient(180deg,rgba(16,26,48,.96),rgba(9,15,30,.96));
+  border:1px solid rgba(74,163,255,.3);border-radius:18px;padding:22px;display:flex;flex-direction:column;gap:12px;
+  box-shadow:0 30px 80px rgba(0,0,0,.6)}
+#add h3{font-size:18px;font-weight:900;letter-spacing:.5px;display:flex;align-items:center;gap:8px}
+#add label{font-size:11px;letter-spacing:1.5px;color:rgba(180,205,255,.7);text-transform:uppercase;margin-bottom:-6px}
+#add input{width:100%;background:rgba(6,12,26,.9);border:1px solid rgba(120,160,255,.28);border-radius:11px;
+  padding:13px 14px;color:#eaf3ff;font-size:15px;outline:none}
+#add input:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(74,163,255,.18)}
+#add .hint{font-size:11px;color:rgba(180,205,255,.5);line-height:1.5}
+#add .row{display:flex;gap:10px;margin-top:6px}
+#add .row .btn{flex:1;text-align:center}
+#err{color:#ff9db0;font-size:12px;min-height:1em;text-align:center}
+
+/* reproductor */
+#player{position:fixed;inset:0;z-index:80;background:#000;display:none}
+#player.on{display:block}
+#pframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
+#pback{position:absolute;top:calc(8px + env(safe-area-inset-top));right:calc(8px + env(safe-area-inset-right));
+  z-index:82;height:34px;padding:0 14px;border-radius:9px;display:flex;align-items:center;gap:6px;
+  background:rgba(6,14,28,.72);border:1px solid rgba(120,170,255,.4);color:#bcd8ff;font-size:12px;font-weight:800;
+  letter-spacing:1px;pointer-events:auto}
+#ploading{position:absolute;inset:0;z-index:81;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:#7cc0ff;background:#05070f}
+#ploading .sp{width:30px;height:30px;border:3px solid rgba(74,163,255,.25);border-top-color:var(--acc);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+#rotate{position:fixed;inset:0;z-index:90;background:#05070f;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px}
+#rotate .ic{font-size:60px;animation:rot 1.7s ease-in-out infinite}
+@keyframes rot{0%,22%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}
+@media (orientation:portrait){#player.on ~ #rotate{display:flex}}
+</style>
+</head>
+<body>
+<div id="bg"><div class="wave" id="w1"></div><div class="wave" id="w2"></div></div>
+
+<div id="top">
+  <div id="brand"><span class="dot"></span>UPGAMES CONSOLE</div>
+  <div id="clock"><span id="ck">--:--</span><small id="cd"></small></div>
+</div>
+
+<div id="stage"><div id="track"></div></div>
+
+<div id="foot">
+  <div id="selTitle"></div>
+  <div id="selDom"></div>
+  <div class="actions" id="acts"></div>
+</div>
+
+<!-- agregar juego -->
+<div id="add">
+  <div class="panel">
+    <h3>➕ Agregar juego</h3>
+    <label>Link del juego</label>
+    <input id="inUrl" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://www.ejemplo.com/juego/">
+    <label>Nombre (opcional)</label>
+    <input id="inName" type="text" autocomplete="off" placeholder="Se detecta solo si lo dejas vacío">
+    <label>Imagen de carátula (opcional)</label>
+    <input id="inCover" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://...jpg  (si no, se genera una)">
+    <p class="hint">Pega el link de un juego web (HTML5). Se abrirá con controles táctiles gamepad, como el emulador. Ideal para juegos tipo Plazma Burst.</p>
+    <div id="err"></div>
+    <div class="row">
+      <button class="btn ghost" id="addCancel">Cancelar</button>
+      <button class="btn" id="addOk">Agregar</button>
+    </div>
+  </div>
+</div>
+
+<!-- reproductor -->
+<div id="player">
+  <button id="pback">✕ Salir</button>
+  <div id="ploading"><div class="sp"></div><div style="font-size:12px;letter-spacing:2px">CARGANDO…</div></div>
+  <iframe id="pframe" allow="fullscreen; autoplay; gamepad; accelerometer; gyroscope" allowfullscreen title="Juego"></iframe>
+</div>
+<div id="rotate"><div class="ic">📱</div><div style="font-weight:800;letter-spacing:1px">GIRA TU DISPOSITIVO</div><div style="font-size:12px;opacity:.7">Estos juegos se juegan en horizontal</div></div>
+
+<script>
+"use strict";
+// Base del emulador (backend de UpGames). El juego + la capa táctil corren en
+// ESTE origen dentro del iframe, por eso los controles táctiles funcionan.
+var EMU_BASE = "https://upgames-production.up.railway.app";
+
+var $ = function(id){ return document.getElementById(id); };
+var track=$('track'), foot=$('foot');
+
+/* ---------- almacenamiento ---------- */
+var STORE='upgamesConsole.v1';
+var DEFAULTS=[
+  { id:'pb2', title:'Plazma Burst 2', url:'https://www.plazmaburst2.com/h5/versions/v1769098419/', cover:'', glyph:'🔫' }
+];
+function load(){ try{ var s=localStorage.getItem(STORE); if(s){ var a=JSON.parse(s); if(Array.isArray(a)&&a.length) return a; } }catch(e){} return DEFAULTS.slice(); }
+function save(){ try{ localStorage.setItem(STORE, JSON.stringify(games)); }catch(e){} }
+var games=load();
+
+/* ---------- utilidades ---------- */
+function domainOf(u){ try{ return new URL(u).host.replace(/^www\./,''); }catch(e){ return ''; } }
+function hueOf(s){ var h=0; for(var i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))%360; return h; }
+function emuUrl(link){
+  var u; try{ u=new URL(link); }catch(e){ return null; }
+  var last=u.pathname.split('/').pop();
+  var pathname=u.pathname;
+  if(last.indexOf('.')===-1 && !pathname.endsWith('/')) pathname+='/';
+  return EMU_BASE + '/games/emu/u/' + u.host + pathname + (u.search||'');
+}
+var GLYPHS=['🎮','🔫','👾','🚀','⚔️','🕹️','💥','🛸','🤖','🏎️','🐉','⚡'];
+
+/* ---------- render del carrusel ---------- */
+function buildCards(){
+  track.innerHTML='';
+  games.forEach(function(g,idx){
+    var c=document.createElement('div'); c.className='card'; c.dataset.idx=idx;
+    var art=document.createElement('div'); art.className='art';
+    if(g.cover){
+      art.style.backgroundImage="url('"+g.cover.replace(/'/g,"%27")+"')";
+    }else{
+      var h=hueOf(g.title||g.url||''+idx);
+      art.style.background='linear-gradient(160deg,hsl('+h+',70%,42%),hsl('+((h+40)%360)+',65%,22%))';
+      var glyph=document.createElement('div'); glyph.className='glyph'; glyph.textContent=g.glyph||GLYPHS[idx%GLYPHS.length]; art.appendChild(glyph);
+      var t=document.createElement('div'); t.className='ttl'; t.textContent=g.title||domainOf(g.url); art.appendChild(t);
+      var d=document.createElement('div'); d.className='dom'; d.textContent=domainOf(g.url); art.appendChild(d);
+    }
+    c.appendChild(art);
+    var sh=document.createElement('div'); sh.className='sheen'; c.appendChild(sh);
+    c.addEventListener('click',function(){ onCardClick(idx, c); });
+    track.appendChild(c);
+  });
+  // tarjeta "+"
+  var add=document.createElement('div'); add.className='card add'; add.dataset.idx='add';
+  add.innerHTML='<div class="plus">+</div><div class="lbl">Agregar</div>';
+  add.addEventListener('click',function(){ centerCard(add); openAdd(); });
+  track.appendChild(add);
+}
+
+function cards(){ return Array.prototype.slice.call(track.children); }
+function centerOf(el){ var r=el.getBoundingClientRect(); return r.left + r.width/2; }
+function updateActive(){
+  var mid=window.innerWidth/2, best=null, bd=1e9;
+  cards().forEach(function(c){ var d=Math.abs(centerOf(c)-mid); if(d<bd){bd=d;best=c;} });
+  cards().forEach(function(c){ c.classList.toggle('active', c===best); });
+  if(!best) return;
+  if(best.classList.contains('add')){
+    $('selTitle').textContent='Agregar juego';
+    $('selDom').textContent='pega un link';
+    renderActions('add');
+  }else{
+    var g=games[+best.dataset.idx];
+    $('selTitle').textContent=g.title||domainOf(g.url);
+    $('selDom').textContent=domainOf(g.url);
+    renderActions('game', +best.dataset.idx);
+  }
+}
+function renderActions(kind, idx){
+  var a=$('acts'); a.innerHTML='';
+  if(kind==='add'){
+    var b=document.createElement('button'); b.className='btn'; b.textContent='➕ Nuevo'; b.onclick=openAdd; a.appendChild(b);
+  }else{
+    var play=document.createElement('button'); play.className='btn'; play.textContent='▶ Jugar'; play.onclick=function(){ playGame(idx); }; a.appendChild(play);
+    if(games[idx].id!=='pb2' || games.length>1){
+      var del=document.createElement('button'); del.className='btn danger'; del.textContent='Quitar';
+      del.onclick=function(){ removeGame(idx); }; a.appendChild(del);
+    }
+  }
+}
+function centerCard(el){ var mid=window.innerWidth/2; track.scrollLeft += centerOf(el)-mid; }
+
+var clickGuard=0;
+function onCardClick(idx, el){
+  if(el.classList.contains('active')){ playGame(idx); }
+  else { centerCard(el); }
+}
+
+/* ---------- agregar ---------- */
+function openAdd(){ $('inUrl').value=''; $('inName').value=''; $('inCover').value=''; $('err').textContent=''; $('add').classList.add('on'); setTimeout(function(){$('inUrl').focus();},200); }
+function closeAdd(){ $('add').classList.remove('on'); }
+$('addCancel').onclick=closeAdd;
+$('add').addEventListener('click',function(e){ if(e.target===$('add')) closeAdd(); });
+$('addOk').onclick=function(){
+  var url=$('inUrl').value.trim();
+  if(!/^https?:\/\//i.test(url)) url='https://'+url;
+  var test; try{ test=new URL(url); }catch(e){ $('err').textContent='Ese link no parece válido.'; return; }
+  if(!test.host || test.host.indexOf('.')===-1){ $('err').textContent='Escribe un link completo (ej: https://sitio.com/juego/).'; return; }
+  var g={ id:'g'+Date.now(), title:($('inName').value.trim()||domainOf(url)), url:url, cover:$('inCover').value.trim(), glyph:GLYPHS[games.length%GLYPHS.length] };
+  games.push(g); save(); buildCards();
+  closeAdd();
+  // centrar el nuevo
+  setTimeout(function(){ var cs=cards(); var target=cs[games.length-1]; if(target){ centerCard(target); updateActive(); } },60);
+};
+function removeGame(idx){
+  games.splice(idx,1); if(!games.length) games=DEFAULTS.slice(); save(); buildCards();
+  setTimeout(updateActive,50);
+}
+
+/* ---------- jugar ---------- */
+function playGame(idx){
+  var g=games[idx]; var src=emuUrl(g.url);
+  if(!src){ alert('El link de este juego no es válido.'); return; }
+  $('ploading').style.display='flex';
+  $('player').classList.add('on');
+  enterFullscreen();
+  var f=$('pframe');
+  f.onload=function(){ setTimeout(function(){ $('ploading').style.display='none'; },800); };
+  f.src=src;
+  setTimeout(function(){ $('ploading').style.display='none'; }, 9000);
+}
+$('pback').onclick=function(){
+  $('player').classList.remove('on'); $('pframe').src='about:blank';
+  try{ if(document.fullscreenElement) document.exitFullscreen(); }catch(e){}
+};
+function enterFullscreen(){
+  var el=document.documentElement, fn=el.requestFullscreen||el.webkitRequestFullscreen;
+  if(fn){ try{ fn.call(el); }catch(e){} }
+  try{ if(screen.orientation&&screen.orientation.lock) screen.orientation.lock('landscape').catch(function(){}); }catch(e){}
+}
+
+/* ---------- reloj ---------- */
+function tick(){
+  var d=new Date();
+  var hh=('0'+d.getHours()).slice(-2), mm=('0'+d.getMinutes()).slice(-2);
+  $('ck').textContent=hh+':'+mm;
+  $('cd').textContent=d.toLocaleDateString('es',{weekday:'short',day:'numeric',month:'short'}).toUpperCase();
+}
+setInterval(tick,1000); tick();
+
+/* ---------- init ---------- */
+buildCards();
+track.addEventListener('scroll',function(){ window.requestAnimationFrame(updateActive); },{passive:true});
+window.addEventListener('resize',updateActive);
+setTimeout(function(){ var cs=cards(); if(cs[0]) centerCard(cs[0]); updateActive(); },100);
+document.addEventListener('gesturestart',function(e){ e.preventDefault(); });
+document.addEventListener('dblclick',function(e){ e.preventDefault(); });
+</script>
+</body>
+</html>
