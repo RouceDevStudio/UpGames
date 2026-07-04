@@ -139,6 +139,14 @@ async function enviarPagoPayPal(paypalEmail, monto, pagoId) {
 
 const app = express();
 
+// ========== PROXY PLAZMA BURST 2 (TÁCTIL) ==========
+// Reservir el juego original H5 same-origin + inyectar controles táctiles.
+// Se monta ANTES de helmet/rate-limit: el juego carga ~90 archivos y no debe
+// consumir el límite de peticiones ni verse afectado por políticas de la API.
+const pb2proxy = require('./modulos/pb2proxy');
+pb2proxy.registrar(app);
+// ===================================================
+
 // ========== CONFIGURACIÓN DE SEGURIDAD ==========
 app.use(helmet({
     contentSecurityPolicy: false,

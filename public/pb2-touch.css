@@ -1,0 +1,58 @@
+/* ============ PLAZMA BURST 2 — Capa de controles táctiles (UpGames) ============ */
+#pb2t-root,#pb2t-root *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:none}
+#pb2t-root{position:fixed;inset:0;z-index:2147483000;pointer-events:none;font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif}
+
+/* aviso de rotación */
+#pb2t-rotate{position:fixed;inset:0;z-index:2147483600;background:#04070f;display:none;flex-direction:column;
+  align-items:center;justify-content:center;gap:14px;color:#88d0ff;text-align:center;padding:24px;pointer-events:auto}
+#pb2t-rotate .ic{font-size:60px;animation:pb2tRot 1.7s ease-in-out infinite}
+@keyframes pb2tRot{0%,22%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}
+@media (orientation:portrait){#pb2t-rotate.on{display:flex}}
+
+/* joystick de movimiento (izq) */
+.pb2t-stick{position:absolute;width:132px;height:132px;border-radius:50%;transform:translate(-50%,-50%);
+  border:2px solid rgba(90,170,255,.28);background:radial-gradient(circle,rgba(60,157,255,.09),rgba(60,157,255,.02) 70%);
+  display:none;pointer-events:none}
+.pb2t-stick.on{display:block}
+.pb2t-nub{position:absolute;left:50%;top:50%;width:60px;height:60px;border-radius:50%;transform:translate(-50%,-50%);
+  background:radial-gradient(circle at 36% 30%,rgba(160,215,255,.85),rgba(60,157,255,.4) 60%,rgba(60,157,255,.16));
+  border:1.5px solid rgba(160,215,255,.6);box-shadow:0 0 18px rgba(60,157,255,.4)}
+#pb2t-stickR{border-color:rgba(255,140,90,.3);background:radial-gradient(circle,rgba(255,140,60,.09),rgba(255,120,60,.02) 70%)}
+#pb2t-nubR{background:radial-gradient(circle at 36% 30%,rgba(255,200,150,.85),rgba(255,120,50,.4) 60%,rgba(255,120,50,.16));border-color:rgba(255,190,150,.6);box-shadow:0 0 18px rgba(255,120,50,.4)}
+
+/* botones de acción */
+.pb2t-btn{position:absolute;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-direction:column;
+  font-weight:800;color:rgba(200,230,255,.92);border:1.5px solid rgba(90,170,255,.32);
+  background:radial-gradient(circle at 36% 30%,rgba(20,40,70,.6),rgba(8,16,30,.5));pointer-events:auto;
+  text-transform:uppercase;letter-spacing:.5px;line-height:1;transition:transform .08s}
+.pb2t-btn small{font-size:8px;opacity:.7;margin-top:2px;font-weight:700}
+.pb2t-btn.press{transform:scale(.92);background:radial-gradient(circle at 36% 30%,rgba(60,157,255,.5),rgba(60,157,255,.12));border-color:#5aa0ff;box-shadow:0 0 22px rgba(60,157,255,.45)}
+#pb2t-jump{width:72px;height:72px;font-size:24px}
+#pb2t-fire{width:78px;height:78px;font-size:22px;border-color:rgba(255,120,90,.4)}
+#pb2t-fire.press{background:radial-gradient(circle at 36% 30%,rgba(255,100,70,.5),rgba(255,100,70,.12));border-color:#ff7a5a;box-shadow:0 0 22px rgba(255,100,70,.45)}
+#pb2t-crouch{width:56px;height:56px;font-size:17px}
+#pb2t-use{width:56px;height:56px;font-size:16px}
+#pb2t-reload{width:56px;height:56px;font-size:15px}
+#pb2t-wprev,#pb2t-wnext{width:46px;height:46px;font-size:16px}
+
+/* zonas táctiles (invisibles) */
+.pb2t-zone{position:absolute;top:0;bottom:0;pointer-events:auto}
+#pb2t-zoneL{left:0;width:42%}
+#pb2t-zoneR{right:0;width:42%}
+
+/* barra superior: botones de sistema */
+.pb2t-sys{position:absolute;top:calc(6px + env(safe-area-inset-top));display:flex;gap:6px;pointer-events:auto}
+#pb2t-sysL{left:calc(6px + env(safe-area-inset-left))}
+.pb2t-syschip{height:30px;padding:0 12px;border-radius:8px;display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;
+  color:#88d0ff;background:rgba(6,14,28,.6);border:1px solid rgba(60,157,255,.28);pointer-events:auto}
+
+/* controles solo en modo juego */
+#pb2t-game{display:none}
+#pb2t-game.on{display:block}
+
+/* pista inicial */
+#pb2t-hint{position:absolute;left:50%;top:64%;transform:translateX(-50%);width:88%;text-align:center;
+  font-size:12px;color:rgba(150,200,255,.6);pointer-events:none;transition:opacity .8s}
+
+/* elementos visibles solo cuando corresponde */
+.pb2t-fade{transition:opacity .25s}

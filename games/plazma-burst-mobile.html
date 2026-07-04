@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#04070f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="Plazma Burst 2 con controles táctiles — jugable 100% en el celular. UpGames.">
+<title>Plazma Burst 2 — Táctil · UpGames</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔫</text></svg>">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:#04070f;overflow:hidden;position:fixed;inset:0;width:100%;
+  font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;color:#cfe9ff;
+  -webkit-user-select:none;user-select:none;overscroll-behavior:none}
+#pbframe{position:fixed;inset:0;width:100%;height:100%;border:0;display:block;background:#000}
+
+/* pantalla de arranque */
+#boot{position:fixed;inset:0;z-index:50;background:radial-gradient(120% 120% at 50% 0%,#0a1730,#04070f);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;text-align:center;
+  padding:24px;transition:opacity .5s ease}
+#boot.hide{opacity:0;pointer-events:none}
+#boot .logo{font-size:clamp(26px,7vw,46px);font-weight:900;letter-spacing:2px;line-height:1;
+  background:linear-gradient(180deg,#aef4ff,#3c9dff 55%,#7a5cff);-webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;filter:drop-shadow(0 0 22px rgba(60,157,255,.35))}
+#boot .sub{font-size:11px;letter-spacing:5px;color:rgba(136,208,255,.6);text-transform:uppercase}
+#boot .bolt{font-size:50px;filter:drop-shadow(0 0 18px #3c9dff);animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:.5}50%{transform:scale(1.16);opacity:1}}
+#playbtn{appearance:none;border:1px solid rgba(60,157,255,.5);background:linear-gradient(180deg,rgba(60,157,255,.18),rgba(60,157,255,.05));
+  color:#dff6ff;font-weight:800;font-size:16px;letter-spacing:3px;padding:15px 40px;border-radius:12px;cursor:pointer;
+  text-transform:uppercase;transition:transform .12s,box-shadow .12s}
+#playbtn:active{transform:scale(.96);box-shadow:0 0 26px rgba(60,157,255,.45)}
+.note{font-size:11px;color:rgba(207,233,255,.45);max-width:420px;line-height:1.5}
+.spin{width:26px;height:26px;border:3px solid rgba(60,157,255,.25);border-top-color:#3c9dff;border-radius:50%;
+  animation:sp .8s linear infinite;display:none}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* aviso de rotación */
+#rotate{position:fixed;inset:0;z-index:60;background:#04070f;display:none;flex-direction:column;
+  align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px}
+#rotate .ic{font-size:60px;animation:rot 1.7s ease-in-out infinite}
+@keyframes rot{0%,22%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}
+@media (orientation:portrait){#rotate.armed{display:flex}}
+</style>
+</head>
+<body>
+
+<iframe id="pbframe" allow="fullscreen; autoplay; gamepad; accelerometer; gyroscope" allowfullscreen title="Plazma Burst 2"></iframe>
+
+<div id="rotate"><div class="ic">📱</div><div style="font-weight:800;letter-spacing:1px">GIRA TU DISPOSITIVO</div><div class="note">Plazma Burst 2 se juega en horizontal</div></div>
+
+<div id="boot">
+  <div class="bolt">⚡</div>
+  <div class="logo">PLAZMA BURST 2</div>
+  <div class="sub">Edición Táctil</div>
+  <button id="playbtn">▶ Jugar</button>
+  <div class="spin" id="spin"></div>
+  <p class="note">Controles táctiles: joystick izquierdo para moverte y saltar, lado derecho para apuntar y disparar. Campaña original de Eric Gurt (plazmaburst2.com), adaptada a móvil por UpGames.</p>
+</div>
+
+<script>
+"use strict";
+// Base del proxy same-origin del backend de UpGames (Railway).
+// El juego + la capa táctil corren en ESTE origen dentro del iframe.
+var PROXY_BASE = "https://upgames-production.up.railway.app/games/pb2";
+
+var frame = document.getElementById('pbframe');
+var boot  = document.getElementById('boot');
+var spin  = document.getElementById('spin');
+var playbtn = document.getElementById('playbtn');
+var rotate = document.getElementById('rotate');
+var launched = false;
+
+function enterFullscreen(){
+  var el = document.documentElement;
+  var fn = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+  if (fn) { try { fn.call(el); } catch(e){} }
+  // bloquear a horizontal si el navegador lo permite
+  try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(function(){}); } catch(e){}
+}
+
+function launch(){
+  if (launched) return; launched = true;
+  playbtn.style.display = 'none';
+  spin.style.display = 'block';
+  enterFullscreen();
+  frame.src = PROXY_BASE;
+  frame.addEventListener('load', function(){
+    setTimeout(function(){ boot.classList.add('hide'); setTimeout(function(){ boot.style.display='none'; }, 600); }, 900);
+  });
+  // failsafe: ocultar el arranque aunque 'load' no dispare
+  setTimeout(function(){ boot.classList.add('hide'); setTimeout(function(){ boot.style.display='none'; }, 600); }, 9000);
+  setTimeout(function(){ rotate.classList.add('armed'); }, 1500);
+}
+
+playbtn.addEventListener('click', launch);
+// evitar zoom/scroll accidental
+document.addEventListener('gesturestart', function(e){ e.preventDefault(); });
+document.addEventListener('dblclick', function(e){ e.preventDefault(); });
+</script>
+</body>
+</html>
