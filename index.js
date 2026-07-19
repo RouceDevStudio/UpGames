@@ -11,6 +11,33 @@ const helmet = require('helmet');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
+// ========== NORMALIZACIÓN DE EMAIL (CONSISTENTE) ==========
+// Solo pasa a minúsculas. NO elimina puntos ni subdirecciones (+tag).
+// Motivo: por defecto normalizeEmail() borra los puntos de Gmail, así que
+// "maria.gonzalez@gmail.com" se guardaba como "mariagonzalez@gmail.com" en el
+// registro, pero el login solo hace toLowerCase() y buscaba el email tal cual
+// lo escribió la persona → no lo encontraba y no podía entrar. Preservando el
+// email evitamos ese desajuste (y pagos de PayPal a una dirección equivocada).
+const EMAIL_NORMALIZE_OPTS = {
+    gmail_remove_dots: false,
+    gmail_remove_subaddress: false,
+    outlookdotcom_remove_subaddress: false,
+    yahoo_remove_subaddress: false,
+    icloud_remove_subaddress: false
+};
+
+// Variante "sin puntos" de un email de Gmail, tal como lo guardaba el
+// normalizeEmail anterior. Sirve como fallback en el login para que las cuentas
+// creadas ANTES de este arreglo (guardadas sin puntos) sigan pudiendo entrar
+// escribiendo su email real. Devuelve null si no aplica o si no cambia nada.
+function gmailLegacyEmail(email) {
+    const m = /^([^@]+)@(gmail\.com|googlemail\.com)$/i.exec(String(email || '').trim());
+    if (!m) return null;
+    const local = m[1].split('+')[0].replace(/\./g, '');
+    const legacy = `${local}@gmail.com`;
+    return legacy !== email.toLowerCase() ? legacy : null;
+}
+
 // ========== MÓDULOS CENTRALIZADOS ==========
 const config       = require('./modulos/config');
 const logger       = require('./modulos/logger');
@@ -611,7 +638,7 @@ app.get('/auth/verify-email/:token', async (req, res) => {
     }
 });
 
-app.post('/auth/resend-verification', [body('email').isEmail().normalizeEmail()], async (req, res) => {
+app.post('/auth/resend-verification', [body('email').isEmail().normalizeEmail(EMAIL_NORMALIZE_OPTS)], async (req, res) => {
     try {
         const { email } = req.body;
         const usuario = await Usuario.findOne({ email: email.toLowerCase() });
@@ -634,7 +661,7 @@ app.post('/auth/resend-verification', [body('email').isEmail().normalizeEmail()]
 //  RECUPERACIÓN DE CONTRASEÑA
 // ══════════════════════════════════════════════════════════════
 
-app.post('/auth/forgot-password', [body('email').isEmail().normalizeEmail()], async (req, res) => {
+app.post('/auth/forgot-password', [body('email').isEmail().normalizeEmail(EMAIL_NORMALIZE_OPTS)], async (req, res) => {
     try {
         const { email } = req.body;
         const usuario = await Usuario.findOne({ email: email.toLowerCase() });
@@ -876,7 +903,7 @@ app.get('/economia/mi-saldo', verificarToken, async (req, res) => {
     }
 });
 
-app.put('/economia/actualizar-paypal', [verificarToken, body('paypalEmail').isEmail().normalizeEmail()], async (req, res) => {
+app.put('/economia/actualizar-paypal', [verificarToken, body('paypalEmail').isEmail().normalizeEmail(EMAIL_NORMALIZE_OPTS)], async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: "Email de PayPal inválido", details: errors.array() });
@@ -1192,7 +1219,7 @@ app.post('/items/verify-download/:id', async (req, res) => {
 
 app.post('/auth/register', [
     body('usuario').trim().isLength({ min: 3, max: 20 }).toLowerCase(),
-    body('email').isEmail().normalizeEmail(),
+    body('email').isEmail().normalizeEmail(EMAIL_NORMALIZE_OPTS),
     body('password').isLength({ min: 6 })
 ], async (req, res) => {
     try {
@@ -1244,7 +1271,13 @@ app.post('/auth/login', [body('usuario').notEmpty(), body('password').notEmpty()
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: "Datos inválidos" });
 
         const { usuario: identificador, password } = req.body;
-        const usuario = await Usuario.findOne({ $or: [{ usuario: identificador.toLowerCase() }, { email: identificador.toLowerCase() }] });
+        const id = identificador.toLowerCase().trim();
+        const orConds = [{ usuario: id }, { email: id }];
+        // Fallback para cuentas antiguas de Gmail guardadas sin puntos por el
+        // normalizeEmail anterior: permite entrar con el email real "con puntos".
+        const legacyGmail = gmailLegacyEmail(id);
+        if (legacyGmail) orConds.push({ email: legacyGmail });
+        const usuario = await Usuario.findOne({ $or: orConds });
         if (!usuario) return res.status(401).json({ success: false, error: "Usuario o contraseña incorrectos" });
 
         const esValida = await bcrypt.compare(password, usuario.password);
@@ -2076,7 +2109,7 @@ app.put('/usuarios/update-username', [verificarToken, body('nuevoUsuario').trim(
     }
 });
 
-app.put('/usuarios/update-email', [verificarToken, body('nuevoEmail').isEmail().normalizeEmail(), body('password').notEmpty()], async (req, res) => {
+app.put('/usuarios/update-email', [verificarToken, body('nuevoEmail').isEmail().normalizeEmail(EMAIL_NORMALIZE_OPTS), body('password').notEmpty()], async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'Email inválido' });
     try {
