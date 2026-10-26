@@ -1986,8 +1986,35 @@ body.nx-open #nxFab {
 .profile-cover {
   height:90px;
   background:linear-gradient(135deg,rgba(var(--g-rgb),.18),rgba(var(--cy-rgb),.12));
+  background-size:cover; background-position:center;
   position:relative;
+  transition:height .25s ease;
 }
+/* Con portada personalizada: más alta y con un velo para que el texto se lea */
+.profile-cover.has-banner { height:130px; }
+.profile-cover.has-banner::after {
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(180deg,transparent 45%,rgba(0,0,0,.45));
+  pointer-events:none;
+}
+.profile-cover-edit {
+  position:absolute; left:12px; bottom:10px; z-index:2;
+  display:inline-flex; align-items:center; gap:5px;
+  padding:5px 10px; border-radius:99px; border:1px solid rgba(255,255,255,.18);
+  background:rgba(10,11,15,.55); color:#fff; font-size:.72rem; font-weight:600;
+  backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); cursor:pointer;
+}
+.profile-cover-edit ion-icon { font-size:.95rem; }
+.profile-cover-edit:active { transform:scale(.96); }
+.pf-banner-preview {
+  height:110px; border-radius:12px; margin-bottom:14px;
+  background:linear-gradient(135deg,rgba(var(--g-rgb),.18),rgba(var(--cy-rgb),.12));
+  background-size:cover; background-position:center;
+  display:flex; align-items:center; justify-content:center;
+  color:var(--txt3); font-size:.8rem; border:1px solid var(--bd);
+}
+.pf-banner-preview.has-banner span { display:none; }
+.pf-btn-danger { background:rgba(255,67,67,.12) !important; color:#ff6b6b !important; border:1px solid rgba(255,67,67,.35) !important; }
 .profile-avatar-wrap {
   position:absolute;
   right:1.3rem;

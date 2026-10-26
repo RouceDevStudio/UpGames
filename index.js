@@ -452,6 +452,7 @@ const UsuarioSchema = new mongoose.Schema({
     siguiendo:       [String],
     verificadoNivel: { type: Number, default: 0, min: 0, max: 3, index: true },
     avatar:   { type: String, default: "" },
+    banner:   { type: String, default: "" },   // portada del perfil (detrás del avatar)
     bio:      { type: String, maxlength: 200, default: '' },
     fecha:    { type: Date, default: Date.now },
     registrationIP:  { type: String, default: '' },
@@ -1219,6 +1220,61 @@ app.post('/items/verify-download/:id', async (req, res) => {
 // ⭐ AUTENTICACIÓN
 // ==========================================
 
+// ── Identidad única: nombre de usuario y email ─────────────────────────
+// El nombre se guarda en minúsculas, así "Pepe" y "pepe" son la MISMA cuenta.
+// Solo a-z, 0-9 y _ (evita nombres casi idénticos con espacios, puntos o
+// letras de otros alfabetos que se ven iguales, ej. "pеpe" con е cirílica).
+const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
+const NOMBRES_RESERVADOS = new Set(['admin', 'administrador', 'upgames', 'nexus', 'soporte', 'support',
+    'moderador', 'mod', 'staff', 'sistema', 'system', 'root', 'oficial', 'official', 'coral', 'rouce', 'roucedev']);
+function errorNombreUsuario(nombre) {
+    const n = String(nombre || '').trim().toLowerCase();
+    if (n.length < 3 || n.length > 20) return 'El nombre debe tener entre 3 y 20 caracteres';
+    if (!USERNAME_RE.test(n)) return 'Solo se permiten letras (a-z), números y guion bajo (_), sin espacios ni tildes';
+    if (NOMBRES_RESERVADOS.has(n)) return 'Ese nombre está reservado. Elige otro';
+    return null;
+}
+/** Error E11000 de MongoDB (índice único) → mensaje claro según el campo */
+function mensajeDuplicado(err) {
+    if (!err || err.code !== 11000) return null;
+    const campo = Object.keys(err.keyPattern || err.keyValue || {})[0] || '';
+    return campo === 'email' ? 'Ese email ya está registrado en otra cuenta' : 'Ese nombre de usuario ya está en uso';
+}
+const _dispHits = new Map();
+// GET /auth/disponibilidad?usuario=&email= — comprobación en vivo al escribir
+app.get('/auth/disponibilidad', async (req, res) => {
+    const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket?.remoteAddress || '';
+    const now = Date.now(); const h = _dispHits.get(ip) || { t: now, n: 0 };
+    if (now - h.t > 60000) { h.t = now; h.n = 0; }
+    h.n++; _dispHits.set(ip, h);
+    if (_dispHits.size > 5000) _dispHits.clear();
+    if (h.n > 40) return res.status(429).json({ success: false, error: 'Demasiadas consultas, espera un momento' });
+    try {
+        const out = { success: true };
+        if (typeof req.query.usuario === 'string' && req.query.usuario.trim()) {
+            const n = req.query.usuario.trim().toLowerCase();
+            const err = errorNombreUsuario(n);
+            if (err) out.usuario = { disponible: false, motivo: err };
+            else {
+                const existe = await Usuario.exists({ usuario: n });
+                out.usuario = existe ? { disponible: false, motivo: `@${n} ya existe. Prueba con otro nombre` } : { disponible: true };
+            }
+        }
+        if (typeof req.query.email === 'string' && req.query.email.trim()) {
+            const e = req.query.email.trim().toLowerCase();
+            if (!/^\S+@\S+\.\S+$/.test(e)) out.email = { disponible: false, motivo: 'Email inválido' };
+            else {
+                const existe = await Usuario.exists({ email: e });
+                out.email = existe ? { disponible: false, motivo: 'Ese email ya tiene una cuenta. ¿Quieres iniciar sesión?' } : { disponible: true };
+            }
+        }
+        res.json(out);
+    } catch (err) {
+        logger.error(`[disponibilidad] ${err.message}`);
+        res.status(500).json({ success: false, error: 'No se pudo comprobar' });
+    }
+});
+
 app.post('/auth/register', [
     body('usuario').trim().isLength({ min: 3, max: 20 }).toLowerCase(),
     body('email').isEmail().normalizeEmail(EMAIL_NORMALIZE_OPTS),
@@ -1229,14 +1285,16 @@ app.post('/auth/register', [
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: "Datos inválidos", details: errors.array() });
 
         const { usuario, email, password } = req.body;
+        const errNombre = errorNombreUsuario(usuario);
+        if (errNombre) return res.status(400).json({ success: false, error: errNombre, campo: 'usuario' });
         const registrationIP = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.headers['x-real-ip'] || req.connection?.remoteAddress || req.socket?.remoteAddress || '';
 
         const [existeUsuario, existeEmail] = await Promise.all([
             Usuario.findOne({ usuario: usuario.toLowerCase() }).select('_id').lean(),
             Usuario.findOne({ email: email.toLowerCase() }).select('_id').lean()
         ]);
-        if (existeUsuario) return res.status(400).json({ success: false, error: "El nombre de usuario ya está en uso" });
-        if (existeEmail) return res.status(400).json({ success: false, error: "El email ya está registrado" });
+        if (existeUsuario) return res.status(409).json({ success: false, error: `El nombre @${usuario.toLowerCase()} ya está en uso. Elige otro`, campo: 'usuario' });
+        if (existeEmail) return res.status(409).json({ success: false, error: "Ese email ya tiene una cuenta. Inicia sesión o recupera tu contraseña", campo: 'email' });
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const verifToken = crypto.randomBytes(32).toString('hex');
@@ -1262,6 +1320,9 @@ app.post('/auth/register', [
         const token = jwt.sign({ usuario: nuevoUsuario.usuario, email: nuevoUsuario.email }, JWT_SECRET, { expiresIn: '30d' });
         res.status(201).json({ success: true, ok: true, token, usuario: nuevoUsuario.usuario, email: nuevoUsuario.email, emailVerificado: false, mensaje: 'Cuenta creada. Revisa tu email para verificar tu cuenta.', datosUsuario: { usuario: nuevoUsuario.usuario, email: nuevoUsuario.email, verificadoNivel: nuevoUsuario.verificadoNivel, isVerificado: nuevoUsuario.isVerificado, emailVerificado: false } });
     } catch (error) {
+        // Dos registros simultáneos con el mismo nombre/email: el índice único lo frena
+        const dup = mensajeDuplicado(error);
+        if (dup) return res.status(409).json({ success: false, error: dup, campo: /email/i.test(dup) ? 'email' : 'usuario' });
         logger.error(`Error en register: ${error.message}`);
         res.status(500).json({ success: false, error: "Error al registrar usuario" });
     }
@@ -2008,11 +2069,16 @@ app.get('/usuarios/perfil-publico/:usuario', async (req, res) => {
     try {
         const username = req.params.usuario.toLowerCase().trim();
         const [user, publicaciones] = await Promise.all([
-            Usuario.findOne({ usuario: username }).select('-password -paypalEmail').lean(),
+            // LISTA BLANCA: antes se devolvía el documento entero (menos password y
+            // paypalEmail) — incluía resetPasswordToken, email, IP, saldo y tarjetas.
+            Usuario.findOne({ usuario: username })
+                .select('usuario avatar banner bio verificadoNivel isVerificado socialLinks ultimoLogin createdAt fecha listaSeguidores siguiendo')
+                .lean(),
             Juego.countDocuments({ usuario: username, status: 'aprobado' })
         ]);
         if (!user) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
-        res.json({ success: true, usuario: { ...user, publicaciones, seguidores: user.listaSeguidores?.length || 0, siguiendo: user.siguiendo?.length || 0 } });
+        const { listaSeguidores, siguiendo, _id, ...publico } = user;
+        res.json({ success: true, usuario: { ...publico, publicaciones, seguidores: listaSeguidores?.length || 0, siguiendo: siguiendo?.length || 0 } });
     } catch (err) {
         res.status(500).json({ success: false, error: "Error al cargar perfil" });
     }
@@ -2033,6 +2099,10 @@ app.put('/usuarios/toggle-seguir/:actual/:objetivo', verificarToken, async (req,
     try {
         const actual   = req.params.actual.toLowerCase();
         const objetivo = req.params.objetivo.toLowerCase();
+        // Solo puedes seguir/dejar de seguir en tu nombre (antes cualquiera podía
+        // inflar seguidores ajenos → verificación → requisito para cobrar)
+        if (actual !== String(req.usuario || '').toLowerCase()) return res.status(403).json({ success: false, error: "Sin permiso" });
+        if (actual === objetivo) return res.status(400).json({ success: false, error: "No puedes seguirte a ti mismo" });
         const [userActual, userObjetivo] = await Promise.all([
             Usuario.findOne({ usuario: actual }).select('siguiendo').lean(),
             Usuario.findOne({ usuario: objetivo }).select('_id').lean()
@@ -2064,15 +2134,40 @@ app.put('/usuarios/toggle-seguir/:actual/:objetivo', verificarToken, async (req,
     }
 });
 
+// URL de imagen segura para avatar/portada: https, sin comillas, espacios ni < >
+// (antes el avatar aceptaba cualquier texto y se insertaba con innerHTML → XSS).
+function urlImagenSegura(u) {
+    const v = String(u || '').trim();
+    return v.length <= 600 && /^https:\/\/[^\s"'<>`\\]+$/i.test(v) ? v : null;
+}
 app.put('/usuarios/update-avatar', [verificarToken, body('avatarUrl').optional(), body('nuevaFoto').optional()], async (req, res) => {
     try {
-        const avatarUrl = req.body.avatarUrl || req.body.nuevaFoto;
-        if (!avatarUrl) return res.status(400).json({ success: false, error: 'URL de avatar requerida' });
+        const raw = req.body.avatarUrl || req.body.nuevaFoto;
+        if (!raw) return res.status(400).json({ success: false, error: 'URL de avatar requerida' });
+        const avatarUrl = urlImagenSegura(raw);
+        if (!avatarUrl) return res.status(400).json({ success: false, error: 'La URL debe empezar por https:// y no tener espacios ni comillas' });
         await Usuario.updateOne({ usuario: req.usuario.toLowerCase() }, { $set: { avatar: avatarUrl } });
-        res.json({ success: true });
+        res.json({ success: true, avatar: avatarUrl });
     } catch (err) {
         logger.error(`Error en update-avatar: ${err.message}`);
         res.status(500).json({ success: false, error: 'Error al actualizar avatar' });
+    }
+});
+// PUT /usuarios/update-banner — poner, cambiar o quitar ("") la portada del perfil
+app.put('/usuarios/update-banner', verificarToken, async (req, res) => {
+    try {
+        const raw = req.body?.bannerUrl;
+        if (typeof raw !== 'string') return res.status(400).json({ success: false, error: 'bannerUrl requerido ("" para quitar la portada)' });
+        let banner = '';
+        if (raw.trim()) {
+            banner = urlImagenSegura(raw);
+            if (!banner) return res.status(400).json({ success: false, error: 'La URL debe empezar por https:// y no tener espacios ni comillas' });
+        }
+        await Usuario.updateOne({ usuario: req.usuario.toLowerCase() }, { $set: { banner } });
+        res.json({ success: true, banner });
+    } catch (err) {
+        logger.error(`Error en update-banner: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error al actualizar la portada' });
     }
 });
 
@@ -2080,7 +2175,7 @@ app.put('/usuarios/update-avatar', [verificarToken, body('avatarUrl').optional()
 // Payload mínimo (solo JSON pequeño), sin límite de tamaño, sin multer, sin dependencias extra
 app.get('/upload/sign', verificarToken, (req, res) => {
     try {
-        const validFolders = ['avatars','covers','thumbnails','videos'];
+        const validFolders = ['avatars','banners','covers','thumbnails','videos'];
         const folder    = validFolders.includes(req.query.folder) ? req.query.folder : 'covers';
         const timestamp = Math.round(Date.now() / 1000);
         const params    = { timestamp, folder };
@@ -2117,6 +2212,9 @@ app.put('/usuarios/update-username', [verificarToken, body('nuevoUsuario').trim(
         const { nuevoUsuario, password } = req.body;
         const oldName = req.usuario.toLowerCase();
         const newName = nuevoUsuario.toLowerCase();
+        if (newName === oldName) return res.status(400).json({ success: false, error: 'Ese ya es tu nombre de usuario' });
+        const errNombre = errorNombreUsuario(newName);
+        if (errNombre) return res.status(400).json({ success: false, error: errNombre });
         const usuario = await Usuario.findOne({ usuario: oldName });
         if (!usuario) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
         const passOk = await bcrypt.compare(password, usuario.password);
@@ -2126,9 +2224,10 @@ app.put('/usuarios/update-username', [verificarToken, body('nuevoUsuario').trim(
             if (diffDays < 30) { const restante = Math.ceil(30 - diffDays); return res.status(429).json({ success: false, error: `Debes esperar ${restante} día${restante !== 1 ? 's' : ''} más para cambiar tu nombre` }); }
         }
         const existe = await Usuario.findOne({ usuario: newName }).select('_id').lean();
-        if (existe) return res.status(409).json({ success: false, error: 'Ese nombre de usuario ya está en uso' });
+        if (existe) return res.status(409).json({ success: false, error: `El nombre @${newName} ya está en uso. Elige otro` });
+        // Primero el usuario (el índice único frena una carrera); luego la cascada
+        await Usuario.updateOne({ usuario: oldName }, { $set: { usuario: newName, lastUsernameChange: new Date() } });
         await Promise.all([
-            Usuario.updateOne({ usuario: oldName }, { $set: { usuario: newName, lastUsernameChange: new Date() } }),
             Juego.updateMany({ usuario: oldName }, { $set: { usuario: newName } }),
             Comentario.updateMany({ usuario: oldName }, { $set: { usuario: newName } }),
             Notificacion.updateMany({ destinatario: oldName }, { $set: { destinatario: newName } }),
@@ -2143,6 +2242,8 @@ app.put('/usuarios/update-username', [verificarToken, body('nuevoUsuario').trim(
         logger.info(`[update-username] ${oldName} → ${newName} | Cascada completada`);
         res.json({ success: true, nuevoToken, nuevoUsuario: newName });
     } catch (err) {
+        const dup = mensajeDuplicado(err);
+        if (dup) return res.status(409).json({ success: false, error: dup });
         logger.error(`Error en update-username: ${err.message}`);
         res.status(500).json({ success: false, error: 'Error al actualizar nombre' });
     }
@@ -2161,8 +2262,9 @@ app.put('/usuarios/update-email', [verificarToken, body('nuevoEmail').isEmail().
             const diffDays = (Date.now() - new Date(usuario.lastEmailChange).getTime()) / (1000 * 60 * 60 * 24);
             if (diffDays < 30) { const restante = Math.ceil(30 - diffDays); return res.status(429).json({ success: false, error: `Debes esperar ${restante} día${restante !== 1 ? 's' : ''} más para cambiar tu email` }); }
         }
+        if (nuevoEmail.toLowerCase() === String(usuario.email || '').toLowerCase()) return res.status(400).json({ success: false, error: 'Ese ya es tu email actual' });
         const existe = await Usuario.findOne({ email: nuevoEmail.toLowerCase() }).select('_id').lean();
-        if (existe) return res.status(409).json({ success: false, error: 'Ese email ya está en uso' });
+        if (existe) return res.status(409).json({ success: false, error: 'Ese email ya está registrado en otra cuenta' });
         const verifToken = crypto.randomBytes(32).toString('hex');
         await Usuario.updateOne({ usuario: req.usuario.toLowerCase() }, { $set: { email: nuevoEmail.toLowerCase(), lastEmailChange: new Date(), emailVerificado: false, emailVerifToken: verifToken, emailVerifExpires: new Date(Date.now() + 24 * 60 * 60 * 1000) } });
         const nuevoToken = jwt.sign({ usuario: req.usuario.toLowerCase(), email: nuevoEmail.toLowerCase() }, JWT_SECRET, { expiresIn: '30d' });
@@ -2171,6 +2273,8 @@ app.put('/usuarios/update-email', [verificarToken, body('nuevoEmail').isEmail().
         sendEmail({ to: nuevoEmail, subject: '✅ Verifica tu nuevo email en UpGames', html: emailVerifTemplate(req.usuario.toLowerCase(), verifLink) }).catch(() => {});
         res.json({ success: true, nuevoToken, mensaje: 'Email actualizado. Revisa tu bandeja para verificar el nuevo email.' });
     } catch (err) {
+        const dup = mensajeDuplicado(err);
+        if (dup) return res.status(409).json({ success: false, error: dup });
         logger.error(`Error en update-email: ${err.message}`);
         res.status(500).json({ success: false, error: 'Error al actualizar email' });
     }
@@ -2612,11 +2716,13 @@ app.get('/usuarios/descubrir', verificarToken, async (req, res) => {
 // ── FIX: Búsqueda de usuarios para el chat ──────────────────────────────────
 app.get('/usuarios/buscar', verificarToken, async (req, res) => {
     try {
-        const q  = (req.query.q || '').trim();
+        const q  = String(req.query.q || '').trim().slice(0, 40);
         const me = req.usuario;
         if (!q || q.length < 2) return res.json({ success: true, usuarios: [] });
+        // Escapar: el texto del usuario iba directo a $regex (patrones costosos / inyección)
+        const qSafe = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const usuarios = await Usuario
-            .find({ usuario: { $regex: q, $options: 'i', $ne: me } })
+            .find({ usuario: { $regex: qSafe, $options: 'i', $ne: me } })
             .select('usuario foto isVerificado verificadoNivel listaSeguidores ultimoLogin')
             .limit(15)
             .lean();
@@ -3048,10 +3154,37 @@ app.listen(PORT, () => {
     logger.info(`Anti-bots: Máx ${MAX_DOWNLOADS_PER_IP_PER_DAY} descargas/IP/día`);
     logger.info(`Detección de fraude: ACTIVA | Auto-lista negra: HABILITADA`);
 
-    mongoose.connection.once('open', () => {
+    const alConectar = () => {
         // Crear índices faltantes al arrancar (idempotente)
         crearIndices().catch(err => logger.warn(`crearIndices: ${err.message}`));
+        auditarIdentidades().catch(err => logger.warn(`auditarIdentidades: ${err.message}`));
         // Iniciar jobs automáticos
         iniciarJobsAutomaticos();
-    });
+    };
+    // Si Mongo conectó ANTES de que el servidor escuchara, 'open' ya ocurrió y
+    // nunca se dispararía: índices y jobs (verificación, links caídos…) no correrían.
+    if (mongoose.connection.readyState === 1) alConectar();
+    else mongoose.connection.once('open', alConectar);
 });
+
+/**
+ * Garantiza nombres y emails únicos a nivel de base de datos. Si ya existen
+ * duplicados (cuentas creadas antes de las validaciones), el índice único no
+ * puede crearse: se registran en el log para que el admin los resuelva.
+ */
+async function auditarIdentidades() {
+    try {
+        await Usuario.createIndexes();
+    } catch (err) {
+        logger.error(`[identidad] No se pudo asegurar el índice único de usuarios: ${err.message}`);
+    }
+    for (const campo of ['usuario', 'email']) {
+        const dups = await Usuario.aggregate([
+            { $group: { _id: { $toLower: `$${campo}` }, n: { $sum: 1 }, cuentas: { $push: '$usuario' } } },
+            { $match: { n: { $gt: 1 } } },
+            { $limit: 50 }
+        ]);
+        if (dups.length) logger.warn(`[identidad] ${dups.length} ${campo}(s) duplicado(s): ` + dups.map(d => campo === 'email' ? `[${d.cuentas.join(', ')}]` : `${d._id} → [${d.cuentas.join(', ')}]`).join(' | '));
+        else logger.info(`[identidad] Sin ${campo}s duplicados ✓`);
+    }
+}

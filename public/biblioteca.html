@@ -135,7 +135,11 @@
 
     <!-- ── Cover + Avatar + Info ── -->
     <div class="profile-card">
-      <div class="profile-cover"></div>
+      <div class="profile-cover" id="pf-cover">
+        <button type="button" class="profile-cover-edit" onclick="pfOpenSettings('portada')" aria-label="Cambiar portada">
+          <ion-icon name="image-outline"></ion-icon><span>Portada</span>
+        </button>
+      </div>
       <div class="profile-avatar-wrap" onclick="pfOpenSettings()">
         <div class="profile-avatar" id="pf-avatar-display">
           <ion-icon name="person" id="pf-avatar-icon" style="font-size:1.4rem"></ion-icon>
@@ -888,6 +892,7 @@
     <div class="pf-modal-body">
       <div class="pf-stabs pf-stabs--scroll">
         <button class="pf-stab active" onclick="pfSwitchSettings('avatar',this)">Avatar</button>
+        <button class="pf-stab" id="pf-stab-portada" onclick="pfSwitchSettings('portada',this)">Portada</button>
         <button class="pf-stab" onclick="pfSwitchSettings('bio',this)">Bio</button>
         <button class="pf-stab" onclick="pfSwitchSettings('links',this)">Links</button>
         <button class="pf-stab" onclick="pfSwitchSettings('nombre',this)">Nombre</button>
@@ -932,6 +937,30 @@
             La foto se sube a la nube y se guarda automáticamente.
           </p>
         </div>
+      </div>
+
+      <!-- ── Portada (imagen detrás del avatar) ── -->
+      <div id="pf-settings-portada" class="pf-scontent">
+        <div class="pf-banner-preview" id="pf-preview-banner"><span>Sin portada</span></div>
+
+        <button class="pf-btn-save" id="pf-bn-upload-btn" onclick="pfUploadBanner()">
+          <ion-icon name="cloud-upload"></ion-icon> SUBIR IMAGEN DE PORTADA
+        </button>
+
+        <div class="pf-form-group" style="margin-top:14px">
+          <label class="pf-label">…o pega una URL de imagen</label>
+          <input type="url" id="pf-input-banner-url" class="pf-input" placeholder="https://i.imgur.com/..." oninput="pfPreviewBanner(this.value)">
+        </div>
+        <button class="pf-btn-save" onclick="pfSaveBanner(document.getElementById('pf-input-banner-url').value)">
+          <ion-icon name="save"></ion-icon> GUARDAR PORTADA
+        </button>
+        <button class="pf-btn-save pf-btn-danger" id="pf-bn-remove-btn" onclick="pfRemoveBanner()" style="display:none;margin-top:10px">
+          <ion-icon name="trash-outline"></ion-icon> QUITAR PORTADA
+        </button>
+        <p class="pf-settings-hint" style="margin-top:10px">
+          <ion-icon name="information-circle-outline"></ion-icon>
+          Se muestra detrás de tu foto en tu perfil y en tu perfil público. Recomendado: imagen horizontal (3:1), por ejemplo 1500×500.
+        </p>
       </div>
 
       <!-- ── Bio ── -->
@@ -1010,8 +1039,8 @@
                  placeholder="minimo3, maximo20 chars"
                  minlength="3" maxlength="20"
                  autocomplete="off"
-                 oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9_]/g,'')">
-          <small style="color:var(--txt3);font-size:.72rem">Solo letras minúsculas, números y guión bajo (_)</small>
+                 oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9_]/g,'');pfCheckDisp('usuario',this)">
+          <small id="pf-username-disp" aria-live="polite" style="color:var(--txt3);font-size:.72rem">Solo letras minúsculas, números y guión bajo (_)</small>
         </div>
         <div class="pf-form-group">
           <label class="pf-label">Confirma tu contraseña</label>
@@ -1036,7 +1065,8 @@
         <div class="pf-form-group">
           <label class="pf-label">Nuevo email</label>
           <input type="email" id="pf-input-newemail" class="pf-input"
-                 placeholder="nuevo@email.com" autocomplete="off">
+                 placeholder="nuevo@email.com" autocomplete="off" oninput="pfCheckDisp('email',this)">
+          <small id="pf-email-disp" aria-live="polite" style="color:var(--txt3);font-size:.72rem"></small>
         </div>
         <div class="pf-form-group">
           <label class="pf-label">Confirma tu contraseña</label>
@@ -1976,8 +2006,8 @@ function pfDetectLinkIcon(idx) {
 
 /* ─── pfOpenSettings (override para cargar datos en nuevas tabs) ─── */
 const _pfOpenSettingsOrig = typeof pfOpenSettings === 'function' ? pfOpenSettings : null;
-window.pfOpenSettings = function() {
-  if (_pfOpenSettingsOrig) _pfOpenSettingsOrig();
+window.pfOpenSettings = function(tab) {
+  if (_pfOpenSettingsOrig) _pfOpenSettingsOrig(tab);   // pasar la pestaña pedida (p. ej. 'portada')
   pfLoadSettingsExtras();
 };
 
@@ -2042,11 +2072,37 @@ function pfCheckCooldown(type, lastChange) {
   }
 }
 
+/* ─── Disponibilidad en vivo: nombre y email son únicos ─── */
+const _pfDisp = { usuario: null, email: null }, _pfDispT = {};
+function pfCheckDisp(campo, input) {
+  const out = document.getElementById(campo === 'usuario' ? 'pf-username-disp' : 'pf-email-disp');
+  const v = input.value.trim().toLowerCase();
+  const set = (t, c) => { out.textContent = t; out.style.color = c || 'var(--txt3)'; };
+  _pfDisp[campo] = null;
+  clearTimeout(_pfDispT[campo]);
+  const actual = campo === 'usuario' ? (localStorage.getItem('user_admin') || '').toLowerCase() : (localStorage.getItem('email') || '').toLowerCase();
+  if (!v) return set(campo === 'usuario' ? 'Solo letras minúsculas, números y guión bajo (_)' : '');
+  if (v === actual) { _pfDisp[campo] = false; return set(campo === 'usuario' ? 'Ese ya es tu nombre actual' : 'Ese ya es tu email actual', '#ffcc00'); }
+  if (campo === 'usuario' && v.length < 3) return set('Mínimo 3 caracteres');
+  set('Comprobando…');
+  _pfDispT[campo] = setTimeout(async () => {
+    try {
+      const r = await fetch(`${API_URL}/auth/disponibilidad?${campo}=${encodeURIComponent(v)}`);
+      const d = await r.json();
+      if (input.value.trim().toLowerCase() !== v || !d[campo]) return;
+      _pfDisp[campo] = !!d[campo].disponible;
+      set(d[campo].disponible ? (campo === 'usuario' ? `✓ @${v} está disponible` : '✓ Email disponible') : d[campo].motivo,
+          d[campo].disponible ? '#32D583' : '#ff5a5a');
+    } catch(_) { set(''); }
+  }, 450);
+}
+
 /* ─── Guardar nuevo nombre de usuario ─── */
 async function pfSaveUsername() {
-  const newUser  = (document.getElementById('pf-input-username')?.value || '').trim();
+  const newUser  = (document.getElementById('pf-input-username')?.value || '').trim().toLowerCase();
   const password = document.getElementById('pf-input-username-pass')?.value || '';
   if (!newUser || newUser.length < 3) { showToast('El nombre debe tener al menos 3 caracteres', 'error'); return; }
+  if (_pfDisp.usuario === false) { showToast(document.getElementById('pf-username-disp')?.textContent || 'Ese nombre no está disponible', 'error'); return; }
   if (!password) { showToast('Ingresa tu contraseña para confirmar', 'error'); return; }
   const token = localStorage.getItem('token');
   try {
@@ -2057,8 +2113,8 @@ async function pfSaveUsername() {
     });
     const data = await res.json();
     if (!data.success) { showToast(data.error || 'Error al cambiar nombre', 'error'); return; }
-    /* Actualizar localStorage — user_admin es un string plano */
-    localStorage.setItem('user_admin', newUser);
+    /* Actualizar localStorage — user_admin es un string plano (el que confirmó el servidor) */
+    localStorage.setItem('user_admin', data.nuevoUsuario || newUser);
     if (data.nuevoToken) localStorage.setItem('token', data.nuevoToken);
     const lastUsernameChange = new Date().toISOString();
     pfSetMeta({ lastUsernameChange });
@@ -2075,6 +2131,7 @@ async function pfSaveEmail() {
   const newEmail = (document.getElementById('pf-input-newemail')?.value || '').trim();
   const password = document.getElementById('pf-input-newemail-pass')?.value || '';
   if (!newEmail || !/\S+@\S+\.\S+/.test(newEmail)) { showToast('Ingresa un email válido', 'error'); return; }
+  if (_pfDisp.email === false) { showToast(document.getElementById('pf-email-disp')?.textContent || 'Ese email no está disponible', 'error'); return; }
   if (!password) { showToast('Ingresa tu contraseña para confirmar', 'error'); return; }
   const token = localStorage.getItem('token');
   try {

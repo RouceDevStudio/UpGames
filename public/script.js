@@ -1493,10 +1493,12 @@ async function pfLoadUserData() {
   document.getElementById('pf-username').textContent = '@' + pfUser;
 
   try {
-    const res = await fetch(`${PF_API}/auth/users/public`);
-    const users = await res.json();
-    const ud = users.find(u => u.usuario === pfUser);
+    // Solo MI perfil (antes se descargaba la lista de TODOS los usuarios para buscarlo)
+    const res = await fetch(`${PF_API}/usuarios/perfil-publico/${encodeURIComponent(pfUser)}`);
+    const pd  = await res.json();
+    const ud  = pd && pd.usuario;
     if(!ud) return;
+    pfApplyBanner(ud.banner || '');
 
     const nivel = ud.verificadoNivel || 0;
     if(nivel > 0) {
@@ -1511,7 +1513,7 @@ async function pfLoadUserData() {
       const ico = document.getElementById('pf-avatar-icon');
       img.src = ud.avatar; img.style.display='block'; ico.style.display='none';
       const prev = document.getElementById('pf-preview-avatar');
-      if(prev) prev.innerHTML=`<img src="${ud.avatar}" alt="Avatar">`;
+      if(prev) { prev.innerHTML=''; const pi=document.createElement('img'); pi.src=ud.avatar; pi.alt='Avatar'; prev.appendChild(pi); }
       const inp = document.getElementById('pf-input-avatar-url');
       if(inp) inp.value = ud.avatar;
     }
@@ -3307,9 +3309,14 @@ async function pfSetTarjetaPrincipal(tarjetaId) {
 }
 
 // ── Settings Modal ──
-function pfOpenSettings() {
+function pfOpenSettings(tab) {
   document.getElementById('pf-settingsModal').classList.add('show');
   document.body.style.overflow='hidden';
+  // Abrir directamente una pestaña (p. ej. 'portada' desde el botón de la cabecera)
+  if (typeof tab === 'string') {
+    const btn = document.querySelector(`.pf-stab[onclick*="'${tab}'"]`);
+    if (btn) pfSwitchSettings(tab, btn);
+  }
 }
 function pfCloseSettings() {
   document.getElementById('pf-settingsModal').classList.remove('show');
@@ -3324,7 +3331,7 @@ function pfSwitchSettings(type, el) {
 function pfUpdateAvatarPreview() {
   const url = document.getElementById('pf-input-avatar-url').value;
   const prev = document.getElementById('pf-preview-avatar');
-  if(url) prev.innerHTML=`<img src="${url}" alt="Avatar">`;
+  if(url) { prev.innerHTML=''; const pi=document.createElement('img'); pi.src=url; pi.alt='Avatar'; prev.appendChild(pi); }
   else prev.innerHTML='<ion-icon name="person"></ion-icon>';
 }
 async function pfSaveAvatar() {
@@ -3343,8 +3350,68 @@ async function pfSaveAvatar() {
       img.src=url; img.style.display='block';
       document.getElementById('pf-avatar-icon').style.display='none';
       pfCloseSettings();
-    } else toast('❌ Error al actualizar avatar');
+    } else { const d = await res.json().catch(() => ({})); toast('❌ ' + (d.error || 'Error al actualizar avatar')); }
   } catch(e) { toast('❌ Error de conexión'); }
+}
+
+// ══════════════════════════════════════════════════
+// PORTADA DEL PERFIL (imagen detrás del avatar)
+// ══════════════════════════════════════════════════
+const PF_BANNER_RE = /^https:\/\/[^\s"'<>`\\]+$/i;
+function pfCssUrl(u) { return `url("${String(u).replace(/["\\\n]/g, '')}")`; }
+function pfApplyBanner(url) {
+  const cover = document.getElementById('pf-cover');
+  const prev  = document.getElementById('pf-preview-banner');
+  const rm    = document.getElementById('pf-bn-remove-btn');
+  const inp   = document.getElementById('pf-input-banner-url');
+  const ok = url && PF_BANNER_RE.test(url);
+  if (cover) { cover.style.backgroundImage = ok ? pfCssUrl(url) : ''; cover.classList.toggle('has-banner', !!ok); }
+  if (prev)  { prev.style.backgroundImage  = ok ? pfCssUrl(url) : ''; prev.classList.toggle('has-banner', !!ok); }
+  if (rm) rm.style.display = ok ? '' : 'none';
+  if (inp && ok) inp.value = url;
+}
+function pfPreviewBanner(url) {
+  const prev = document.getElementById('pf-preview-banner');
+  if (!prev) return;
+  const ok = PF_BANNER_RE.test((url || '').trim());
+  prev.style.backgroundImage = ok ? pfCssUrl(url.trim()) : '';
+  prev.classList.toggle('has-banner', ok);
+}
+async function pfSaveBanner(url) {
+  url = (url || '').trim();
+  if (url && !PF_BANNER_RE.test(url)) { toast('⚠️ La URL debe empezar por https:// y no tener espacios'); return; }
+  if (url && /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url)) { toast('⚠️ La portada debe ser una imagen, no un video'); return; }
+  try {
+    const res = await fetch(`${PF_API}/usuarios/update-banner`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${LS.get('token')}` },
+      body: JSON.stringify({ bannerUrl: url })
+    });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok || !d.success) { toast('❌ ' + (d.error || 'No se pudo guardar la portada')); return; }
+    pfApplyBanner(d.banner || '');
+    if (!d.banner) { const inp = document.getElementById('pf-input-banner-url'); if (inp) inp.value = ''; }
+    toast(d.banner ? '✅ Portada actualizada' : '🗑️ Portada eliminada');
+    pfCloseSettings();
+  } catch(e) { toast('❌ Error de conexión'); }
+}
+function pfRemoveBanner() {
+  if (!confirm('¿Quitar tu imagen de portada?')) return;
+  pfSaveBanner('');
+}
+async function pfUploadBanner() {
+  const btn = document.getElementById('pf-bn-upload-btn');
+  const orig = btn ? btn.innerHTML : '';
+  try {
+    const data = await pfWidgetUpload();
+    if (!data.success) return;
+    if (btn) { btn.innerHTML = '<ion-icon name="sync-outline" style="animation:spin .8s linear infinite"></ion-icon> Guardando...'; btn.disabled = true; }
+    await pfSaveBanner(data.url);
+  } catch(e) {
+    toast('❌ ' + e.message);
+  } finally {
+    if (btn) { btn.innerHTML = orig; btn.disabled = false; }
+  }
 }
 
 // ══════════════════════════════════════════════════
@@ -4180,6 +4247,20 @@ document.getElementById('btut-prev').addEventListener('click', () => {
   if(tutIdx > 0) { tutIdx--; renderTut(); }
 });
 document.getElementById('btut-close').addEventListener('click', finishTutorial);
+
+// ── Enlace directo a Ajustes del perfil: biblioteca.html?ajustes=portada ──
+(function abrirAjustesDesdeURL() {
+  const tab = new URLSearchParams(location.search).get('ajustes');
+  if (!tab || !/^[a-z]+$/.test(tab) || !LS.get('token')) return;
+  const go = () => {
+    switchTab('profile');
+    setTimeout(() => pfOpenSettings(tab), 400);
+    // Limpiar el parámetro para que recargar no vuelva a abrir el modal
+    try { history.replaceState(null, '', location.pathname); } catch(_) {}
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(go, 300));
+  else setTimeout(go, 300);
+})();
 
 // ── INIT ─────────────────────────────────────────────────
 window.startBibliotecaTutorial = startTutorial;

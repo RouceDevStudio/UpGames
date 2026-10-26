@@ -161,6 +161,10 @@
 
         /* ⭐ NUEVO: Ocultar campo email en login */
         .hidden { display: none !important; }
+        .field-hint { min-height: 16px; margin-top: 6px; font-size: 12px; line-height: 1.35; color: #8a8fa3; }
+        .field-hint.ok { color: #32D583; }
+        .field-hint.bad { color: #ff5a5a; }
+        input.bad { border-color: rgba(255,90,90,.6) !important; }
 
         /* ============================
            🎓 SISTEMA DE TUTORIAL
@@ -505,7 +509,8 @@
                 <label for="user">
                     <ion-icon name="person-circle-outline"></ion-icon> USUARIO O EMAIL
                 </label>
-                <input id="user" type="text" placeholder="Usuario o Email" autocomplete="username" minlength="3">
+                <input id="user" type="text" placeholder="Usuario o Email" autocomplete="username" minlength="3" autocapitalize="off" spellcheck="false">
+                <div class="field-hint hidden" id="user-hint" aria-live="polite"></div>
             </div>
 
             <!-- ⭐ NUEVO: Campo de email (solo visible en modo registro) -->
@@ -513,7 +518,8 @@
                 <label for="email">
                     <ion-icon name="mail-outline"></ion-icon> CORREO ELECTRÓNICO
                 </label>
-                <input id="email" type="email" placeholder="tucorreo@ejemplo.com" autocomplete="email">
+                <input id="email" type="email" placeholder="tucorreo@ejemplo.com" autocomplete="email" autocapitalize="off" spellcheck="false">
+                <div class="field-hint" id="email-hint" aria-live="polite"></div>
             </div>
 
             <div class="input-group">
@@ -619,8 +625,49 @@
             user: document.getElementById("user"),
             email: document.getElementById("email"),
             emailGroup: document.getElementById("email-group"),
-            pass: document.getElementById("pass")
+            pass: document.getElementById("pass"),
+            userHint: document.getElementById("user-hint"),
+            emailHint: document.getElementById("email-hint")
         };
+
+        // ── Disponibilidad en vivo (solo en modo registro) ─────────────
+        // Nombre y email son únicos: avisamos ANTES de enviar si ya existen.
+        const disp = { usuario: null, email: null };   // null = sin comprobar · true/false
+        const _dispTimers = {};
+        function setHint(el, input, text, state) {
+            el.textContent = text || '';
+            el.className = 'field-hint' + (state ? ' ' + state : '') + (el === els.userHint && isLoginMode ? ' hidden' : '');
+            input.classList.toggle('bad', state === 'bad');
+        }
+        function checkDisp(campo) {
+            if (isLoginMode) return;
+            const input = campo === 'usuario' ? els.user : els.email;
+            const hint  = campo === 'usuario' ? els.userHint : els.emailHint;
+            let v = input.value.trim();
+            if (campo === 'usuario') {
+                v = v.toLowerCase();
+                if (input.value !== v && !/\s$/.test(input.value)) input.value = v;
+                if (v && !/^[a-z0-9_]*$/.test(v)) { disp.usuario = false; return setHint(hint, input, 'Solo letras (a-z), números y _ — sin espacios ni tildes', 'bad'); }
+                if (v && v.length < 3) { disp.usuario = null; return setHint(hint, input, 'Mínimo 3 caracteres', ''); }
+            }
+            disp[campo] = null;
+            if (!v) return setHint(hint, input, '', '');
+            setHint(hint, input, 'Comprobando…', '');
+            clearTimeout(_dispTimers[campo]);
+            _dispTimers[campo] = setTimeout(async () => {
+                try {
+                    const r = await fetch(`${API_URL}/auth/disponibilidad?${campo}=${encodeURIComponent(v)}`);
+                    const d = await r.json();
+                    const info = d[campo];
+                    if ((campo === 'usuario' ? els.user : els.email).value.trim().toLowerCase() !== v.toLowerCase()) return; // ya cambió
+                    if (!info) return setHint(hint, input, '', '');
+                    disp[campo] = !!info.disponible;
+                    setHint(hint, input, info.disponible ? (campo === 'usuario' ? `✓ @${v} está disponible` : '✓ Email disponible') : info.motivo, info.disponible ? 'ok' : 'bad');
+                } catch (_) { setHint(hint, input, '', ''); }
+            }, 450);
+        }
+        els.user.addEventListener('input', () => checkDisp('usuario'));
+        els.email.addEventListener('input', () => checkDisp('email'));
 
         // ── Leer parámetros de URL ─────────────────────────
         const _urlP       = new URLSearchParams(window.location.search);
@@ -756,6 +803,9 @@
             els.user.value = "";
             els.email.value = "";
             els.pass.value = "";
+            disp.usuario = disp.email = null;
+            setHint(els.userHint, els.user, '', '');
+            setHint(els.emailHint, els.email, '', '');
         };
 
         // ⭐ FUNCIÓN PRINCIPAL: LOGIN O REGISTRO
@@ -785,6 +835,16 @@
                     return;
                 }
                 
+                if (!/^[a-z0-9_]+$/.test(usuario.toLowerCase())) {
+                    showMsg("⚠️ El usuario solo puede tener letras (a-z), números y _", "#ff4343");
+                    return;
+                }
+
+                if (disp.usuario === false || disp.email === false) {
+                    showMsg("⚠️ " + (disp.usuario === false ? "Ese nombre de usuario no está disponible" : "Ese email ya tiene una cuenta"), "#ff4343");
+                    return;
+                }
+
                 if (password.length < 6) {
                     showMsg("⚠️ Contraseña debe tener al menos 6 caracteres", "#ff4343");
                     return;
@@ -875,6 +935,8 @@
                     setTimeout(() => window.location.replace(REDIRECT_URL), 500);
                 } else {
                     showMsg("❌ " + (data.error || "Error al registrar"), "#ff4343");
+                    if (data.campo === 'usuario') { disp.usuario = false; setHint(els.userHint, els.user, data.error, 'bad'); }
+                    if (data.campo === 'email')   { disp.email = false;   setHint(els.emailHint, els.email, data.error, 'bad'); }
                     setLoading(false);
                 }
             } catch (error) {

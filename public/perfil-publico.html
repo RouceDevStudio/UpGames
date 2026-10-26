@@ -177,13 +177,28 @@ a { text-decoration:none; color:inherit; }
   opacity: .35;
 }
 
-/* Avatar flotante */
+/* Avatar flotante — fuera de .hero-cover (que recorta con overflow:hidden),
+   montado sobre el borde inferior de la portada */
 .hero-avatar-wrap {
-  position: relative;
+  position: absolute;
   left: 20px;
-  bottom: -55px;
+  top: 98px;              /* alto de portada (148) − 50 */
   z-index: 100;
 }
+/* Portada personalizada del usuario */
+.hero-cover.has-banner { background-size: cover; background-position: center; }
+.hero-cover.has-banner .hero-cover-gradient { background: linear-gradient(180deg, rgba(0,0,0,.05) 35%, rgba(10,11,15,.65) 100%); }
+.hero-cover.has-banner .hero-cover-scan,
+.hero-cover.has-banner .hero-cover-glow { display: none; }
+.hero-cover-edit {
+  position: absolute; right: 12px; bottom: 12px; z-index: 5;
+  display: none; align-items: center; gap: 6px;
+  padding: 6px 12px; border-radius: 99px;
+  border: 1px solid rgba(255,255,255,.2); background: rgba(10,11,15,.6);
+  color: #fff; font: 600 12px/1 var(--ff-body, system-ui), sans-serif; text-decoration: none;
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.hero-cover-edit.show { display: inline-flex; }
 .avatar {
   width: 100px;
   height: 100px;
@@ -555,13 +570,14 @@ display:block;
 @media (min-width: 700px) {
   .items-grid { grid-template-columns: repeat(4, 1fr); }
   .hero-cover  { height: 190px; }
-  .hero-avatar-wrap { left: 28px; bottom: -54px; }
+  .hero-avatar-wrap { left: 28px; top: 136px; }
   .avatar { width: 108px; height: 108px; }
   .hero-info { padding-top: 70px; }
 }
 @media (min-width: 1000px) {
   .items-grid { grid-template-columns: repeat(5, 1fr); }
   .hero-cover  { height: 220px; }
+  .hero-avatar-wrap { top: 166px; }
 }
 
 /* SUB-NAV Publicaciones / Videos */
@@ -680,13 +696,16 @@ display:block;
             <div class="hero-cover-scan"></div>
             <div class="hero-cover-glow"></div>
             <div class="hero-cover-line"></div>
-            <div class="hero-avatar-wrap">
-                <div class="avatar" id="avatar-wrap">
-                    <ion-icon name="person" id="avatar-icon" style="font-size:2.6rem;"></ion-icon>
-                    <img id="avatar-img" style="display:none;" alt="Avatar">
-                </div>
-                <div class="avatar-ring"></div>
+            <a class="hero-cover-edit" id="hero-cover-edit" href="./biblioteca.html?ajustes=portada">
+                <ion-icon name="image-outline"></ion-icon> Cambiar portada
+            </a>
+        </div>
+        <div class="hero-avatar-wrap">
+            <div class="avatar" id="avatar-wrap">
+                <ion-icon name="person" id="avatar-icon" style="font-size:2.6rem;"></ion-icon>
+                <img id="avatar-img" style="display:none;" alt="Avatar">
             </div>
+            <div class="avatar-ring"></div>
         </div>
 
         <div class="hero-info" id="hero-info">
@@ -844,6 +863,15 @@ display:block;
                     avatarIcon.style.display = 'block';
                     avatarImg.style.display = 'none';
                 }
+
+                // Portada (imagen detrás del avatar)
+                const cover = document.getElementById('hero-cover');
+                if (user.banner && /^https:\/\/[^\s"'<>`\\]+$/i.test(user.banner)) {
+                    cover.style.backgroundImage = `url("${user.banner}")`;
+                    cover.classList.add('has-banner');
+                }
+                const esMiPerfil = usuarioActual && usuarioActual.toLowerCase() === String(user.usuario).toLowerCase();
+                document.getElementById('hero-cover-edit').classList.toggle('show', !!esMiPerfil);
 
                 // Biografía
                 document.getElementById('user-bio').textContent = user.bio || 'Sin biografía';
