@@ -15,7 +15,7 @@ const cache        = require('./cache');
 const logger       = require('./logger');
 const gameDetector = require('./gameDetector');
 
-const UA      = 'UpGamesBot/1.0 (https://roucedevstudio.github.io/Up_Games/)';
+const UA      = 'UpGamesBot/1.0 (https://roucedevstudio.github.io/UpGames/)';
 const TTL_SEG = 60 * 60 * 24;
 
 // Palabras que no ayudan a identificar el contenido ("GTA V mod realista PC full español")

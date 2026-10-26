@@ -75,8 +75,9 @@ let currentObserver = null;
   setTimeout(()=>{ window.closePreloader && window.closePreloader(); }, 1500);
 })();
 
-// ── WAKE UP BACKEND ───────────────────────────────────────
-fetch(`${API_URL}/items`,{mode:'no-cors'}).catch(()=>{});
+// (Se quitaron los "pings de despertar" no-cors: en Railway el backend no se
+// duerme, el navegador descartaba su respuesta (CORP same-origin) y cada visita
+// descargaba el catálogo y la lista de usuarios de más.)
 
 // ── CACHE SYSTEM ──────────────────────────────────────────
 const CACHE_KEY_ITEMS   = 'upgames_items_cache';
@@ -572,11 +573,6 @@ async function loadContent() {
     render(filteredItems);
     window.closePreloader && window.closePreloader();
   }
-
-  // ── PASO 2: Wake-up paralelo del backend (Render duerme) ──
-  // Lanzar dos pings simultáneos para despertar más rápido
-  fetch(`${API_URL}/items`, {mode:'no-cors'}).catch(()=>{});
-  fetch(`${API_URL}/auth/users/public`, {mode:'no-cors'}).catch(()=>{});
 
   // ── PASO 3: Actualizar desde la red en background ──
   try {
