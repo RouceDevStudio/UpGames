@@ -6,8 +6,10 @@
  *  Usa https nativo (sin dependencias extra).
  *
  *  Variables de entorno:
- *    NEXUS_API_URL=https://tu-nexus.up.railway.app   (requerida)
- *    NEXUS_INTERNAL_SECRET=tu_secret_compartido       (opcional)
+ *    NEXUS_API_URL=https://tu-nexus.up.railway.app   (o NEXUS_URL; por defecto producción)
+ *    NEXUS_INTERNAL_SECRET=tu_secret_compartido       (requerido para mentor,
+ *        analytics, fraude y moderación: NEXUS lo valida en x-nexus-secret.
+ *        Debe ser el MISMO valor en ambos servicios.)
  *
  *  Métodos:
  *    mentorGame(usuario, gameData, userJwt)
@@ -24,7 +26,7 @@ const https  = require('https');
 const http   = require('http');
 const logger = require('./logger');
 
-const NEXUS_API  = (process.env.NEXUS_API_URL || 'https://nexus-production.up.railway.app').replace(/\/$/, '');
+const NEXUS_API  = (process.env.NEXUS_API_URL || process.env.NEXUS_URL || 'https://nexus-production-781b.up.railway.app').replace(/\/+$/, '');
 const SECRET     = process.env.NEXUS_INTERNAL_SECRET || '';
 const TIMEOUT_MS = 15_000;
 
@@ -176,6 +178,7 @@ async function getUserProfile(usuario) {
 }
 
 module.exports = {
+    NEXUS_API,
     mentorGame,
     analyzeFraud,
     getCreatorAnalytics,

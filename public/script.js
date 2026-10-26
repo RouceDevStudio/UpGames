@@ -3642,6 +3642,9 @@ document.addEventListener('keydown', e => {
 })();
 
 // ── NEXUS AI WIDGET ──────────────────────────────────────
+// URL del servicio NEXUS (se puede sobreescribir con window.NEXUS_URL antes de cargar este script)
+const NEXUS_URL    = (window.NEXUS_URL || 'https://nexus-production-781b.up.railway.app').replace(/\/+$/, '');
+const NEXUS_ORIGIN = new URL(NEXUS_URL).origin;
 let nxOpen=false, nxExpanded=false;
 function nxToggle() {
   nxOpen=!nxOpen;
@@ -3693,16 +3696,12 @@ function nxExpand() {
     ico.innerHTML='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
   }
 }
-function nxBoot() {
-  const boot  = document.getElementById('nxBoot');
+// Carga diferida del widget: el iframe solo se pide la primera vez que se
+// abre el panel (antes cargaba la app completa de NEXUS en cada visita).
+function nxEnsureFrame() {
   const frame = document.getElementById('nxFrame');
-
-  // Cargar iframe inmediatamente
-  frame.src = frame.dataset.src;
-  frame.classList.add('loaded');
-
-  // Ocultar boot screen después de 2 segundos sin importar nada
-  setTimeout(() => { boot.style.display = 'none'; }, 2000);
+  if (!frame || frame.getAttribute('src')) return;
+  frame.setAttribute('src', `${NEXUS_URL}/upgames`);
 }
 // Clock — solo activo cuando el panel NEXUS está abierto
 let _clockInterval = null;
@@ -4031,13 +4030,13 @@ const TUT_STEPS = [
   {
     sel: null,
     title: '🤖 NEXUS IA — Tu Asistente',
-    body: 'El <strong>botón hexagonal verde</strong> en la esquina inferior derecha abre la IA integrada de UpGames. Puedes preguntarle:<br>• "¿Qué mods hay para Minecraft?"<br>• "Recomiéndame un juego de terror"<br>• "¿Cómo instalo un mod paso a paso?"<br>• Cualquier duda sobre la plataforma<br><br>Responde en segundos sin salir de la app.',
+    body: 'El <strong>botón NEXUS</strong> abre el asistente de IA de UpGames. Usa el catálogo real y las reglas de la plataforma, así que puedes preguntarle:<br>• "¿Qué mods hay para Minecraft?"<br>• "Recomiéndame un juego de terror"<br>• "¿Cuánto me falta para retirar mis ganancias?"<br>• "¿Cómo publico mi contenido?"<br><br>Cuando recomienda algo, toca la tarjeta y se abre aquí mismo.',
     onEnter: function() { switchTab('main'); }
   },
   {
     sel: '#nxFab',
     title: '🔮 Botón de NEXUS IA',
-    body: 'Este es el botón de NEXUS. El efecto pulsante verde indica que está en línea. Tócalo para abrir el panel de chat con la IA. Puedes expandirlo a pantalla completa con el botón de expandir que aparece en la esquina del panel.'
+    body: 'Este es el botón de NEXUS. Tócalo para abrir el chat; puedes expandirlo a pantalla completa con el botón de la esquina del panel. Si NEXUS tiene algo para ti, verás un punto verde sobre el botón.',
   },
   {
     sel: '#tut-fab',
@@ -4193,7 +4192,6 @@ if(document.readyState==='loading'){
 //  NEXUS puede ver lo que el usuario hace y actuar sobre el feed
 // ══════════════════════════════════════════════════════════════════
 
-const NEXUS_URL = 'https://nexus-production-781b.up.railway.app';
 
 // ── 1. TRACKER DE EVENTOS ────────────────────────────────
 // Envía eventos de comportamiento a NEXUS silenciosamente
@@ -4350,135 +4348,108 @@ function nexusAplicarPerfil(perfil) {
   }
 }
 
-// ── 7. RECEPTOR DE MENSAJES DEL IFRAME DE NEXUS ─────────
-// NEXUS puede mandar instrucciones desde el widget al feed
+// ── 7. PUENTE CON EL WIDGET DE NEXUS (postMessage) ──────
+// El widget (NEXUS_URL/upgames) avisa con NX_WIDGET_READY al cargar; aquí
+// respondemos con el contexto. Antes se intentaba leer contentDocument del
+// iframe (cross-origin → siempre null) y el contexto casi nunca llegaba.
+function nexusContexto() {
+  return {
+    type: 'UPGAMES_CONTEXT',
+    usuario: LS.get('user_admin') || '',
+    // El token permite a NEXUS consultar TU saldo real (/economia/mi-saldo)
+    // en nombre tuyo; viaja solo al origen de NEXUS y no se guarda allí.
+    token: LS.get('token') || '',
+    categoriaActiva: activeCategory || null,
+    busquedaActiva: document.getElementById('buscador')?.value?.trim() || null
+  };
+}
+function nexusEnviarContexto() {
+  const frame = document.getElementById('nxFrame');
+  if (!frame || !frame.contentWindow || !frame.dataset.loaded) return;
+  try { frame.contentWindow.postMessage(nexusContexto(), NEXUS_ORIGIN); } catch(_) {}
+}
+
+async function nexusAbrirItem(itemId, itemLite) {
+  let item = todosLosItems.find(i => i._id === itemId);
+  if (!item) {
+    try {
+      const r = await fetchTimeout(`${API_URL}/items/${encodeURIComponent(itemId)}`, 8000);
+      if (r.ok) item = await r.json();
+    } catch(_) {}
+  }
+  if (!item || !item._id) { toast('No pude abrir ese contenido'); return; }
+  nxClose();
+  window.openDetail(item);
+}
+
 window.addEventListener('message', function(event) {
-  // Solo aceptar mensajes del iframe de NEXUS
-  if (!event.origin.includes('nexus-production-781b.up.railway.app')) return;
+  if (event.origin !== NEXUS_ORIGIN) return;
   const msg = event.data;
   if (!msg || typeof msg !== 'object') return;
 
   switch (msg.type) {
+    case 'NX_WIDGET_READY': {
+      const frame = document.getElementById('nxFrame');
+      if (frame) frame.dataset.loaded = '1';
+      nexusEnviarContexto();
+      break;
+    }
+    case 'NX_OPEN_ITEM':
+      if (typeof msg.itemId === 'string' && /^[a-f\d]{24}$/i.test(msg.itemId)) nexusAbrirItem(msg.itemId, msg.item);
+      break;
 
-    // NEXUS recomienda reordenar por una categoría específica
     case 'NX_FILTER_CATEGORY': {
-      const cat = msg.category;
+      const cat = String(msg.category || '');
       if (!cat) return;
-      // Activar el chip de categoría visualmente
-      document.querySelectorAll('.chip').forEach(c => {
-        c.classList.toggle('active', c.dataset.cat === cat);
-      });
+      nxClose();
+      if (currentTab !== 'main') switchTab('main');
+      document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.cat === cat));
       activeCategory = cat;
-      document.getElementById('buscador').value = '';
+      const b = document.getElementById('buscador'); if (b) b.value = '';
       filteredItems = todosLosItems.filter(i => i.category === cat);
       render(filteredItems);
+      nexusTrack('category', { category: cat });
       break;
     }
 
-    // NEXUS pide limpiar filtros y mostrar todo
     case 'NX_SHOW_ALL': {
+      nxClose();
+      if (currentTab !== 'main') switchTab('main');
       document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
       activeCategory = '';
-      document.getElementById('buscador').value = '';
       filteredItems = todosLosItems.filter(i => i.category !== 'Video');
       render(filteredItems);
       break;
     }
 
-    // NEXUS manda lista de IDs recomendados para mostrar primero
-    case 'NX_HIGHLIGHT_ITEMS': {
-      const ids = msg.itemIds;
-      if (!Array.isArray(ids) || !ids.length) return;
-      const idSet = new Set(ids);
-      const pool = activeCategory === 'Video'
-        ? todosLosItems
-        : todosLosItems.filter(i => i.category !== 'Video');
-      const destacados = pool.filter(i => idSet.has(i._id));
-      const resto       = pool.filter(i => !idSet.has(i._id));
-      filteredItems = [...destacados, ...resto];
-      render(filteredItems);
-      // Toast sutil para el usuario
-      toast('🤖 NEXUS personalizó tu feed');
+    case 'NX_NAVIGATE': {
+      const tabs = ['main', 'favs', 'economia', 'profile'];
+      if (!tabs.includes(msg.tab)) return;
+      nxClose();
+      switchTab(msg.tab);
+      if (msg.tab === 'profile' && msg.pftab) {
+        const el = document.querySelector(`[data-pftab="${String(msg.pftab).replace(/[^a-z]/g, '')}"]`);
+        if (el) setTimeout(() => pfSwitchTab(el.dataset.pftab, el), 120);
+      }
       break;
     }
 
-    // NEXUS pide abrir el detalle de un juego específico
-    case 'NX_OPEN_ITEM': {
-      const item = todosLosItems.find(i => i._id === msg.itemId);
-      if (item) window.openDetail(item);
-      break;
-    }
-
-    // NEXUS confirma que recibió el perfil del usuario (debug)
-    case 'NX_READY':
-      console.log('[NEXUS] Widget listo y conectado al feed');
+    case 'NX_PROACTIVE_SENT':
+      if (!nxOpen) _showNxFabBadge();
       break;
   }
 });
 
-// ── 8. ENVIAR CONTEXTO AL IFRAME + MENSAJE PROACTIVO ────
-// Al abrir el widget: (1) enviar contexto del feed,
-// (2) pedir a NEXUS que inicie la conversación (una vez por sesión de pestaña)
-
-let _nxSessionGreeted = false; // NEXUS solo saluda una vez por sesión de pestaña
-
-const _nxToggleOriginal = window.nxToggle;
+// Al abrir el panel: cargar el widget la primera vez (lazy) y refrescar contexto
+const _nxToggleBase = window.nxToggle || nxToggle;
 window.nxToggle = function() {
-  _nxToggleOriginal();
+  _nxToggleBase();
   if (nxOpen) {
-    const usuario = LS.get('user_admin');
-    const frame   = document.getElementById('nxFrame');
-    if (!frame || !usuario) return;
-
-    const enviarContexto = () => {
-      try {
-        // (1) Enviar contexto del feed
-        frame.contentWindow.postMessage({
-          type:     'UPGAMES_CONTEXT',
-          usuario,
-          feedActual: filteredItems.slice(0, 20).map(i => ({
-            _id:       i._id,
-            title:     i.title,
-            category:  i.category || '',
-            tags:      i.tags     || [],
-            descargas: i.descargasEfectivas || 0
-          })),
-          categoriaActiva: activeCategory || null,
-          busquedaActiva:  document.getElementById('buscador')?.value?.trim() || null
-        }, 'https://nexus-production-781b.up.railway.app');
-
-        // (2) Pedir mensaje proactivo — solo la primera vez en esta pestaña
-        if (!_nxSessionGreeted) {
-          _nxSessionGreeted = true;
-          setTimeout(() => {
-            try {
-              frame.contentWindow.postMessage(
-                { type: 'NX_REQUEST_PROACTIVE' },
-                'https://nexus-production-781b.up.railway.app'
-              );
-            } catch(_) {}
-          }, 600);
-        }
-      } catch(_) {}
-    };
-
-    if (frame.contentDocument?.readyState === 'complete') {
-      enviarContexto();
-    } else {
-      frame.addEventListener('load', enviarContexto, { once: true });
-    }
+    _clearNxFabBadge();
+    nxEnsureFrame();
+    nexusEnviarContexto();
   }
 };
-
-// ── Escuchar respuesta proactiva de NEXUS y mostrar badge en el FAB ─
-window.addEventListener('message', function _nxProactiveReceiver(event) {
-  if (!event.origin.includes('nexus-production-781b.up.railway.app')) return;
-  const msg = event.data;
-  if (!msg || typeof msg !== 'object') return;
-  if (msg.type === 'NX_PROACTIVE_SENT' && msg.message) {
-    if (!nxOpen) _showNxFabBadge();
-  }
-});
 
 // Badge visual en el FAB de NEXUS cuando tiene algo que decir
 let _nxFabBadgeEl = null;
@@ -4507,56 +4478,9 @@ function _clearNxFabBadge() {
   if (_nxFabBadgeEl) { _nxFabBadgeEl.remove(); _nxFabBadgeEl = null; }
 }
 
-// Quitar badge al abrir el panel
-const _origToggleForBadge = window.nxToggle;
-window.nxToggle = function() {
-  _origToggleForBadge();
-  if (nxOpen) _clearNxFabBadge();
-};
-
-// ── 9. INIT: cargar perfil al arrancar (500ms de delay para no
-//    interferir con la carga inicial del feed)
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  NEXUS MASCOT — Activar widget al cargar UpGames
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ── 8. INIT: cargar perfil al arrancar (con retraso para no
+//    competir con la carga inicial del feed)
 setTimeout(nexusCargarPerfil, 2000);
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//  NEXUS MASCOT — Activar widget al cargar UpGames
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-(function notifyNexusMascot() {
-  function doNotify() {
-    const frame = document.getElementById('nxFrame');
-    if (!frame) return;
-    function send() {
-      try {
-        frame.contentWindow.postMessage(
-          { type: 'upgames_active', context: 'biblioteca' },
-          'https://nexus-production-781b.up.railway.app'
-        );
-      } catch(_) {}
-    }
-    if (frame.contentDocument && frame.contentDocument.readyState === 'complete') {
-      send();
-    } else {
-      frame.addEventListener('load', send, { once: true });
-    }
-  }
-  // Ejecutar al cargar la página
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', doNotify);
-  } else {
-    doNotify();
-  }
-  // También disparar cuando el usuario abre el panel de NEXUS
-  const _origNxToggle = window.nxToggle;
-  if (typeof _origNxToggle === 'function') {
-    window.nxToggle = function() {
-      _origNxToggle.apply(this, arguments);
-      setTimeout(doNotify, 800);
-    };
-  }
-})();
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 //  AUTOPLAY — SIGUIENTE VIDEO (punto 6)
@@ -5184,32 +5108,40 @@ async function pfLoadAnalytics() {
     const r = await fetch(`${PF_API}/nexus/mis-analytics`, { headers: { Authorization: `Bearer ${token}` } });
     const d = await r.json();
     if(!r.ok || d.error) { el.innerHTML = '<div class="pf-empty"><ion-icon name="cloud-offline"></ion-icon><p>Nexus no disponible ahora. Intenta más tarde.</p></div>'; return; }
-    const insights = d.insights || d.data || d;
+    // Respuesta real de NEXUS: { statsReales, actividad, insights:{ resumen_ejecutivo, acciones_prioritarias, ... } }
+    const ins = d.insights || {};
+    const st  = d.statsReales || null;
+    const act = d.actividad || {};
+    const e   = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const box = (icon, color, title, body) => `
+      <div class="pf-info-box" style="border-color:${color}40">
+        <ion-icon name="${icon}" style="color:${color};font-size:24px"></ion-icon>
+        <div>${title ? `<h4 style="color:${color}">${title}</h4>` : ''}<p>${body}</p></div>
+      </div>`;
+    const list = (title, icon, arr) => (Array.isArray(arr) && arr.length) ? `
+      <div class="pf-section-title" style="margin-top:8px"><ion-icon name="${icon}"></ion-icon> ${title}</div>
+      ${arr.map(x => box('arrow-forward-circle', '#5AC8FA', '', e(x))).join('')}` : '';
+    const mp = ins.mejor_momento_publicar;
     el.innerHTML = `
       <div style="display:grid;gap:12px;padding:4px 0">
-        ${insights.puntuacion !== undefined ? `
-        <div class="pf-info-box" style="border-color:rgba(50,213,131,.3)">
-          <ion-icon name="star" style="color:#32D583;font-size:28px"></ion-icon>
-          <div>
-            <h4 style="color:#32D583">Puntuación de Creador: ${insights.puntuacion}/100</h4>
-            <p>${insights.resumen || 'Análisis completado por Nexus IA'}</p>
-          </div>
+        ${st ? `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center">
+          ${[['Descargas', st.totalDescargas], ['Aprobadas', st.publicacionesAprobadas], ['Seguidores', st.seguidores]].map(([k, v]) =>
+            `<div class="pf-info-box" style="flex-direction:column;gap:2px;padding:10px"><b style="font-size:20px;color:#32D583">${Number(v || 0).toLocaleString('es-CO')}</b><span style="font-size:11px;opacity:.7">${k}</span></div>`).join('')}
         </div>` : ''}
-        ${(insights.recomendaciones || []).length > 0 ? `
-        <div class="pf-section-title" style="margin-top:8px"><ion-icon name="bulb"></ion-icon> RECOMENDACIONES DE NEXUS</div>
-        ${insights.recomendaciones.map(r => `
-          <div class="pf-info-box">
-            <ion-icon name="arrow-forward-circle" style="color:#5AC8FA"></ion-icon>
-            <div><p>${r}</p></div>
-          </div>`).join('')}` : ''}
-        ${(insights.categorias || []).length > 0 ? `
-        <div class="pf-section-title" style="margin-top:8px"><ion-icon name="pie-chart"></ion-icon> CATEGORÍAS TOP</div>
+        ${ins.resumen_ejecutivo ? box('sparkles', '#32D583', 'Resumen de NEXUS', e(ins.resumen_ejecutivo)) : ''}
+        ${ins.punto_fuerte ? box('trophy', '#32D583', 'Tu punto fuerte', e(ins.punto_fuerte)) : ''}
+        ${ins.punto_a_mejorar ? box('construct', '#ffcc00', 'Qué mejorar', e(ins.punto_a_mejorar)) : ''}
+        ${mp && (mp.dia || mp.hora) ? box('time', '#5AC8FA', 'Mejor momento para publicar', `${e(mp.dia)} ${e(mp.hora)}${mp.razon ? ' — ' + e(mp.razon) : ''}`) : ''}
+        ${list('ACCIONES PRIORITARIAS', 'bulb', ins.acciones_prioritarias)}
+        ${(ins.categorias_recomendadas || []).length ? `
+        <div class="pf-section-title" style="margin-top:8px"><ion-icon name="pie-chart"></ion-icon> CATEGORÍAS RECOMENDADAS</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          ${insights.categorias.map(c => `<span style="background:rgba(50,213,131,.1);border:1px solid rgba(50,213,131,.3);padding:4px 12px;border-radius:20px;font-size:12px;color:#32D583">${c}</span>`).join('')}
+          ${ins.categorias_recomendadas.map(c => `<span style="background:rgba(50,213,131,.1);border:1px solid rgba(50,213,131,.3);padding:4px 12px;border-radius:20px;font-size:12px;color:#32D583">${e(c)}</span>`).join('')}
         </div>` : ''}
+        ${!ins.resumen_ejecutivo && !st ? box('information-circle', '#A6ADBB', '', 'Aún no hay suficientes datos. Publica contenido y vuelve en unos días.') : ''}
         <div class="pf-info-box" style="opacity:.6;margin-top:4px">
           <ion-icon name="information-circle"></ion-icon>
-          <div><p style="font-size:11px">Analytics calculados por Nexus IA en base a tu actividad y la de tus seguidores.</p></div>
+          <div><p style="font-size:11px">Estadísticas reales de UpGames${act.totalEventos60dias ? ` y ${act.totalEventos60dias} eventos de los últimos 60 días` : ''}. Las sugerencias las redacta NEXUS con IA y pueden equivocarse.</p></div>
         </div>
       </div>`;
   } catch(e) {

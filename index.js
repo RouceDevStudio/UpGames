@@ -1835,10 +1835,11 @@ app.get('/nexus/status', async (req, res) => {
     try {
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 5000);
-        const r = await fetch(process.env.NEXUS_URL || 'https://nexus-production-781b.up.railway.app', { signal: ctrl.signal });
+        // /health es un JSON pequeño (antes se descargaba la página completa de NEXUS)
+        const r = await fetch(`${nexusClient.NEXUS_API}/health`, { signal: ctrl.signal });
         clearTimeout(t);
-        const txt = r.status < 500 ? await r.text() : '';
-        online = r.ok && !/Application not found/i.test(txt);
+        const d = r.ok ? await r.json().catch(() => null) : null;
+        online = !!d && (d.status === 'ok' || d.status === 'initializing');
     } catch (_) { online = false; }
     const data = { online, checkedAt: new Date().toISOString() };
     memCache.set(KEY, data, 60);

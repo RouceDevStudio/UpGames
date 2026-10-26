@@ -37,7 +37,7 @@
 
   <div class="lg-note g"><span class="ic">🛡️</span><div><strong>Resumen.</strong> Usamos tu usuario, email y contraseña (cifrada con
     bcrypt) para autenticarte; opcionalmente tu email de PayPal para pagarte. Registramos tu IP de forma temporal contra el
-    fraude. Si usas NEXUS IA, guardamos contexto de conversación para personalizarla. Cuando escribes un título al
+    fraude. Si usas NEXUS IA, guardamos un registro mínimo de tus preguntas (30 días) para mejorarla. Cuando escribes un título al
     publicar, solo enviamos ese texto para reconocerlo. Nada más, y nunca lo vendemos.</div></div>
 
   <nav class="lg-card lg-toc" aria-label="Índice">
@@ -107,19 +107,17 @@
 
   <section class="lg-sec lg-card" id="ia">
     <h2><span class="n">03</span>NEXUS IA y funciones automáticas</h2>
-    <h3>3.1 Memoria de NEXUS</h3>
+    <h3>3.1 Qué guarda NEXUS</h3>
     <div class="lg-scroll"><table class="lg-table">
-      <tr><th>CAPA</th><th>QUÉ GUARDA</th><th>DÓNDE / CUÁNTO</th></tr>
-      <tr><td>Memoria de trabajo</td><td>Últimos turnos de la conversación activa</td><td>RAM del servidor · se borra al cerrar sesión</td></tr>
-      <tr><td>Memoria episódica</td><td>Consultas, respuestas y valoración implícita</td><td>Servidor Railway · mientras exista la cuenta</td></tr>
-      <tr><td>Memoria semántica</td><td>Preferencias aprendidas (juego favorito, plataforma, ciudad…)</td><td>Servidor Railway · borrable a petición</td></tr>
-      <tr><td>Estado afectivo</td><td>Vector interno de NEXUS (no es un dato tuyo)</td><td>Servidor</td></tr>
+      <tr><th>DATO</th><th>PARA QUÉ</th><th>DÓNDE / CUÁNTO</th></tr>
+      <tr><td>Conversación del panel</td><td>Mantener el hilo de la charla</td><td>Tu navegador (sessionStorage) · se borra al cerrar la pestaña o con «Nueva conversación»</td></tr>
+      <tr><td>Registro de preguntas</td><td>Medir y mejorar el asistente (pregunta recortada, intención, tiempo de respuesta)</td><td>Servidor de NEXUS · se elimina a los 30 días</td></tr>
+      <tr><td>Eventos de uso (búsquedas, vistas, favoritos, categorías)</td><td>Personalizar recomendaciones y el feed</td><td>Servidor de NEXUS · se elimina a los 90 días</td></tr>
+      <tr><td>Tu saldo y estadísticas</td><td>Responder si preguntas por tus ganancias</td><td>Se consultan a UpGames en el momento con tu sesión; NEXUS no los almacena</td></tr>
     </table></div>
     <h3>3.2 Proveedores de IA</h3>
     <ul>
-      <li><strong>Anthropic (Claude) y Groq (Llama):</strong> reciben el texto de tu consulta para generar la respuesta. No les enviamos tu email ni datos de identificación.</li>
-      <li><strong>Groq Vision:</strong> procesa imágenes o documentos que envíes; no se guardan en UpGames.</li>
-      <li><strong>Pollinations.ai:</strong> recibe el texto de tus solicitudes de imagen.</li>
+      <li><strong>Groq y Anthropic (Claude):</strong> reciben el texto de tu consulta y el contexto necesario (por ejemplo, tu nombre de usuario y estadísticas públicas si preguntas por ellas) para generar la respuesta. No les enviamos tu email ni tu contraseña.</li>
     </ul>
     <p>Cada proveedor trata los datos según su propia política de privacidad. Evita compartir con NEXUS información
       sensible (salud, finanzas, documentos de identidad).</p>
@@ -153,7 +151,7 @@
       <div class="lg-tile"><b>🗄️ MongoDB Atlas</b>Base de datos principal, cifrada en reposo.</div>
       <div class="lg-tile"><b>🚂 Railway</b>Hosting del backend y de NEXUS.</div>
       <div class="lg-tile"><b>🖼️ Cloudinary</b>Avatares, imágenes y videos (URLs públicas).</div>
-      <div class="lg-tile"><b>🤖 Anthropic · Groq · Pollinations</b>Texto de consultas a la IA, sin identificación personal.</div>
+      <div class="lg-tile"><b>🤖 Groq · Anthropic</b>Texto de consultas a la IA, sin identificación personal.</div>
       <div class="lg-tile"><b>🔎 Steam · App Store · Wikipedia</b>Solo el texto del título, para reconocerlo.</div>
       <div class="lg-tile"><b>📄 GitHub Pages</b>Hosting del frontend estático.</div>
       <div class="lg-tile"><b>📢 Redes publicitarias</b>highperformanceformat.com, effectivegatecpm.com y profitablecpmratenetwork.com en la página puente; pueden usar sus propias cookies.</div>
@@ -173,7 +171,7 @@
       <tr><td>Mensajes de chat</td><td>90 días</td><td>TTL automático</td></tr>
       <tr><td>Registros de actividad sospechosa</td><td>Mientras sean necesarios para la investigación</td><td>Módulo anti-fraude</td></tr>
       <tr><td>Historial de pagos</td><td>7 años</td><td>Obligación fiscal</td></tr>
-      <tr><td>Memoria NEXUS</td><td>Mientras exista la cuenta</td><td>Borrado a petición</td></tr>
+      <tr><td>Registro de NEXUS</td><td>30 días (eventos de uso: 90 días)</td><td>Borrado a petición</td></tr>
       <tr><td>Caché de reconocimiento de títulos</td><td>24 horas</td><td>Caché en memoria, sin datos personales</td></tr>
       <tr><td>Tokens de verificación / reseteo</td><td>24 h / 1 h</td><td>Expiración automática</td></tr>
     </table></div>
@@ -186,7 +184,7 @@
       <div class="lg-tile"><b>Rectificación</b>Corregir email, avatar, biografía y demás.</div>
       <div class="lg-tile"><b>Supresión</b>Borrar tu cuenta, publicaciones y datos asociados.</div>
       <div class="lg-tile"><b>Oposición y limitación</b>Frente a tratamientos concretos.</div>
-      <div class="lg-tile"><b>Memoria NEXUS</b>Borrar lo que la IA aprendió de ti.</div>
+      <div class="lg-tile"><b>Datos de NEXUS</b>Borrar tus preguntas y eventos de uso.</div>
       <div class="lg-tile"><b>Revisión humana</b>De decisiones automatizadas que te afecten.</div>
     </div>
     <p style="margin-top:12px">Escribe a <a href="mailto:mr.m0onster@protonmail.com">mr.m0onster@protonmail.com</a> con el
