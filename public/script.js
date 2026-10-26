@@ -1680,7 +1680,7 @@ const PF_BANNED_VISUAL = ['crack','cracked','crackeado','crackeo','pirata','pira
   'gratis','free','gratuito','full','completo','complete','premium','pro','descargar','download'];
 const PF_ALLOWED_LINKS = ['mediafire.com','mega.nz','mega.co.nz','drive.google.com',
   'gofile.io','onedrive.live.com','icloud.com','proton.me','pcloud.com',
-  'pixeldrain.com','1fichier.com','qiwi.gg','krakenfiles.com','dropbox.com','github.com','github.io','sto.romsfast.com'];
+  'pixeldrain.com','1fichier.com','qiwi.gg','krakenfiles.com','dropbox.com','github.com','github.io','sto.romsfast.com','clarodrive.com'];
 
 function pfAnalizarLink(url) {
   if(!url) return { ok: null };
@@ -4348,6 +4348,11 @@ document.getElementById('btut-prev').addEventListener('click', () => {
 document.getElementById('btut-close').addEventListener('click', finishTutorial);
 
 // ── Enlace directo a Ajustes del perfil: biblioteca.html?ajustes=portada ──
+(function abrirPestanaDesdeURL() {
+  // Acceso directo de la app instalada: biblioteca.html?tab=perfil
+  const t = new URLSearchParams(location.search).get('tab');
+  if (t === 'perfil' && LS.get('token')) setTimeout(() => switchTab('profile'), 300);
+})();
 (function abrirAjustesDesdeURL() {
   const tab = new URLSearchParams(location.search).get('ajustes');
   if (!tab || !/^[a-z]+$/.test(tab) || !LS.get('token')) return;

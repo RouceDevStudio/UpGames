@@ -1702,12 +1702,42 @@ app.get("/items/user/:usuario", async (req, res) => {
     }
 });
 
+// ── Enlaces permitidos para publicar (misma lista que PF_ALLOWED_LINKS del frontend) ──
+const LINKS_PERMITIDOS = ['mediafire.com', 'mega.nz', 'mega.co.nz', 'drive.google.com',
+    'gofile.io', 'onedrive.live.com', 'icloud.com', 'proton.me', 'pcloud.com',
+    'pixeldrain.com', '1fichier.com', 'qiwi.gg', 'krakenfiles.com', 'dropbox.com',
+    'github.com', 'github.io', 'sto.romsfast.com', 'clarodrive.com'];
+
+// Devuelve null si el enlace es válido o un mensaje de error si no.
+function errorLinkPublicacion(link, category) {
+    let u;
+    try { u = new URL(String(link || '').trim()); } catch (_) { return 'Formato de enlace inválido'; }
+    if (!['https:', 'http:'].includes(u.protocol)) return 'El enlace debe empezar por https://';
+    if (category === 'Video') return null;   // videos: Cloudinary, YouTube u otra URL directa
+    const host = u.hostname.toLowerCase().replace(/^www\./, '');
+    if (!LINKS_PERMITIDOS.some(d => host === d || host.endsWith('.' + d)))
+        return 'Plataforma no permitida. Usa MediaFire, MEGA, Drive, ClaroDrive, etc. (sin acortadores)';
+    if (/\.(exe|msi)$/i.test(u.pathname)) return 'No se permiten enlaces directos a .exe/.msi; usa .zip o .rar';
+    return null;
+}
+
+const CAMPOS_PUBLICACION = ['title', 'description', 'link', 'image', 'images', 'category', 'videoType', 'extraData', 'featuredItemId', 'tags'];
+
 app.post("/items/add", [verificarToken, body('title').notEmpty().trim().isLength({ max: 200 }), body('link').notEmpty().trim()], async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: "Datos inválidos" });
 
-        const nuevoJuego = new Juego({ ...req.body, usuario: req.usuario, status: "aprobado", linkStatus: "revision" });
+        const errLink = errorLinkPublicacion(req.body.link, req.body.category);
+        if (errLink) return res.status(400).json({ success: false, error: errLink });
+
+        // Solo campos editables por el autor: con strict:false, un ...req.body permitía
+        // inyectar descargasEfectivas, likesCount, nexusMentor, etc.
+        const datos = {};
+        CAMPOS_PUBLICACION.forEach(f => { if (req.body[f] !== undefined) datos[f] = req.body[f]; });
+        if (datos.extraData && (typeof datos.extraData !== 'object' || Array.isArray(datos.extraData))) datos.extraData = {};
+        if (datos.tags !== undefined && !Array.isArray(datos.tags)) delete datos.tags;
+        const nuevoJuego = new Juego({ ...datos, usuario: req.usuario, status: "aprobado", linkStatus: "revision" });
 
         // ── Detección automática de juego conocido ──────────────────
         const deteccion = gameDetector.detectGame(nuevoJuego.title, nuevoJuego.description);
@@ -1790,6 +1820,10 @@ app.put("/items/:id", verificarToken, [
         const updates = {};
         ['title', 'description', 'link', 'image', 'images', 'category', 'videoType', 'extraData', 'featuredItemId'].forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
         if (Object.keys(updates).length === 0) return res.status(400).json({ success: false, error: "No se enviaron campos para actualizar" });
+        if (updates.link !== undefined) {
+            const errLink = errorLinkPublicacion(updates.link, updates.category || item.category);
+            if (errLink) return res.status(400).json({ success: false, error: errLink });
+        }
         const updated = await Juego.findByIdAndUpdate(req.params.id, { $set: updates }, { new: true, runValidators: true });
         logger.info(`Usuario @${req.usuario} editó su publicación: ${updated.title}`);
         res.json({ success: true, item: updated });

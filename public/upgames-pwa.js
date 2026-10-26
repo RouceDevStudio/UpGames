@@ -36,16 +36,15 @@
                     if (!nuevoSW) return;
 
                     nuevoSW.addEventListener('statechange', () => {
-                        if (nuevoSW.state === 'installed' && navigator.serviceWorker.controller) {
-                            // Hay una nueva versión esperando
-                            mostrarPromptActualizar(nuevoSW);
-                        }
+                        // (El SW se activa solo; el aviso de actualización ya no es necesario)
                     });
                 });
 
-                // Detectar si otro SW tomó control
+                // El SW nuevo se activa solo (skipWaiting) y sirve el código en red
+                // primero: NO recargar la página automáticamente (antes la primera
+                // visita y cada actualización recargaban a mitad de uso).
                 navigator.serviceWorker.addEventListener('controllerchange', () => {
-                    window.location.reload();
+                    if (window.__ugRecargarAlActualizar) window.location.reload();
                 });
 
             } catch (err) {
@@ -63,10 +62,10 @@
         deferredInstallPrompt = e;
 
         // Mostrar botón de instalar (si no se ha mostrado antes)
-        const yaRechazado = localStorage.getItem('upgames_install_rejected');
-        if (!yaRechazado) {
-            setTimeout(mostrarPromptInstalar, 30000); // Después de 30s de uso
-        }
+        // Ofrecerlo tras 25 s de uso; si dijo "Ahora no", volver a ofrecer a los 14 días
+        let rechazo = 0;
+        try { rechazo = Number(localStorage.getItem('upgames_install_rejected')) || 0; } catch (_) {}
+        if (Date.now() - rechazo > 14 * 24 * 3600 * 1000) setTimeout(mostrarPromptInstalar, 25000);
     });
 
     window.addEventListener('appinstalled', () => {
@@ -86,9 +85,9 @@
         prompt.innerHTML = `
             <div class="ug-install-backdrop"></div>
             <div class="ug-install-card">
-                <div class="ug-install-icon">📲</div>
-                <h3>Instalar UpGames</h3>
-                <p>Accede más rápido, recibe notificaciones y úsalo sin conexión.</p>
+                <img class="ug-install-icon" src="./icons/icon-192.png" alt="" width="72" height="72">
+                <h3>Instala UpGames</h3>
+                <p>Ábrelo desde tu pantalla de inicio, a pantalla completa y más rápido.</p>
                 <div class="ug-install-actions">
                     <button class="ug-install-btn-primary" id="ug-install-yes">Instalar</button>
                     <button class="ug-install-btn-secondary" id="ug-install-no">Ahora no</button>
@@ -102,7 +101,7 @@
             #upgames-install-prompt {
                 position: fixed; inset: 0; z-index: 99999;
                 display: flex; align-items: center; justify-content: center;
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                 animation: ug-fadein 0.3s;
             }
             @keyframes ug-fadein { from { opacity: 0; } to { opacity: 1; } }
@@ -111,8 +110,9 @@
                 background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
             }
             .ug-install-card {
-                position: relative; background: #15152a;
-                border: 1px solid rgba(139, 92, 246, 0.3);
+                position: relative; background: rgba(23,26,33,.86);
+                backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
+                border: 1px solid rgba(255,255,255,.1);
                 border-radius: 20px; padding: 32px 28px; max-width: 360px; width: 90%;
                 text-align: center; color: #fff;
                 box-shadow: 0 20px 60px rgba(0,0,0,0.5);
@@ -122,9 +122,9 @@
                 from { transform: translateY(30px); opacity: 0; }
                 to   { transform: translateY(0); opacity: 1; }
             }
-            .ug-install-icon { font-size: 56px; margin-bottom: 16px; }
+            .ug-install-icon { width: 72px; height: 72px; border-radius: 20px; margin: 0 auto 14px; display: block; box-shadow: 0 10px 30px rgba(50,213,131,.25); }
             .ug-install-card h3 { margin: 0 0 8px; font-size: 20px; font-weight: 700; }
-            .ug-install-card p { margin: 0 0 24px; color: #a0a0b8; font-size: 14px; line-height: 1.5; }
+            .ug-install-card p { margin: 0 0 24px; color: #A3A8B6; font-size: 14px; line-height: 1.5; }
             .ug-install-actions { display: flex; gap: 10px; justify-content: center; }
             .ug-install-btn-primary, .ug-install-btn-secondary {
                 padding: 12px 20px; border: none; border-radius: 10px;
@@ -132,8 +132,8 @@
                 transition: transform 0.15s, box-shadow 0.15s;
             }
             .ug-install-btn-primary {
-                background: linear-gradient(135deg, #6366f1, #8b5cf6); color: #fff;
-                box-shadow: 0 8px 24px rgba(99,102,241,0.3);
+                background: linear-gradient(135deg, #32D583, #5AC8FA); color: #04170c;
+                box-shadow: 0 8px 24px rgba(50,213,131,0.3);
             }
             .ug-install-btn-primary:hover { transform: translateY(-1px); }
             .ug-install-btn-secondary {
