@@ -23,28 +23,28 @@
     <!-- ╔══════════════════════════════════════════════╗
          ║  UpGames · SEO & Social Sharing              ║
          ╚══════════════════════════════════════════════╝ -->
-    <meta name="description" content="Biblioteca digital inteligente indexada por la comunidad. Juegos, mods, apps y software. Monetiza tus aportes y deja que NEXUS IA personalice tu experiencia.">
+    <meta name="description" content="Biblioteca digital inteligente indexada por la comunidad. Juegos, ROMs, mods, apps, herramientas, software y videos. Monetiza tus aportes y deja que NEXUS IA personalice tu experiencia.">
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230a0a0a'/><text y='.9em' font-size='72' x='50%' dominant-baseline='middle' text-anchor='middle'>🎮</text></svg>">
     <!-- Open Graph -->
     <meta property="og:type"        content="website">
     <meta property="og:site_name"   content="UpGames">
     <meta property="og:url"         content="https://roucedevstudio.github.io/Up_Games/">
     <meta property="og:title"       content="UpGames — La Nube de Contenido">
-    <meta property="og:description" content="Biblioteca digital inteligente indexada por la comunidad. Juegos, mods, apps y software. Monetiza tus aportes y deja que NEXUS IA personalice tu experiencia.">
+    <meta property="og:description" content="Biblioteca digital inteligente indexada por la comunidad. Juegos, ROMs, mods, apps, herramientas, software y videos. Monetiza tus aportes y deja que NEXUS IA personalice tu experiencia.">
     <meta property="og:image"       content="https://roucedevstudio.github.io/Up_Games/public/og-cover.png">
     <meta property="og:image:width"  content="1200">
     <meta property="og:image:height" content="630">
     <!-- Twitter Card -->
     <meta name="twitter:card"        content="summary_large_image">
     <meta name="twitter:title"       content="UpGames — La Nube de Contenido">
-    <meta name="twitter:description" content="Biblioteca digital inteligente indexada por la comunidad. Juegos, mods, apps y software. Monetiza tus aportes y deja que NEXUS IA personalice tu experiencia.">
+    <meta name="twitter:description" content="Biblioteca digital inteligente indexada por la comunidad. Juegos, ROMs, mods, apps, herramientas, software y videos. Monetiza tus aportes y deja que NEXUS IA personalice tu experiencia.">
     <meta name="twitter:image"       content="https://roucedevstudio.github.io/Up_Games/public/og-cover.png">
     <!-- WhatsApp / Telegram usan og: tags ↑ automáticamente -->
     <link rel="preconnect" href="https://unpkg.com">
     <link rel="preconnect" href="https://upgames-production.up.railway.app">
     <style>
         :root {
-            --primary: #5EFF43;
+            --primary: #32D583;
             --bg: #0a0a0a;
             --card: #161616;
             --text-dim: #666;
@@ -117,7 +117,7 @@
 
         input:focus {
             border-color: var(--primary);
-            box-shadow: 0 0 8px rgba(94, 255, 67, 0.2);
+            box-shadow: 0 0 8px rgba(50,213,131, 0.2);
         }
 
         #btnAction {
@@ -137,7 +137,7 @@
         #btnAction:hover:not(:disabled) {
             filter: brightness(1.1);
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(94, 255, 67, 0.3);
+            box-shadow: 0 5px 15px rgba(50,213,131, 0.3);
         }
 
         #btnAction:disabled {
@@ -189,7 +189,7 @@
             border-radius: 14px;
             padding: 18px 20px 16px;
             width: 280px;
-            box-shadow: 0 8px 32px rgba(94,255,67,0.15), 0 2px 8px rgba(0,0,0,0.6);
+            box-shadow: 0 8px 32px rgba(50,213,131,0.15), 0 2px 8px rgba(0,0,0,0.6);
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             pointer-events: all;
         }
@@ -237,8 +237,8 @@
             font-weight: 900;
             letter-spacing: 1.5px;
             color: var(--primary);
-            background: rgba(94,255,67,0.1);
-            border: 1px solid rgba(94,255,67,0.3);
+            background: rgba(50,213,131,0.1);
+            border: 1px solid rgba(50,213,131,0.3);
             border-radius: 20px;
             padding: 2px 10px;
             text-transform: uppercase;
@@ -357,7 +357,7 @@
         }
         #tut-trigger:hover {
             border-color: var(--primary);
-            box-shadow: 0 4px 16px rgba(94,255,67,0.2);
+            box-shadow: 0 4px 16px rgba(50,213,131,0.2);
             transform: scale(1.05);
         }
 
@@ -381,14 +381,123 @@
         NEXUS_DOMAIN: "nexus-production-781b.up.railway.app"
       };
     </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* ═══ UpGames v5 · Liquid Glass — capa visual del login ═══ */
+        :root {
+            --primary: #32D583;
+            --g-rgb: 50,213,131;
+            --bg: #0A0B0F;
+            --card: rgba(28,31,40,.55);
+            --text-dim: #A3A8B6;
+            --danger: #FF6B6B;
+            --ease-out: cubic-bezier(.22,1,.36,1);
+            --ease-spring: cubic-bezier(.34,1.25,.64,1);
+            --transition: .35s var(--ease-out);
+        }
+        html { background: var(--bg); }
+        body {
+            font-family: 'Manrope', -apple-system, 'Segoe UI', Roboto, sans-serif;
+            background: transparent;
+            flex-direction: column;
+            gap: 18px;
+            padding: 24px 16px 96px;
+            box-sizing: border-box;
+            font-variant-ligatures: no-common-ligatures;
+            -webkit-font-smoothing: antialiased;
+        }
+        body::before {
+            content: ''; position: fixed; inset: -10%; z-index: -1; pointer-events: none;
+            background:
+                radial-gradient(38% 30% at 18% 12%, rgba(var(--g-rgb),.16), transparent 70%),
+                radial-gradient(36% 30% at 88% 22%, rgba(90,200,250,.13), transparent 70%),
+                radial-gradient(44% 34% at 60% 95%, rgba(139,124,246,.12), transparent 70%),
+                var(--bg);
+            animation: ugDrift 24s ease-in-out infinite alternate;
+        }
+        @keyframes ugDrift { to { transform: translate3d(-2%, 1.5%, 0) scale(1.04); } }
+        .form-card {
+            background: var(--card);
+            -webkit-backdrop-filter: blur(24px) saturate(170%);
+            backdrop-filter: blur(24px) saturate(170%);
+            border: 1px solid rgba(255,255,255,.10);
+            border-radius: 28px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 30px 60px -30px rgba(0,0,0,.8);
+            animation: ugCardIn .7s var(--ease-out) both;
+        }
+        @keyframes ugCardIn { from { opacity: 0; transform: translateY(16px) scale(.98); } to { opacity: 1; transform: none; } }
+        #main-icon {
+            font-size: 1.9rem; color: var(--primary);
+            width: 56px; height: 56px; padding: 13px; box-sizing: border-box;
+            border-radius: 18px;
+            background: rgba(var(--g-rgb),.12);
+            border: 1px solid rgba(var(--g-rgb),.3);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
+        }
+        h2 { color: #F4F5F7; letter-spacing: -.02em; text-transform: none; font-size: 1.7rem; font-weight: 800; margin-top: 6px; }
+        .subtitle { color: var(--text-dim); }
+        label { color: #A3A8B6; letter-spacing: .02em; font-weight: 650; text-transform: none; }
+        label ion-icon { color: var(--primary); }
+        input {
+            background: rgba(255,255,255,.045);
+            border: 1px solid rgba(255,255,255,.10);
+            border-radius: 14px;
+            padding: 13px 14px;
+            font-family: inherit; font-size: .92rem;
+        }
+        input:focus { border-color: rgba(var(--g-rgb),.55); box-shadow: 0 0 0 4px rgba(var(--g-rgb),.12); background: rgba(255,255,255,.065); }
+        #btnAction {
+            border-radius: 16px; font-weight: 800; letter-spacing: 0; text-transform: none; font-size: .95rem;
+            font-family: inherit; color: #04120A;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 12px 26px -12px rgba(var(--g-rgb),.7);
+            transition: transform .25s var(--ease-spring), filter .2s, box-shadow .3s var(--ease-out);
+        }
+        #btnAction:hover:not(:disabled) { transform: translateY(-1px); box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 16px 30px -12px rgba(var(--g-rgb),.8); }
+        #btnAction:active:not(:disabled) { transform: scale(.97); }
+        #btnAction:disabled { background: rgba(255,255,255,.08); color: #6C7180; box-shadow: none; }
+        .toggle-container a { color: var(--primary); }
+        .tutorial-tooltip, .tutorial-tooltip::before {
+            background: rgba(22,25,32,.9);
+            -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+            border-color: rgba(255,255,255,.12);
+        }
+        .tutorial-tooltip { border-radius: 18px; transition: all .5s var(--ease-out); }
+        .tutorial-spotlight { border-radius: 16px; transition: all .5s var(--ease-out); }
+        .tut-badge, .tut-btn { text-transform: none; letter-spacing: 0; }
+        .tut-btn { border-radius: 999px; font-family: inherit; }
+        .tut-btn-next { color: #04120A; }
+        #tut-trigger {
+            background: rgba(28,31,40,.55);
+            -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+            border: 1px solid rgba(255,255,255,.12);
+            transition: transform .3s var(--ease-spring), border-color .3s;
+        }
+        .ug-scope {
+            display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; max-width: 400px;
+            animation: ugCardIn .7s .08s var(--ease-out) both;
+        }
+        .ug-scope span {
+            font-size: .72rem; font-weight: 650; color: #A3A8B6;
+            padding: 5px 11px; border-radius: 999px;
+            background: rgba(255,255,255,.045); border: 1px solid rgba(255,255,255,.08);
+        }
+        .ug-legal {
+            font-size: .7rem; color: #6C7180; text-align: center; line-height: 1.6; max-width: 400px;
+            animation: ugCardIn .7s .14s var(--ease-out) both;
+        }
+        .ug-legal a { color: #A3A8B6; text-decoration: none; }
+        .ug-legal a:hover { color: var(--primary); }
+        @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } }
+    </style>
 </head>
 <body>
 
     <div id="login-container" class="form-card">
         <header>
-            <ion-icon id="main-icon" name="game-controller-outline"></ion-icon>
+            <ion-icon id="main-icon" name="layers-outline"></ion-icon>
             <h2 id="form-title">UpGames</h2>
-            <p id="form-subtitle" class="subtitle">Inicia sesión para acceder a tu librería</p>
+            <p id="form-subtitle" class="subtitle">Inicia sesión para acceder a tu biblioteca</p>
         </header>
 
         <div id="form-content">
@@ -435,7 +544,7 @@
                 <label for="forgot-email"><ion-icon name="mail-outline"></ion-icon> TU EMAIL REGISTRADO</label>
                 <input id="forgot-email" type="email" placeholder="tucorreo@ejemplo.com" autocomplete="email">
             </div>
-            <button id="forgot-btn" style="width:100%;padding:12px;background:rgba(94,255,67,.12);border:1px solid rgba(94,255,67,.3);border-radius:8px;color:#5EFF43;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;letter-spacing:.05em;margin-bottom:8px">ENVIAR LINK DE RECUPERACIÓN</button>
+            <button id="forgot-btn" style="width:100%;padding:12px;background:rgba(50,213,131,.12);border:1px solid rgba(50,213,131,.3);border-radius:8px;color:#32D583;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;letter-spacing:.05em;margin-bottom:8px">ENVIAR LINK DE RECUPERACIÓN</button>
             <p style="text-align:center"><a href="#" id="back-to-login" style="font-size:12px;color:#a0a0b8;text-decoration:none">← Volver al login</a></p>
         </div>
 
@@ -449,11 +558,21 @@
                 <label for="new-pass2"><ion-icon name="shield-checkmark-outline"></ion-icon> CONFIRMAR CONTRASEÑA</label>
                 <input id="new-pass2" type="password" placeholder="Repite la contraseña" minlength="6">
             </div>
-            <button id="reset-btn" style="width:100%;padding:12px;background:rgba(94,255,67,.12);border:1px solid rgba(94,255,67,.3);border-radius:8px;color:#5EFF43;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;letter-spacing:.05em">ACTUALIZAR CONTRASEÑA</button>
+            <button id="reset-btn" style="width:100%;padding:12px;background:rgba(50,213,131,.12);border:1px solid rgba(50,213,131,.3);border-radius:8px;color:#32D583;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;letter-spacing:.05em">ACTUALIZAR CONTRASEÑA</button>
         </div>
 
         <p id="msg"></p>
     </div>
+
+    <div class="ug-scope" aria-label="Qué encontrarás en UpGames">
+        <span>Juegos</span><span>ROMs</span><span>Mods</span><span>Apps</span><span>Herramientas</span><span>Software</span><span>Videos</span><span>Comunidad</span>
+    </div>
+    <p class="ug-legal">
+        Al continuar aceptas los <a href="./public/terminos_condiciones.html">Términos</a> y la
+        <a href="./public/politica-privacidad.html">Política de Privacidad</a>.<br>
+        Software registrado ante la DNDA de Colombia ·
+        <a href="https://apps.derechodeautor.gov.co/Certificados-API/api/v1/dnda/certificates/registrations/filing/QzY3NDJGQkVFQThCRUY3QkQ3MTVGMTA0QUIzN0NGMkU" target="_blank" rel="noopener">Ver certificado</a>
+    </p>
 
     <!-- 🎓 TUTORIAL OVERLAY -->
     <div id="tutorial-overlay" style="display:none;">
@@ -528,7 +647,7 @@
 
             // 2. Mensajes de verificación de email
             if (_verifStatus === 'ok') {
-                showMsg('✅ Email verificado' + (_verifUser ? ', @'+_verifUser : '') + '. Ya puedes iniciar sesión.', '#5EFF43');
+                showMsg('✅ Email verificado' + (_verifUser ? ', @'+_verifUser : '') + '. Ya puedes iniciar sesión.', '#32D583');
             } else if (_verifStatus === 'error') {
                 showMsg('❌ El link de verificación es inválido o expiró.', '#ff4343');
             }
@@ -567,7 +686,7 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ email })
                     });
-                    showMsg('📧 Si el email está registrado, recibirás el link en tu correo.', '#5EFF43');
+                    showMsg('📧 Si el email está registrado, recibirás el link en tu correo.', '#32D583');
                 } catch (_) { showMsg('⚠️ Error de conexión. Intenta nuevamente.', '#ff4343'); }
                 forgotBtn.disabled = false; forgotBtn.innerText = 'ENVIAR LINK DE RECUPERACIÓN';
             };
@@ -586,13 +705,13 @@
                     });
                     const data = await res.json();
                     if (data.success) {
-                        showMsg('✅ Contraseña actualizada. Ya puedes iniciar sesión.', '#5EFF43');
+                        showMsg('✅ Contraseña actualizada. Ya puedes iniciar sesión.', '#32D583');
                         setTimeout(() => {
                             _resetPanel.style.display = 'none';
                             _mainForm.style.display = 'block';
                             _forgotLinkWrap.style.display = 'block';
                             els.title.innerText = 'UpGames';
-                            els.subtitle.innerText = 'Inicia sesión para acceder a tu librería';
+                            els.subtitle.innerText = 'Inicia sesión para acceder a tu biblioteca';
                             showMsg('', '');
                         }, 2500);
                     } else {
@@ -614,11 +733,11 @@
             if (isLoginMode) {
                 // MODO LOGIN
                 els.title.innerText = "UpGames";
-                els.subtitle.innerText = "Inicia sesión para acceder a tu librería";
+                els.subtitle.innerText = "Inicia sesión para acceder a tu biblioteca";
                 els.btn.innerText = "INICIAR SESIÓN";
                 els.text.innerText = "¿No tienes cuenta?";
                 els.toggle.innerText = "Regístrate aquí";
-                els.icon.name = "game-controller-outline";
+                els.icon.name = "layers-outline";
                 els.emailGroup.classList.add("hidden");
                 els.user.placeholder = "Email o nombre de usuario";
             } else {
@@ -709,7 +828,7 @@
                     localStorage.setItem("user_admin", data.usuario);
                     localStorage.setItem("email", data.email);
                     
-                    showMsg("✅ ACCESO CONCEDIDO", "#5EFF43");
+                    showMsg("✅ ACCESO CONCEDIDO", "#32D583");
                     setTimeout(() => window.location.replace(REDIRECT_URL), 500);
                 } else {
                     showMsg("❌ " + (data.error || "Error de credenciales"), "#ff4343");
@@ -752,7 +871,7 @@
                     localStorage.setItem("user_admin", data.usuario);
                     localStorage.setItem("email", data.email);
                     
-                    showMsg("✅ REGISTRO EXITOSO", "#5EFF43");
+                    showMsg("✅ REGISTRO EXITOSO", "#32D583");
                     setTimeout(() => window.location.replace(REDIRECT_URL), 500);
                 } else {
                     showMsg("❌ " + (data.error || "Error al registrar"), "#ff4343");
@@ -815,7 +934,7 @@
             {
                 target: "#login-container header",
                 title: "👋 ¡Bienvenido a UpGames!",
-                body: "Tu librería digital de Juegos, Apps y Software. Para entrar solo necesitas tu usuario y contraseña. ¡Es muy fácil! Te guiamos paso a paso.",
+                body: "Tu biblioteca digital de Juegos, ROMs, Mods, Apps, Herramientas y Videos. Para entrar solo necesitas tu usuario y contraseña. ¡Es muy fácil! Te guiamos paso a paso.",
                 arrow: "arrow-top",
                 position: "below"
             },

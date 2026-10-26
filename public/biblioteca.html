@@ -18,14 +18,15 @@
     </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<meta name="theme-color" content="#07070f">
+<meta name="theme-color" content="#0A0B0F">
 <title>UpGames — La Nube de Contenido</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://upgames-production.up.railway.app" crossorigin>
 <link rel="dns-prefetch" href="https://upgames-production.up.railway.app">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
 <link rel="stylesheet" href="biblioteca.css">
+<link rel="stylesheet" href="upgames-glass.css">
 <script src="https://upload-widget.cloudinary.com/global/all.js" type="text/javascript"></script>
 
 </head>
@@ -50,8 +51,8 @@
   <div class="hdr-logo"><span class="up">UP</span><span class="gm">GAMES</span></div>
   <div class="search-bar">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-    <input type="text" id="buscador" placeholder="Buscar juegos, mods, apps..." autocomplete="off">
-    <div id="autocomplete-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#1a1a28;border:1px solid rgba(94,255,67,.2);border-radius:0 0 12px 12px;z-index:1000;max-height:280px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.5)"></div>
+    <input type="text" id="buscador" placeholder="Buscar juegos, ROMs, mods, apps, videos..." autocomplete="off">
+    <div id="autocomplete-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#1a1a28;border:1px solid rgba(50,213,131,.2);border-radius:0 0 12px 12px;z-index:1000;max-height:280px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.5)"></div>
   </div>
   <div class="hdr-actions">
     <button class="hdr-btn" onclick="switchTab('profile')" title="Subir contenido" aria-label="Subir contenido">
@@ -70,6 +71,7 @@
   <button class="chip active" data-cat="">Todos</button>
   <button class="chip chip--video" data-cat="Video">▶ Video</button>
   <button class="chip" data-cat="Juego">Juegos</button>
+  <button class="chip" data-cat="ROM">ROMs</button>
   <button class="chip" data-cat="Mod">Mod</button>
   <button class="chip" data-cat="Apps">Apps</button>
   <button class="chip" data-cat="Ajustes">Herramientas</button>
@@ -220,6 +222,10 @@
             <ion-icon name="game-controller"></ion-icon>
             <span>Juego</span>
           </button>
+          <button class="pf-cat-btn" data-cat="ROM" onclick="pfOnCategoryChange('ROM',this)">
+            <ion-icon name="disc"></ion-icon>
+            <span>ROM</span>
+          </button>
           <button class="pf-cat-btn" data-cat="Mod" onclick="pfOnCategoryChange('Mod',this)">
             <ion-icon name="construct"></ion-icon>
             <span>Mod</span>
@@ -263,8 +269,8 @@
         <div class="pf-form-group">
           <label class="pf-label">Título <span class="pf-info-icon" onclick="pfToggleTooltip('pf-tooltip-title')">?</span></label>
           <input type="text" id="pf-addTitle" class="pf-input" placeholder="Ej: GTA V Optimizado" oninput="pfDetectGameRealtime(this.value)">
-          <div id="pf-game-detection-hint" style="display:none;margin-top:8px;padding:10px 12px;background:rgba(94,255,67,.09);border:1px solid rgba(94,255,67,.3);border-radius:10px;">
-            <div style="color:#5EFF43;font-size:.78rem;font-weight:700;display:flex;align-items:center;gap:5px;">
+          <div id="pf-game-detection-hint" style="display:none;margin-top:8px;padding:10px 12px;background:rgba(50,213,131,.09);border:1px solid rgba(50,213,131,.3);border-radius:10px;">
+            <div style="color:#32D583;font-size:.78rem;font-weight:700;display:flex;align-items:center;gap:5px;">
               <ion-icon name="game-controller"></ion-icon>
               <span id="pf-detected-game-name"></span>
             </div>
@@ -597,8 +603,8 @@
       <svg viewBox="0 0 120 120" class="eco-ring-svg">
         <defs>
           <linearGradient id="eco-ring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#5EFF43"/>
-            <stop offset="100%" stop-color="#00f2ff"/>
+            <stop offset="0%" stop-color="#32D583"/>
+            <stop offset="100%" stop-color="#5AC8FA"/>
           </linearGradient>
         </defs>
         <circle cx="60" cy="60" r="50" class="eco-ring-bg"/>
@@ -1081,7 +1087,7 @@
         <button class="pf-btn-detect" onclick="pfDetectOldName()">
           <ion-icon name="search-outline"></ion-icon> DETECTAR MI NOMBRE ANTERIOR
         </button>
-        <div id="pf-detect-result" style="display:none;margin-bottom:12px;padding:10px 12px;background:rgba(94,255,67,.07);border:1px solid var(--bd-g);border-radius:10px;font-size:.75rem;color:var(--txt2)"></div>
+        <div id="pf-detect-result" style="display:none;margin-bottom:12px;padding:10px 12px;background:rgba(50,213,131,.07);border:1px solid var(--bd-g);border-radius:10px;font-size:.75rem;color:var(--txt2)"></div>
 
         <div class="pf-repair-divider">— o ingresa el nombre manualmente —</div>
 
@@ -1175,6 +1181,7 @@
       <div class="pf-form-group"><label class="pf-label">Categoría</label>
         <select id="pf-edit-category" class="pf-select">
           <option value="Juego">Juego</option>
+          <option value="ROM">ROM (Retro / Emulador)</option>
           <option value="Mod">Mod</option>
           <option value="Optimizacion">Optimización</option>
           <option value="Ajustes">Ajustes (Herramientas)</option>
@@ -1247,6 +1254,8 @@
           <p>Juegos completos distribuidos legalmente (código abierto, desarrollador original, dominio público, o con permiso expreso).</p></div>
         <div class="pf-cat-info"><h4><ion-icon name="construct"></ion-icon> MOD</h4>
           <p>Modificaciones de juegos existentes (texturas, gameplay, personajes, etc.)</p></div>
+        <div class="pf-cat-info"><h4><ion-icon name="disc"></ion-icon> ROMS</h4>
+          <p>Juegos retro para emulador (NES, SNES, N64, GBA, PS1, PSP…). Solo homebrew, dominio público, ROMs con licencia libre o con autorización del titular.</p></div>
         <div class="pf-cat-info"><h4><ion-icon name="speedometer"></ion-icon> OPTIMIZACIÓN</h4>
           <p>Mejoras de rendimiento, configuraciones optimizadas, parches de FPS.</p></div>
         <div class="pf-cat-info"><h4><ion-icon name="settings"></ion-icon> AJUSTES</h4>
@@ -1258,6 +1267,7 @@
         <div class="pf-warning-box">
           <h4><ion-icon name="warning"></ion-icon> IMPORTANTE</h4>
           <p><strong>Categoría "Juego":</strong> Solo si eres el desarrollador original o tienes autorización legal. Redistribuir juegos de terceros sin permiso puede violar derechos de autor.</p>
+          <p style="margin-top:6px"><strong>Categoría "ROM":</strong> Indexa solo ROMs homebrew, de dominio público o que tengas derecho a compartir. Las ROMs comerciales con derechos vigentes serán retiradas ante cualquier reclamación (Notice &amp; Takedown).</p>
         </div>
       </div>
     </div>
@@ -1463,12 +1473,15 @@
           <span class="ob-eco-up">UP</span><span class="ob-eco-gm">GAMES</span>
         </div>
 
-        <div class="ob-kicker">Único en el mundo — sin competencia</div>
+        <div class="ob-kicker">Bienvenido a UpGames</div>
         <h2 class="ob-title-sm" style="font-size:1.5rem;line-height:1.2">
-          No es una app.<br>
-          Es un <span class="ob-accent-g">ecosistema inteligente</span><br>
-          que nadie más tiene.
+          Todo tu contenido digital,<br>
+          <span class="ob-accent-g">en un solo lugar.</span>
         </h2>
+        <div class="ob-cats">
+          <span>🎮 Juegos</span><span>💾 ROMs</span><span>🧩 Mods</span><span>📱 Apps</span>
+          <span>🛠 Herramientas</span><span>💻 Software</span><span>▶ Videos</span><span>👥 Comunidad</span>
+        </div>
 
         <!-- Ciclo visual: 6 nodos conectados en círculo -->
         <div class="ob-cycle">
@@ -1501,18 +1514,18 @@
             <div class="ob-cycle-center">
               <svg viewBox="0 0 32 32" width="28" height="28">
                 <polygon points="16,2 29,8 29,24 16,30 3,24 3,8"
-                  stroke="#5EFF43" stroke-width="1.2" fill="none" opacity=".6"/>
-                <line x1="16" y1="10" x2="16" y2="22" stroke="#5EFF43" stroke-width="2" stroke-linecap="round"/>
-                <line x1="10" y1="16" x2="22" y2="16" stroke="#5EFF43" stroke-width="2" stroke-linecap="round"/>
-                <circle cx="16" cy="16" r="2.5" fill="#5EFF43"/>
+                  stroke="#32D583" stroke-width="1.2" fill="none" opacity=".6"/>
+                <line x1="16" y1="10" x2="16" y2="22" stroke="#32D583" stroke-width="2" stroke-linecap="round"/>
+                <line x1="10" y1="16" x2="22" y2="16" stroke="#32D583" stroke-width="2" stroke-linecap="round"/>
+                <circle cx="16" cy="16" r="2.5" fill="#32D583"/>
               </svg>
             </div>
           </div>
         </div>
 
         <p class="ob-eco-caption">
-          Biblioteca inteligente · Videos propios · Red social · Monetización real · NEXUS IA.<br>
-          <strong style="color:var(--g)">Todo en un solo ecosistema. No hay dos. No hay competencia.</strong>
+          Biblioteca indexada por la comunidad · Videos de creadores · Red social · Monetización real · NEXUS IA.<br>
+          <strong style="color:var(--g)">Los juegos son la prioridad, pero aquí cabe todo lo que creas y compartes.</strong>
         </p>
 
       </div>
@@ -1524,14 +1537,14 @@
         <div class="ob-icon-wrap ob-icon-money">
           <svg viewBox="0 0 48 48" fill="none" class="ob-svg">
             <rect x="6" y="8" width="36" height="32" rx="4" stroke="url(#og1)" stroke-width="1.5" fill="none" opacity=".4"/>
-            <line x1="12" y1="18" x2="36" y2="18" stroke="#5EFF43" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="12" y1="24" x2="30" y2="24" stroke="#5EFF43" stroke-width="1.5" stroke-linecap="round" opacity=".7"/>
-            <line x1="12" y1="30" x2="24" y2="30" stroke="#5EFF43" stroke-width="1.5" stroke-linecap="round" opacity=".4"/>
-            <circle cx="38" cy="34" r="7" fill="rgba(0,242,255,.15)" stroke="#00f2ff" stroke-width="1"/>
-            <polygon points="36,31 36,37 41,34" fill="#00f2ff"/>
+            <line x1="12" y1="18" x2="36" y2="18" stroke="#32D583" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="12" y1="24" x2="30" y2="24" stroke="#32D583" stroke-width="1.5" stroke-linecap="round" opacity=".7"/>
+            <line x1="12" y1="30" x2="24" y2="30" stroke="#32D583" stroke-width="1.5" stroke-linecap="round" opacity=".4"/>
+            <circle cx="38" cy="34" r="7" fill="rgba(90,200,250,.15)" stroke="#5AC8FA" stroke-width="1"/>
+            <polygon points="36,31 36,37 41,34" fill="#5AC8FA"/>
             <defs>
               <linearGradient id="og1" x1="6" y1="8" x2="42" y2="40">
-                <stop stop-color="#5EFF43"/><stop offset="1" stop-color="#00f2ff"/>
+                <stop stop-color="#32D583"/><stop offset="1" stop-color="#5AC8FA"/>
               </linearGradient>
             </defs>
           </svg>
@@ -1542,7 +1555,8 @@
           UpGames opera con <strong style="color:var(--g)">dos tipos de contenido legalmente distintos</strong>. La <strong style="color:var(--g)">Biblioteca</strong> indexa metadatos (links, textos, portadas) de juegos, mods, apps y software — <em>UpGames no almacena esos archivos</em>, solo la referencia. El <strong style="color:var(--cy)">Canal de Video</strong> funciona como YouTube: cada usuario publica y es responsable de su propio video, el cual sí se aloja en los servidores de UpGames vía Cloudinary.
         </p>
         <div class="ob-nexus-feats">
-          <div class="ob-nfeat"><ion-icon name="link-outline"></ion-icon> <strong>Biblioteca (metadatos):</strong> Juegos · Mods · Apps · Software · Herramientas — solo referencias indexadas por la comunidad</div>
+          <div class="ob-nfeat"><ion-icon name="link-outline"></ion-icon> <strong>Biblioteca (metadatos):</strong> Juegos · ROMs · Mods · Apps · Software · Herramientas — solo referencias indexadas por la comunidad</div>
+          <div class="ob-nfeat"><ion-icon name="sparkles-outline"></ion-icon> <strong>Reconocimiento automático:</strong> escribe el nombre (ej. "GTA V") y UpGames propone portada y descripción oficial al instante</div>
           <div class="ob-nfeat"><ion-icon name="videocam-outline"></ion-icon> <strong>Canal de Video (contenido propio):</strong> Tutoriales · Gameplay · Reviews · Showcase — almacenados directamente en UpGames</div>
           <div class="ob-nfeat"><ion-icon name="hardware-chip-outline"></ion-icon> NEXUS IA organiza y personaliza ambas capas jerárquicamente según tus gustos</div>
           <div class="ob-nfeat"><ion-icon name="shield-checkmark-outline"></ion-icon> Distinción legal clara: los videos son contenido propio del usuario — cada creador asume su responsabilidad</div>
@@ -1556,11 +1570,11 @@
         <div class="ob-icon-wrap ob-icon-nexus">
           <svg viewBox="0 0 48 48" fill="none" class="ob-svg">
             <circle cx="24" cy="24" r="18" stroke="url(#og2)" stroke-width="1.5" fill="none" opacity=".4"/>
-            <text x="24" y="30" text-anchor="middle" font-size="20" font-weight="900" fill="#5EFF43" font-family="sans-serif">$</text>
-            <circle cx="24" cy="24" r="10" stroke="#5EFF43" stroke-width=".8" fill="none" opacity=".5"/>
+            <text x="24" y="30" text-anchor="middle" font-size="20" font-weight="900" fill="#32D583" font-family="sans-serif">$</text>
+            <circle cx="24" cy="24" r="10" stroke="#32D583" stroke-width=".8" fill="none" opacity=".5"/>
             <defs>
               <linearGradient id="og2" x1="6" y1="6" x2="42" y2="42">
-                <stop stop-color="#5EFF43"/><stop offset="1" stop-color="#00f2ff"/>
+                <stop stop-color="#32D583"/><stop offset="1" stop-color="#5AC8FA"/>
               </linearGradient>
             </defs>
           </svg>
@@ -1595,12 +1609,12 @@
           <svg viewBox="0 0 48 48" fill="none" class="ob-svg">
             <polygon points="24,3 44,13 44,35 24,45 4,35 4,13" stroke="url(#og3)" stroke-width="1.5" fill="none" opacity=".35"/>
             <polygon points="24,11 37,18 37,30 24,37 11,30 11,18" stroke="url(#og3)" stroke-width="1" fill="none" opacity=".6"/>
-            <line x1="24" y1="16" x2="24" y2="32" stroke="#00f2ff" stroke-width="2" stroke-linecap="round"/>
-            <line x1="16" y1="24" x2="32" y2="24" stroke="#00f2ff" stroke-width="2" stroke-linecap="round"/>
+            <line x1="24" y1="16" x2="24" y2="32" stroke="#5AC8FA" stroke-width="2" stroke-linecap="round"/>
+            <line x1="16" y1="24" x2="32" y2="24" stroke="#5AC8FA" stroke-width="2" stroke-linecap="round"/>
             <circle cx="24" cy="24" r="3.5" fill="url(#og3)"/>
             <defs>
               <linearGradient id="og3" x1="4" y1="4" x2="44" y2="44">
-                <stop stop-color="#5EFF43"/><stop offset="1" stop-color="#00f2ff"/>
+                <stop stop-color="#32D583"/><stop offset="1" stop-color="#5AC8FA"/>
               </linearGradient>
             </defs>
           </svg>
@@ -1625,13 +1639,13 @@
         <div class="ob-icon-wrap ob-icon-identity">
           <svg viewBox="0 0 48 48" fill="none" class="ob-svg">
             <rect x="8" y="10" width="32" height="28" rx="4" stroke="url(#og4)" stroke-width="1.5" fill="none" opacity=".4"/>
-            <line x1="14" y1="20" x2="22" y2="20" stroke="#5EFF43" stroke-width="2" stroke-linecap="round"/>
-            <line x1="14" y1="26" x2="34" y2="26" stroke="#5EFF43" stroke-width="1.5" stroke-linecap="round" opacity=".6"/>
-            <line x1="14" y1="32" x2="28" y2="32" stroke="#5EFF43" stroke-width="1.5" stroke-linecap="round" opacity=".4"/>
-            <polyline points="26,16 30,20 26,24" stroke="#00f2ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            <line x1="14" y1="20" x2="22" y2="20" stroke="#32D583" stroke-width="2" stroke-linecap="round"/>
+            <line x1="14" y1="26" x2="34" y2="26" stroke="#32D583" stroke-width="1.5" stroke-linecap="round" opacity=".6"/>
+            <line x1="14" y1="32" x2="28" y2="32" stroke="#32D583" stroke-width="1.5" stroke-linecap="round" opacity=".4"/>
+            <polyline points="26,16 30,20 26,24" stroke="#5AC8FA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
             <defs>
               <linearGradient id="og4" x1="8" y1="10" x2="40" y2="38">
-                <stop stop-color="#5EFF43"/><stop offset="1" stop-color="#00f2ff"/>
+                <stop stop-color="#32D583"/><stop offset="1" stop-color="#5AC8FA"/>
               </linearGradient>
             </defs>
           </svg>
@@ -1658,13 +1672,13 @@
           <svg viewBox="0 0 48 48" fill="none" class="ob-svg">
             <circle cx="16" cy="20" r="7" stroke="url(#og5)" stroke-width="1.3" fill="none"/>
             <circle cx="32" cy="20" r="7" stroke="url(#og5)" stroke-width="1.3" fill="none"/>
-            <circle cx="24" cy="32" r="7" stroke="#5EFF43" stroke-width="1.3" fill="none"/>
-            <line x1="16" y1="27" x2="24" y2="32" stroke="#5EFF43" stroke-width="1" opacity=".5"/>
-            <line x1="32" y1="27" x2="24" y2="32" stroke="#5EFF43" stroke-width="1" opacity=".5"/>
-            <circle cx="24" cy="24" r="2.5" fill="#5EFF43"/>
+            <circle cx="24" cy="32" r="7" stroke="#32D583" stroke-width="1.3" fill="none"/>
+            <line x1="16" y1="27" x2="24" y2="32" stroke="#32D583" stroke-width="1" opacity=".5"/>
+            <line x1="32" y1="27" x2="24" y2="32" stroke="#32D583" stroke-width="1" opacity=".5"/>
+            <circle cx="24" cy="24" r="2.5" fill="#32D583"/>
             <defs>
               <linearGradient id="og5" x1="6" y1="6" x2="42" y2="42">
-                <stop stop-color="#5EFF43"/><stop offset="1" stop-color="#00f2ff"/>
+                <stop stop-color="#32D583"/><stop offset="1" stop-color="#5AC8FA"/>
               </linearGradient>
             </defs>
           </svg>
@@ -1691,10 +1705,10 @@
             <path d="M24 4 L40 12 L40 28 C40 36 24 44 24 44 C24 44 8 36 8 28 L8 12 Z"
               stroke="url(#og6)" stroke-width="1.5" fill="none" opacity=".5"/>
             <polyline points="17,24 22,29 31,19"
-              stroke="#5EFF43" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              stroke="#32D583" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
             <defs>
               <linearGradient id="og6" x1="8" y1="4" x2="40" y2="44">
-                <stop stop-color="#5EFF43"/><stop offset="1" stop-color="#00f2ff"/>
+                <stop stop-color="#32D583"/><stop offset="1" stop-color="#5AC8FA"/>
               </linearGradient>
             </defs>
           </svg>
@@ -1703,7 +1717,7 @@
         <h2 class="ob-title-sm">Dos tipos de contenido.<br><span class="ob-accent-g">Una sola plataforma.</span></h2>
         <p class="ob-desc">
           UpGames opera con <strong style="color:var(--g)">dos modelos de contenido distintos</strong>.
-          Los <strong style="color:var(--g)">juegos, mods, apps y software</strong> son
+          Los <strong style="color:var(--g)">juegos, ROMs, mods, apps, herramientas y software</strong> son
           <em>solo metadatos</em> indexados por la comunidad — UpGames no almacena esos archivos,
           actúa como un motor de indexación. Los <strong style="color:var(--cy)">videos</strong>
           sí se alojan directamente en nuestros servidores — cada creador publica y es
@@ -1711,29 +1725,37 @@
         </p>
         <div class="ob-rules">
           <div class="ob-rule">
-            <span class="ob-rule-num" style="background:rgba(0,242,255,.1);border-color:rgba(0,242,255,.3);color:var(--cy)">📚</span>
-            <div><strong>Biblioteca = solo metadatos.</strong> Juegos, mods, apps y software son referencias indexadas voluntariamente — UpGames no almacena ni distribuye esos archivos.</div>
+            <span class="ob-rule-num" style="background:rgba(90,200,250,.1);border-color:rgba(90,200,250,.3);color:var(--cy)">📚</span>
+            <div><strong>Biblioteca = solo metadatos.</strong> Juegos, ROMs, mods, apps y software son referencias indexadas voluntariamente — UpGames no almacena ni distribuye esos archivos.</div>
           </div>
           <div class="ob-rule">
             <span class="ob-rule-num" style="background:rgba(255,200,0,.1);border-color:rgba(255,200,0,.3);color:#ffc800">▶</span>
             <div><strong>Videos = contenido propio del creador.</strong> Cada video es publicado y responsabilidad exclusiva de su autor. UpGames actúa como plataforma de alojamiento, no como editor del contenido.</div>
           </div>
           <div class="ob-rule">
-            <span class="ob-rule-num" style="background:rgba(0,242,255,.1);border-color:rgba(0,242,255,.3);color:var(--cy)">🛡</span>
+            <span class="ob-rule-num" style="background:rgba(90,200,250,.1);border-color:rgba(90,200,250,.3);color:var(--cy)">🛡</span>
             <div><strong>Safe Harbor activo.</strong> Operamos bajo DMCA 512(c), Ley colombiana 1915/2018 y Directiva 2000/31/CE. Notice &amp; Takedown en 24-72h.</div>
           </div>
           <div class="ob-rule">
-            <span class="ob-rule-num" style="background:rgba(94,255,67,.1);border-color:rgba(94,255,67,.3);color:var(--g)">🚫</span>
+            <span class="ob-rule-num" style="background:rgba(50,213,131,.1);border-color:rgba(50,213,131,.3);color:var(--g)">🚫</span>
             <div><strong>Filtros automáticos activos.</strong> Bots, palabras clave prohibidas y validación de plataformas de hosting bloquean contenido ilegal antes de publicarse.</div>
           </div>
           <div class="ob-rule">
-            <span class="ob-rule-num" style="background:rgba(94,255,67,.1);border-color:rgba(94,255,67,.3);color:var(--g)">⚖</span>
+            <span class="ob-rule-num" style="background:rgba(50,213,131,.1);border-color:rgba(50,213,131,.3);color:var(--g)">⚖</span>
             <div><strong>Responsabilidad del publicador.</strong> Quien indexa o sube contenido asume total responsabilidad legal sobre lo publicado. UpGames es intermediario de metadatos y plataforma de video — no editor ni distribuidor de contenido de terceros.</div>
           </div>
         </div>
-        <a href="./terminos&condiciones.html" class="ob-legal-link" target="_blank">
-          Leer contrato completo · v.2026.C — DMCA · Ley 1915 · Safe Harbor →
-        </a>
+        <div class="ob-cert">
+          <ion-icon name="ribbon-outline"></ion-icon>
+          <div>Software registrado ante la <strong>Dirección Nacional de Derecho de Autor</strong> de Colombia · Libro-Tomo-Partida 13-109-81 (18-jun-2026).
+            <a href="https://apps.derechodeautor.gov.co/Certificados-API/api/v1/dnda/certificates/registrations/filing/QzY3NDJGQkVFQThCRUY3QkQ3MTVGMTA0QUIzN0NGMkU" target="_blank" rel="noopener">Ver certificado</a></div>
+        </div>
+        <div class="ob-legal-link" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+          <a href="./terminos_condiciones.html" target="_blank" style="color:inherit">Términos v5.0</a> ·
+          <a href="./politica-privacidad.html" target="_blank" style="color:inherit">Privacidad v3.0</a> ·
+          <a href="./terminos_condiciones.html#ia" target="_blank" style="color:inherit">IA</a> ·
+          <a href="./terminos_condiciones.html#derechos-autor" target="_blank" style="color:inherit">Derechos de autor</a>
+        </div>
         <button id="btn-accept-terms" class="ob-btn-accept">
           ✓ Entendido — Entrar a UpGames
         </button>
@@ -1789,7 +1811,7 @@
         <circle cx="20" cy="20" r="2.8" fill="url(#fgn)"/>
         <defs>
           <linearGradient id="fgn" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
-            <stop stop-color="#5EFF43"/><stop offset="1" stop-color="#00f2ff"/>
+            <stop stop-color="#32D583"/><stop offset="1" stop-color="#5AC8FA"/>
           </linearGradient>
         </defs>
       </svg>
@@ -1826,7 +1848,7 @@
     <circle cx="20" cy="20" r="2.8" fill="url(#fg)"/>
     <defs>
       <linearGradient id="fg" x1="4" y1="4" x2="36" y2="36" gradientUnits="userSpaceOnUse">
-        <stop stop-color="#5EFF43"/><stop offset="1" stop-color="#00f2ff"/>
+        <stop stop-color="#32D583"/><stop offset="1" stop-color="#5AC8FA"/>
       </linearGradient>
     </defs>
   </svg>
@@ -1839,10 +1861,10 @@
         <svg viewBox="0 0 24 24" fill="none" class="nx-lsvg">
           <path d="M12 2L22 12L12 22L2 12Z" stroke="url(#hg)" stroke-width=".9" opacity=".4"/>
           <path d="M12 7L17 12L12 17L7 12Z" stroke="url(#hg)" stroke-width=".7" opacity=".7"/>
-          <line x1="12" y1="9" x2="12" y2="15" stroke="#00f2ff" stroke-width="1.3" stroke-linecap="round"/>
-          <line x1="9" y1="12" x2="15" y2="12" stroke="#00f2ff" stroke-width="1.3" stroke-linecap="round"/>
-          <circle cx="12" cy="12" r="2" fill="#5EFF43"/>
-          <defs><linearGradient id="hg" x1="2" y1="2" x2="22" y2="22"><stop stop-color="#5EFF43"/><stop offset="1" stop-color="#00f2ff"/></linearGradient></defs>
+          <line x1="12" y1="9" x2="12" y2="15" stroke="#5AC8FA" stroke-width="1.3" stroke-linecap="round"/>
+          <line x1="9" y1="12" x2="15" y2="12" stroke="#5AC8FA" stroke-width="1.3" stroke-linecap="round"/>
+          <circle cx="12" cy="12" r="2" fill="#32D583"/>
+          <defs><linearGradient id="hg" x1="2" y1="2" x2="22" y2="22"><stop stop-color="#32D583"/><stop offset="1" stop-color="#5AC8FA"/></linearGradient></defs>
         </svg>
         <span class="nx-live"></span>
       </div>
@@ -1913,6 +1935,8 @@
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
 <script src="script.js"></script>
+<script src="upgames-autoinfo.js"></script>
+<script src="upgames-motion.js"></script>
 
 <!-- ══════════════════════════════════════
   EXTENSIÓN DE PERFIL: Nombre / Email / Contraseña / Links

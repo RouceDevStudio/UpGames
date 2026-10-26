@@ -194,6 +194,9 @@ function getTileExtras(item) {
   if(cat === 'Juego') {
     if(ex.plataforma) badges.push({ icon:'desktop-outline', text: ex.plataforma });
     if(ex.size)       badges.push({ icon:'archive-outline',  text: ex.size });
+  } else if(cat === 'ROM') {
+    if(ex.consola) badges.push({ icon:'disc-outline', text: ex.consola });
+    if(ex.region)  badges.push({ icon:'globe-outline', text: ex.region.replace(/\s*\(.*\)/,'') });
   } else if(cat === 'Mod') {
     if(ex['juego-base']) badges.push({ icon:'game-controller-outline', text: ex['juego-base'] });
     if(ex.version)       badges.push({ icon:'git-branch-outline', text: 'v' + ex.version });
@@ -794,8 +797,8 @@ function openDetail(item) {
         fsBtn.style.cssText = [
           'position:absolute','bottom:10px','right:10px','z-index:20',
           'background:rgba(0,0,0,.6)','backdrop-filter:blur(6px)',
-          'border:1px solid rgba(0,242,255,.35)','border-radius:8px',
-          'color:#00f2ff','font-size:1.05rem',
+          'border:1px solid rgba(90,200,250,.35)','border-radius:8px',
+          'color:#5AC8FA','font-size:1.05rem',
           'width:34px','height:34px',
           'display:flex','align-items:center','justify-content:center',
           'cursor:pointer','transition:opacity .15s'
@@ -1696,6 +1699,17 @@ const CAT_CONFIG = {
       { id:'pf-ex-requisitos', label:'Requisitos mínimos (opcional)', type:'textarea', placeholder:'CPU, RAM, GPU...' },
     ]
   },
+  ROM: {
+    icon: 'disc', label: 'SUBIR ROM',
+    extras: [
+      { id:'pf-ex-consola', label:'Consola / Sistema', type:'select',
+        options:['NES','SNES','Nintendo 64','GameCube','Wii','Game Boy / Color','Game Boy Advance','Nintendo DS','Nintendo 3DS',
+          'PlayStation 1','PlayStation 2','PSP','Sega Genesis / Mega Drive','Sega Dreamcast','Arcade (MAME)','Homebrew','Otra'] },
+      { id:'pf-ex-region', label:'Región', type:'select', options:['USA (NTSC-U)','Europa (PAL)','Japón (NTSC-J)','Multi-región'] },
+      { id:'pf-ex-emulador', label:'Emulador recomendado (opcional)', type:'text', placeholder:'Ej: RetroArch, PPSSPP, Dolphin...' },
+      { id:'pf-ex-size', label:'Tamaño', type:'text', placeholder:'Ej: 8 MB' },
+    ]
+  },
   Mod: {
     icon: 'construct', label: 'SUBIR MOD',
     extras: [
@@ -1926,10 +1940,10 @@ function pfGetUniversalWidget() {
       showSkipCropButton: false,
       styles: {
         palette: {
-          window: '#07070f', windowBorder: '#5EFF43', tabIcon: '#5EFF43',
+          window: '#0A0B0F', windowBorder: '#32D583', tabIcon: '#32D583',
           menuIcons: '#9090aa', textDark: '#f0f0f8', textLight: '#f0f0f8',
-          link: '#5EFF43', action: '#5EFF43', inactiveTabIcon: '#555570',
-          error: '#ff4343', inProgress: '#00f2ff', complete: '#5EFF43', sourceBg: '#0d0d1a'
+          link: '#32D583', action: '#32D583', inactiveTabIcon: '#555570',
+          error: '#ff4343', inProgress: '#5AC8FA', complete: '#32D583', sourceBg: '#0d0d1a'
         }
       }
     }, (error, result) => {
@@ -2263,7 +2277,7 @@ async function pfLoadHistorial() {
         <div style="position:relative">
           <img src="${item.image||'https://via.placeholder.com/300x170/07070f/00f2ff?text=VIDEO'}" alt="${item.title}" style="width:100%;height:100px;object-fit:cover;display:block" onerror="this.src='https://via.placeholder.com/300x170/07070f/00f2ff?text=VIDEO'">
           <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.3)"><ion-icon name="play-circle" style="font-size:2rem;color:rgba(255,255,255,.9)"></ion-icon></div>
-          ${item.videoType?`<div style="position:absolute;bottom:5px;left:5px;background:rgba(0,242,255,.85);color:#000;font-size:.55rem;font-weight:800;padding:2px 7px;border-radius:999px;text-transform:uppercase">${item.videoType}</div>`:''}
+          ${item.videoType?`<div style="position:absolute;bottom:5px;left:5px;background:rgba(90,200,250,.85);color:#000;font-size:.55rem;font-weight:800;padding:2px 7px;border-radius:999px;text-transform:uppercase">${item.videoType}</div>`:''}
         </div>
         <div class="pf-item-info">
           <div class="pf-item-title">${item.title||'Sin título'}</div>
@@ -2279,7 +2293,7 @@ async function pfLoadHistorial() {
             <div class="pf-item-stat"><div class="pf-item-stat-val" style="color:${(item.reportes||0)>=3?'#ff4343':'var(--txt)'}">${item.reportes||0}</div><div class="pf-item-stat-lbl">REP</div></div>
           </div>
           <div class="pf-item-actions">
-            <button class="pf-btn-action edit" style="background:rgba(0,242,255,.12);border-color:rgba(0,242,255,.3);color:var(--cy)" onclick="pfOpenEditVideoModal('${item._id}')"><ion-icon name="create"></ion-icon> Editar</button>
+            <button class="pf-btn-action edit" style="background:rgba(90,200,250,.12);border-color:rgba(90,200,250,.3);color:var(--cy)" onclick="pfOpenEditVideoModal('${item._id}')"><ion-icon name="create"></ion-icon> Editar</button>
             <button class="pf-btn-action del" onclick="pfEliminarVideo('${item._id}')"><ion-icon name="trash"></ion-icon> Borrar</button>
           </div>
         </div>`;
@@ -2826,8 +2840,8 @@ function ecoDrawChart(totalDl, periodDays) {
 
   // Bars
   const barGrad = ctx.createLinearGradient(0, padT, 0, padT + chartH);
-  barGrad.addColorStop(0, 'rgba(94,255,67,.9)');
-  barGrad.addColorStop(1, 'rgba(94,255,67,.18)');
+  barGrad.addColorStop(0, 'rgba(50,213,131,.9)');
+  barGrad.addColorStop(1, 'rgba(50,213,131,.18)');
 
   counts.forEach((val, i) => {
     const bH = Math.max(2, (val / maxVal) * chartH);
@@ -2845,7 +2859,7 @@ function ecoDrawChart(totalDl, periodDays) {
     const slice = counts.slice(Math.max(0, i - 2), i + 3);
     return slice.reduce((a, b) => a + b, 0) / slice.length;
   });
-  ctx.strokeStyle = 'rgba(0,242,255,0.55)';
+  ctx.strokeStyle = 'rgba(90,200,250,0.55)';
   ctx.lineWidth = 1.5;
   ctx.setLineDash([5, 4]);
   ctx.beginPath();
@@ -2881,7 +2895,7 @@ function ecoRenderLeaderboard(items) {
   const sorted = [...items].sort((a, b) => (b.descargasEfectivas || 0) - (a.descargasEfectivas || 0)).slice(0, 5);
   const maxDl  = sorted[0]?.descargasEfectivas || 1;
   const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
-  const catColor = c => ({ Juego:'var(--g)', Mod:'#ff9800', Apps:'var(--cy)', Video:'#ff4c8b', Software:'#a78bfa', Ajustes:'#ffd700', Optimizacion:'#ff6b6b' }[c] || '#888');
+  const catColor = c => ({ Juego:'var(--g)', Mod:'#ff9800', Apps:'var(--cy)', Video:'#ff4c8b', Software:'#a78bfa', Ajustes:'#ffd700', Optimizacion:'#ff6b6b', ROM:'#fd79a8' }[c] || '#888');
 
   el.innerHTML = sorted.map((item, i) => {
     const dl  = item.descargasEfectivas || 0;
@@ -2947,7 +2961,7 @@ function ecoRenderCategories(items) {
   items.forEach(i => { const c = i.categoria || 'Otro'; cats[c] = (cats[c] || 0) + 1; });
   const total  = items.length;
   const sorted = Object.entries(cats).sort((a, b) => b[1] - a[1]);
-  const colors = { Juego:'var(--g)', Mod:'#ff9800', Apps:'var(--cy)', Video:'#ff4c8b', Software:'#a78bfa', Ajustes:'#ffd700', Optimizacion:'#ff6b6b' };
+  const colors = { Juego:'var(--g)', Mod:'#ff9800', Apps:'var(--cy)', Video:'#ff4c8b', Software:'#a78bfa', Ajustes:'#ffd700', Optimizacion:'#ff6b6b', ROM:'#fd79a8' };
 
   el.innerHTML = sorted.map(([cat, count]) => {
     const pct = Math.round(count / total * 100);
@@ -3030,8 +3044,8 @@ function ecoRenderContentTable(items) {
 
   const sorted = [...items].sort((a, b) => (b.descargasEfectivas || 0) - (a.descargasEfectivas || 0));
   const maxDl  = sorted[0]?.descargasEfectivas || 1;
-  const colors = { Juego:'var(--g)', Mod:'#ff9800', Apps:'var(--cy)', Video:'#ff4c8b', Software:'#a78bfa', Ajustes:'#ffd700', Optimizacion:'#ff6b6b' };
-  const catShort = c => ({ Juego:'JUG', Mod:'MOD', Apps:'APP', Video:'VID', Software:'SW', Ajustes:'HER', Optimizacion:'OPT' }[c] || '???');
+  const colors = { Juego:'var(--g)', Mod:'#ff9800', Apps:'var(--cy)', Video:'#ff4c8b', Software:'#a78bfa', Ajustes:'#ffd700', Optimizacion:'#ff6b6b', ROM:'#fd79a8' };
+  const catShort = c => ({ Juego:'JUG', Mod:'MOD', Apps:'APP', Video:'VID', Software:'SW', Ajustes:'HER', Optimizacion:'OPT', ROM:'ROM' }[c] || '???');
 
   el.innerHTML = `
     <div class="eco-table-header">
@@ -3716,7 +3730,7 @@ const TUT_STEPS = [
   {
     sel: '#category-row',
     title: '🏷️ Filtros por Categoría',
-    body: 'Esta fila de botones te permite filtrar el contenido por tipo. Toca <strong>Juegos</strong> para ver solo juegos, <strong>Mod</strong> para modificaciones, <strong>Apps</strong> para aplicaciones, etc. Desliza hacia la derecha para ver más categorías. Toca <strong>"Todos"</strong> para quitar el filtro.'
+    body: 'Esta fila de botones te permite filtrar el contenido por tipo. Toca <strong>Juegos</strong> para ver solo juegos, <strong>ROMs</strong> para clásicos retro y homebrew, <strong>Mod</strong> para modificaciones, <strong>Apps</strong> para aplicaciones, etc. Desliza hacia la derecha para ver más categorías. Toca <strong>"Todos"</strong> para quitar el filtro.'
   },
   {
     sel: '.featured-tile',
@@ -3726,7 +3740,7 @@ const TUT_STEPS = [
   {
     sel: '.game-tile .tile-status',
     title: '🟢 Badge de Estado del Link',
-    body: 'Cada tarjeta tiene este badge en la esquina superior derecha que indica si el enlace funciona:<br>• <strong style="color:#5EFF43">● Online</strong> — funciona perfectamente<br>• <strong style="color:#ffcc00">● Revisión</strong> — se está verificando (3+ reportes)<br>• <strong style="color:#ff4343">● Caído</strong> — el link no funciona<br><br>Evita los que están en "Caído" o repórtalos.'
+    body: 'Cada tarjeta tiene este badge en la esquina superior derecha que indica si el enlace funciona:<br>• <strong style="color:#32D583">● Online</strong> — funciona perfectamente<br>• <strong style="color:#ffcc00">● Revisión</strong> — se está verificando (3+ reportes)<br>• <strong style="color:#ff4343">● Caído</strong> — el link no funciona<br><br>Evita los que están en "Caído" o repórtalos.'
   },
   {
     sel: '.tile-fav-quick',
@@ -3892,7 +3906,7 @@ const TUT_STEPS = [
   {
     sel: '#pf-addCategory',
     title: '🏷️ Campo: Categoría',
-    body: 'Elige la categoría que mejor describe tu contenido:<br>• <strong>Juego</strong> — solo si eres el desarrollador original o tienes permiso<br>• <strong>Mod</strong> — modificaciones de juegos existentes<br>• <strong>Optimización</strong> — mejoras de rendimiento, parches FPS<br>• <strong>Ajustes</strong> — utilidades y herramientas<br>• <strong>Apps</strong> — aplicaciones móviles o de escritorio<br>• <strong>Software</strong> — código abierto y herramientas libres<br><br>Toca el badge "VER INFO" para ver la guía completa.'
+    body: 'Elige la categoría que mejor describe tu contenido:<br>• <strong>Juego</strong> — solo si eres el desarrollador original o tienes permiso<br>• <strong>ROM</strong> — juegos retro para emulador (homebrew, dominio público o con permiso)<br>• <strong>Mod</strong> — modificaciones de juegos existentes<br>• <strong>Optimización</strong> — mejoras de rendimiento, parches FPS<br>• <strong>Ajustes</strong> — utilidades y herramientas<br>• <strong>Apps</strong> — aplicaciones móviles o de escritorio<br>• <strong>Software</strong> — código abierto y herramientas libres<br><br>Toca el badge "VER INFO" para ver la guía completa.'
   },
   {
     sel: '.pf-preview-card',
@@ -3917,7 +3931,7 @@ const TUT_STEPS = [
   {
     sel: '#pf-showContent',
     title: '📦 Tus Publicaciones (Tarjetas)',
-    body: 'Cada tarjeta de publicación muestra:<br>• Badge <strong style="color:#ffcc00">Pendiente</strong> (en revisión) o <strong style="color:#5EFF43">Aprobado</strong> (visible en la nube)<br>• Imagen de portada<br>• Título y categoría<br>• <strong>DL</strong> = descargas efectivas acumuladas<br>• <strong>LINK</strong> = estado del enlace en tiempo real<br>• <strong>REP</strong> = reportes recibidos (rojo si son 3 o más)<br>• Botones Editar y Borrar'
+    body: 'Cada tarjeta de publicación muestra:<br>• Badge <strong style="color:#ffcc00">Pendiente</strong> (en revisión) o <strong style="color:#32D583">Aprobado</strong> (visible en la nube)<br>• Imagen de portada<br>• Título y categoría<br>• <strong>DL</strong> = descargas efectivas acumuladas<br>• <strong>LINK</strong> = estado del enlace en tiempo real<br>• <strong>REP</strong> = reportes recibidos (rojo si son 3 o más)<br>• Botones Editar y Borrar'
   },
   {
     sel: '#pf-showContent',
@@ -4447,7 +4461,7 @@ function _showNxFabBadge() {
   _nxFabBadgeEl.style.cssText = `
     position:absolute;top:-3px;right:-3px;
     width:14px;height:14px;border-radius:50%;
-    background:var(--g,#5EFF43);border:2px solid var(--bg,#07070f);
+    background:var(--g,#32D583);border:2px solid var(--bg,#0A0B0F);
     animation:nx-badge-pulse 1.5s ease-in-out infinite;
     pointer-events:none;z-index:1;
   `;
@@ -4718,7 +4732,7 @@ function _initNotifUI() {
     <ion-icon name="notifications-outline"></ion-icon>
     <span id="notif-badge" style="
       display:none;position:absolute;top:2px;right:2px;
-      background:#5EFF43;color:#000;font-size:9px;font-weight:900;
+      background:#32D583;color:#000;font-size:9px;font-weight:900;
       border-radius:50%;width:16px;height:16px;
       line-height:16px;text-align:center;pointer-events:none;
     ">0</span>
@@ -4743,7 +4757,7 @@ function _initNotifUI() {
     <div style="padding:12px 14px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1e1e1e;gap:8px;">
       <span style="font-size:.82rem;font-weight:700;color:#fff;letter-spacing:.5px;">NOTIFICACIONES</span>
       <div style="display:flex;gap:6px;align-items:center;">
-        <button onclick="_marcarTodasLeidas()" style="background:none;border:none;color:#5EFF43;font-size:.7rem;cursor:pointer;font-weight:700;padding:4px 8px;border-radius:7px;transition:background .15s;" onmouseover="this.style.background='rgba(94,255,67,.1)'" onmouseout="this.style.background='none'">✓ Leídas</button>
+        <button onclick="_marcarTodasLeidas()" style="background:none;border:none;color:#32D583;font-size:.7rem;cursor:pointer;font-weight:700;padding:4px 8px;border-radius:7px;transition:background .15s;" onmouseover="this.style.background='rgba(50,213,131,.1)'" onmouseout="this.style.background='none'">✓ Leídas</button>
         <button onclick="_eliminarTodasNotif()" style="background:none;border:none;color:#ff4343;font-size:.7rem;cursor:pointer;font-weight:700;padding:4px 8px;border-radius:7px;transition:background .15s;" onmouseover="this.style.background='rgba(255,67,67,.1)'" onmouseout="this.style.background='none'">🗑 Vaciar</button>
       </div>
     </div>
@@ -4775,16 +4789,16 @@ function _notifMeta(n) {
   const tag = (txt, color) => `<span style="color:${color}">@${e}</span> ${txt}`;
   switch (n.tipo) {
     case 'favorito':   return { accent:'#ff4d6d', icon:'heart',              line: n.mensaje || tag('guardó tu publicación', '#ff4d6d') };
-    case 'comentario': return { accent:'#00f2ff', icon:'chatbubble',         line: n.mensaje || tag('comentó tu publicación', '#00f2ff') };
+    case 'comentario': return { accent:'#5AC8FA', icon:'chatbubble',         line: n.mensaje || tag('comentó tu publicación', '#5AC8FA') };
     case 'seguidor':   return { accent:'#b16bff', icon:'person-add',         line: n.mensaje || tag('empezó a seguirte', '#b16bff') };
     case 'logro':      return { accent:'#ffd23f', icon:'trophy',             line: n.mensaje || '🎉 ¡Nuevo logro desbloqueado!' };
-    case 'descarga':   return { accent:'#5EFF43', icon:'download',           line: n.mensaje || tag('descargó tu contenido', '#5EFF43') };
+    case 'descarga':   return { accent:'#32D583', icon:'download',           line: n.mensaje || tag('descargó tu contenido', '#32D583') };
     case 'sistema':
       if ((n.itemTitle || '').startsWith('Mensaje'))
-                       return { accent:'#00f2ff', icon:'mail',              line: n.mensaje || tag('te envió un mensaje', '#00f2ff') };
+                       return { accent:'#5AC8FA', icon:'mail',              line: n.mensaje || tag('te envió un mensaje', '#5AC8FA') };
                        return { accent:'#8888aa', icon:'information-circle', line: n.mensaje || 'Notificación del sistema' };
     case 'nueva_publicacion':
-    default:           return { accent:'#5EFF43', icon:'cloud-upload',       line: n.mensaje || tag('publicó algo nuevo', '#5EFF43') };
+    default:           return { accent:'#32D583', icon:'cloud-upload',       line: n.mensaje || tag('publicó algo nuevo', '#32D583') };
   }
 }
 
@@ -5145,10 +5159,10 @@ async function pfLoadAnalytics() {
     el.innerHTML = `
       <div style="display:grid;gap:12px;padding:4px 0">
         ${insights.puntuacion !== undefined ? `
-        <div class="pf-info-box" style="border-color:rgba(94,255,67,.3)">
-          <ion-icon name="star" style="color:#5EFF43;font-size:28px"></ion-icon>
+        <div class="pf-info-box" style="border-color:rgba(50,213,131,.3)">
+          <ion-icon name="star" style="color:#32D583;font-size:28px"></ion-icon>
           <div>
-            <h4 style="color:#5EFF43">Puntuación de Creador: ${insights.puntuacion}/100</h4>
+            <h4 style="color:#32D583">Puntuación de Creador: ${insights.puntuacion}/100</h4>
             <p>${insights.resumen || 'Análisis completado por Nexus IA'}</p>
           </div>
         </div>` : ''}
@@ -5156,13 +5170,13 @@ async function pfLoadAnalytics() {
         <div class="pf-section-title" style="margin-top:8px"><ion-icon name="bulb"></ion-icon> RECOMENDACIONES DE NEXUS</div>
         ${insights.recomendaciones.map(r => `
           <div class="pf-info-box">
-            <ion-icon name="arrow-forward-circle" style="color:#00f2ff"></ion-icon>
+            <ion-icon name="arrow-forward-circle" style="color:#5AC8FA"></ion-icon>
             <div><p>${r}</p></div>
           </div>`).join('')}` : ''}
         ${(insights.categorias || []).length > 0 ? `
         <div class="pf-section-title" style="margin-top:8px"><ion-icon name="pie-chart"></ion-icon> CATEGORÍAS TOP</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          ${insights.categorias.map(c => `<span style="background:rgba(94,255,67,.1);border:1px solid rgba(94,255,67,.3);padding:4px 12px;border-radius:20px;font-size:12px;color:#5EFF43">${c}</span>`).join('')}
+          ${insights.categorias.map(c => `<span style="background:rgba(50,213,131,.1);border:1px solid rgba(50,213,131,.3);padding:4px 12px;border-radius:20px;font-size:12px;color:#32D583">${c}</span>`).join('')}
         </div>` : ''}
         <div class="pf-info-box" style="opacity:.6;margin-top:4px">
           <ion-icon name="information-circle"></ion-icon>
@@ -5193,7 +5207,7 @@ async function pfLoadHistorialPagos() {
       el.innerHTML = '<div class="pf-empty"><ion-icon name="cash-outline"></ion-icon><p>Aún no tienes solicitudes de retiro</p></div>';
       return;
     }
-    const colorEstado = { completado:'#5EFF43', pendiente:'#ffd23f', rechazado:'#ff4d6d', procesado:'#00f2ff' };
+    const colorEstado = { completado:'#32D583', pendiente:'#ffd23f', rechazado:'#ff4d6d', procesado:'#5AC8FA' };
     el.innerHTML = `
       <div style="display:grid;gap:10px;padding:4px 0">
         ${d.historial.map(p => `
@@ -5237,11 +5251,11 @@ async function pfLoadLogros() {
     const badges = g.badges || [];
     el.innerHTML = `
       <div style="display:grid;gap:16px;padding:4px 0">
-        <div style="background:linear-gradient(135deg,#1a1a28,#0f0f18);border:1px solid rgba(94,255,67,.2);border-radius:14px;padding:20px">
+        <div style="background:linear-gradient(135deg,#1a1a28,#0f0f18);border:1px solid rgba(50,213,131,.2);border-radius:14px;padding:20px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
             <div>
               <div style="font-size:11px;color:#60607a;letter-spacing:.1em">NIVEL</div>
-              <div style="font-size:32px;font-weight:900;color:#5EFF43">${nivel}</div>
+              <div style="font-size:32px;font-weight:900;color:#32D583">${nivel}</div>
             </div>
             <div style="text-align:right">
               <div style="font-size:11px;color:#60607a">XP TOTAL</div>
@@ -5249,7 +5263,7 @@ async function pfLoadLogros() {
             </div>
           </div>
           <div style="background:rgba(255,255,255,.06);border-radius:8px;height:8px;overflow:hidden">
-            <div style="background:linear-gradient(90deg,#5EFF43,#00f2ff);height:100%;width:${pct}%;border-radius:8px;transition:width .5s"></div>
+            <div style="background:linear-gradient(90deg,#32D583,#5AC8FA);height:100%;width:${pct}%;border-radius:8px;transition:width .5s"></div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:#60607a">
             <span>${xp % xpNext} XP</span><span>${xpNext} XP para nivel ${nivel+1}</span>
@@ -5300,7 +5314,7 @@ async function pfLoadLogros() {
         const sugs = d.suggestions || d.results || [];
         if(!sugs.length) { closeDropdown(); return; }
         drop.innerHTML = sugs.map(s => `
-          <div class="ac-item" onclick="document.getElementById('buscador').value='${(s.title||s).replace(/'/g,"\\'")}';document.getElementById('buscador').dispatchEvent(new Event('input'));document.getElementById('autocomplete-dropdown').style.display='none'" style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.05);transition:background .15s" onmouseover="this.style.background='rgba(94,255,67,.07)'" onmouseout="this.style.background=''">
+          <div class="ac-item" onclick="document.getElementById('buscador').value='${(s.title||s).replace(/'/g,"\\'")}';document.getElementById('buscador').dispatchEvent(new Event('input'));document.getElementById('autocomplete-dropdown').style.display='none'" style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.05);transition:background .15s" onmouseover="this.style.background='rgba(50,213,131,.07)'" onmouseout="this.style.background=''">
             ${s.image ? `<img src="${s.image}" style="width:32px;height:32px;border-radius:6px;object-fit:cover" onerror="this.style.display='none'">` : '<ion-icon name="search-outline" style="color:#60607a;font-size:18px"></ion-icon>'}
             <div>
               <div style="font-size:13px;color:#f0f0f8">${s.title||s}</div>

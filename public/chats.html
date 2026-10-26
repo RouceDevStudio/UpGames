@@ -11,10 +11,10 @@
    TOKENS
 ══════════════════════════════════════ */
 :root {
-  --g:      #5EFF43;
-  --g-dim:  rgba(94,255,67,.1);
-  --g-glow: rgba(94,255,67,.22);
-  --g-soft: rgba(94,255,67,.06);
+  --g:      #32D583;
+  --g-dim:  rgba(50,213,131,.1);
+  --g-glow: rgba(50,213,131,.22);
+  --g-soft: rgba(50,213,131,.06);
   --cy:     #00d4ff;
   --bg:     #06060e;
   --bg1:    #09091a;
@@ -22,7 +22,7 @@
   --bg3:    #131328;
   --bg4:    #181832;
   --bd:     rgba(255,255,255,.065);
-  --bd-g:   rgba(94,255,67,.2);
+  --bd-g:   rgba(50,213,131,.2);
   --txt:    #eeeef8;
   --txt2:   #7878a8;
   --txt3:   #3a3a5e;
@@ -240,12 +240,12 @@ input[type="file"] { display:none; }
   margin-left: auto; padding: 5px 11px;
   border-radius: 7px;
   background: var(--g-dim);
-  border: 1px solid rgba(94,255,67,.2);
+  border: 1px solid rgba(50,213,131,.2);
   color: var(--g); font-size: .63rem; font-weight: 800;
   flex-shrink: 0;
   transition: background .15s;
 }
-.ur-btn:hover { background: rgba(94,255,67,.18); }
+.ur-btn:hover { background: rgba(50,213,131,.18); }
 
 /* ══════════════════════════════════════
    CHAT AREA
@@ -310,7 +310,7 @@ input[type="file"] { display:none; }
 }
 @keyframes pulse-dot {
   0%, 100% { box-shadow: 0 0 4px var(--g-glow); }
-  50%       { box-shadow: 0 0 12px var(--g-glow), 0 0 22px rgba(94,255,67,.1); }
+  50%       { box-shadow: 0 0 12px var(--g-glow), 0 0 22px rgba(50,213,131,.1); }
 }
 .ch-actions { display: flex; gap: 3px; margin-left: auto; }
 
@@ -319,7 +319,7 @@ input[type="file"] { display:none; }
   flex: 1; overflow-y: auto;
   padding: 16px 0 8px;
   background:
-    radial-gradient(ellipse 70% 35% at 95% 5%, rgba(94,255,67,.025), transparent 60%),
+    radial-gradient(ellipse 70% 35% at 95% 5%, rgba(50,213,131,.025), transparent 60%),
     radial-gradient(ellipse 55% 35% at 5% 95%, rgba(0,212,255,.02), transparent 60%),
     var(--bg);
 }
@@ -387,10 +387,10 @@ input[type="file"] { display:none; }
 .msg-line.mine {
   border-radius: 14px 4px 14px 14px;
   background: var(--g-soft);
-  border-color: rgba(94,255,67,.13);
+  border-color: rgba(50,213,131,.13);
 }
 .msg-line:hover { border-color: rgba(255,255,255,.1); }
-.msg-line.mine:hover { border-color: rgba(94,255,67,.2); }
+.msg-line.mine:hover { border-color: rgba(50,213,131,.2); }
 
 /* image in chat */
 .msg-img {
@@ -402,7 +402,7 @@ input[type="file"] { display:none; }
   transition: transform .15s, border-color .15s;
 }
 .msg-img:hover { transform: scale(.99); border-color: rgba(255,255,255,.15); }
-.msg-img.mine { border-color: rgba(94,255,67,.15); }
+.msg-img.mine { border-color: rgba(50,213,131,.15); }
 .msg-img img { width: 100%; height: auto; display: block; max-height: 260px; object-fit: cover; }
 
 /* read receipt */
@@ -467,7 +467,7 @@ input[type="file"] { display:none; }
   display: flex; align-items: flex-end; gap: 7px;
   transition: border-color .2s;
 }
-.inp-wrap:focus-within { border-color: rgba(94,255,67,.28); }
+.inp-wrap:focus-within { border-color: rgba(50,213,131,.28); }
 .inp-ico {
   color: var(--txt3); font-size: 1.05rem;
   flex-shrink: 0; padding: 2px;

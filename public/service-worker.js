@@ -11,7 +11,7 @@
 // IMPORTANTE: bump CACHE_VERSION cuando cambies archivos estáticos.
 // ========================================
 
-const CACHE_VERSION = 'upgames-v1.0.0';
+const CACHE_VERSION = 'upgames-v5.0.0';
 const CACHE_STATIC  = `${CACHE_VERSION}-static`;
 const CACHE_RUNTIME = `${CACHE_VERSION}-runtime`;
 const CACHE_API     = `${CACHE_VERSION}-api`;
@@ -24,9 +24,12 @@ const PRECACHE_URLS = [
     './chats.html',
     './puente.html',
     './politica-privacidad.html',
-    './terminos&condiciones.html',
+    './terminos_condiciones.html',
     './biblioteca.css',
+    './upgames-glass.css',
     './script.js',
+    './upgames-autoinfo.js',
+    './upgames-motion.js',
     './og-cover.png',
     './manifest.json',
     './offline.html'
