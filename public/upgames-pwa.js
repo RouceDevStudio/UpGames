@@ -16,7 +16,10 @@
 (function() {
     'use strict';
 
-    const SW_URL = './service-worker.js';
+    // Relativo a este script (public/), así también funciona desde /UpGames/index.html
+    const BASE = (document.currentScript && document.currentScript.src) || location.href;
+    const SW_URL = new URL('service-worker.js', BASE).href;
+    const SW_SCOPE = new URL('./', BASE).href;
     let deferredInstallPrompt = null;
     let swRegistration = null;
 
@@ -27,7 +30,7 @@
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', async () => {
             try {
-                swRegistration = await navigator.serviceWorker.register(SW_URL, { scope: './' });
+                swRegistration = await navigator.serviceWorker.register(SW_URL, { scope: SW_SCOPE });
                 console.log('[PWA] Service Worker registrado:', swRegistration.scope);
 
                 // Detectar updates
