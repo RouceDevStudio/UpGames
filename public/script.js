@@ -4036,7 +4036,7 @@ const TUT_STEPS = [
   {
     sel: '#nxFab',
     title: '🔮 Botón de NEXUS IA',
-    body: 'Este es el botón de NEXUS. Tócalo para abrir el chat; puedes expandirlo a pantalla completa con el botón de la esquina del panel. Si NEXUS tiene algo para ti, verás un punto verde sobre el botón.',
+    body: 'Este es el botón de NEXUS. Tócalo para abrir el chat; puedes expandirlo a pantalla completa con el botón de la esquina del panel. Si sales a mitad de una respuesta, verás un punto verde cuando NEXUS termine.',
   },
   {
     sel: '#tut-fab',
