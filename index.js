@@ -1825,6 +1825,23 @@ app.get('/items/recomendados/:usuario', async (req, res) => {
     }
 });
 
+// GET /items/autoinfo?title=&cat= — reconoce el título y devuelve imagen + descripción breve
+// Debe ir ANTES de /items/:id, si no Express interpreta "autoinfo" como un id.
+app.get('/items/autoinfo', async (req, res) => {
+    const title = String(req.query.title || '').trim().slice(0, 120);
+    const cat   = String(req.query.cat || 'Juego').trim().slice(0, 30);
+    if (title.length < 3) return res.json({ found: false });
+    try {
+        const info = await autoInfo.lookup(title, cat);
+        if (!info) return res.json({ found: false });
+        res.set('Cache-Control', 'public, max-age=3600');
+        res.json({ found: true, ...info });
+    } catch (err) {
+        logger.error(`[autoinfo] ${err.message}`);
+        res.status(500).json({ found: false });
+    }
+});
+
 app.get('/items/:id', async (req, res) => {
     try {
         const item = await Juego.findById(req.params.id).lean();
@@ -2886,22 +2903,6 @@ app.post('/items/detect-game', [body('title').notEmpty().trim()], async (req, re
     } catch(err) {
         logger.error(`[detect-game] ${err.message}`);
         res.status(500).json({ detected: false });
-    }
-});
-
-// GET /items/autoinfo?title=&cat= — reconoce el título y devuelve imagen + descripción breve
-app.get('/items/autoinfo', async (req, res) => {
-    const title = String(req.query.title || '').trim().slice(0, 120);
-    const cat   = String(req.query.cat || 'Juego').trim().slice(0, 30);
-    if (title.length < 3) return res.json({ found: false });
-    try {
-        const info = await autoInfo.lookup(title, cat);
-        if (!info) return res.json({ found: false });
-        res.set('Cache-Control', 'public, max-age=3600');
-        res.json({ found: true, ...info });
-    } catch (err) {
-        logger.error(`[autoinfo] ${err.message}`);
-        res.status(500).json({ found: false });
     }
 });
 
