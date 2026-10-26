@@ -662,7 +662,56 @@ display:block;
 .vid-meta .vid-views ion-icon { font-size: .75rem; }
 .vid-meta .vid-likes { display:flex; align-items:center; gap:3px; color:#ff4d6a; }
 .vid-meta .vid-likes ion-icon { font-size: .75rem; }
-    </style>
+    
+/* ════════════════════════════════════════════════════════════════
+   PERFIL PÚBLICO v6 — mismo lenguaje que el perfil propio
+   (portada 3:1, avatar superpuesto, acciones y cuadrícula tipo Instagram)
+   ════════════════════════════════════════════════════════════════ */
+.profile-hero { max-width: 720px; margin: 0 auto; }
+.hero-cover, .hero-cover { height: auto !important; aspect-ratio: 3 / 1; min-height: 118px; max-height: 240px; }
+@media (min-width: 720px) { .hero-cover { border-radius: 0 0 18px 18px; } }
+.hero-avatar-wrap { position: relative !important; top: auto !important; left: auto !important; margin: -48px 0 0 16px; width: max-content; }
+.hero-avatar-wrap .avatar { width: 96px !important; height: 96px !important; border-width: 4px; }
+.hero-info { padding-top: 10px !important; background: transparent; border-bottom: 0; }
+.hero-top-row { flex-direction: column; align-items: stretch !important; gap: 12px; }
+.hero-action-row { display: flex; gap: 8px; width: 100%; }
+.hero-action-row .btn-seguir, .hero-action-row .btn-mensaje, .hero-action-row .btn-compartir {
+  flex: 1; min-height: 40px; border-radius: 10px; justify-content: center; font-size: .82rem;
+}
+.btn-compartir {
+  display: inline-flex; align-items: center; gap: 6px; padding: 0 14px; cursor: pointer;
+  border: 1px solid var(--bd); background: var(--bg2); color: var(--txt); font-weight: 700; font-family: inherit;
+}
+.btn-compartir:hover { background: var(--bg3, #1f232c); }
+.pp-head { display: flex; align-items: flex-end; gap: 10px; padding-right: 12px; position: relative; z-index: 5; }
+.pp-head .hero-avatar-wrap { flex-shrink: 0; }
+.pp-stats { flex: 1; display: grid !important; grid-template-columns: repeat(3, 1fr); gap: 0 !important; margin: 0 !important; padding: 0 0 6px !important; border: 0 !important; background: none !important; }
+.pp-stats .stat-item { background: none !important; border: 0 !important; padding: 4px 0 !important; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.pp-stats .stat-number { font-size: 1.15rem !important; }
+.pp-stats .stat-label { font-size: .64rem !important; letter-spacing: .3px !important; }
+.hero-cover-edit { top: 12px; bottom: auto !important; }
+.container { max-width: 720px; margin: 0 auto; }
+.section-header { display: none; }
+#pub-subnav { display: flex !important; }
+.pub-subnav-tab.active { color: var(--txt) !important; border-bottom-color: var(--txt) !important; }
+
+/* Cuadrícula tipo Instagram */
+#user-items.items-grid, #user-videos.items-grid { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 3px !important; padding: 0 !important; }
+.pp-tile { position: relative; aspect-ratio: 1 / 1; overflow: hidden; background: var(--bg2); cursor: pointer; display: block; border: 0; padding: 0; text-decoration: none; }
+.pp-tile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .35s ease, filter .2s; }
+.pp-tile:hover img { transform: scale(1.04); filter: brightness(.88); }
+.pp-tile-ph { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 8px 8px 26px; background: linear-gradient(135deg, var(--bg2), #1f232c); }
+.pp-tile.no-img .pp-tile-ph { display: flex; }
+.pp-tile-ph ion-icon { font-size: 1.5rem; color: var(--g); }
+.pp-tile-ph em { font-style: normal; font-size: .66rem; font-weight: 700; color: var(--txt2); text-align: center; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pp-tile-meta { position: absolute; left: 6px; bottom: 6px; display: inline-flex; align-items: center; gap: 3px; font-size: .7rem; font-weight: 800; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.8); }
+.pp-tile-type { position: absolute; right: 6px; top: 6px; color: #fff; font-size: 1rem; filter: drop-shadow(0 1px 3px rgba(0,0,0,.7)); }
+.pp-tile-badge { position: absolute; left: 6px; top: 6px; padding: 2px 7px; border-radius: 99px; font-size: .58rem; font-weight: 800; background: rgba(255,204,0,.92); color: #1a1400; }
+.pp-tile-badge.bad { background: rgba(255,67,67,.92); color: #fff; }
+#user-items .empty-msg, #user-videos .empty-msg { grid-column: 1 / -1; }
+.hero-bio { font-family: var(--ff-body, 'Manrope', system-ui, sans-serif) !important; font-size: .9rem !important; line-height: 1.45 !important; color: var(--txt2) !important; white-space: pre-line; letter-spacing: 0 !important; }
+@media (prefers-reduced-motion: reduce) { .pp-tile img { transition: none; } }
+</style>
 
     <!-- ╔══════════════════════════════════════════════╗
          ║  UpGames · Configuración Centralizada        ║
@@ -700,12 +749,28 @@ display:block;
                 <ion-icon name="image-outline"></ion-icon> Cambiar portada
             </a>
         </div>
-        <div class="hero-avatar-wrap">
+        <div class="pp-head">
+            <div class="hero-avatar-wrap">
             <div class="avatar" id="avatar-wrap">
                 <ion-icon name="person" id="avatar-icon" style="font-size:2.6rem;"></ion-icon>
                 <img id="avatar-img" style="display:none;" alt="Avatar">
             </div>
             <div class="avatar-ring"></div>
+        </div>
+            <div class="stats pp-stats">
+                <div class="stat-item">
+                    <span class="stat-number" id="stat-uploads">—</span>
+                    <span class="stat-label">Publicaciones</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" id="stat-followers">—</span>
+                    <span class="stat-label">Seguidores</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number" id="stat-following">—</span>
+                    <span class="stat-label">Siguiendo</span>
+                </div>
+            </div>
         </div>
 
         <div class="hero-info" id="hero-info">
@@ -726,20 +791,10 @@ display:block;
                     <ion-icon name="chatbubble-ellipses-outline"></ion-icon>
                     Mensaje
                   </button>
-                </div>
-            </div>
-            <div class="stats">
-                <div class="stat-item">
-                    <span class="stat-number" id="stat-uploads">—</span>
-                    <span class="stat-label">Publicaciones</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-number" id="stat-followers">—</span>
-                    <span class="stat-label">Seguidores</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-number" id="stat-following">—</span>
-                    <span class="stat-label">Siguiendo</span>
+                  <button type="button" class="btn-compartir" onclick="compartirPerfil()">
+                    <ion-icon name="share-social-outline"></ion-icon>
+                    Compartir
+                  </button>
                 </div>
             </div>
         </div>
@@ -791,6 +846,37 @@ display:block;
 
         console.log("👤 Usuario actual:", usuarioActual);
         console.log("👁️ Viendo perfil de:", usuarioViendo);
+
+        // ── Helpers de presentación ──
+        const ppEsc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        const ppFmt = n => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1000 ? (n/1000).toFixed(1)+'K' : String(n || 0);
+        // Cloudinary: tamaño justo + formato automático (las fotos HEIC/4000px se ven y cargan rápido)
+        function cldOpt(url, t) {
+            const u = String(url || '');
+            if (!/^https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\//.test(u)) return u;
+            if (/\/image\/upload\/(?!v\d+\/)[a-z]{1,3}_[^/]*\//.test(u)) return u.replace(/\.(heic|heif)(\?|$)/i, '.jpg$2');
+            return u.replace('/image/upload/', `/image/upload/${t}/`).replace(/\.(heic|heif)(\?|$)/i, '.jpg$2');
+        }
+        function ppTile(item) {
+            const isVideo = item.category === 'Video';
+            const img = item.image && !/\.(mp4|webm|mov|m4v|avi)(\?.*)?$/i.test(item.image) ? cldOpt(item.image, 'c_fill,g_auto,w_420,h_420,q_auto,f_auto') : '';
+            const ls = item.linkStatus || 'online';
+            const pending = item.status === 'pendiente' || item.status === 'pending';
+            return `<a class="pp-tile${img ? '' : ' no-img'}" href="./biblioteca.html?id=${encodeURIComponent(item._id)}" aria-label="${ppEsc(item.title)}">
+                ${img ? `<img src="${ppEsc(img)}" alt="" loading="lazy" onerror="this.remove();this.parentElement.classList.add('no-img')">` : ''}
+                <span class="pp-tile-ph"><ion-icon name="${isVideo ? 'play' : 'game-controller'}"></ion-icon><em>${ppEsc(item.title)}</em></span>
+                ${pending ? '<span class="pp-tile-badge">Pendiente</span>' : ls !== 'online' ? `<span class="pp-tile-badge ${ls === 'caido' ? 'bad' : ''}">${ls === 'caido' ? 'Link caído' : 'Revisión'}</span>` : ''}
+                ${isVideo ? '<span class="pp-tile-type"><ion-icon name="play"></ion-icon></span>' : ''}
+                <span class="pp-tile-meta"><ion-icon name="${isVideo ? 'eye-outline' : 'cloud-download-outline'}"></ion-icon>${ppFmt(item.descargasEfectivas)}</span>
+            </a>`;
+        }
+        async function compartirPerfil() {
+            const url = location.href.split('#')[0];
+            try { if (navigator.share) { await navigator.share({ title: `@${usuarioViendo} en UpGames`, url }); return; } }
+            catch (e) { if (e && e.name === 'AbortError') return; }
+            try { await navigator.clipboard.writeText(url); alert('🔗 Enlace del perfil copiado'); }
+            catch (_) { prompt('Copia el enlace del perfil:', url); }
+        }
 
         // Helper: fetch con manejo de errores
         async function fetchAPI(url, options = {}) {
@@ -855,7 +941,7 @@ display:block;
                 const avatarIcon = document.getElementById('avatar-icon');
                 
                 if (user.avatar && user.avatar.trim() !== '') {
-                    avatarImg.src = user.avatar;
+                    avatarImg.src = cldOpt(user.avatar, 'c_fill,g_face,w_400,h_400,q_auto,f_auto');
                     avatarImg.style.display = 'block';
                     avatarIcon.style.display = 'none';
                 } else {
@@ -867,7 +953,7 @@ display:block;
                 // Portada (imagen detrás del avatar)
                 const cover = document.getElementById('hero-cover');
                 if (user.banner && /^https:\/\/[^\s"'<>`\\]+$/i.test(user.banner)) {
-                    cover.style.backgroundImage = `url("${user.banner}")`;
+                    cover.style.backgroundImage = `url("${cldOpt(user.banner, 'c_fill,g_auto,w_1500,h_500,q_auto,f_auto')}")`;
                     cover.classList.add('has-banner');
                 }
                 const esMiPerfil = usuarioActual && usuarioActual.toLowerCase() === String(user.usuario).toLowerCase();
@@ -915,6 +1001,8 @@ display:block;
                     ? (esAutor ? response : response.filter(item => item.status === 'aprobado'))
                     : [];
 
+                // Lo más reciente primero (como Instagram/TikTok)
+                todos.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
                 const juegos = todos.filter(i => i.category !== 'Video');
                 const videos = todos.filter(i => i.category === 'Video');
 
@@ -929,10 +1017,6 @@ display:block;
                 const countEl = document.getElementById('pub-count');
                 if(countEl) countEl.textContent = total > 0 ? `${total} resultados` : '';
 
-                // Ocultar sub-nav si no hay videos
-                if(videos.length === 0) {
-                    document.getElementById('pub-subnav').style.display = 'none';
-                }
 
                 // ── Renderizar JUEGOS ──
                 const contJuegos = document.getElementById('user-items');
@@ -944,44 +1028,7 @@ display:block;
                             <p>Este usuario aún no ha publicado nada.</p>
                         </div>`;
                 } else {
-                    contJuegos.innerHTML = '';
-                    juegos.forEach((item, idx) => {
-                        const descargas = item.descargasEfectivas || 0;
-                        const likes = item.likesCount || 0;
-                        const linkStatus = item.linkStatus || 'online';
-                        const linkStatusText = linkStatus === 'online' ? 'Online'
-                            : linkStatus === 'revision' ? 'Revisión' : 'Caído';
-
-                        const card = document.createElement('div');
-                        card.className = 'item-card';
-                        card.style.animationDelay = `${idx * 40}ms`;
-                        card.onclick = () => { window.location.href = `./biblioteca.html?id=${item._id}`; };
-                        card.innerHTML = `
-                            <div class="thumb-wrap">
-                                <img src="${item.image || 'https://via.placeholder.com/300x170/12121f/555570?text=Sin+Imagen'}"
-                                     alt="${item.title}"
-                                     onerror="this.src='https://via.placeholder.com/300x170/12121f/555570?text=Sin+Imagen'">
-                                <div class="item-link-badge ${linkStatus}">
-                                    <span class="item-link-dot"></span>
-                                    ${linkStatusText}
-                                </div>
-                            </div>
-                            <div class="item-info">
-                                <div class="item-category">${item.category || 'General'}</div>
-                                <div class="item-title">${item.title}</div>
-                                <div class="item-stats">
-                                    <div class="item-stat">
-                                        <ion-icon name="cloud-download-outline"></ion-icon>
-                                        <span class="item-stat-val">${descargas >= 1000 ? (descargas/1000).toFixed(1)+'K' : descargas}</span>
-                                    </div>
-                                    ${likes > 0 ? `<div class="item-stat" style="color:#ff4d6a">
-                                        <ion-icon name="heart" style="color:#ff4d6a"></ion-icon>
-                                        <span class="item-stat-val" style="color:#ff4d6a">${likes >= 1000 ? (likes/1000).toFixed(1)+'K' : likes}</span>
-                                    </div>` : ''}
-                                </div>
-                            </div>`;
-                        contJuegos.appendChild(card);
-                    });
+                    contJuegos.innerHTML = juegos.map(ppTile).join('');
                 }
 
                 // ── Renderizar VIDEOS ──
@@ -994,46 +1041,7 @@ display:block;
                             <p>Este usuario aún no ha publicado videos.</p>
                         </div>`;
                 } else {
-                    contVideos.innerHTML = '';
-                    videos.forEach((item, idx) => {
-                        const vistas = item.descargasEfectivas || 0;
-                        const likes  = item.likesCount || 0;
-                        const duracion = item.extraData?.duracion || '';
-                        const linkStatus = item.linkStatus || 'online';
-
-                        const fmtN = n => n >= 1000 ? (n/1000).toFixed(1)+'K' : n;
-                        const avatarLetter = (item.usuario || '?')[0].toUpperCase();
-
-                        const card = document.createElement('div');
-                        card.className = 'item-card item-card--video';
-                        card.style.animationDelay = `${idx * 40}ms`;
-                        card.onclick = () => { window.location.href = `./biblioteca.html?id=${item._id}`; };
-                        card.innerHTML = `
-                            <div class="thumb-wrap">
-                                <img src="${item.image || 'https://via.placeholder.com/600x338/07070f/00f2ff?text=VIDEO'}"
-                                     alt="${item.title}"
-                                     onerror="this.src='https://via.placeholder.com/600x338/07070f/00f2ff?text=VIDEO'">
-                                <div class="video-play-overlay"><ion-icon name="play-circle"></ion-icon></div>
-                                <div class="item-link-badge ${linkStatus}">
-                                    <span class="item-link-dot"></span>
-                                    ${linkStatus === 'online' ? 'Online' : linkStatus === 'revision' ? 'Revisión' : 'Caído'}
-                                </div>
-                                ${item.videoType ? `<div class="video-type-badge">${item.videoType}</div>` : ''}
-                                ${duracion ? `<div class="video-dur-badge">${duracion}</div>` : ''}
-                            </div>
-                            <div class="item-info">
-                                <div class="vid-avatar">${avatarLetter}</div>
-                                <div class="vid-body">
-                                    <div class="item-title">${item.title}</div>
-                                    <div class="vid-meta">
-                                        ${vistas > 0 ? `<span class="vid-views"><ion-icon name="eye-outline"></ion-icon>${fmtN(vistas)}</span>` : ''}
-                                        ${vistas > 0 && likes > 0 ? `<span class="vid-dot">·</span>` : ''}
-                                        ${likes > 0 ? `<span class="vid-likes"><ion-icon name="heart"></ion-icon>${fmtN(likes)}</span>` : ''}
-                                    </div>
-                                </div>
-                            </div>`;
-                        contVideos.appendChild(card);
-                    });
+                    contVideos.innerHTML = videos.map(ppTile).join('');
                 }
 
             } catch (error) {

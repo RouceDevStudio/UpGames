@@ -25,8 +25,8 @@
 <link rel="dns-prefetch" href="https://upgames-production.up.railway.app">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="biblioteca.css">
-<link rel="stylesheet" href="upgames-glass.css">
+<link rel="stylesheet" href="biblioteca.css?v=20261026b">
+<link rel="stylesheet" href="upgames-glass.css?v=20261026b">
 <script src="https://upload-widget.cloudinary.com/global/all.js" type="text/javascript"></script>
 
 </head>
@@ -133,91 +133,56 @@
   <!-- Logged in content -->
   <div id="pf-logged" style="display:none">
 
-    <!-- ── Cover + Avatar + Info ── -->
-    <div class="profile-card">
-      <div class="profile-cover" id="pf-cover">
-        <button type="button" class="profile-cover-edit" onclick="pfOpenSettings('portada')" aria-label="Cambiar portada">
-          <ion-icon name="image-outline"></ion-icon><span>Portada</span>
+    <!-- ══ CABECERA TIPO RED SOCIAL: portada 3:1 + avatar + stats + acciones ══ -->
+    <div class="pf2-hero">
+      <div class="pf2-cover" id="pf-cover">
+        <button type="button" class="pf2-cover-btn" onclick="pfOpenSettings('portada')" aria-label="Editar portada">
+          <ion-icon name="camera-outline"></ion-icon><span>Editar portada</span>
         </button>
       </div>
-      <div class="profile-avatar-wrap" onclick="pfOpenSettings()">
-        <div class="profile-avatar" id="pf-avatar-display">
-          <ion-icon name="person" id="pf-avatar-icon" style="font-size:1.4rem"></ion-icon>
-          <img src="" alt="Avatar" id="pf-avatar-img" style="display:none">
+
+      <div class="pf2-head">
+        <button type="button" class="pf2-avatar-wrap" onclick="pfOpenSettings('avatar')" aria-label="Cambiar foto de perfil">
+          <div class="pf2-avatar" id="pf-avatar-display">
+            <ion-icon name="person" id="pf-avatar-icon"></ion-icon>
+            <img src="" alt="Foto de perfil" id="pf-avatar-img" style="display:none">
+          </div>
+          <span class="pf2-avatar-edit"><ion-icon name="camera"></ion-icon></span>
+        </button>
+        <div class="pf2-stats">
+          <button type="button" class="pf2-stat" onclick="pfShowPosts('publicaciones')"><b id="pf-stat-uploads">0</b><span>Publicaciones</span></button>
+          <div class="pf2-stat"><b id="pf-stat-followers">0</b><span>Seguidores</span></div>
+          <div class="pf2-stat"><b id="pf-stat-following">0</b><span>Siguiendo</span></div>
         </div>
       </div>
-      <div class="profile-info">
-        <div class="profile-name">
+
+      <div class="pf2-info">
+        <div class="pf2-name">
           <span id="pf-username">@usuario</span>
           <span id="pf-badge"></span>
         </div>
-        <div class="profile-bio" id="pf-bio">Sin biografía</div>
+        <div class="pf2-xp" id="pf-stat-xp"></div>
+        <div class="pf2-bio" id="pf-bio">Sin biografía</div>
         <div class="profile-social-links" id="pf-social-links-row"></div>
       </div>
-    </div>
 
-    <!-- ── Stats ── -->
-    <div class="profile-stats-row">
-      <div class="profile-stat-box">
-        <div class="profile-stat-val" id="pf-stat-uploads">0</div>
-        <div class="profile-stat-lbl">Publicaciones</div>
+      <div class="pf2-actions">
+        <button type="button" class="pf2-btn" onclick="pfOpenSettings()">Editar perfil</button>
+        <button type="button" class="pf2-btn" onclick="pfShareProfile()">Compartir perfil</button>
+        <button type="button" class="pf2-btn pf2-btn-icon" onclick="window.location.href='./chats.html'" aria-label="Chats"><ion-icon name="chatbubbles-outline"></ion-icon></button>
+        <button type="button" class="pf2-btn pf2-btn-icon pf2-btn-danger" onclick="pfLogout()" aria-label="Cerrar sesión"><ion-icon name="log-out-outline"></ion-icon></button>
       </div>
-      <div class="profile-stat-box">
-        <div class="profile-stat-val" id="pf-stat-followers">0</div>
-        <div class="profile-stat-lbl">Seguidores</div>
-      </div>
-      <div class="profile-stat-box">
-        <div class="profile-stat-val" id="pf-stat-following">0</div>
-        <div class="profile-stat-lbl">Siguiendo</div>
-      </div>
-      <div class="profile-stat-box">
-        <div class="profile-stat-val" id="pf-stat-xp" style="font-size:13px">—</div>
-        <div class="profile-stat-lbl">Nivel / XP</div>
-      </div>
-    </div>
 
-    <!-- ── Action Shortcuts ── -->
-    <div class="profile-actions">
-      <div class="profile-actions-grid">
-        <button class="profile-action-btn profile-action-icon-only" onclick="pfOpenSettings()">
-          <ion-icon name="settings-outline" style="color:var(--g)"></ion-icon>
-          <span>Editar Perfil</span>
-        </button>
-        <button class="profile-action-btn profile-action-icon-only" onclick="window.location.href='./chats.html'">
-          <ion-icon name="chatbubbles-outline" style="color:var(--cy)"></ion-icon>
-          <span>Chats</span>
-        </button>
-        <button class="profile-action-btn profile-action-icon-only red" onclick="pfLogout()">
-          <ion-icon name="log-out-outline"></ion-icon>
-          <span>Cerrar Sesión</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- ── Inner Tabs ── -->
-    <div class="perfil-tabs" id="pf-tabs">
-      <button class="perfil-tab active" data-pftab="publicar" onclick="pfSwitchTab('publicar',this)">
-        <ion-icon name="cloud-upload"></ion-icon> Publicar
-      </button>
-      <button class="perfil-tab" data-pftab="historial" onclick="pfSwitchTab('historial',this)">
-        <ion-icon name="time"></ion-icon> Historial
-      </button>
-      <button class="perfil-tab" data-pftab="analytics" onclick="pfSwitchTab('analytics',this)">
-        <ion-icon name="analytics"></ion-icon> Analytics
-      </button>
-      <button class="perfil-tab" data-pftab="pagos" onclick="pfSwitchTab('pagos',this)">
-        <ion-icon name="cash"></ion-icon> Pagos
-      </button>
-      <button class="perfil-tab" data-pftab="logros" onclick="pfSwitchTab('logros',this)">
-        <ion-icon name="trophy"></ion-icon> Logros
-      </button>
-      <button class="perfil-tab" data-pftab="reportes" onclick="pfSwitchTab('reportes',this)">
-        <ion-icon name="flag"></ion-icon> Reportes
+      <!-- Publicar: botón desplegable con todo el formulario -->
+      <button type="button" class="pf2-create" id="pf-create-btn" onclick="pfTogglePublish()" aria-expanded="false" aria-controls="pf-publish-wrap">
+        <span class="pf2-create-ico"><ion-icon name="add"></ion-icon></span>
+        <span class="pf2-create-txt"><b>Crear publicación</b><small>Juego, ROM, mod, app, software o video</small></span>
+        <ion-icon name="chevron-down" class="pf2-chev"></ion-icon>
       </button>
     </div>
 
-    <!-- ══ TAB: PUBLICAR ══ -->
-    <div id="pf-tab-publicar" class="perfil-tab-content active">
+    <div class="pf2-publish" id="pf-publish-wrap" hidden>
+    <div id="pf-tab-publicar" class="pf2-publish-body">
 
       <!-- ── SELECTOR DE CATEGORÍA — SIEMPRE VISIBLE PRIMERO ── -->
       <div class="pf-cat-selector">
@@ -486,8 +451,32 @@
 
     </div>
 
-    <!-- ══ TAB: HISTORIAL ══ -->
-    <div id="pf-tab-historial" class="perfil-tab-content">
+    </div><!-- /pf-publish-wrap -->
+
+    <!-- ── Pestañas: Publicaciones (por defecto) · Videos · gestión ── -->
+    <div class="perfil-tabs pf2-tabs" id="pf-tabs">
+      <button class="perfil-tab active" data-pftab="historial" data-sub="publicaciones" onclick="pfShowPosts('publicaciones',this)">
+        <ion-icon name="grid-outline"></ion-icon> Publicaciones
+      </button>
+      <button class="perfil-tab" data-pftab="historial" data-sub="videos" onclick="pfShowPosts('videos',this)">
+        <ion-icon name="play-circle-outline"></ion-icon> Videos
+      </button>
+      <button class="perfil-tab" data-pftab="analytics" onclick="pfSwitchTab('analytics',this)">
+        <ion-icon name="analytics-outline"></ion-icon> Analytics
+      </button>
+      <button class="perfil-tab" data-pftab="pagos" onclick="pfSwitchTab('pagos',this)">
+        <ion-icon name="cash-outline"></ion-icon> Pagos
+      </button>
+      <button class="perfil-tab" data-pftab="logros" onclick="pfSwitchTab('logros',this)">
+        <ion-icon name="trophy-outline"></ion-icon> Logros
+      </button>
+      <button class="perfil-tab" data-pftab="reportes" onclick="pfSwitchTab('reportes',this)">
+        <ion-icon name="flag-outline"></ion-icon> Reportes
+      </button>
+    </div>
+
+    <!-- ══ TAB: PUBLICACIONES / VIDEOS (por defecto) ══ -->
+    <div id="pf-tab-historial" class="perfil-tab-content active">
 
       <!-- ── Sub-nav sticky ── -->
       <div class="hist-subnav" id="hist-subnav">
@@ -1966,9 +1955,9 @@
 <!-- ION ICONS -->
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
-<script src="script.js"></script>
-<script src="upgames-autoinfo.js"></script>
-<script src="upgames-motion.js"></script>
+<script src="script.js?v=20261026b"></script>
+<script src="upgames-autoinfo.js?v=20261026b"></script>
+<script src="upgames-motion.js?v=20261026b"></script>
 
 <!-- ══════════════════════════════════════
   EXTENSIÓN DE PERFIL: Nombre / Email / Contraseña / Links

@@ -4825,3 +4825,176 @@ body.nx-open #nxFab {
 .pf-img-upload-btn:hover { background: var(--cy); border-color: var(--cy); color: #000; }
 .pf-img-upload-btn:active { opacity: .8; transform: scale(.95); }
 .pf-img-upload-btn:disabled { opacity: .6; cursor: wait; }
+
+/* ════════════════════════════════════════════════════════════════
+   PERFIL v6 — diseño de red social (portada 3:1, avatar, stats,
+   "Crear publicación" desplegable y cuadrícula tipo Instagram)
+   ════════════════════════════════════════════════════════════════ */
+#pf-logged { max-width: 720px; margin: 0 auto; }
+.pf2-hero { position: relative; padding-bottom: 6px; }
+
+/* Portada: proporción 3:1 (1500×500) y un velo inferior para leer el texto */
+.pf2-cover {
+  position: relative;
+  aspect-ratio: 3 / 1;
+  min-height: 118px; max-height: 240px; width: 100%;
+  background:
+    radial-gradient(120% 140% at 85% -20%, rgba(var(--g-rgb), .22), transparent 60%),
+    radial-gradient(90% 120% at 0% 120%, rgba(var(--cy-rgb), .18), transparent 60%),
+    linear-gradient(135deg, var(--bg2), var(--bg1));
+  background-size: cover; background-position: center;
+  overflow: hidden;
+}
+@media (min-width: 720px) { .pf2-cover { border-radius: 0 0 18px 18px; } }
+.pf2-cover::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, transparent 55%, rgba(var(--bg-rgb), .55));
+}
+.pf2-cover-btn {
+  position: absolute; right: 12px; top: 12px; z-index: 2;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px; border-radius: 99px;
+  border: 1px solid rgba(255,255,255,.2); background: rgba(var(--bg-rgb), .55);
+  color: #fff; font: 700 .72rem/1 var(--ff); cursor: pointer;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  transition: background .2s var(--ease), transform .15s var(--ease);
+}
+.pf2-cover-btn:hover { background: rgba(var(--bg-rgb), .75); }
+.pf2-cover-btn:active { transform: scale(.96); }
+.pf2-cover-btn ion-icon { font-size: 1rem; }
+
+/* Avatar montado sobre la portada + estadísticas a la derecha */
+.pf2-head { display: flex; align-items: flex-end; gap: 14px; padding: 0 16px; margin-top: -44px; position: relative; z-index: 3; }
+.pf2-avatar-wrap { position: relative; flex-shrink: 0; background: none; border: 0; padding: 0; cursor: pointer; border-radius: 50%; }
+.pf2-avatar {
+  width: 92px; height: 92px; border-radius: 50%;
+  border: 4px solid var(--bg);
+  background: linear-gradient(135deg, var(--g), var(--cy));
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  color: #06210f; font-size: 2rem;
+  box-shadow: 0 8px 26px rgba(0,0,0,.45);
+}
+.pf2-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pf2-avatar-edit {
+  position: absolute; right: 2px; bottom: 4px;
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--g); color: #06210f; border: 3px solid var(--bg);
+  display: flex; align-items: center; justify-content: center; font-size: .78rem;
+}
+.pf2-stats { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); padding-bottom: 6px; }
+.pf2-stat { display: flex; flex-direction: column; align-items: center; gap: 2px; background: none; border: 0; color: var(--txt); font-family: var(--ff); cursor: default; padding: 4px 0; }
+button.pf2-stat { cursor: pointer; }
+.pf2-stat b { font-size: 1.15rem; font-weight: 800; line-height: 1.1; }
+.pf2-stat span { font-size: .68rem; color: var(--txt2); }
+
+.pf2-info { padding: 12px 16px 4px; }
+.pf2-name { display: flex; align-items: center; gap: 6px; font-size: 1.12rem; font-weight: 800; color: var(--txt); }
+.pf2-name .verificado-badge { font-size: 1.05rem; }
+.pf2-xp:empty { display: none; }
+.pf2-xp { display: inline-block; margin-top: 6px; padding: 3px 9px; border-radius: 99px; font-size: .66rem; font-weight: 700; color: var(--g); background: var(--g-dim); border: 1px solid var(--bd-g); }
+.pf2-bio { margin-top: 8px; font-size: .86rem; line-height: 1.45; color: var(--txt2); white-space: pre-line; word-break: break-word; }
+.pf2-info .profile-social-links { margin-top: 8px; }
+
+/* Botones de acción (estilo Instagram) */
+.pf2-actions { display: flex; gap: 8px; padding: 12px 16px 4px; }
+.pf2-btn {
+  flex: 1; min-height: 38px; padding: 0 12px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border-radius: 10px; border: 1px solid var(--bd); background: var(--bg2);
+  color: var(--txt); font: 700 .8rem/1 var(--ff); cursor: pointer;
+  transition: background .18s var(--ease), border-color .18s var(--ease), transform .12s var(--ease);
+}
+.pf2-btn:hover { background: var(--bg3); }
+.pf2-btn:active { transform: scale(.97); }
+.pf2-btn ion-icon { font-size: 1.05rem; }
+.pf2-btn-icon { flex: 0 0 42px; padding: 0; }
+.pf2-btn-danger { color: #ff6b6b; }
+.pf2-btn-primary { background: var(--g); border-color: var(--g); color: #06210f; }
+.pf2-btn-primary:hover { background: #3be08f; }
+
+/* "Crear publicación" — botón desplegable */
+.pf2-create {
+  margin: 12px 16px 0; width: calc(100% - 32px);
+  display: flex; align-items: center; gap: 12px; text-align: left;
+  padding: 12px 14px; border-radius: 14px; cursor: pointer;
+  border: 1px dashed rgba(var(--g-rgb), .45);
+  background: linear-gradient(135deg, rgba(var(--g-rgb), .1), rgba(var(--cy-rgb), .06));
+  color: var(--txt); font-family: var(--ff);
+  transition: border-color .2s var(--ease), background .2s var(--ease);
+}
+.pf2-create:hover, .pf2-create.open { border-style: solid; border-color: var(--g); }
+.pf2-create-ico { width: 38px; height: 38px; flex-shrink: 0; border-radius: 12px; background: var(--g); color: #06210f; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; }
+.pf2-create-txt { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.pf2-create-txt b { font-size: .9rem; }
+.pf2-create-txt small { font-size: .7rem; color: var(--txt2); }
+.pf2-chev { font-size: 1.1rem; color: var(--txt2); transition: transform .25s var(--ease); }
+.pf2-create.open .pf2-chev { transform: rotate(180deg); }
+.pf2-publish { margin: 10px 12px 4px; padding: 14px 4px 4px; border-radius: 16px; border: 1px solid var(--bd); background: var(--bg1); }
+.pf2-publish[hidden] { display: none; }
+.pf2-publish-in { animation: pf2In .28s var(--ease); }
+@keyframes pf2In { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.pf2-publish-body { padding: 0 8px; }
+
+/* Pestañas: iconos y subrayado, centradas en pantallas anchas */
+.pf2-tabs { margin-top: 14px; position: sticky; top: var(--hdr-h); z-index: 20; background: rgba(var(--bg-rgb), .92); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.pf2-tabs .perfil-tab { font-size: .74rem; letter-spacing: 0; text-transform: none; padding: 12px 14px; }
+.pf2-tabs .perfil-tab.active { color: var(--txt); border-bottom-color: var(--txt); }
+#pf-tab-historial .hist-subnav { display: none; }   /* sustituida por las pestañas superiores */
+#pf-tab-historial { padding: 0 2px; }
+
+/* Cuadrícula tipo Instagram */
+.pf2-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+.pf2-tile {
+  position: relative; aspect-ratio: 1 / 1; overflow: hidden; border: 0; padding: 0;
+  background: var(--bg2); cursor: pointer; display: block;
+}
+.pf2-tile img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .35s var(--ease), filter .2s; }
+.pf2-tile:hover img { transform: scale(1.04); filter: brightness(.88); }
+.pf2-tile-ph { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 8px; color: var(--txt3); background: linear-gradient(135deg, var(--bg2), var(--bg3)); }
+.pf2-tile.no-img .pf2-tile-ph { display: flex; }
+.pf2-tile-ph ion-icon { font-size: 1.5rem; color: var(--g); }
+.pf2-tile-ph em { font-style: normal; font-size: .66rem; font-weight: 700; color: var(--txt2); text-align: center; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pf2-tile-meta {
+  position: absolute; left: 6px; bottom: 6px; display: inline-flex; align-items: center; gap: 3px;
+  font-size: .7rem; font-weight: 800; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.8);
+}
+.pf2-tile-meta ion-icon { font-size: .85rem; }
+.pf2-tile-type { position: absolute; right: 6px; top: 6px; color: #fff; font-size: 1rem; filter: drop-shadow(0 1px 3px rgba(0,0,0,.7)); }
+.pf2-tile-badge { position: absolute; left: 6px; top: 6px; padding: 2px 7px; border-radius: 99px; font-size: .58rem; font-weight: 800; background: rgba(255,204,0,.92); color: #1a1400; }
+.pf2-tile-badge.warn { background: rgba(255,204,0,.92); }
+.pf2-tile-badge.bad { background: rgba(255,67,67,.92); color: #fff; }
+.pf2-skel { cursor: default; background: linear-gradient(90deg, var(--bg2) 0%, var(--bg3) 50%, var(--bg2) 100%); background-size: 200% 100%; animation: pf2Skel 1.2s linear infinite; }
+@keyframes pf2Skel { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+.pf2-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 40px 24px 30px; color: var(--txt2); }
+.pf2-empty ion-icon { font-size: 2.6rem; color: var(--txt3); }
+.pf2-empty h4 { color: var(--txt); font-size: .95rem; }
+.pf2-empty p { font-size: .8rem; max-width: 280px; }
+.pf2-empty .pf2-btn { flex: none; margin-top: 6px; padding: 0 18px; }
+
+/* Hoja de acciones de una publicación propia */
+.pf2-sheet-ov { position: fixed; inset: 0; z-index: 3000; background: rgba(0,0,0,.55); display: flex; align-items: flex-end; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .2s var(--ease); }
+.pf2-sheet-ov.show { opacity: 1; pointer-events: auto; }
+.pf2-sheet { width: 100%; max-width: 520px; max-height: 88vh; overflow-y: auto; background: var(--bg1); border: 1px solid var(--bd); border-radius: 20px 20px 0 0; padding-bottom: calc(14px + env(safe-area-inset-bottom)); transform: translateY(24px); transition: transform .28s var(--ease); }
+.pf2-sheet-ov.show .pf2-sheet { transform: none; }
+.pf2-sheet-grab { display: block; width: 40px; height: 4px; border-radius: 4px; background: var(--bd); margin: 10px auto; }
+.pf2-sheet-img { display: block; width: calc(100% - 28px); margin: 0 14px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 14px; }
+.pf2-sheet-body { padding: 12px 16px 0; }
+.pf2-sheet-cat { font-size: .72rem; color: var(--cy); font-weight: 700; }
+.pf2-sheet-cat .ok { color: var(--g); } .pf2-sheet-cat .warn { color: #ffcc00; }
+.pf2-sheet h3 { margin-top: 4px; font-size: 1.05rem; color: var(--txt); line-height: 1.3; }
+.pf2-sheet-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 14px 0; }
+.pf2-sheet-stats div { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 9px 4px; border-radius: 12px; background: var(--bg2); }
+.pf2-sheet-stats b { font-size: .95rem; color: var(--txt); }
+.pf2-sheet-stats span { font-size: .62rem; color: var(--txt3); }
+.pf2-sheet-actions { display: grid; gap: 8px; }
+.pf2-sheet-actions .pf2-btn { min-height: 44px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pf2-publish-in, .pf2-skel { animation: none; }
+  .pf2-tile img, .pf2-sheet, .pf2-sheet-ov, .pf2-chev { transition: none; }
+}
+/* El contenedor heredado era una grid de 2 columnas: la cuadrícula ocupa todo el ancho */
+#pf-showContent, #pf-showVideos { display: block !important; padding: 0; }
+.pf2-tile-ph { padding-bottom: 26px; }
+#pf-create-btn, #pf-tabs { scroll-margin-top: calc(var(--hdr-h) + 8px); }

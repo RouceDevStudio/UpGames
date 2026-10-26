@@ -1343,7 +1343,9 @@ document.querySelectorAll('.nav-tab[data-tab]').forEach(tab=>{
 });
 
 function switchTab(t) {
+  const abrirPublicar = t === 'upload';
   if(t==='upload') t='profile';
+  if(abrirPublicar) setTimeout(() => pfOpenPublish && pfOpenPublish(true), 150);
   currentTab=t;
   document.querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active'));
   const navBtn = document.querySelector(`.nav-tab[data-tab="${t}"]`);
@@ -1507,7 +1509,7 @@ async function pfLoadUserData() {
     if(ud.avatar && ud.avatar.trim()) {
       const img = document.getElementById('pf-avatar-img');
       const ico = document.getElementById('pf-avatar-icon');
-      img.src = ud.avatar; img.style.display='block'; ico.style.display='none';
+      img.src = cldOpt(ud.avatar, CLD_AVATAR); img.style.display='block'; ico.style.display='none';
       const prev = document.getElementById('pf-preview-avatar');
       if(prev) { prev.innerHTML=''; const pi=document.createElement('img'); pi.src=ud.avatar; pi.alt='Avatar'; prev.appendChild(pi); }
       const inp = document.getElementById('pf-input-avatar-url');
@@ -1543,14 +1545,7 @@ async function pfLoadUserData() {
     }
   } catch(e) {}
 
-  try {
-    const ir = await fetch(`${PF_API}/items/user/${pfUser}`);
-    if(ir.ok) {
-      const id = await ir.json();
-      const aprobados = Array.isArray(id) ? id.filter(i => i.status === 'aprobado').length : 0;
-      document.getElementById('pf-stat-uploads').textContent = aprobados;
-    }
-  } catch(e) {}
+  // (El contador de publicaciones lo actualiza pfLoadHistorial: evita descargar dos veces la lista)
 
   // Gamificación — XP y nivel en header de perfil
   try {
@@ -1571,6 +1566,7 @@ async function pfLoadUserData() {
 
 // ── Inner tab switching ──
 function pfSwitchTab(tabName, el) {
+  if (tabName === 'publicar') { pfOpenPublish(true); return; }
   document.querySelectorAll('.perfil-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.perfil-tab-content').forEach(c => c.classList.remove('active'));
   if(el) el.classList.add('active');
@@ -1595,6 +1591,42 @@ function histSwitchSubTab(tab, el) {
   const panelVid = document.getElementById('hist-panel-videos');
   if(panelPub) panelPub.style.display = tab === 'publicaciones' ? 'block' : 'none';
   if(panelVid) panelVid.style.display = tab === 'videos' ? 'block' : 'none';
+}
+
+// ── Publicaciones / Videos (pestañas superiores tipo Instagram) ──
+function pfShowPosts(sub, el) {
+  sub = sub === 'videos' ? 'videos' : 'publicaciones';
+  const btn = el || document.querySelector(`.perfil-tab[data-sub="${sub}"]`);
+  pfSwitchTab('historial', btn);
+  histSwitchSubTab(sub);
+  if (!el) document.getElementById('pf-tabs')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── "Crear publicación": botón que despliega todo el formulario ──
+function pfOpenPublish(open) {
+  const wrap = document.getElementById('pf-publish-wrap');
+  const btn  = document.getElementById('pf-create-btn');
+  if (!wrap || !btn) return;
+  const abrir = open === undefined ? wrap.hidden : !!open;
+  wrap.hidden = !abrir;
+  btn.setAttribute('aria-expanded', String(abrir));
+  btn.classList.toggle('open', abrir);
+  if (abrir) {
+    wrap.classList.remove('pf2-publish-in'); void wrap.offsetWidth; wrap.classList.add('pf2-publish-in');
+    setTimeout(() => btn.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+  }
+}
+function pfTogglePublish() { pfOpenPublish(); }
+
+// ── Compartir el perfil público ──
+async function pfShareProfile() {
+  if (!pfUser) return;
+  const url = `${location.origin}${location.pathname.replace(/[^/]*$/, '')}perfil-publico.html?usuario=${encodeURIComponent(pfUser)}`;
+  try {
+    if (navigator.share) { await navigator.share({ title: `@${pfUser} en UpGames`, url }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(url); toast('🔗 Enlace de tu perfil copiado'); }
+  catch (_) { prompt('Copia el enlace de tu perfil:', url); }
 }
 
 // ── Form: upload ──
@@ -1965,6 +1997,54 @@ function pfGetUniversalWidget() {
 }
 
 // Abre el widget y resuelve con la URL subida
+// ── Widget de IMAGEN con recorte (portada 3:1, foto 1:1) ──
+// Devuelve una URL de Cloudinary ya recortada y optimizada (formato y tamaño
+// automáticos), así una foto de 4000px o HEIC del móvil se ve bien y carga rápido.
+const _pfImgWidgets = {};
+function pfImageUpload({ aspect = 1, transform = CLD_AVATAR, folder = 'avatars' } = {}) {
+  return new Promise((resolve, reject) => {
+    const key = String(aspect);
+    let done = false;
+    const finish = (fn, v) => { if (!done) { done = true; fn(v); } };
+    _pfImgWidgets[key + '_cb'] = { resolve: v => finish(resolve, v), reject: e => finish(reject, e) };
+    if (!_pfImgWidgets[key]) {
+      _pfImgWidgets[key] = cloudinary.createUploadWidget({
+        cloudName: CLOUDINARY_CLOUD_NAME,
+        uploadPreset: CLOUDINARY_UPLOAD_PRESET,
+        folder,
+        sources: ['local', 'camera', 'url'],
+        resourceType: 'image',
+        clientAllowedFormats: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif', 'avif'],
+        maxImageFileSize: 25 * 1024 * 1024,
+        multiple: false,
+        cropping: true,
+        croppingAspectRatio: aspect,
+        croppingCoordinatesMode: 'custom',
+        croppingShowDimensions: true,
+        showSkipCropButton: false,
+        language: 'es',
+        text: { es: { crop: { title: aspect === 1 ? 'Recorta tu foto' : 'Recorta tu portada', crop_btn: 'Listo' } } },
+        styles: { palette: { window: '#0A0B0F', windowBorder: '#32D583', tabIcon: '#32D583', menuIcons: '#9090aa', textDark: '#f0f0f8', textLight: '#f0f0f8', link: '#32D583', action: '#32D583', inactiveTabIcon: '#555570', error: '#ff4343', inProgress: '#5AC8FA', complete: '#32D583', sourceBg: '#0d0d1a' } }
+      }, (error, result) => {
+        const cb = _pfImgWidgets[key + '_cb'];
+        if (!cb) return;
+        if (error) { cb.reject(new Error(error.message || error.statusText || 'No se pudo subir la imagen')); return; }
+        if (result.event === 'success') {
+          const info = result.info || {};
+          let url = info.secure_url || '';
+          const c = info.coordinates && info.coordinates.custom && info.coordinates.custom[0];
+          const crop = c ? `c_crop,x_${Math.round(c[0])},y_${Math.round(c[1])},w_${Math.round(c[2])},h_${Math.round(c[3])}/` : '';
+          url = url.replace('/image/upload/', `/image/upload/${crop}${transform}/`).replace(/\.(heic|heif)$/i, '.jpg');
+          cb.resolve(url);
+          try { _pfImgWidgets[key].close(); } catch (_) {}
+        }
+        if (result.event === 'close') cb.resolve(null);   // cerró sin subir
+      });
+    }
+    _pfImgWidgets[key].open();
+  });
+}
+
 function pfWidgetUpload(onProgress) {
   return new Promise((resolve, reject) => {
     pfWidgetCallback = (res) => {
@@ -2205,128 +2285,126 @@ async function pfSubirJuego() {
 }
 
 // ── Historial ──
+// ── Utilidades de imagen ──────────────────────────────────
+function ugEsc(v) { return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+/**
+ * Entrega optimizada de Cloudinary: tamaño justo + formato automático.
+ * Las fotos de iPhone (HEIC) no se ven en Chrome/Android y las de 4000px
+ * pesan varios MB: con f_auto,q_auto y un ancho fijo cargan rápido y en todos lados.
+ */
+function cldOpt(url, t) {
+  const u = String(url || '');
+  if (!/^https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\//.test(u)) return u;
+  // Ya trae transformaciones (recorte del widget, q_auto…): no anteponer otra o el recorte se descuadra
+  if (/\/image\/upload\/(?!v\d+\/)[a-z]{1,3}_[^/]*\//.test(u)) return u.replace(/\.(heic|heif)(\?|$)/i, '.jpg$2');
+  return u.replace('/image/upload/', `/image/upload/${t}/`).replace(/\.(heic|heif)(\?|$)/i, '.jpg$2');
+}
+const CLD_BANNER = 'c_fill,g_auto,w_1500,h_500,q_auto,f_auto';
+const CLD_AVATAR = 'c_fill,g_face,w_400,h_400,q_auto,f_auto';
+const CLD_TILE   = 'c_fill,g_auto,w_420,h_420,q_auto,f_auto';
+const UG_VIDEO_RE = /\.(mp4|webm|mov|m4v|avi)(\?.*)?$/i;
+
+// ── Publicaciones del perfil: cuadrícula tipo Instagram ──
+let _pfMisItems = [];
+function pfTileHTML(item, i) {
+  const isVideo   = item.category === 'Video';
+  const isPending = item.status === 'pendiente' || item.status === 'pending';
+  const ls        = item.linkStatus || 'online';
+  const img       = item.image && !UG_VIDEO_RE.test(item.image) ? cldOpt(item.image, CLD_TILE) : '';
+  const n         = isVideo ? (item.descargasEfectivas || 0) : (item.descargasEfectivas || 0);
+  return `<button type="button" class="pf2-tile${img ? '' : ' no-img'}" onclick="pfOpenPostSheet(${i})" aria-label="${ugEsc(item.title || 'Publicación')}">
+      ${img ? `<img src="${ugEsc(img)}" alt="" loading="lazy" onerror="this.remove();this.parentElement.classList.add('no-img')">` : ''}
+      <span class="pf2-tile-ph"><ion-icon name="${isVideo ? 'play' : 'game-controller'}"></ion-icon><em>${ugEsc(item.title || '')}</em></span>
+      ${isPending ? '<span class="pf2-tile-badge">Pendiente</span>' : ''}
+      ${!isPending && ls !== 'online' ? `<span class="pf2-tile-badge ${ls === 'caido' ? 'bad' : 'warn'}">${ls === 'caido' ? 'Link caído' : 'Revisión'}</span>` : ''}
+      ${isVideo ? '<span class="pf2-tile-type"><ion-icon name="play"></ion-icon></span>' : ''}
+      <span class="pf2-tile-meta"><ion-icon name="${isVideo ? 'eye-outline' : 'cloud-download-outline'}"></ion-icon>${pfFmt ? pfFmt(n) : n}</span>
+    </button>`;
+}
+
 async function pfLoadHistorial() {
   const cont      = document.getElementById('pf-showContent');
   const vidCont   = document.getElementById('pf-showVideos');
   const vidCount  = document.getElementById('pf-hist-vid-count');
   if(!cont || !pfUser) return;
-  cont.innerHTML = '<div class="pf-empty"><ion-icon name="sync-outline"></ion-icon><p>Cargando...</p></div>';
+  const skel = '<div class="pf2-grid">' + '<span class="pf2-tile pf2-skel"></span>'.repeat(6) + '</div>';
+  cont.innerHTML = skel; if (vidCont) vidCont.innerHTML = skel;
   try {
     const token = LS.get('token');
-    const res = await fetch(`${PF_API}/items/user/${pfUser}`, {
+    const res = await fetch(`${PF_API}/items/user/${encodeURIComponent(pfUser)}`, {
       headers: token ? { Authorization:`Bearer ${token}` } : {}
     });
     const data = await res.json();
-    const items = Array.isArray(data) ? data.reverse() : [];
+    // Lo más reciente primero (como Instagram/TikTok)
+    _pfMisItems = (Array.isArray(data) ? data : [])
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    const up = document.getElementById('pf-stat-uploads');
+    if (up) up.textContent = _pfMisItems.filter(i => i.status === 'aprobado').length;
 
-    const juegos = items.filter(i => i.category !== 'Video');
-    const videos = items.filter(i => i.category === 'Video');
+    const idx = it => _pfMisItems.indexOf(it);
+    const juegos = _pfMisItems.filter(i => i.category !== 'Video');
+    const videos = _pfMisItems.filter(i => i.category === 'Video');
 
-    // ── Publicaciones (no video) ──
-    cont.innerHTML = '';
-    if(!juegos.length) {
-      cont.innerHTML='<div class="pf-empty"><ion-icon name="cloud-offline-outline"></ion-icon><p>Aún no has publicado nada.</p></div>';
-    } else {
-      juegos.forEach(item => {
-        const isPending = item.status==='pendiente'||item.status==='pending';
-        const ls = item.linkStatus||'online';
-        const lsText = ls==='online'?'🟢 Online':ls==='revision'?'🟡 Rev.':'🔴 Caído';
-        const card = document.createElement('div');
-        card.className = 'pf-item-card';
-        card.innerHTML = `
-          <div class="pf-item-badge ${isPending?'pending':'approved'}">${isPending?'Pendiente':'Aprobado'}</div>
-          <img src="${item.image||'https://via.placeholder.com/300x170?text=Sin+Imagen'}" alt="${item.title}" onerror="this.src='https://via.placeholder.com/300x170?text=Sin+Imagen'">
-          <div class="pf-item-info">
-            <div class="pf-item-title">${item.title||'Sin título'}</div>
-            <div class="pf-item-cat">${catLabel(item.category)}</div>
-            <div class="pf-item-stats">
-              <div class="pf-item-stat"><div class="pf-item-stat-val">${item.descargasEfectivas||0}</div><div class="pf-item-stat-lbl">DL</div></div>
-              <div class="pf-item-stat"><div class="pf-item-stat-val" style="font-size:.62rem">${lsText}</div><div class="pf-item-stat-lbl">LINK</div></div>
-              <div class="pf-item-stat"><div class="pf-item-stat-val" style="color:${(item.reportes||0)>=3?'#ff4343':'var(--txt)'}">${item.reportes||0}</div><div class="pf-item-stat-lbl">REP</div></div>
-            </div>
-            <div class="pf-item-actions">
-              <button class="pf-btn-action edit" onclick="pfOpenEditModal('${item._id}')"><ion-icon name="create"></ion-icon> Editar</button>
-              <button class="pf-btn-action del" onclick="pfEliminar('${item._id}')"><ion-icon name="trash"></ion-icon> Borrar</button>
-            </div>
-          </div>`;
-        cont.appendChild(card);
-      });
-    }
+    cont.innerHTML = juegos.length
+      ? `<div class="pf2-grid">${juegos.map(it => pfTileHTML(it, idx(it))).join('')}</div>`
+      : `<div class="pf2-empty"><ion-icon name="images-outline"></ion-icon><h4>Aún no tienes publicaciones</h4><p>Comparte tu primer juego, mod o app con la comunidad.</p><button type="button" class="pf2-btn pf2-btn-primary" onclick="pfOpenPublish(true)">Crear publicación</button></div>`;
 
-    // ── Videos — actualizar badge de count en sub-nav ──
-    if(vidCount) {
-      if(videos.length > 0) {
-        vidCount.textContent = videos.length;
-        vidCount.style.display = 'inline-flex';
-      } else {
-        vidCount.style.display = 'none';
-      }
-    }
-    if(!vidCont) return;
-    if(!videos.length) {
-      vidCont.innerHTML='<div class="pf-empty"><ion-icon name="videocam-off-outline"></ion-icon><p>Aún no has publicado videos.</p></div>';
-      return;
-    }
-    vidCont.innerHTML = '';
-    videos.forEach(item => {
-      const isPending = item.status==='pendiente'||item.status==='pending';
-      const ls = item.linkStatus||'online';
-      const lsText = ls==='online'?'🟢 Online':ls==='revision'?'🟡 Rev.':'🔴 Caído';
-      const card = document.createElement('div');
-      card.className = 'pf-item-card pf-item-card--video';
-      card.innerHTML = `
-        <div class="pf-item-badge ${isPending?'pending':'approved'}">${isPending?'Pendiente':'Aprobado'}</div>
-        <div style="position:relative">
-          <img src="${item.image||'https://via.placeholder.com/300x170/07070f/00f2ff?text=VIDEO'}" alt="${item.title}" style="width:100%;height:100px;object-fit:cover;display:block" onerror="this.src='https://via.placeholder.com/300x170/07070f/00f2ff?text=VIDEO'">
-          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.3)"><ion-icon name="play-circle" style="font-size:2rem;color:rgba(255,255,255,.9)"></ion-icon></div>
-          ${item.videoType?`<div style="position:absolute;bottom:5px;left:5px;background:rgba(90,200,250,.85);color:#000;font-size:.55rem;font-weight:800;padding:2px 7px;border-radius:999px;text-transform:uppercase">${item.videoType}</div>`:''}
-        </div>
-        <div class="pf-item-info">
-          <div class="pf-item-title">${item.title||'Sin título'}</div>
-          <div class="pf-item-cat" style="color:var(--cy)">Video</div>
-          ${item.featuredItemId ? `
-          <div class="pf-vid-featured-row" id="pf-feat-${item._id}">
-            <ion-icon name="pin" style="color:var(--cy);font-size:.7rem"></ion-icon>
-            <span style="font-size:.68rem;color:var(--txt3)">Cargando entrada destacada…</span>
-          </div>` : ''}
-          <div class="pf-item-stats">
-            <div class="pf-item-stat"><div class="pf-item-stat-val">${item.descargasEfectivas||0}</div><div class="pf-item-stat-lbl">VISTAS</div></div>
-            <div class="pf-item-stat"><div class="pf-item-stat-val" style="color:#ff4d6a">${item.likesCount||0}</div><div class="pf-item-stat-lbl">LIKES</div></div>
-            <div class="pf-item-stat"><div class="pf-item-stat-val" style="color:${(item.reportes||0)>=3?'#ff4343':'var(--txt)'}">${item.reportes||0}</div><div class="pf-item-stat-lbl">REP</div></div>
-          </div>
-          <div class="pf-item-actions">
-            <button class="pf-btn-action edit" style="background:rgba(90,200,250,.12);border-color:rgba(90,200,250,.3);color:var(--cy)" onclick="pfOpenEditVideoModal('${item._id}')"><ion-icon name="create"></ion-icon> Editar</button>
-            <button class="pf-btn-action del" onclick="pfEliminarVideo('${item._id}')"><ion-icon name="trash"></ion-icon> Borrar</button>
-          </div>
-        </div>`;
-      vidCont.appendChild(card);
-
-      // Cargar nombre de la entrada destacada si existe
-      if (item.featuredItemId) {
-        const rowEl = document.getElementById(`pf-feat-${item._id}`);
-        const cached = todosLosItems.find(i => i._id === item.featuredItemId);
-        const fillRow = (feat) => {
-          if (!rowEl) return;
-          rowEl.innerHTML = `
-            <ion-icon name="pin" style="color:var(--cy);font-size:.7rem;flex-shrink:0"></ion-icon>
-            <img src="${feat.image||''}" alt="" style="width:28px;height:20px;object-fit:cover;border-radius:4px;flex-shrink:0" onerror="this.style.display='none'">
-            <span style="font-size:.68rem;color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${feat.title||'Entrada destacada'}</span>`;
-        };
-        if (cached) {
-          fillRow(cached);
-        } else {
-          fetch(`${PF_API}/items/${item.featuredItemId}`)
-            .then(r => r.ok ? r.json() : null)
-            .then(d => { if (d && d._id) fillRow(d); else if (rowEl) rowEl.style.display='none'; })
-            .catch(() => { if (rowEl) rowEl.style.display='none'; });
-        }
-      }
-      vidCont.appendChild(card);
-    });
-
+    if (vidCount) { vidCount.textContent = videos.length; vidCount.style.display = videos.length ? 'inline-flex' : 'none'; }
+    if (vidCont) vidCont.innerHTML = videos.length
+      ? `<div class="pf2-grid">${videos.map(it => pfTileHTML(it, idx(it))).join('')}</div>`
+      : `<div class="pf2-empty"><ion-icon name="videocam-outline"></ion-icon><h4>Aún no tienes videos</h4><p>Sube tutoriales, gameplays o reviews.</p><button type="button" class="pf2-btn pf2-btn-primary" onclick="pfOpenPublish(true);pfOnCategoryChange && pfOnCategoryChange('Video', document.querySelector('.pf-cat-btn[data-cat=&quot;Video&quot;]'))">Subir video</button></div>`;
   } catch(e) {
-    cont.innerHTML='<div class="pf-empty" style="color:#ff4343"><p>Error al cargar historial</p></div>';
+    cont.innerHTML='<div class="pf2-empty"><ion-icon name="cloud-offline-outline"></ion-icon><h4>No se pudieron cargar tus publicaciones</h4><button type="button" class="pf2-btn" onclick="pfLoadHistorial()">Reintentar</button></div>';
   }
+}
+
+// ── Hoja de acciones al tocar una publicación propia ──
+function pfOpenPostSheet(i) {
+  const item = _pfMisItems[i];
+  if (!item) return;
+  const isVideo   = item.category === 'Video';
+  const isPending = item.status === 'pendiente' || item.status === 'pending';
+  const ls = item.linkStatus || 'online';
+  const lsTxt = ls === 'online' ? '🟢 Online' : ls === 'revision' ? '🟡 En revisión' : '🔴 Caído';
+  const img = item.image && !UG_VIDEO_RE.test(item.image) ? cldOpt(item.image, 'c_fill,g_auto,w_900,h_506,q_auto,f_auto') : '';
+  let ov = document.getElementById('pf2-sheet');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'pf2-sheet'; ov.className = 'pf2-sheet-ov';
+    ov.addEventListener('click', e => { if (e.target === ov) pfClosePostSheet(); });
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML = `<div class="pf2-sheet" role="dialog" aria-modal="true" aria-label="${ugEsc(item.title)}">
+      <span class="pf2-sheet-grab"></span>
+      ${img ? `<img class="pf2-sheet-img" src="${ugEsc(img)}" alt="" onerror="this.remove()">` : ''}
+      <div class="pf2-sheet-body">
+        <div class="pf2-sheet-cat">${ugEsc(catLabel(item.category))} · <span class="${isPending ? 'warn' : 'ok'}">${isPending ? 'Pendiente de revisión' : 'Aprobado'}</span></div>
+        <h3>${ugEsc(item.title || 'Sin título')}</h3>
+        <div class="pf2-sheet-stats">
+          <div><b>${item.descargasEfectivas || 0}</b><span>${isVideo ? 'Vistas' : 'Descargas'}</span></div>
+          <div><b>${item.likesCount || 0}</b><span>Likes</span></div>
+          <div><b style="color:${(item.reportes || 0) >= 3 ? '#ff4343' : 'inherit'}">${item.reportes || 0}</b><span>Reportes</span></div>
+          <div><b style="font-size:.78rem">${lsTxt}</b><span>Enlace</span></div>
+        </div>
+        <div class="pf2-sheet-actions">
+          ${!isPending ? `<button type="button" class="pf2-btn pf2-btn-primary" onclick="pfVerPublicacion(${i})"><ion-icon name="open-outline"></ion-icon> Ver publicación</button>` : ''}
+          <button type="button" class="pf2-btn" onclick="pfClosePostSheet();${isVideo ? `pfOpenEditVideoModal('${item._id}')` : `pfOpenEditModal('${item._id}')`}"><ion-icon name="create-outline"></ion-icon> Editar</button>
+          <button type="button" class="pf2-btn pf2-btn-danger" onclick="pfClosePostSheet();${isVideo ? `pfEliminarVideo('${item._id}')` : `pfEliminar('${item._id}')`}"><ion-icon name="trash-outline"></ion-icon> Borrar</button>
+        </div>
+      </div>
+    </div>`;
+  ov.classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+function pfClosePostSheet() {
+  const ov = document.getElementById('pf2-sheet');
+  if (ov) ov.classList.remove('show');
+  document.body.style.overflow = '';
+}
+function pfVerPublicacion(i) {
+  const item = _pfMisItems[i];
+  pfClosePostSheet();
+  if (item && typeof window.openDetail === 'function') window.openDetail(todosLosItems.find(x => x._id === item._id) || item);
 }
 
 // ── Eliminar Video ──
@@ -2770,7 +2848,14 @@ function ecoUpdateDashboard(d) {
 
   // ── Followers ──
   const flEl = document.getElementById('eco-kpi-followers');
-  if (flEl) flEl.textContent = pfFmt(userObj.followers || userObj.seguidores || 0);
+  // (antes usaba `userObj`, que no existía → ReferenceError y el panel se cortaba aquí)
+  if (flEl) {
+    flEl.textContent = document.getElementById('pf-stat-followers')?.textContent || '0';
+    if (username) fetch(`${PF_API}/usuarios/stats-seguimiento/${encodeURIComponent(username)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(sd => { if (sd?.stats) flEl.textContent = pfFmt(sd.stats.seguidores || 0); })
+      .catch(() => {});
+  }
 
   // ── Period delta for KPI ──
   const dlDeltaEl = document.getElementById('eco-kpi-dl-delta');
@@ -3361,8 +3446,9 @@ function pfApplyBanner(url) {
   const rm    = document.getElementById('pf-bn-remove-btn');
   const inp   = document.getElementById('pf-input-banner-url');
   const ok = url && PF_BANNER_RE.test(url);
-  if (cover) { cover.style.backgroundImage = ok ? pfCssUrl(url) : ''; cover.classList.toggle('has-banner', !!ok); }
-  if (prev)  { prev.style.backgroundImage  = ok ? pfCssUrl(url) : ''; prev.classList.toggle('has-banner', !!ok); }
+  const shown = ok ? cldOpt(url, CLD_BANNER) : '';
+  if (cover) { cover.style.backgroundImage = ok ? pfCssUrl(shown) : ''; cover.classList.toggle('has-banner', !!ok); }
+  if (prev)  { prev.style.backgroundImage  = ok ? pfCssUrl(shown) : ''; prev.classList.toggle('has-banner', !!ok); }
   if (rm) rm.style.display = ok ? '' : 'none';
   if (inp && ok) inp.value = url;
 }
@@ -3370,7 +3456,7 @@ function pfPreviewBanner(url) {
   const prev = document.getElementById('pf-preview-banner');
   if (!prev) return;
   const ok = PF_BANNER_RE.test((url || '').trim());
-  prev.style.backgroundImage = ok ? pfCssUrl(url.trim()) : '';
+  prev.style.backgroundImage = ok ? pfCssUrl(cldOpt(url.trim(), CLD_BANNER)) : '';
   prev.classList.toggle('has-banner', ok);
 }
 async function pfSaveBanner(url) {
@@ -3399,10 +3485,10 @@ async function pfUploadBanner() {
   const btn = document.getElementById('pf-bn-upload-btn');
   const orig = btn ? btn.innerHTML : '';
   try {
-    const data = await pfWidgetUpload();
-    if (!data.success) return;
+    const url = await pfImageUpload({ aspect: 3, transform: CLD_BANNER, folder: 'banners' });
+    if (!url) return;                       // el usuario cerró el widget
     if (btn) { btn.innerHTML = '<ion-icon name="sync-outline" style="animation:spin .8s linear infinite"></ion-icon> Guardando...'; btn.disabled = true; }
-    await pfSaveBanner(data.url);
+    await pfSaveBanner(url);
   } catch(e) {
     toast('❌ ' + e.message);
   } finally {
@@ -3435,11 +3521,12 @@ async function pfUploadAvatar() {
   const btn = document.getElementById('pf-av-upload-btn');
   const orig = btn ? btn.innerHTML : '';
   try {
-    const data = await pfWidgetUpload();
-    if(!data.success) return;
+    const url = await pfImageUpload({ aspect: 1, transform: CLD_AVATAR, folder: 'avatars' });
+    if(!url) return;                        // el usuario cerró el widget
+    const data = { success: true, url };
     // preview
     const prev = document.getElementById('pf-preview-avatar');
-    if(prev) prev.innerHTML = `<img src="${data.url}" alt="Avatar">`;
+    if(prev) prev.innerHTML = `<img src="${ugEsc(data.url)}" alt="Avatar">`;
     if(btn) { btn.innerHTML = '<ion-icon name="sync-outline" style="animation:spin .8s linear infinite"></ion-icon> Guardando...'; btn.disabled = true; }
     // guardar en backend
     const token = LS.get('token');
@@ -3940,39 +4027,39 @@ const TUT_STEPS = [
 
   // ── PERFIL: SECCIÓN SUPERIOR ─────────────────────────────
   {
-    sel: '.profile-card',
-    title: '🪪 Tu Tarjeta de Perfil',
-    body: 'Esta tarjeta muestra tu identidad en UpGames: <strong>avatar, nombre de usuario, badge de verificación</strong> y tu bio. El fondo degradado es tu "portada" de perfil.<br><br>Si no has iniciado sesión, verás un mensaje para acceder. Inicia sesión desde la pantalla de login para desbloquear todas las funciones de creador.'
+    sel: '.pf2-hero',
+    title: '🪪 Tu Perfil',
+    body: 'Así te ven los demás: <strong>portada, foto, nombre, verificación y bio</strong>, como en cualquier red social.<br><br>Toca <strong>Editar portada</strong> para poner una imagen detrás de tu foto.'
   },
   {
-    sel: '.profile-avatar-wrap',
-    title: '🖼️ Tu Avatar',
-    body: 'Esta es tu foto de perfil. Al tocarlo se abre el modal de <strong>Configuración</strong> donde puedes cambiarla pegando una URL de imagen. También puedes editar tu bio desde ahí.<br><br>Tip: usa Imgur o ImgBB para alojar tu foto gratis.'
+    sel: '.pf2-avatar-wrap',
+    title: '🖼️ Tu Foto de Perfil',
+    body: 'Toca tu foto para cambiarla: puedes <strong>subirla desde el móvil</strong> (con recorte) o pegar una URL.'
   },
   {
-    sel: '.profile-stats-row',
+    sel: '.pf2-stats',
     title: '📊 Tus Estadísticas Personales',
     body: 'Tres números que resumen tu actividad:<br>• <strong>Publicaciones</strong> — cuántos aportes aprobados tienes<br>• <strong>Seguidores</strong> — usuarios que te siguen<br>• <strong>Siguiendo</strong> — usuarios que sigues tú'
   },
   {
-    sel: '.profile-actions',
+    sel: '.pf2-actions',
     title: '⚙️ Acciones del Perfil',
-    body: 'Dos botones principales:<br>• <strong>Editar Perfil</strong> — abre el modal para cambiar avatar y bio<br>• <strong>Cerrar Sesión</strong> (rojo) — cierra tu sesión actual. Si cierras sesión tendrás que volver a hacer login para publicar o comentar.'
+    body: '• <strong>Editar perfil</strong> — foto, portada, bio, links, nombre, email y contraseña<br>• <strong>Compartir perfil</strong> — copia el enlace a tu perfil público<br>• 💬 <strong>Chats</strong> · 🚪 <strong>Cerrar sesión</strong>'
   },
 
   // ── PERFIL: TABS INTERNAS ────────────────────────────────
   {
     sel: '#pf-tabs',
-    title: '📑 Las 5 Pestañas de Tu Perfil',
-    body: 'Tu perfil tiene 5 secciones que veremos una por una:<br>• ☁️ <strong>Publicar</strong> — sube nuevo contenido<br>• 🕒 <strong>Historial</strong> — gestiona tus publicaciones<br>• 🛡️ <strong>Bóveda</strong> — tus favoritos guardados<br>• 🚩 <strong>Reportes</strong> — publicaciones reportadas<br>• 💰 <strong>Economía</strong> — tus ganancias'
+    title: '📑 Las Pestañas de Tu Perfil',
+    body: 'Al entrar ves tus <strong>Publicaciones</strong>, como en Instagram o TikTok:<br>• ▦ <strong>Publicaciones</strong> y ▶ <strong>Videos</strong> — toca una para ver, editar o borrar<br>• 📈 <strong>Analytics</strong> · 💵 <strong>Pagos</strong> · 🏆 <strong>Logros</strong> · 🚩 <strong>Reportes</strong>'
   },
 
   // ── TAB: PUBLICAR ────────────────────────────────────────
   {
-    sel: '[data-pftab="publicar"]',
-    title: '☁️ Pestaña: Publicar',
-    body: 'Esta pestaña tiene el <strong>formulario para subir nuevo contenido</strong> a la nube. Vamos a ver cada campo.',
-    onEnter: function() { pfSwitchTab('publicar', document.querySelector('[data-pftab="publicar"]')); }
+    sel: '#pf-create-btn',
+    title: '➕ Crear publicación',
+    body: 'Este botón <strong>despliega el formulario</strong> para subir contenido a la nube. Vamos a ver cada campo.',
+    onEnter: function() { pfOpenPublish(true); }
   },
   {
     sel: '#pf-addTitle',

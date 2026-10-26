@@ -11,7 +11,7 @@
 // IMPORTANTE: bump CACHE_VERSION cuando cambies archivos estáticos.
 // ========================================
 
-const CACHE_VERSION = 'upgames-v5.0.1';
+const CACHE_VERSION = 'upgames-v6.0.0';
 const CACHE_STATIC  = `${CACHE_VERSION}-static`;
 const CACHE_RUNTIME = `${CACHE_VERSION}-runtime`;
 const CACHE_API     = `${CACHE_VERSION}-api`;
@@ -100,7 +100,15 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Estrategia 4: Otros (CSS, JS, fuentes) → Cache first, refresh en background
+    // Estrategia 4: JS/CSS PROPIOS → Network first (fallback a caché sin conexión).
+    // Antes eran cache-first: tras cada despliegue el usuario recibía el HTML
+    // nuevo con el script.js VIEJO (botones nuevos sin función, p. ej. Portada).
+    if (url.origin === self.location.origin) {
+        event.respondWith(networkFirstStatic(request));
+        return;
+    }
+
+    // Estrategia 5: recursos de terceros (fuentes, CDNs versionados) → stale-while-revalidate
     event.respondWith(cacheFirstStale(request));
 });
 
@@ -126,17 +134,20 @@ function isImageRequest(request) {
 // ---------- Estrategias ----------
 
 async function networkFirstAPI(request) {
+    // Peticiones con sesión (saldo, notificaciones, chats…) NUNCA se guardan:
+    // en un dispositivo compartido otro usuario podría verlas sin conexión.
+    const privada = request.headers.has('Authorization');
     try {
         const response = await fetch(request);
-        // Solo cachear respuestas exitosas para GETs simples
-        if (response.ok && request.method === 'GET') {
+        // Solo cachear respuestas exitosas de GETs públicos
+        if (!privada && response.ok && request.method === 'GET') {
             const cache = await caches.open(CACHE_API);
             cache.put(request, response.clone()).catch(() => {});
         }
         return response;
     } catch (err) {
-        // Sin conexión → devolver del caché si existe
-        const cached = await caches.match(request);
+        // Sin conexión → devolver del caché si existe (solo públicas)
+        const cached = privada ? null : await caches.match(request);
         if (cached) return cached;
         // Respuesta de fallback genérica para que la app no crashee
         return new Response(
@@ -189,6 +200,21 @@ async function networkFirstNavigation(request) {
         // Fallback a página offline
         const offline = await caches.match('./offline.html');
         if (offline) return offline;
+        return new Response('Sin conexión', { status: 503 });
+    }
+}
+
+async function networkFirstStatic(request) {
+    try {
+        const response = await fetch(request);
+        if (response.ok) {
+            const cache = await caches.open(CACHE_STATIC);
+            cache.put(request, response.clone()).catch(() => {});
+        }
+        return response;
+    } catch (err) {
+        const cached = await caches.match(request, { ignoreSearch: true });
+        if (cached) return cached;
         return new Response('Sin conexión', { status: 503 });
     }
 }
