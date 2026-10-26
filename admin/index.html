@@ -1103,26 +1103,48 @@ let bulkMode=false, selIds=new Set();
 // ==========================================
 // SYNC
 // ==========================================
+// Descarga TODAS las páginas de un endpoint paginado ({items|users, pages}) o un array plano.
+// Antes solo se pedía la primera página (100 items) y /auth/users se leía como array
+// aunque responde {users,total,...} → el panel mostraba 0 usuarios.
+async function fetchAllPages(path, key, limit){
+  const all = [];
+  let page = 1, pages = 1;
+  do {
+    const r = await fetch(`${API}${path}?page=${page}&limit=${limit}`, {headers: adminHeaders()});
+    if(!r.ok) throw new Error(`${path} HTTP ${r.status}`);
+    const d = await r.json();
+    const arr = Array.isArray(d) ? d : (Array.isArray(d[key]) ? d[key] : []);
+    all.push(...arr);
+    pages = Array.isArray(d) ? 1 : (d.pages || 1);
+    page++;
+  } while(page <= pages && page <= 200);
+  return all;
+}
+
 async function sync() {
   try {
+    const fallos = [];
+    const avisar = (nombre, vacio) => e => { console.error(nombre, e); fallos.push(nombre); return vacio; };
     const [iR,uR,cR,pR,dR,tR] = await Promise.all([
-      fetch(`${API}/admin/items`, {headers: adminHeaders()}).then(r=>r.json()).catch(()=>({items:[]})),
-      fetch(`${API}/auth/users`, {headers: adminHeaders()}).then(r=>r.json()).catch(()=>[]),
-      fetch(`${API}/comentarios`, {headers: adminHeaders()}).then(r=>r.json()).catch(()=>[]),
-      fetch(`${API}/admin/finanzas/solicitudes-pendientes`, {headers: adminHeaders()}).then(r=>r.json()).catch(()=>({solicitudes:[]})),
-      fetch(`${API}/admin/stats/dashboard`, {headers: adminHeaders()}).then(r=>r.json()).catch(()=>({success:false})),
-      fetch(`${API}/admin/finanzas/tarjetas`, {headers: adminHeaders()}).then(r=>r.json()).catch(()=>({tarjetas:[]}))
+      fetchAllPages('/admin/items', 'items', 200).then(items=>({items})).catch(avisar('entradas', {items:[]})),
+      fetchAllPages('/auth/users', 'users', 500).catch(avisar('usuarios', [])),
+      fetch(`${API}/comentarios`, {headers: adminHeaders()}).then(r=>r.json()).catch(avisar('comentarios', [])),
+      fetch(`${API}/admin/finanzas/solicitudes-pendientes`, {headers: adminHeaders()}).then(r=>r.json()).catch(avisar('pagos', {solicitudes:[]})),
+      fetch(`${API}/admin/stats/dashboard`, {headers: adminHeaders()}).then(r=>r.json()).catch(avisar('dashboard', {success:false})),
+      fetch(`${API}/admin/finanzas/tarjetas`, {headers: adminHeaders()}).then(r=>r.json()).catch(avisar('tarjetas', {tarjetas:[]}))
     ]);
     D = {
       items: Array.isArray(iR.items)?iR.items:(Array.isArray(iR)?iR:[]),
-      users: Array.isArray(uR)?uR:[],
+      users: Array.isArray(uR)?uR:(Array.isArray(uR?.users)?uR.users:[]),
       comments: Array.isArray(cR)?cR:[],
       pagos: Array.isArray(pR.solicitudes)?pR.solicitudes:[],
       tarjetas: Array.isArray(tR.tarjetas)?tR.tarjetas:[]
     };
     if(dR.success) dash = dR.dashboard;
     updCounters(); filtrar();
-    toast("✓ Sincronizado");
+    if(typeof syncReportes === 'function') syncReportes();
+    if(fallos.length) toast("⚠ No cargó: " + fallos.join(', '), "err");
+    else toast(`✓ Sincronizado · ${D.items.length} entradas · ${D.users.length} usuarios`);
   } catch(e){ toast("ERROR DE RED","err"); }
 }
 
@@ -1139,7 +1161,7 @@ async function syncTarjetas() {
 
 function updCounters(){
   const aprob = D.items.filter(i=>i.status==='aprobado').length;
-  const rev   = D.items.filter(i=>i.linkStatus==='revision').length;
+  const rev   = D.items.filter(enRevision).length;
   const vids  = D.items.filter(i=>i.videoType && i.videoType.trim()!=='').length;
   const vidRev= D.items.filter(i=>i.videoType && i.videoType.trim()!=='' && i.linkStatus==='revision').length;
   document.getElementById('cA').innerText   = aprob;
@@ -1657,10 +1679,13 @@ async function setTarjetaPrincipalAdmin(usuario, tarjetaId){
 // ==========================================
 // REVISIÓN
 // ==========================================
+// En revisión: link marcado "revision" o entrada aún no aprobada (pendiente/pending)
+function enRevision(i){ return i.linkStatus==='revision' || i.status==='pendiente' || i.status==='pending'; }
+
 function renderRevision(q){
   const c=document.getElementById('revList');
   c.innerHTML="";
-  D.items.filter(i=>i.linkStatus==='revision').forEach(j=>{
+  D.items.filter(enRevision).forEach(j=>{
     if(q!==''&&!(j.title||'').toLowerCase().includes(q)&&!(j.usuario||'').toLowerCase().includes(q)) return;
     const rep=j.reportes||0, dias=Math.floor((Date.now()-new Date(j.createdAt).getTime())/(1000*60*60*24));
     c.innerHTML+=`<div class="item-card">
@@ -1678,7 +1703,7 @@ function renderRevision(q){
       </div>
       <div class="item-btns">
         <button class="ba be" onclick="openEdit('${j._id}')"><ion-icon name="create-outline"></ion-icon></button>
-        <button class="ba bv" onclick="mkOnline('${j._id}')"><ion-icon name="checkmark-circle-outline"></ion-icon></button>
+        <button class="ba bv" onclick="mkOnline('${j._id}', true)"><ion-icon name="checkmark-circle-outline"></ion-icon></button>
         <button class="ba bd" onclick="mkCaido('${j._id}')"><ion-icon name="close-circle-outline"></ion-icon></button>
       </div>
     </div>`;
@@ -1972,10 +1997,12 @@ async function doPago(pid,pu,pm){
   } catch(e){toast("ERROR DE RED","err");}
 }
 
-async function mkOnline(id){
-  if(!confirm("¿Marcar ONLINE y resetear reportes?")) return;
+async function mkOnline(id, aprobar){
+  if(!confirm(aprobar ? "¿Aprobar, marcar ONLINE y resetear reportes?" : "¿Marcar ONLINE y resetear reportes?")) return;
   try {
-    const r=await fetch(`${API}/admin/items/${id}`,{method:'PUT',headers:adminHeaders(),body:JSON.stringify({linkStatus:'online',reportes:0})});
+    const upd = {linkStatus:'online',reportes:0};
+    if(aprobar) upd.status = 'aprobado'; // las entradas "pendiente" también salen de revisión
+    const r=await fetch(`${API}/admin/items/${id}`,{method:'PUT',headers:adminHeaders(),body:JSON.stringify(upd)});
     if(r.ok){toast("✓ ONLINE");sync();}
   } catch(e){toast("ERROR","err");}
 }
@@ -2243,8 +2270,7 @@ let reportesData = [];
 
 async function syncReportes() {
   try {
-    const res = await fetch(`${API}/items`, {headers: adminHeaders()});
-    const items = await res.json();
+    const items = (D.items && D.items.length) ? D.items : await fetchAllPages('/admin/items', 'items', 200);
     
     reportesData = items.filter(i => i.reportes > 0).sort((a,b) => b.reportes - a.reportes);
     
