@@ -4998,3 +4998,8 @@ button.pf2-stat { cursor: pointer; }
 #pf-showContent, #pf-showVideos { display: block !important; padding: 0; }
 .pf2-tile-ph { padding-bottom: 26px; }
 #pf-create-btn, #pf-tabs { scroll-margin-top: calc(var(--hdr-h) + 8px); }
+
+/* Contador de mensajes sin leer en el botón de Chats */
+#pf-chat-btn { position: relative; }
+.pf2-chat-n { position: absolute; top: -6px; right: -6px; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 99px; background: var(--g); color: #06210f; font-size: .62rem; font-weight: 800; display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg); }
+.pf2-chat-n[hidden] { display: none; }

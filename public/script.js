@@ -1470,6 +1470,7 @@ function pfInit(user) {
   pfUser = user;
   if(pfInitialized) {
     // Refresh data
+    pfChatBadge();
     pfLoadUserData();
     pfLoadHistorial();
     pfLoadEconomia();
@@ -1477,6 +1478,7 @@ function pfInit(user) {
     return;
   }
   pfInitialized = true;
+  pfChatBadge();
   pfLoadUserData();
   pfLoadHistorial();
   pfLoadBoveda();
@@ -1617,6 +1619,20 @@ function pfOpenPublish(open) {
   }
 }
 function pfTogglePublish() { pfOpenPublish(); }
+
+// ── Mensajes sin leer (botón Chats del perfil) ──
+async function pfChatBadge() {
+  const el = document.getElementById('pf-chat-n');
+  const token = LS.get('token');
+  if (!el || !token) return;
+  try {
+    const r = await fetch(`${PF_API}/chat/no-leidos`, { headers: { Authorization: `Bearer ${token}` } });
+    const d = r.ok ? await r.json() : null;
+    const n = d && d.noLeidos || 0;
+    el.textContent = n > 99 ? '99+' : n; el.hidden = !n;
+  } catch (_) {}
+}
+setInterval(() => { if (!document.hidden && currentTab === 'profile') pfChatBadge(); }, 30000);
 
 // ── Compartir el perfil público ──
 async function pfShareProfile() {
@@ -4961,7 +4977,7 @@ async function _cargarNotificaciones() {
           "
           onmouseover="this.style.background='rgba(255,255,255,.04)';this.querySelector('.notif-del-btn').style.opacity='1'"
           onmouseout="this.style.background='${unread ? unreadBg : 'transparent'}';this.querySelector('.notif-del-btn').style.opacity='0'">
-          <div onclick="_abrirItemDesdeNotif('${n.itemId}')" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer;">
+          <div onclick="${n.tipo === 'sistema' && (n.itemTitle || '').startsWith('Mensaje') ? `location.href='./chats.html?usuario=${encodeURIComponent(n.emisor || '')}'` : `_abrirItemDesdeNotif('${n.itemId}')`}" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer;">
             <div style="position:relative;width:44px;height:32px;flex-shrink:0;">
               <div style="position:absolute;inset:0;background:${meta.accent}1f;border-radius:6px;display:flex;align-items:center;justify-content:center;">
                 <ion-icon name="${meta.icon}" style="color:${meta.accent};font-size:1rem;"></ion-icon>

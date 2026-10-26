@@ -465,6 +465,7 @@ const UsuarioSchema = new mongoose.Schema({
     emailVerifExpires:   { type: Date, default: null },
     resetPasswordToken:  { type: String, default: null },
     resetPasswordExpires:{ type: Date, default: null },
+    bloqueados:  { type: [String], default: [] },   // usuarios bloqueados en el chat
     socialLinks: { type: [String], default: [], validate: { validator: v => v.length <= 4, message: 'Máximo 4 links sociales' } },
     lastUsernameChange: { type: Date, default: null },
     lastEmailChange:    { type: Date, default: null },
@@ -552,7 +553,14 @@ const MensajeSchema = new mongoose.Schema({
     texto:  { type: String, default: '', maxlength: 2000 },
     imagen: { type: String, default: '' },
     leido:  { type: Boolean, default: false, index: true },
-    fecha:  { type: Date, default: Date.now, index: true, expires: 90 * 24 * 60 * 60 }
+    fecha:  { type: Date, default: Date.now, index: true, expires: 90 * 24 * 60 * 60 },
+    // Chat v2
+    actualizado: { type: Date, default: Date.now, index: true },   // cambia al leer/editar/reaccionar/borrar
+    editado:     { type: Boolean, default: false },
+    borrado:     { type: Boolean, default: false },                 // eliminado para todos
+    ocultoPara:  { type: [String], default: [] },                   // eliminado/vaciado solo para esos usuarios
+    replyTo:     { id: String, de: String, texto: String, imagen: Boolean },
+    reacciones:  { type: [{ u: String, e: String, _id: false }], default: [] }
 }, { collection: 'mensajes', timestamps: false });
 MensajeSchema.index({ de: 1, para: 1, fecha: 1 });
 MensajeSchema.index({ para: 1, leido: 1 });
@@ -568,6 +576,7 @@ const StorySchema = new mongoose.Schema({
 const Story = mongoose.model('Story', StorySchema);
 
 // ========== MIDDLEWARE JWT ==========
+const presenciaEscrita = new Map();   // usuario → ms de la última escritura de ultimoLogin
 const verificarToken = (req, res, next) => {
     const authHeader = req.headers.authorization;
     const token = authHeader?.split(' ')[1];
@@ -582,11 +591,14 @@ const verificarToken = (req, res, next) => {
         req.usuario = decoded.usuario;
         req.userTokenData = decoded;
 
-        // Actualizar ultimoLogin en background (sin bloquear la respuesta)
-        Usuario.updateOne(
-            { usuario: decoded.usuario },
-            { $set: { ultimoLogin: new Date() } }
-        ).catch(() => {});
+        // Presencia: actualizar ultimoLogin como máximo una vez por minuto
+        // (antes era una escritura en la BD en CADA petición autenticada)
+        const ahoraMs = Date.now();
+        if ((presenciaEscrita.get(decoded.usuario) || 0) < ahoraMs - 60000) {
+            presenciaEscrita.set(decoded.usuario, ahoraMs);
+            if (presenciaEscrita.size > 50000) presenciaEscrita.clear();
+            Usuario.updateOne({ usuario: decoded.usuario }, { $set: { ultimoLogin: new Date() } }).catch(() => {});
+        }
 
         next();
     } catch (error) {
@@ -2563,117 +2575,282 @@ app.get('/usuarios/stats-seguimiento/:usuario', async (req, res) => {
 
 // ========== CHAT ==========
 
+// ══════════════════════════════════════════════════════════════════
+//  CHAT v2 — mensajes privados entre seguidores mutuos
+//  · Últimos N mensajes + paginación hacia atrás (antes se devolvían los
+//    200 MÁS ANTIGUOS: en chats largos los nuevos nunca aparecían).
+//  · Cursor del SERVIDOR (no del reloj del móvil) y cambios incrementales:
+//    leído, editado, reacciones y borrados llegan en el polling.
+//  · Responder, reaccionar, editar (15 min), borrar para todos (24 h) o
+//    solo para mí, "escribiendo…", bloqueo y vaciar chat solo para mí.
+// ══════════════════════════════════════════════════════════════════
+const CHAT_REACCIONES = ['❤️', '😂', '😮', '😢', '👍', '🔥'];
+const CHAT_PAGINA = 40;
+const chatEscribiendo = new Map();          // "de->para" → timestamp
+const chatEsId = v => typeof v === 'string' && /^[a-f\d]{24}$/i.test(v);
+const chatConv = (yo, otro) => ({ $or: [{ de: yo, para: otro }, { de: otro, para: yo }], ocultoPara: { $ne: yo } });
+const chatOnline = fecha => !!fecha && (Date.now() - new Date(fecha).getTime()) < 2 * 60 * 1000;
+function chatSerializar(m) {
+    return {
+        id: m._id, de: m.de, para: m.para,
+        texto: m.borrado ? '' : m.texto, imagen: m.borrado ? '' : (m.imagen || ''),
+        leido: !!m.leido, fecha: m.fecha, editado: !!m.editado, borrado: !!m.borrado,
+        replyTo: m.replyTo && m.replyTo.id ? m.replyTo : null,
+        reacciones: m.borrado ? [] : (m.reacciones || []),
+    };
+}
+async function chatRelacion(yo, otro) {
+    const [a, b] = await Promise.all([
+        Usuario.findOne({ usuario: yo }).select('siguiendo listaSeguidores bloqueados').lean(),
+        Usuario.findOne({ usuario: otro }).select('usuario avatar verificadoNivel ultimoLogin siguiendo listaSeguidores bloqueados').lean(),
+    ]);
+    if (!a || !b) return { existe: !!b };
+    const yoSigo = (a.siguiendo || []).includes(otro);
+    const meSigue = (b.siguiendo || []).includes(yo) || (a.listaSeguidores || []).includes(otro);
+    const yoBloqueo = (a.bloqueados || []).includes(otro);
+    const meBloqueo = (b.bloqueados || []).includes(yo);
+    return {
+        existe: true, usuario: b.usuario, avatar: b.avatar || '', verificadoNivel: b.verificadoNivel || 0,
+        online: !meBloqueo && chatOnline(b.ultimoLogin), ultimaVez: meBloqueo ? null : (b.ultimoLogin || null),
+        yoSigo, meSigue, yoBloqueo, meBloqueo,
+        puedeChatear: yoSigo && meSigue && !yoBloqueo && !meBloqueo,
+    };
+}
+
 app.post('/chat/enviar', verificarToken, async (req, res) => {
     try {
-        const { para, texto, imagen } = req.body;
         const de = req.usuario;
+        const para = String(req.body.para || '').toLowerCase().trim();
+        const texto = typeof req.body.texto === 'string' ? req.body.texto.trim() : '';
+        const imagenRaw = typeof req.body.imagen === 'string' ? req.body.imagen.trim() : '';
         if (!para) return res.status(400).json({ success: false, error: 'Destinatario requerido' });
-        if (!texto?.trim() && !imagen?.trim()) return res.status(400).json({ success: false, error: 'Mensaje vacío' });
+        if (!texto && !imagenRaw) return res.status(400).json({ success: false, error: 'Mensaje vacío' });
         if (de === para) return res.status(400).json({ success: false, error: 'No puedes enviarte mensajes a ti mismo' });
-        if (texto && texto.trim().length > 2000) return res.status(400).json({ success: false, error: 'Mensaje demasiado largo (máx 2000 caracteres)' });
+        if (texto.length > 2000) return res.status(400).json({ success: false, error: 'Mensaje demasiado largo (máx 2000 caracteres)' });
+        const imagen = imagenRaw ? urlImagenSegura(imagenRaw) : '';
+        if (imagenRaw && !imagen) return res.status(400).json({ success: false, error: 'Imagen inválida' });
 
-        const [emisor, receptor] = await Promise.all([
-            Usuario.findOne({ usuario: de }).select('siguiendo').lean(),
-            Usuario.findOne({ usuario: para }).select('listaSeguidores').lean()
-        ]);
-        if (!receptor) return res.status(404).json({ success: false, error: 'Usuario destinatario no existe' });
-        const emisorSigueReceptor = (emisor?.siguiendo || []).includes(para);
-        const receptorSigueEmisor = (receptor?.listaSeguidores || []).includes(de);
-        if (!emisorSigueReceptor || !receptorSigueEmisor) return res.status(403).json({ success: false, error: 'Solo puedes chatear con usuarios que se siguen mutuamente' });
+        const rel = await chatRelacion(de, para);
+        if (!rel.existe) return res.status(404).json({ success: false, error: 'Ese usuario no existe' });
+        if (rel.yoBloqueo) return res.status(403).json({ success: false, error: `Bloqueaste a @${para}. Desbloquéalo para escribirle`, code: 'YO_BLOQUEO' });
+        if (rel.meBloqueo) return res.status(403).json({ success: false, error: 'No puedes enviar mensajes a este usuario', code: 'BLOQUEADO' });
+        if (!rel.puedeChatear) return res.status(403).json({ success: false, error: 'Solo puedes chatear con usuarios que se siguen mutuamente', code: 'NO_MUTUO' });
 
-        const msg = new Mensaje({ de, para, texto: texto?.trim() || '', imagen: imagen?.trim() || '' });
-        await msg.save();
+        let replyTo = undefined;
+        if (chatEsId(req.body.replyTo)) {
+            const orig = await Mensaje.findOne({ _id: req.body.replyTo, ...chatConv(de, para) }).select('de texto imagen borrado').lean();
+            if (orig && !orig.borrado) replyTo = { id: String(orig._id), de: orig.de, texto: (orig.texto || '').slice(0, 140), imagen: !!orig.imagen };
+        }
+        const ahora = new Date();
+        const msg = await new Mensaje({ de, para, texto, imagen, replyTo, actualizado: ahora, fecha: ahora }).save();
+        chatEscribiendo.delete(`${de}->${para}`);
 
-        new Notificacion({ destinatario: para, tipo: 'sistema', emisor: de, itemId: msg._id.toString(), itemTitle: `Mensaje de @${de}`, itemImage: imagen || '', leida: false, fecha: new Date() }).save().catch(() => {});
+        // Una sola notificación por conversación sin leer (antes: una por mensaje)
+        Notificacion.findOneAndUpdate(
+            { destinatario: para, emisor: de, tipo: 'sistema', leida: false, itemTitle: `Mensaje de @${de}` },
+            // (sin el texto del mensaje: el panel de notificaciones lo inserta como HTML)
+            { $set: { fecha: ahora, itemId: msg._id.toString(), itemImage: imagen || '', mensaje: '' } },
+            { upsert: true }
+        ).catch(() => {});
 
-        res.json({ success: true, mensaje: { id: msg._id, de, para, texto: msg.texto, imagen: msg.imagen, leido: false, fecha: msg.fecha } });
+        res.json({ success: true, mensaje: chatSerializar(msg.toObject()), cursor: Date.now() });
     } catch (err) {
         logger.error(`Error enviando mensaje: ${err.message}`);
         res.status(500).json({ success: false, error: 'Error interno' });
     }
 });
 
+// GET /chat/mensajes/:otro            → últimos 40
+// GET /chat/mensajes/:otro?antes=ms   → 40 anteriores (scroll hacia arriba)
+// GET /chat/mensajes/:otro?desde=ms   → nuevos + cambiados desde el cursor del servidor
 app.get('/chat/mensajes/:otroUsuario', verificarToken, async (req, res) => {
     try {
-        const yo    = req.usuario;
-        const otro  = req.params.otroUsuario;
-        const desde = req.query.desde ? new Date(Number(req.query.desde)) : null;
-        const filtro = { $or: [{ de: yo, para: otro }, { de: otro, para: yo }] };
-        if (desde) filtro.fecha = { $gt: desde };
-        const mensajes = await Mensaje.find(filtro).sort({ fecha: 1 }).limit(200).lean();
-        const idsNoLeidos = mensajes.filter(m => m.para === yo && !m.leido).map(m => m._id);
-        // mark-as-read en background — no bloquea la respuesta
-        if (idsNoLeidos.length) Mensaje.updateMany({ _id: { $in: idsNoLeidos } }, { $set: { leido: true } }).catch(() => {});
-        const idSet = new Set(idsNoLeidos.map(id => id.toString()));
-        res.json({ success: true, mensajes: mensajes.map(m => ({ id: m._id, de: m.de, para: m.para, texto: m.texto, imagen: m.imagen || '', leido: idSet.has(m._id.toString()) ? true : m.leido, fecha: m.fecha })) });
+        const yo = req.usuario;
+        const otro = String(req.params.otroUsuario || '').toLowerCase();
+        const base = chatConv(yo, otro);
+        const cursor = Date.now();
+        const desde = Number(req.query.desde) || 0;
+        const antes = Number(req.query.antes) || 0;
+        let mensajes, hayMas = false;
+        if (desde) {
+            const d = new Date(desde - 1500);   // margen por escrituras concurrentes (el cliente deduplica por id)
+            mensajes = await Mensaje.find({ ...base, $and: [{ $or: [{ fecha: { $gt: d } }, { actualizado: { $gt: d } }] }] })
+                .sort({ fecha: 1 }).limit(300).lean();
+        } else {
+            const f = antes ? { ...base, fecha: { $lt: new Date(antes) } } : base;
+            const filas = await Mensaje.find(f).sort({ fecha: -1 }).limit(CHAT_PAGINA + 1).lean();
+            hayMas = filas.length > CHAT_PAGINA;
+            mensajes = filas.slice(0, CHAT_PAGINA).reverse();
+        }
+        // Marcar como leído TODO lo que me envió (y avisar al emisor vía "actualizado")
+        const sinLeer = mensajes.some(m => m.para === yo && !m.leido) || !desde;
+        if (sinLeer) {
+            const r = await Mensaje.updateMany({ de: otro, para: yo, leido: false }, { $set: { leido: true, actualizado: new Date() } });
+            if (r.modifiedCount) mensajes.forEach(m => { if (m.para === yo) m.leido = true; });
+            if (r.modifiedCount) Notificacion.updateMany({ destinatario: yo, emisor: otro, tipo: 'sistema', leida: false, itemTitle: `Mensaje de @${otro}` }, { $set: { leida: true } }).catch(() => {});
+        }
+        const t = chatEscribiendo.get(`${otro}->${yo}`);
+        res.json({ success: true, mensajes: mensajes.map(chatSerializar), hayMas, cursor, escribiendo: !!t && cursor - t < 6000 });
     } catch (err) {
         logger.error(`Error cargando mensajes: ${err.message}`);
         res.status(500).json({ success: false, error: 'Error interno' });
     }
 });
 
-/**
- * ⭐ GET /chat/conversaciones — OPTIMIZADO
- *
- * Versión original: cargaba TODOS los mensajes del usuario en memoria
- * para agruparlos en JS → O(n) en RAM.
- *
- * Versión nueva: aggregate en MongoDB que devuelve solo ~50 conversaciones
- * (1 doc por contacto) sin importar cuántos mensajes haya.
- */
+// GET /chat/conversaciones — una fila por contacto, con avatar y estado
 app.get('/chat/conversaciones', verificarToken, async (req, res) => {
     try {
         const yo = req.usuario;
-
         const conversaciones = await Mensaje.aggregate([
-            // Solo mensajes donde participo yo
-            { $match: { $or: [{ de: yo }, { para: yo }] } },
-            // Calcular el campo "contacto"
-            {
-                $addFields: {
-                    contacto: {
-                        $cond: { if: { $eq: ['$de', yo] }, then: '$para', else: '$de' }
-                    },
-                    esMio:    { $eq: ['$de', yo] },
-                    esNoLeido:{ $and: [{ $eq: ['$para', yo] }, { $eq: ['$leido', false] }] }
-                }
-            },
-            // Ordenar por fecha desc antes de agrupar
+            { $match: { $or: [{ de: yo }, { para: yo }], ocultoPara: { $ne: yo } } },
+            { $addFields: {
+                contacto:  { $cond: { if: { $eq: ['$de', yo] }, then: '$para', else: '$de' } },
+                esNoLeido: { $and: [{ $eq: ['$para', yo] }, { $eq: ['$leido', false] }] }
+            } },
             { $sort: { fecha: -1 } },
-            // Agrupar por contacto, tomando el primer mensaje (el más reciente)
-            {
-                $group: {
-                    _id: '$contacto',
-                    ultimoTexto:  { $first: '$texto' },
-                    ultimaImagen: { $first: '$imagen' },
-                    ultimoDe:     { $first: '$de' },
-                    ultimaFecha:  { $first: '$fecha' },
-                    noLeidos:     { $sum: { $cond: ['$esNoLeido', 1, 0] } }
-                }
-            },
+            { $group: {
+                _id: '$contacto',
+                ultimoTexto:  { $first: '$texto' },
+                ultimaImagen: { $first: '$imagen' },
+                ultimoDe:     { $first: '$de' },
+                ultimaFecha:  { $first: '$fecha' },
+                ultimoLeido:  { $first: '$leido' },
+                ultimoBorrado:{ $first: '$borrado' },
+                noLeidos:     { $sum: { $cond: ['$esNoLeido', 1, 0] } }
+            } },
             { $sort: { ultimaFecha: -1 } },
-            { $limit: 50 },
-            {
-                $project: {
-                    _id: 0,
-                    contacto:      '$_id',
-                    ultimoMensaje: { texto: '$ultimoTexto', imagen: '$ultimaImagen', de: '$ultimoDe', fecha: '$ultimaFecha' },
-                    noLeidos: 1
-                }
-            }
+            { $limit: 60 }
         ]);
-
-        res.json({ success: true, conversaciones });
+        const nombres = conversaciones.map(c => c._id);
+        const [usuarios, yoDoc] = await Promise.all([
+            Usuario.find({ usuario: { $in: nombres } }).select('usuario avatar verificadoNivel ultimoLogin bloqueados').lean(),
+            Usuario.findOne({ usuario: yo }).select('bloqueados').lean(),
+        ]);
+        const porNombre = new Map(usuarios.map(u => [u.usuario, u]));
+        const misBloq = new Set(yoDoc?.bloqueados || []);
+        res.json({ success: true, conversaciones: conversaciones.map(c => {
+            const u = porNombre.get(c._id) || {};
+            const meBloq = (u.bloqueados || []).includes(yo);
+            return {
+                contacto: c._id,
+                avatar: u.avatar || '', verificadoNivel: u.verificadoNivel || 0,
+                online: !meBloq && chatOnline(u.ultimoLogin),
+                bloqueado: misBloq.has(c._id),
+                existe: !!u.usuario,
+                noLeidos: c.noLeidos,
+                ultimoMensaje: {
+                    texto: c.ultimoBorrado ? '' : c.ultimoTexto, imagen: c.ultimoBorrado ? '' : c.ultimaImagen,
+                    de: c.ultimoDe, fecha: c.ultimaFecha, leido: c.ultimoLeido, borrado: !!c.ultimoBorrado
+                }
+            };
+        }) });
     } catch (err) {
         logger.error(`Error cargando conversaciones: ${err.message}`);
         res.status(500).json({ success: false, error: 'Error interno' });
     }
 });
 
+// GET /chat/contacto/:otro — perfil breve + relación (seguir, bloqueo, en línea)
+app.get('/chat/contacto/:otroUsuario', verificarToken, async (req, res) => {
+    try {
+        const otro = String(req.params.otroUsuario || '').toLowerCase();
+        const rel = await chatRelacion(req.usuario, otro);
+        if (!rel.existe) return res.status(404).json({ success: false, error: 'Ese usuario no existe' });
+        res.json({ success: true, contacto: rel });
+    } catch (err) {
+        res.status(500).json({ success: false, error: 'Error interno' });
+    }
+});
+
+// GET /chat/contactos — seguidores mutuos (con quienes puedes chatear)
+app.get('/chat/contactos', verificarToken, async (req, res) => {
+    try {
+        const yo = await Usuario.findOne({ usuario: req.usuario }).select('siguiendo listaSeguidores bloqueados').lean();
+        if (!yo) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+        const seg = new Set(yo.listaSeguidores || []);
+        const bloq = new Set(yo.bloqueados || []);
+        const mutuos = (yo.siguiendo || []).filter(u => seg.has(u) && !bloq.has(u));
+        const usuarios = await Usuario.find({ usuario: { $in: mutuos } })
+            .select('usuario avatar verificadoNivel ultimoLogin').limit(200).lean();
+        res.json({ success: true, contactos: usuarios
+            .map(u => ({ usuario: u.usuario, avatar: u.avatar || '', verificadoNivel: u.verificadoNivel || 0, online: chatOnline(u.ultimoLogin) }))
+            .sort((a, b) => (b.online - a.online) || a.usuario.localeCompare(b.usuario)) });
+    } catch (err) {
+        res.status(500).json({ success: false, error: 'Error interno' });
+    }
+});
+
+// POST /chat/escribiendo/:otro — indicador "escribiendo…" (vive 6 s en memoria)
+app.post('/chat/escribiendo/:otroUsuario', verificarToken, (req, res) => {
+    const otro = String(req.params.otroUsuario || '').toLowerCase().slice(0, 40);
+    if (chatEscribiendo.size > 20000) chatEscribiendo.clear();
+    chatEscribiendo.set(`${req.usuario}->${otro}`, Date.now());
+    res.json({ success: true });
+});
+
+// PATCH /chat/mensaje/:id — editar mi mensaje (hasta 15 min)
+app.patch('/chat/mensaje/:id', verificarToken, async (req, res) => {
+    try {
+        if (!chatEsId(req.params.id)) return res.status(400).json({ success: false, error: 'ID inválido' });
+        const texto = typeof req.body.texto === 'string' ? req.body.texto.trim() : '';
+        if (!texto || texto.length > 2000) return res.status(400).json({ success: false, error: 'Texto inválido (1-2000 caracteres)' });
+        const m = await Mensaje.findById(req.params.id);
+        if (!m || m.de !== req.usuario) return res.status(404).json({ success: false, error: 'Mensaje no encontrado' });
+        if (m.borrado) return res.status(400).json({ success: false, error: 'El mensaje fue eliminado' });
+        if (Date.now() - m.fecha.getTime() > 15 * 60 * 1000) return res.status(400).json({ success: false, error: 'Solo puedes editar durante 15 minutos' });
+        m.texto = texto; m.editado = true; m.actualizado = new Date();
+        await m.save();
+        res.json({ success: true, mensaje: chatSerializar(m.toObject()) });
+    } catch (err) { res.status(500).json({ success: false, error: 'Error interno' }); }
+});
+
+// DELETE /chat/mensaje/:id?modo=todos|mi
+app.delete('/chat/mensaje/:id', verificarToken, async (req, res) => {
+    try {
+        if (!chatEsId(req.params.id)) return res.status(400).json({ success: false, error: 'ID inválido' });
+        const yo = req.usuario;
+        const m = await Mensaje.findById(req.params.id);
+        if (!m || (m.de !== yo && m.para !== yo)) return res.status(404).json({ success: false, error: 'Mensaje no encontrado' });
+        if (req.query.modo === 'todos') {
+            if (m.de !== yo) return res.status(403).json({ success: false, error: 'Solo puedes eliminar para todos tus propios mensajes' });
+            if (Date.now() - m.fecha.getTime() > 24 * 60 * 60 * 1000) return res.status(400).json({ success: false, error: 'Solo puedes eliminar para todos durante 24 horas' });
+            m.borrado = true; m.texto = ''; m.imagen = ''; m.reacciones = []; m.replyTo = undefined; m.actualizado = new Date();
+            await m.save();
+            return res.json({ success: true, mensaje: chatSerializar(m.toObject()) });
+        }
+        await Mensaje.updateOne({ _id: m._id }, { $addToSet: { ocultoPara: yo } });
+        await Mensaje.deleteOne({ _id: m._id, ocultoPara: { $all: [m.de, m.para] } });
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ success: false, error: 'Error interno' }); }
+});
+
+// POST /chat/mensaje/:id/reaccion { emoji } — una reacción por persona; repetirla la quita
+app.post('/chat/mensaje/:id/reaccion', verificarToken, async (req, res) => {
+    try {
+        if (!chatEsId(req.params.id)) return res.status(400).json({ success: false, error: 'ID inválido' });
+        const e = String(req.body.emoji || '');
+        if (!CHAT_REACCIONES.includes(e)) return res.status(400).json({ success: false, error: 'Reacción no permitida' });
+        const yo = req.usuario;
+        const m = await Mensaje.findById(req.params.id);
+        if (!m || (m.de !== yo && m.para !== yo) || (m.ocultoPara || []).includes(yo)) return res.status(404).json({ success: false, error: 'Mensaje no encontrado' });
+        if (m.borrado) return res.status(400).json({ success: false, error: 'El mensaje fue eliminado' });
+        const previa = (m.reacciones || []).find(r => r.u === yo);
+        m.reacciones = (m.reacciones || []).filter(r => r.u !== yo);
+        if (!previa || previa.e !== e) m.reacciones.push({ u: yo, e });
+        m.actualizado = new Date();
+        await m.save();
+        res.json({ success: true, mensaje: chatSerializar(m.toObject()) });
+    } catch (err) { res.status(500).json({ success: false, error: 'Error interno' }); }
+});
+
+// DELETE /chat/conversacion/:otro — vaciar el chat SOLO para mí
+// (antes borraba los mensajes también para la otra persona)
 app.delete('/chat/conversacion/:otroUsuario', verificarToken, async (req, res) => {
     try {
-        const yo = req.usuario, otro = req.params.otroUsuario;
-        await Mensaje.deleteMany({ $or: [{ de: yo, para: otro }, { de: otro, para: yo }] });
+        const yo = req.usuario, otro = String(req.params.otroUsuario || '').toLowerCase();
+        const conv = { $or: [{ de: yo, para: otro }, { de: otro, para: yo }] };
+        await Mensaje.updateMany(conv, { $addToSet: { ocultoPara: yo } });
+        await Mensaje.deleteMany({ ...conv, ocultoPara: { $all: [yo, otro] } });
         res.json({ success: true });
     } catch (err) {
         logger.error(`Error borrando conversación: ${err.message}`);
@@ -2681,9 +2858,26 @@ app.delete('/chat/conversacion/:otroUsuario', verificarToken, async (req, res) =
     }
 });
 
+// POST / DELETE /chat/bloqueo/:otro — bloquear o desbloquear a un usuario
+app.post('/chat/bloqueo/:otroUsuario', verificarToken, async (req, res) => {
+    try {
+        const otro = String(req.params.otroUsuario || '').toLowerCase();
+        if (otro === req.usuario) return res.status(400).json({ success: false, error: 'No puedes bloquearte a ti mismo' });
+        if (!(await Usuario.exists({ usuario: otro }))) return res.status(404).json({ success: false, error: 'Ese usuario no existe' });
+        await Usuario.updateOne({ usuario: req.usuario }, { $addToSet: { bloqueados: otro } });
+        res.json({ success: true, bloqueado: true });
+    } catch (err) { res.status(500).json({ success: false, error: 'Error interno' }); }
+});
+app.delete('/chat/bloqueo/:otroUsuario', verificarToken, async (req, res) => {
+    try {
+        await Usuario.updateOne({ usuario: req.usuario }, { $pull: { bloqueados: String(req.params.otroUsuario || '').toLowerCase() } });
+        res.json({ success: true, bloqueado: false });
+    } catch (err) { res.status(500).json({ success: false, error: 'Error interno' }); }
+});
+
 app.get('/chat/no-leidos', verificarToken, async (req, res) => {
     try {
-        const total = await Mensaje.countDocuments({ para: req.usuario, leido: false });
+        const total = await Mensaje.countDocuments({ para: req.usuario, leido: false, ocultoPara: { $ne: req.usuario } });
         res.json({ success: true, noLeidos: total });
     } catch (err) { res.status(500).json({ success: false, error: 'Error interno' }); }
 });
@@ -2699,12 +2893,12 @@ app.get('/usuarios/descubrir', verificarToken, async (req, res) => {
         const mutuos = siguiendo.filter(u => seguidores.includes(u));
         let extras = [];
         if (mutuos.length < limite) {
-            extras = await Usuario.find({ usuario: { $ne: me, $nin: siguiendo } }).select('usuario foto listaSeguidores isVerificado verificadoNivel').sort({ 'listaSeguidores.length': -1 }).limit(limite - mutuos.length).lean();
+            extras = await Usuario.find({ usuario: { $ne: me, $nin: siguiendo } }).select('usuario avatar listaSeguidores isVerificado verificadoNivel').sort({ 'listaSeguidores.length': -1 }).limit(limite - mutuos.length).lean();
         }
-        const mutuosData = await Usuario.find({ usuario: { $in: mutuos } }).select('usuario foto listaSeguidores isVerificado verificadoNivel').limit(limite).lean();
+        const mutuosData = await Usuario.find({ usuario: { $in: mutuos } }).select('usuario avatar listaSeguidores isVerificado verificadoNivel').limit(limite).lean();
         const todos = [
-            ...mutuosData.map(u => ({ ...u, mutuo: true, seguidores: u.listaSeguidores?.length || 0 })),
-            ...extras.map(u => ({ ...u, mutuo: false, seguidores: u.listaSeguidores?.length || 0 }))
+            ...mutuosData.map(u => ({ usuario: u.usuario, foto: u.avatar || '', avatar: u.avatar || '', verificadoNivel: u.verificadoNivel || 0, mutuo: true, seguidores: u.listaSeguidores?.length || 0 })),
+            ...extras.map(u => ({ usuario: u.usuario, foto: u.avatar || '', avatar: u.avatar || '', verificadoNivel: u.verificadoNivel || 0, mutuo: false, seguidores: u.listaSeguidores?.length || 0 }))
         ].slice(0, limite);
         res.json({ success: true, usuarios: todos });
     } catch (err) {
@@ -2723,14 +2917,18 @@ app.get('/usuarios/buscar', verificarToken, async (req, res) => {
         const qSafe = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const usuarios = await Usuario
             .find({ usuario: { $regex: qSafe, $options: 'i', $ne: me } })
-            .select('usuario foto isVerificado verificadoNivel listaSeguidores ultimoLogin')
+            .select('usuario avatar isVerificado verificadoNivel listaSeguidores siguiendo ultimoLogin')
             .limit(15)
             .lean();
         res.json({
             success: true,
             usuarios: usuarios.map(u => ({
                 usuario:         u.usuario,
-                foto:            u.foto || '',
+                foto:            u.avatar || '',   // (antes leía "foto", campo que no existe)
+                avatar:          u.avatar || '',
+                // Relación conmigo: para mostrar "Mensaje" solo si se siguen mutuamente
+                yoSigo:          (u.listaSeguidores || []).includes(me),
+                meSigue:         (u.siguiendo || []).includes(me),
                 isVerificado:    u.isVerificado,
                 verificadoNivel: u.verificadoNivel,
                 seguidores:      (u.listaSeguidores || []).length,
