@@ -446,7 +446,11 @@ const isMobile = () => window.innerWidth <= 760;
 async function api(path, opts = {}) {
   const r = await fetch(API + path, { ...opts, headers: { ...H(), ...(opts.headers || {}) } });
   const d = await r.json().catch(() => ({}));
-  if (r.status === 401) { toast('Tu sesión expiró. Inicia sesión de nuevo'); setTimeout(() => location.replace('../index.html'), 1600); throw new Error('401'); }
+  if (r.status === 401) {
+    // Sesión caducada: borrarla, o el login vería el token viejo y rebotaría a la biblioteca
+    try { localStorage.removeItem('token'); localStorage.removeItem('user_admin'); } catch (_) {}
+    toast('Tu sesión expiró. Inicia sesión de nuevo'); setTimeout(() => location.replace('../index.html'), 1600); throw new Error('401');
+  }
   if (!r.ok || d.success === false) { const e = new Error(d.error || 'Error de conexión'); e.code = d.code; e.status = r.status; throw e; }
   return d;
 }
