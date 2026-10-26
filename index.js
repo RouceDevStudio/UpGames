@@ -56,6 +56,7 @@ const twoFactor       = require('./modulos/twoFactor');
 const nexusClient     = require('./modulos/nexusClient');
 const gameDetector    = require('./modulos/gameDetector');
 const autoInfo        = require('./modulos/autoInfo');
+const memCache        = require('./modulos/cache');
 const searchModule    = require('./modulos/search');
 // ==========================================
 
@@ -1823,6 +1824,25 @@ app.get('/items/recomendados/:usuario', async (req, res) => {
         logger.error(`Error: ${error?.message}`);
         res.status(500).json({ success: false, error: 'Error al obtener recomendaciones' });
     }
+});
+
+// GET /nexus/status — indica si el servicio NEXUS IA responde (el panel lo consulta antes de mostrar el iframe)
+app.get('/nexus/status', async (req, res) => {
+    const KEY = 'nexus:status';
+    const hit = memCache.get(KEY);
+    if (hit) return res.json(hit);
+    let online = false;
+    try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 5000);
+        const r = await fetch(process.env.NEXUS_URL || 'https://nexus-production-781b.up.railway.app', { signal: ctrl.signal });
+        clearTimeout(t);
+        const txt = r.status < 500 ? await r.text() : '';
+        online = r.ok && !/Application not found/i.test(txt);
+    } catch (_) { online = false; }
+    const data = { online, checkedAt: new Date().toISOString() };
+    memCache.set(KEY, data, 60);
+    res.json(data);
 });
 
 // GET /items/autoinfo?title=&cat= — reconoce el título y devuelve imagen + descripción breve

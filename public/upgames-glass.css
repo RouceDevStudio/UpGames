@@ -513,3 +513,11 @@ body.ug-scrolled #app-header {
 
 /* En pantallas táctiles el carrusel se desliza con el dedo: sin flechas que tapen el contenido */
 @media (hover: none) { .hero-arrow { display: none !important; } }
+
+/* Carrusel: con margen lateral y proporción contenida en pantallas grandes */
+#hero-carousel { margin: 4px 14px 14px; }
+@media (min-width: 900px) {
+  #hero-carousel { aspect-ratio: 16 / 5; max-width: 1372px; margin: 8px auto 18px; width: calc(100% - 28px); }
+  .hero-title { font-size: 1.6rem; }
+}
+@media (min-width: 900px) { #tut-fab { bottom: calc(22px + env(safe-area-inset-bottom)) !important; } }

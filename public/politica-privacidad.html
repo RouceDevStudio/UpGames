@@ -80,7 +80,9 @@
     <h3>2.2 Monetización (opcionales)</h3>
     <ul>
       <li><strong>Email de PayPal</strong> — solo si quieres recibir pagos; se comparte únicamente con PayPal.</li>
-      <li><strong>Nivel de verificación</strong> — asignado por administradores.</li>
+      <li><strong>Nivel de verificación</strong> — se asigna automáticamente según tus seguidores (100 / 500 / 1.000).</li>
+      <li><strong>Tarjetas registradas</strong> — titular, alias, últimos 4 dígitos, mes/año de vencimiento y marca.
+        <strong>El número completo nunca se envía ni se guarda</strong>: tu navegador lo valida y solo transmite los últimos 4 dígitos. No se recogen códigos CVV.</li>
     </ul>
     <h3>2.3 Datos técnicos automáticos</h3>
     <ul>
@@ -92,7 +94,7 @@
     <h3>2.4 Perfil social (opcionales)</h3>
     <ul>
       <li>Avatar (Cloudinary), biografía, enlaces sociales, seguidores y seguidos — visibles públicamente.</li>
-      <li>Mensajes de chat entre usuarios — visibles solo para los participantes y moderables ante denuncia.</li>
+      <li>Mensajes de chat entre usuarios — visibles solo para los participantes; se eliminan automáticamente a los 90 días.</li>
     </ul>
     <h3>2.5 Contenido publicado</h3>
     <ul>
@@ -147,14 +149,14 @@
   <section class="lg-sec lg-card" id="terceros">
     <h2><span class="n">05</span>Terceros que pueden recibir datos</h2>
     <div class="lg-grid">
-      <div class="lg-tile"><b>💳 PayPal</b>Email de PayPal, solo para pagos.</div>
+      <div class="lg-tile"><b>💳 PayPal</b>Email de PayPal y monto, solo para pagarte.</div>
       <div class="lg-tile"><b>🗄️ MongoDB Atlas</b>Base de datos principal, cifrada en reposo.</div>
       <div class="lg-tile"><b>🚂 Railway</b>Hosting del backend y de NEXUS.</div>
       <div class="lg-tile"><b>🖼️ Cloudinary</b>Avatares, imágenes y videos (URLs públicas).</div>
       <div class="lg-tile"><b>🤖 Anthropic · Groq · Pollinations</b>Texto de consultas a la IA, sin identificación personal.</div>
       <div class="lg-tile"><b>🔎 Steam · App Store · Wikipedia</b>Solo el texto del título, para reconocerlo.</div>
       <div class="lg-tile"><b>📄 GitHub Pages</b>Hosting del frontend estático.</div>
-      <div class="lg-tile"><b>📢 Redes publicitarias</b>En la página puente; pueden usar sus propias cookies.</div>
+      <div class="lg-tile"><b>📢 Redes publicitarias</b>highperformanceformat.com, effectivegatecpm.com y profitablecpmratenetwork.com en la página puente; pueden usar sus propias cookies.</div>
     </div>
     <div class="lg-note g"><span class="ic">✅</span><div>Tus datos personales <strong>nunca</strong> se venden, alquilan ni ceden a
       brokers de datos o empresas de marketing.</div></div>
@@ -165,10 +167,11 @@
     <div class="lg-scroll"><table class="lg-table">
       <tr><th>DATO</th><th>PERIODO</th><th>MECANISMO</th></tr>
       <tr><td>Cuenta activa</td><td>Mientras exista</td><td>Eliminación a petición</td></tr>
-      <tr><td>Cuentas inactivas</td><td>2 años sin acceso</td><td>Purga automática</td></tr>
+      <tr><td>Cuentas inactivas</td><td>2 años sin acceso (sin saldo ni pagos pendientes)</td><td>Purga automática semanal</td></tr>
       <tr><td>IPs de descarga</td><td>24 horas</td><td>TTL automático</td></tr>
       <tr><td>Notificaciones</td><td>30 días</td><td>TTL automático</td></tr>
-      <tr><td>Registros de actividad sospechosa</td><td>90 días</td><td>Módulo anti-fraude</td></tr>
+      <tr><td>Mensajes de chat</td><td>90 días</td><td>TTL automático</td></tr>
+      <tr><td>Registros de actividad sospechosa</td><td>Mientras sean necesarios para la investigación</td><td>Módulo anti-fraude</td></tr>
       <tr><td>Historial de pagos</td><td>7 años</td><td>Obligación fiscal</td></tr>
       <tr><td>Memoria NEXUS</td><td>Mientras exista la cuenta</td><td>Borrado a petición</td></tr>
       <tr><td>Caché de reconocimiento de títulos</td><td>24 horas</td><td>Caché en memoria, sin datos personales</td></tr>
@@ -211,7 +214,8 @@
       <li><strong>Service Worker</strong> — guarda archivos de la app para que funcione más rápido y sin conexión.</li>
     </ul>
     <h3>De terceros</h3>
-    <p>Las redes publicitarias de la página puente pueden instalar cookies propias. Puedes bloquearlas con extensiones como
+    <p>Las redes publicitarias de la página puente (highperformanceformat.com, effectivegatecpm.com y
+      profitablecpmratenetwork.com) pueden instalar cookies propias. Puedes bloquearlas con extensiones como
       uBlock Origin o Privacy Badger sin afectar la funcionalidad principal.</p>
   </section>
 

@@ -76,7 +76,7 @@ let currentObserver = null;
 })();
 
 // ── WAKE UP BACKEND ───────────────────────────────────────
-try{fetch(`${API_URL}/items`,{mode:'no-cors'});}catch(_){}
+fetch(`${API_URL}/items`,{mode:'no-cors'}).catch(()=>{});
 
 // ── CACHE SYSTEM ──────────────────────────────────────────
 const CACHE_KEY_ITEMS   = 'upgames_items_cache';
@@ -225,6 +225,10 @@ function getTileExtras(item) {
   </div>`;
 }
 
+// Nombre visible de cada categoría (el valor guardado en la BD no cambia)
+const CAT_LABEL = { Ajustes:'Herramientas', Optimizacion:'Optimización', Juego:'Juego', ROM:'ROM', Mod:'Mod', Apps:'App', Software:'Software', Video:'Video' };
+const catLabel = c => CAT_LABEL[c] || c || 'General';
+
 // ── CREATE TILE ───────────────────────────────────────────
 function createTile(item, isFeatured=false) {
   const ls = item.linkStatus || (item.reportes>=3?'revision':'online');
@@ -313,7 +317,7 @@ function createTile(item, isFeatured=false) {
 
       </div>
       <div class="tile-info">
-        <div class="tile-cat">${cat}</div>
+        <div class="tile-cat">${catLabel(cat)}</div>
         ${extraBadges}
         <div class="tile-title">${item.title}</div>
         <div class="tile-meta">
@@ -885,7 +889,7 @@ function openDetail(item) {
     });
   } else { galleryEl.style.display='none'; galleryEl.innerHTML=''; }
 
-  document.getElementById('ds-cat').textContent=item.category||'General';
+  document.getElementById('ds-cat').textContent=catLabel(item.category);
   document.getElementById('ds-title').textContent=item.title;
   document.getElementById('ds-dl').textContent=fmt(item.descargasEfectivas||0);
   document.getElementById('ds-rep').textContent=item.reportes||0;
@@ -1067,7 +1071,7 @@ function renderFeaturedEntry(container, item) {
         <img src="${img}" alt="${title}"
              onerror="this.src='https://via.placeholder.com/72x50/12121f/555570?text=?'">
         <div class="ds-featured-info">
-          <div class="ds-featured-cat">${cat}</div>
+          <div class="ds-featured-cat">${catLabel(cat)}</div>
           <div class="ds-featured-title">${title}</div>
           <div class="ds-featured-meta">
             ${lsDot}
@@ -1876,7 +1880,7 @@ function pfRenderFeaturedList(items) {
              alt="" loading="lazy"
              onerror="this.src='https://via.placeholder.com/50x35/12121f/555570?text=?'">
         <div class="pf-featured-item-info">
-          <div class="pf-featured-item-cat">${item.category || 'General'}</div>
+          <div class="pf-featured-item-cat">${catLabel(item.category)}</div>
           <div class="pf-featured-item-title">${(item.title || 'Sin título').substring(0, 52)}</div>
         </div>
         <ion-icon name="pin-outline" class="pf-featured-item-add"></ion-icon>
@@ -2180,7 +2184,7 @@ async function pfSubirJuego() {
     });
     if(res.ok) {
       LS.set('ultima_publicacion', Date.now().toString());
-      toast('✅ Publicado. Esperando aprobación.');
+      toast('✅ Publicado. Aparecerá como "En revisión" hasta verificar el enlace.');
       document.getElementById('pf-addTitle').value='';
       document.getElementById('pf-addDescription').value='';
       document.getElementById('pf-addLink').value='';
@@ -2236,7 +2240,7 @@ async function pfLoadHistorial() {
           <img src="${item.image||'https://via.placeholder.com/300x170?text=Sin+Imagen'}" alt="${item.title}" onerror="this.src='https://via.placeholder.com/300x170?text=Sin+Imagen'">
           <div class="pf-item-info">
             <div class="pf-item-title">${item.title||'Sin título'}</div>
-            <div class="pf-item-cat">${item.category||'General'}</div>
+            <div class="pf-item-cat">${catLabel(item.category)}</div>
             <div class="pf-item-stats">
               <div class="pf-item-stat"><div class="pf-item-stat-val">${item.descargasEfectivas||0}</div><div class="pf-item-stat-lbl">DL</div></div>
               <div class="pf-item-stat"><div class="pf-item-stat-val" style="font-size:.62rem">${lsText}</div><div class="pf-item-stat-lbl">LINK</div></div>
@@ -2967,7 +2971,7 @@ function ecoRenderCategories(items) {
     const pct = Math.round(count / total * 100);
     const col = colors[cat] || '#888';
     return `<div class="eco-cat-item">
-      <div class="eco-cat-label" style="color:${col}">${cat}</div>
+      <div class="eco-cat-label" style="color:${col}">${catLabel(cat)}</div>
       <div class="eco-cat-bar-wrap"><div class="eco-cat-bar" style="width:${pct}%;background:${col}"></div></div>
       <div class="eco-cat-count">${count} (${pct}%)</div>
     </div>`;
@@ -3645,7 +3649,32 @@ function nxToggle() {
   // Bloquear scroll del body y marcar estado para el CSS
   document.body.style.overflow = nxOpen ? 'hidden' : '';
   document.body.classList.toggle('nx-open', nxOpen);
-  if(nxOpen) nxClockStart(); else nxClockStop();
+  if(nxOpen) { nxClockStart(); nxCheckStatus(); } else nxClockStop();
+}
+// Si el servicio NEXUS no responde, mostrar un aviso claro en vez del error crudo del iframe
+let _nxStatusAt = 0;
+async function nxCheckStatus() {
+  if(Date.now() - _nxStatusAt < 60000) return;
+  _nxStatusAt = Date.now();
+  let online = true;
+  try {
+    const r = await fetchTimeout(`${API_URL}/nexus/status`, 6000);
+    if(r.ok) online = (await r.json()).online !== false;
+  } catch(_) { /* sin dato: no bloquear el panel */ }
+  const body = document.querySelector('#nxPanel .nx-body');
+  const foot = document.querySelector('#nxPanel .nx-fl');
+  let aviso = document.getElementById('nxOffline');
+  if(!online && body && !aviso) {
+    aviso = document.createElement('div');
+    aviso.id = 'nxOffline';
+    aviso.style.cssText = 'position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;background:var(--bg1);color:var(--txt2);font-size:.86rem;line-height:1.5';
+    aviso.innerHTML = '<ion-icon name="cloud-offline-outline" style="font-size:2.4rem;color:var(--txt3)"></ion-icon>'
+      + '<strong style="color:var(--txt);font-size:1rem">NEXUS no está disponible ahora</strong>'
+      + '<span>Estamos trabajando para restablecerlo. El resto de UpGames funciona con normalidad.</span>';
+    body.appendChild(aviso);
+  }
+  if(aviso) aviso.style.display = online ? 'none' : 'flex';
+  if(foot) foot.innerHTML = online ? '<i class="nx-fdot"></i>EN LÍNEA' : '<i class="nx-fdot" style="background:var(--txt3);box-shadow:none"></i>FUERA DE LÍNEA';
 }
 function nxClose() {
   nxOpen=false;
