@@ -4932,6 +4932,8 @@ function _notifMeta(n) {
     case 'logro':      return { accent:'#ffd23f', icon:'trophy',             line: n.mensaje || '🎉 ¡Nuevo logro desbloqueado!' };
     case 'descarga':   return { accent:'#32D583', icon:'download',           line: n.mensaje || tag('descargó tu contenido', '#32D583') };
     case 'sistema':
+      if (n.itemTitle === 'Anuncio' || n.itemTitle === 'Equipo')
+                       return { accent:'#32D583', icon: n.itemTitle === 'Equipo' ? 'shield-checkmark' : 'megaphone', line: n.mensaje || 'Anuncio de UpGames' };
       if ((n.itemTitle || '').startsWith('Mensaje'))
                        return { accent:'#5AC8FA', icon:'mail',              line: n.mensaje || tag('te envió un mensaje', '#5AC8FA') };
                        return { accent:'#8888aa', icon:'information-circle', line: n.mensaje || 'Notificación del sistema' };
@@ -5457,16 +5459,32 @@ async function pfLoadLogros() {
         const r = await fetch(`${API_URL}/search/autocomplete?q=${encodeURIComponent(q)}&limit=6`);
         if(!r.ok) return;
         const d = await r.json();
-        const sugs = d.suggestions || d.results || [];
+        const sugs = d.suggestions || d.results || d.items || [];
         if(!sugs.length) { closeDropdown(); return; }
-        drop.innerHTML = sugs.map(s => `
-          <div class="ac-item" onclick="document.getElementById('buscador').value='${(s.title||s).replace(/'/g,"\\'")}';document.getElementById('buscador').dispatchEvent(new Event('input'));document.getElementById('autocomplete-dropdown').style.display='none'" style="padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.05);transition:background .15s" onmouseover="this.style.background='rgba(50,213,131,.07)'" onmouseout="this.style.background=''">
-            ${s.image ? `<img src="${s.image}" style="width:32px;height:32px;border-radius:6px;object-fit:cover" onerror="this.style.display='none'">` : '<ion-icon name="search-outline" style="color:#60607a;font-size:18px"></ion-icon>'}
-            <div>
-              <div style="font-size:13px;color:#f0f0f8">${s.title||s}</div>
-              ${s.category ? `<div style="font-size:10px;color:#60607a">${s.category}</div>` : ''}
-            </div>
-          </div>`).join('');
+        // Construido con DOM: los títulos vienen de usuarios (antes se insertaban como HTML → XSS)
+        drop.replaceChildren(...sugs.map(s => {
+          const titulo = String((s && s.title) || s || '');
+          const row = document.createElement('div');
+          row.className = 'ac-item';
+          row.style.cssText = 'padding:10px 16px;cursor:pointer;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.05);transition:background .15s';
+          row.onmouseover = () => { row.style.background = 'rgba(50,213,131,.07)'; };
+          row.onmouseout  = () => { row.style.background = ''; };
+          row.onclick = () => {
+            const b = document.getElementById('buscador');
+            b.value = titulo; b.dispatchEvent(new Event('input'));
+            drop.style.display = 'none';
+          };
+          const img = s && /^https:\/\//i.test(s.image || '') ? Object.assign(document.createElement('img'), { src: s.image, onerror() { this.style.display = 'none'; } }) : null;
+          if (img) img.style.cssText = 'width:32px;height:32px;border-radius:6px;object-fit:cover';
+          const ico = img || Object.assign(document.createElement('ion-icon'), { name: 'search-outline' });
+          if (!img) ico.style.cssText = 'color:#60607a;font-size:18px';
+          const txt = document.createElement('div');
+          const t = document.createElement('div'); t.style.cssText = 'font-size:13px;color:#f0f0f8'; t.textContent = titulo;
+          txt.appendChild(t);
+          if (s && s.category) { const c = document.createElement('div'); c.style.cssText = 'font-size:10px;color:#60607a'; c.textContent = s.category; txt.appendChild(c); }
+          row.append(ico, txt);
+          return row;
+        }));
         drop.style.display = 'block';
       } catch(_) {}
     }, 250);

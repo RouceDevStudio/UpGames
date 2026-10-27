@@ -527,12 +527,12 @@ function registrar(app, { verificarToken, verificarAdmin }) {
      * POST /referrals/register
      * Se llama tras el registro de un nuevo usuario si viene con ?ref=XXX
      */
-    app.post('/referrals/register', [
-        body('codigo').notEmpty(),
-        body('nuevoUsuario').notEmpty()
+    // Requiere sesión: el referido es siempre quien llama (antes cualquiera podía inflar contadores)
+    app.post('/referrals/register', verificarToken, [
+        body('codigo').notEmpty()
     ], async (req, res) => {
         try {
-            const result = await socialFeed.registrarReferido(req.body.codigo, req.body.nuevoUsuario.toLowerCase());
+            const result = await socialFeed.registrarReferido(req.body.codigo, req.usuario);
             res.json(result);
         } catch (err) {
             res.status(500).json({ ok: false });

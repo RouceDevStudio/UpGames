@@ -466,6 +466,14 @@ const UsuarioSchema = new mongoose.Schema({
     resetPasswordToken:  { type: String, default: null },
     resetPasswordExpires:{ type: Date, default: null },
     bloqueados:  { type: [String], default: [] },   // usuarios bloqueados en el chat
+    // Panel admin: '' = usuario normal. El dueño se reconoce por OWNER_EMAIL (rutas/adminPanel.js)
+    adminRol:      { type: String, enum: ['', 'admin', 'moderador'], default: '', index: true },
+    adminPermisos: { type: [String], default: [] },
+    adminDesde:    { type: Date, default: null },
+    adminPor:      { type: String, default: '' },
+    suspendido:       { type: Boolean, default: false, index: true },   // no puede iniciar sesión ni usar su token
+    motivoSuspension: { type: String, default: '', maxlength: 300 },
+    fechaSuspension:  { type: Date, default: null },
     socialLinks: { type: [String], default: [], validate: { validator: v => v.length <= 4, message: 'Máximo 4 links sociales' } },
     lastUsernameChange: { type: Date, default: null },
     lastEmailChange:    { type: Date, default: null },
@@ -588,6 +596,8 @@ const verificarToken = (req, res, next) => {
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
+        if (adminPanel.estaSuspendido(decoded.usuario))
+            return res.status(403).json({ success: false, error: 'Tu cuenta está suspendida. Contacta a soporte.', code: 'SUSPENDIDO' });
         req.usuario = decoded.usuario;
         req.userTokenData = decoded;
 
@@ -610,17 +620,6 @@ const verificarToken = (req, res, next) => {
         return res.status(401).json({ success: false, error: msg, code });
     }
 };
-
-// ========== ADMIN SESSION ==========
-const adminSessions = new Map();
-const ADMIN_SESSION_DURATION = 8 * 60 * 60 * 1000;
-
-setInterval(() => {
-    const now = Date.now();
-    for (const [token, session] of adminSessions.entries()) {
-        if (now - session.createdAt > ADMIN_SESSION_DURATION) adminSessions.delete(token);
-    }
-}, 60 * 60 * 1000);
 
 // ========== CONSTANTES DE ECONOMÍA ==========
 const CPM_VALUE                = config.CPM_VALUE;
@@ -716,46 +715,13 @@ app.post('/auth/reset-password', [body('token').notEmpty(), body('password').isL
 });
 
 // ========== ADMIN AUTH ==========
-app.post('/admin/auth/login', (req, res) => {
-    const { pin } = req.body;
-    if (!pin || pin !== JWT_SECRET) {
-        logger.warn(`Intento de acceso admin fallido - IP: ${req.ip}`);
-        return res.status(401).json({ success: false, error: 'PIN incorrecto' });
-    }
-    const adminToken = jwt.sign({ role: 'admin', createdAt: Date.now() }, JWT_SECRET + '_ADMIN', { expiresIn: '8h' });
-    adminSessions.set(adminToken, { createdAt: Date.now(), ip: req.ip });
-    logger.info(`Sesión admin iniciada - IP: ${req.ip}`);
-    res.json({ success: true, adminToken, expiresIn: '8h' });
+// Roles (dueño + sub-admins), login con la cuenta, permisos, auditoría,
+// anuncios y diagnóstico → rutas/adminPanel.js
+const adminPanel = require('./rutas/adminPanel').registrar(app, {
+    Usuario, Juego, Comentario, Notificacion, Pago, JWT_SECRET, logger, twoFactor, authLimiter,
+    NEXUS_API: nexusClient.NEXUS_API,
 });
-
-app.get('/admin/auth/verify', (req, res) => {
-    const token = req.headers['x-admin-token'];
-    if (!token || !adminSessions.has(token)) return res.status(401).json({ success: false, error: 'Sesión admin inválida o expirada' });
-    const session = adminSessions.get(token);
-    if (Date.now() - session.createdAt > ADMIN_SESSION_DURATION) {
-        adminSessions.delete(token);
-        return res.status(401).json({ success: false, error: 'Sesión expirada' });
-    }
-    res.json({ success: true, message: 'Sesión activa' });
-});
-
-app.post('/admin/auth/logout', (req, res) => {
-    const token = req.headers['x-admin-token'];
-    if (token) { adminSessions.delete(token); logger.info(`Sesión admin cerrada - IP: ${req.ip}`); }
-    res.json({ success: true, message: 'Sesión cerrada' });
-});
-
-const verificarAdmin = (req, res, next) => {
-    const adminToken = req.headers['x-admin-token'];
-    if (!adminToken) return res.status(401).json({ success: false, error: 'Panel admin: token requerido' });
-    if (!adminSessions.has(adminToken)) return res.status(401).json({ success: false, error: 'Sesión admin inválida o expirada. Ingresa el PIN.' });
-    const session = adminSessions.get(adminToken);
-    if (Date.now() - session.createdAt > ADMIN_SESSION_DURATION) {
-        adminSessions.delete(adminToken);
-        return res.status(401).json({ success: false, error: 'Sesión admin expirada. Ingresa el PIN nuevamente.' });
-    }
-    next();
-};
+const verificarAdmin = adminPanel.verificarAdmin;
 
 // ==========================================
 // ⭐ RUTAS DE ECONOMÍA
@@ -1357,6 +1323,7 @@ app.post('/auth/login', [body('usuario').notEmpty(), body('password').notEmpty()
 
         const esValida = await bcrypt.compare(password, usuario.password);
         if (!esValida) return res.status(401).json({ success: false, error: "Usuario o contraseña incorrectos" });
+        if (usuario.suspendido) return res.status(403).json({ success: false, error: 'Tu cuenta está suspendida' + (usuario.motivoSuspension ? `: ${usuario.motivoSuspension}` : '') + '. Contacta a soporte.', code: 'SUSPENDIDO' });
 
         // ── Verificación 2FA (si el usuario lo tiene activo) ──
         const tieneDFA = await twoFactor.tieneActivo(usuario.usuario);
@@ -1448,7 +1415,7 @@ app.put('/admin/users/ajustar-saldo/:id', verificarAdmin, [param('id').isMongoId
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: "Datos inválidos" });
         const { saldo, motivo } = req.body;
-        const user = await Usuario.findByIdAndUpdate(req.params.id, { $set: { saldo: parseFloat(saldo) } }, { new: true }).select('-password');
+        const user = await Usuario.findByIdAndUpdate(req.params.id, { $set: { saldo: parseFloat(saldo) } }, { new: true }).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires');
         if (!user) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
         logger.info(`ADMIN: Saldo ajustado @${user.usuario} → $${saldo} (${motivo || 'Sin motivo'})`);
         res.json({ success: true, usuario: user.usuario, nuevoSaldo: user.saldo });
@@ -1880,12 +1847,11 @@ app.delete("/items/:id", async (req, res) => {
         const adminToken = req.headers['x-admin-token'];
         const bearerToken = req.headers.authorization?.split(' ')[1];
         if (adminToken) {
-            if (!adminSessions.has(adminToken)) return res.status(401).json({ success: false, error: "Sesión admin inválida" });
-            const session = adminSessions.get(adminToken);
-            if (Date.now() - session.createdAt > ADMIN_SESSION_DURATION) { adminSessions.delete(adminToken); return res.status(401).json({ success: false, error: "Sesión admin expirada" }); }
-            await Juego.findByIdAndDelete(req.params.id);
-            logger.info(`ADMIN eliminó publicación: ${item.title}`);
-            return res.json({ success: true, ok: true });
+            return verificarAdmin(req, res, async () => {
+                await Juego.findByIdAndDelete(req.params.id);
+                logger.info(`ADMIN @${req.admin.usuario} eliminó publicación: ${item.title}`);
+                res.json({ success: true, ok: true });
+            });
         } else if (bearerToken) {
             try {
                 const decoded = jwt.verify(bearerToken, JWT_SECRET);
@@ -2005,11 +1971,13 @@ app.get('/auth/users', verificarAdmin, async (req, res) => {
         const page  = Math.max(1, parseInt(req.query.page)  || 1);
         const limit = Math.min(500, Math.max(1, parseInt(req.query.limit) || 100));
         const skip  = (page - 1) * limit;
-        const q     = req.query.q ? { usuario: { $regex: req.query.q, $options: 'i' } } : {};
+        const q     = req.query.q ? { usuario: { $regex: String(req.query.q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } } : {};
         const [total, users] = await Promise.all([
             Usuario.countDocuments(q),
-            Usuario.find(q).select('-password').sort({ fecha: -1 }).skip(skip).limit(limit).lean()
+            // Nunca exponer hashes ni tokens de reset/verificación (un sub-admin podría secuestrar cuentas)
+            Usuario.find(q).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires').sort({ fecha: -1 }).skip(skip).limit(limit).lean()
         ]);
+        users.forEach(u => { u.esDueno = adminPanel.esOwnerEmail(u.email); });
         res.json({ users, total, page, limit, pages: Math.ceil(total / limit) });
     } catch (error) {
         res.status(500).json([]);
@@ -2018,7 +1986,7 @@ app.get('/auth/users', verificarAdmin, async (req, res) => {
 
 app.get('/admin/users/detalle/:id', verificarAdmin, async (req, res) => {
     try {
-        const user = await Usuario.findById(req.params.id).select('-password').lean();
+        const user = await Usuario.findById(req.params.id).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires').lean();
         if (!user) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
         const juegos = await Juego.find({ usuario: user.usuario }).select('title status descargasEfectivas likesCount linkStatus createdAt').lean();
         res.json({ success: true, user, juegos });
@@ -2032,7 +2000,7 @@ app.put('/admin/users/lista-negra/:id', verificarAdmin, [body('listaNegraAdmin')
         const { listaNegraAdmin, notasAdmin } = req.body;
         const updates = { listaNegraAdmin: !!listaNegraAdmin, fechaListaNegra: listaNegraAdmin ? new Date() : null };
         if (notasAdmin !== undefined) updates.notasAdmin = notasAdmin;
-        const user = await Usuario.findByIdAndUpdate(req.params.id, { $set: updates }, { new: true }).select('-password');
+        const user = await Usuario.findByIdAndUpdate(req.params.id, { $set: updates }, { new: true }).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires');
         if (!user) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
         logger.warn(`Lista negra actualizada: @${user.usuario} → ${listaNegraAdmin}`);
         res.json({ success: true, user });
@@ -2043,7 +2011,7 @@ app.put('/admin/users/lista-negra/:id', verificarAdmin, [body('listaNegraAdmin')
 
 app.put('/admin/users/notas/:id', verificarAdmin, [body('notasAdmin').trim().isLength({ max: 500 })], async (req, res) => {
     try {
-        const user = await Usuario.findByIdAndUpdate(req.params.id, { $set: { notasAdmin: req.body.notasAdmin } }, { new: true }).select('-password');
+        const user = await Usuario.findByIdAndUpdate(req.params.id, { $set: { notasAdmin: req.body.notasAdmin } }, { new: true }).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires');
         if (!user) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
         res.json({ success: true, mensaje: "Notas actualizadas" });
     } catch (error) {
@@ -2053,7 +2021,7 @@ app.put('/admin/users/notas/:id', verificarAdmin, [body('notasAdmin').trim().isL
 
 app.get('/admin/users/lista-negra', verificarAdmin, async (req, res) => {
     try {
-        const users = await Usuario.find({ listaNegraAdmin: true }).select('-password').sort({ fechaListaNegra: -1 }).lean();
+        const users = await Usuario.find({ listaNegraAdmin: true }).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires').sort({ fechaListaNegra: -1 }).lean();
         res.json({ success: true, users, total: users.length });
     } catch (error) {
         res.status(500).json({ success: false, error: "Error al obtener lista negra" });
@@ -2062,6 +2030,9 @@ app.get('/admin/users/lista-negra', verificarAdmin, async (req, res) => {
 
 app.delete('/auth/users/:id', verificarAdmin, async (req, res) => {
     try {
+        if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ success: false, error: 'ID inválido' });
+        const u = await Usuario.findById(req.params.id).select('email').lean();
+        if (u && adminPanel.esOwnerEmail(u.email)) return res.status(400).json({ success: false, error: 'La cuenta del dueño no se puede eliminar' });
         await Usuario.findByIdAndDelete(req.params.id);
         res.json({ success: true, ok: true });
     } catch (error) {
@@ -2073,7 +2044,7 @@ app.put('/auth/admin/verificacion/:username', verificarAdmin, [body('nivel').isI
     try {
         const { username } = req.params;
         const { nivel } = req.body;
-        const user = await Usuario.findOneAndUpdate({ usuario: username.toLowerCase() }, { $set: { verificadoNivel: nivel } }, { new: true }).select('-password');
+        const user = await Usuario.findOneAndUpdate({ usuario: username.toLowerCase() }, { $set: { verificadoNivel: nivel } }, { new: true }).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires');
         if (!user) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
         logger.info(`Verificación actualizada: @${username} → Nivel ${nivel}`);
         // ⭐ Recalcular scores al cambiar nivel
@@ -3362,6 +3333,13 @@ const nexusPublish = require('./modulos/nexusPublish');
 nexusPublish.registrar(app, { Juego, logger });
 // ================================================================================================
 
+// ========== MEJORAS v2 ==========
+// Búsqueda, recomendaciones, gamificación, 2FA, analíticas, social y referidos.
+// Antes se registraba DESPUÉS del handler 404 → sus 37 rutas respondían "Endpoint no encontrado".
+const rutasMejoras = require('./rutas/rutasMejoras');
+rutasMejoras.registrar(app, { verificarToken, verificarAdmin });
+// ================================
+
 // ========== MANEJO DE ERRORES ==========
 app.use((req, res) => {
     res.status(404).json({ error: "Endpoint no encontrado" });
@@ -3371,11 +3349,6 @@ app.use((err, req, res, next) => {
     logger.error(`Error: ${err?.message || "unknown"}`);
     res.status(500).json({ error: "Error interno del servidor" });
 });
-
-// ========== MEJORAS v2 ==========
-const rutasMejoras = require('./rutas/rutasMejoras');
-rutasMejoras.registrar(app, { verificarToken, verificarAdmin });
-// ================================
 
 // ========== INICIAR SERVIDOR ==========
 const PORT = config.PORT;
