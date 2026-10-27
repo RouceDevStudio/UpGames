@@ -120,7 +120,7 @@
         <div id="debug-info" class="debug-info" style="display:none;"></div>
     </div>
 
-    <script src="./upgames-pagos.js" defer></script>
+    <script src="./upgames-pagos.js?v=20261027r" defer></script>
     <script>
         // ⭐ CONFIGURACIÓN
         const API_URL   = "https://upgames-production.up.railway.app";
@@ -533,11 +533,12 @@
             api(`/acceso-directo/${encodeURIComponent(juegoId)}`).then(est => {
                 if (est.desbloqueado && est.link) return listo(est.link, '✅ Ya tienes acceso directo a esta publicación');
                 const conMonedas = est.monedas >= est.precioMonedas;
+                if (!est.pagosActivos && !conMonedas) { box.style.display = 'none'; return; }   // sin forma de pagar: no ofrecerlo
                 box.innerHTML = cabecera() + `<div class="ad-pass-btns">
-                    <button class="ad-pass-btn card" id="ad-pay-card">💳 Pagar US$1 con tarjeta</button>
+                    ${est.pagosActivos ? '<button class="ad-pass-btn card" id="ad-pay-card">💳 Pagar US$1 con tarjeta</button>' : ''}
                     ${conMonedas ? `<button class="ad-pass-btn coins" id="ad-pay-coins">🪙 Usar ${est.precioMonedas} monedas (tienes ${est.monedas})</button>` : ''}
                     <div id="ad-pay-area"></div></div>` + nota;
-                document.getElementById('ad-pay-card').onclick = () => {
+                if (document.getElementById('ad-pay-card')) document.getElementById('ad-pay-card').onclick = () => {
                     document.getElementById('ad-pay-card').style.display = 'none';
                     const area = document.getElementById('ad-pay-area');
                     const montar = () => window.UGPagos.botones(area, {

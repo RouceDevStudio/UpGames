@@ -76,5 +76,25 @@ const opts = { usuario: 'ana', validarRef: r => r === 'acceso:abc', usd: 1 };
         assert.ok(PayPal.crear(cfg, async () => '').activo());
         assert.ok(!PayPal.crear({}, async () => '').activo());
     });
+    await test('credenciales rechazadas por PayPal → pagos desactivados con explicación', async () => {
+        const pp = PayPal.crear({ PAYPAL_CLIENT_ID: 'ATdr3QfFOrdOVmtOJUgOy', PAYPAL_CLIENT_SECRET: 'x', PAYPAL_MODE: 'live' },
+            async () => { throw new Error('PayPal token error: {"error":"invalid_client","error_description":"Client Authentication failed"}'); });
+        assert.ok(pp.activo(), 'antes de verificar se asume disponible');
+        const e = await pp.verificar();
+        assert.strictEqual(e.motivo, 'credenciales_invalidas');
+        assert.ok(!pp.activo());
+        assert.match(e.detalle, /mide 21/);
+    });
+    await test('PayPal caído (red) → no_disponible, no culpa a las credenciales', async () => {
+        const pp = PayPal.crear(cfg, async () => { throw new Error('getaddrinfo ENOTFOUND api-m.paypal.com'); });
+        assert.strictEqual((await pp.verificar()).motivo, 'no_disponible');
+    });
+    await test('credenciales válidas → activo', async () => {
+        const pp = PayPal.crear(cfg, async () => 'token');
+        assert.ok((await pp.verificar()).ok); assert.ok(pp.activo());
+    });
+    await test('sin configurar → sin_configurar', async () => {
+        assert.strictEqual((await PayPal.crear({}, async () => '').verificar()).motivo, 'sin_configurar');
+    });
     console.log(`\n${passed} pruebas OK`);
 })();

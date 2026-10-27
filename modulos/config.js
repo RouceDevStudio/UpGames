@@ -11,6 +11,8 @@ if (!process.env.MONGODB_URI || !process.env.JWT_SECRET) {
     process.exit(1);
 }
 
+const limpio = v => String(v ?? '').trim().replace(/^(['"])(.*)\1$/s, '$2').trim();
+
 const config = {
     // ========== SERVIDOR ==========
     PORT: process.env.PORT || 10000,
@@ -67,9 +69,10 @@ const config = {
     },
     
     // ========== PAYPAL ==========
-    PAYPAL_CLIENT_ID:     process.env.PAYPAL_CLIENT_ID     || null,
-    PAYPAL_CLIENT_SECRET: process.env.PAYPAL_CLIENT_SECRET || null,
-    PAYPAL_MODE:          process.env.PAYPAL_MODE          || 'sandbox', // 'sandbox' | 'live'
+    // limpio(): quita espacios, saltos de línea y comillas que se cuelan al pegar en Railway
+    PAYPAL_CLIENT_ID:     limpio(process.env.PAYPAL_CLIENT_ID)     || null,
+    PAYPAL_CLIENT_SECRET: limpio(process.env.PAYPAL_CLIENT_SECRET) || null,
+    PAYPAL_MODE:          (limpio(process.env.PAYPAL_MODE) || 'sandbox').toLowerCase() === 'live' ? 'live' : 'sandbox', // 'sandbox' | 'live'
 
     // ========== CARACTERÍSTICAS ==========
     FEATURES: {

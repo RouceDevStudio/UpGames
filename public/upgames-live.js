@@ -45,6 +45,10 @@ async function api(path, opts = {}) {
   return d;
 }
 const irLogin = () => { location.href = '../index.html'; };
+// Deja en el log del servidor fallos que solo ocurren en el dispositivo del usuario
+const diag = (tipo, nombre, mensaje, contexto = '') => {
+  try { fetch(API + '/live/diag', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo, nombre, mensaje: String(mensaje).slice(0, 240), contexto }), keepalive: true }).catch(() => {}); } catch (_) {}
+};
 
 /* ══════════════ Estado global ══════════════ */
 let CFG = null;
@@ -54,7 +58,8 @@ const cleanup = [];
 
 function conectar() {
   if (socket) return socket;
-  socket = io(API, { transports: ['websocket'], auth: { token: TOKEN }, reconnectionDelayMax: 6000 });
+  // WebSocket primero; si la red lo bloquea (algunas redes móviles/corporativas), long-polling HTTP
+  socket = io(API, { transports: ['websocket', 'polling'], tryAllTransports: true, auth: { token: TOKEN }, reconnectionDelayMax: 6000 });
   return socket;
 }
 async function cargarConfig() {
@@ -265,7 +270,7 @@ function modoInmersivo(pw, alCambiar) {
 /* ══════════════ Reproductores ══════════════ */
 // WebRTC directo: el creador nos envía una oferta por Socket.IO
 function reproductorP2P(video, liveId, estado) {
-  let pc = null, host = null, cadena = Promise.resolve(), reintento = null;
+  let pc = null, host = null, cadena = Promise.resolve(), reintento = null, fallos = 0;
   const cerrar = () => { try { pc?.close(); } catch (_) {} pc = null; };
   async function manejar({ de, data }) {
     if (data.sdp?.type === 'offer') {
@@ -275,9 +280,15 @@ function reproductorP2P(video, liveId, estado) {
       pc.onicecandidate = e => { if (e.candidate) socket.emit('p2p:senal', { liveId, para: host, data: { candidate: e.candidate } }); };
       pc.onconnectionstatechange = () => {
         const s = pc?.connectionState;
-        if (s === 'connected') { estado('ok'); clearTimeout(reintento); }
+        if (s === 'connected') { estado('ok'); clearTimeout(reintento); fallos = 0; }
+        if (s === 'failed' && ++fallos === 3) {
+          // Sin servidor TURN, algunas redes (4G con NAT estricto, redes corporativas) no permiten video directo
+          diag('video', 'ice_fallo', 'El video P2P no logró conectar tras 3 intentos', navigator.connection?.effectiveType || '');
+        }
         if (s === 'failed' || s === 'disconnected') {
-          estado('cargando', 'Reconectando video…');
+          estado('cargando', fallos >= 3
+            ? 'Tu red no permite conectar el video directo con este creador (pasa en algunas redes móviles o de empresa). Prueba con otra red (Wi-Fi ↔ datos); el chat y los regalos siguen funcionando.'
+            : 'Reconectando video…');
           clearTimeout(reintento);
           reintento = setTimeout(() => { if (!pc || pc.connectionState !== 'connected') socket.emit('p2p:solicitar', { liveId }); }, s === 'failed' ? 500 : 5000);
         }
@@ -522,8 +533,9 @@ async function vistaEstudio() {
   await cargarConfig();
   const prov = CFG.proveedor;
   const puedePantalla = !!navigator.mediaDevices?.getDisplayMedia;
+  const puedeCamara = !!navigator.mediaDevices?.getUserMedia;
   const pref = (() => { try { return JSON.parse(localStorage.getItem('ug_live_pref') || '{}'); } catch (_) { return {}; } })();
-  let fuente = pref.fuente && (pref.fuente !== 'pantalla' || puedePantalla) ? pref.fuente : (puedePantalla ? 'pantalla' : 'camara');
+  let fuente = pref.fuente && (pref.fuente !== 'pantalla' || puedePantalla) && (pref.fuente !== 'camara' || puedeCamara) ? pref.fuente : (puedePantalla ? 'pantalla' : 'camara');
   if (fuente === 'obs' && prov.tipo !== 'mediamtx') fuente = puedePantalla ? 'pantalla' : 'camara';
 
   app.innerHTML = `
@@ -566,7 +578,7 @@ async function vistaEstudio() {
         <div class="field"><label>Fuente</label>
           <div class="src-grid">
             <button class="src" data-f="pantalla" ${puedePantalla ? '' : 'disabled'}><ion-icon name="desktop-outline"></ion-icon>Pantalla<small>${puedePantalla ? 'Juego + audio' : 'Solo en PC'}</small></button>
-            <button class="src" data-f="camara"><ion-icon name="videocam-outline"></ion-icon>Cámara<small>Móvil o webcam</small></button>
+            <button class="src" data-f="camara" ${puedeCamara ? '' : 'disabled'}><ion-icon name="videocam-outline"></ion-icon>Cámara<small>${puedeCamara ? 'Móvil o webcam' : 'No disponible'}</small></button>
             <button class="src" data-f="obs" ${prov.tipo === 'mediamtx' ? '' : 'disabled'}><ion-icon name="construct-outline"></ion-icon>OBS<small>${prov.tipo === 'mediamtx' ? 'Pro · RTMP' : 'Próximamente'}</small></button>
           </div>
         </div>
@@ -580,9 +592,11 @@ async function vistaEstudio() {
           ${puedePantalla ? '<div class="note" style="margin-top:12px">💡 Al compartir, elige <b>la pestaña o pantalla del juego</b> y activa <b>“Compartir audio”</b> para que se escuche el juego.</div>' : '<div class="note warn" style="margin-top:12px">📱 Tu navegador no permite compartir pantalla (los móviles no lo soportan). Puedes transmitir con la cámara, o desde un PC para compartir tu juego.</div>'}
           ${prov.tipo === 'p2p' ? `<div class="note warn">📡 Modo directo: hasta <b>${prov.p2pMax} espectadores con video</b>; el resto puede usar el chat. Tu subida de internet se reparte entre ellos, así que usa una calidad acorde a tu conexión.</div>` : ''}
         </div>
+        ${!puedeCamara && !puedePantalla ? `<div class="note warn" id="sin-media">🚫 <b>Este navegador no permite usar la cámara.</b> Pasa casi siempre al abrir el enlace dentro de otra app (Instagram, Facebook, TikTok, WhatsApp…). Ábrelo en <b>Chrome</b> o <b>Safari</b> (menú ⋮ → “Abrir en el navegador”) y vuelve a intentarlo.</div>` : ''}
+        <div class="note warn" id="cap-err" role="alert" hidden></div>
         <div class="studio-actions">
           <button class="btn btn-ghost" id="b-prev"><ion-icon name="eye-outline"></ion-icon> Vista previa</button>
-          <button class="btn btn-live" id="b-go" disabled><ion-icon name="radio"></ion-icon> Iniciar transmisión</button>
+          <button class="btn btn-live" id="b-go"><ion-icon name="radio"></ion-icon> Iniciar transmisión</button>
         </div>
       </div>
       <div class="panel glass" style="margin-top:16px" id="live-ctrl" hidden>
@@ -607,13 +621,13 @@ async function vistaEstudio() {
   let stream = null, mezcla = null, liveId = null, enVivo = false, inicio = 0, ganado = 0, pico = 0, whip = null;
   const peers = new Map();   // espectador → { pc, cadena }
   const timers = [];
+  let liberarPantalla = null;
   cleanup.push(() => timers.forEach(clearInterval));
 
   const guardarPref = () => { try { localStorage.setItem('ug_live_pref', JSON.stringify({ fuente, titulo: $('f-tit').value, categoria: $('f-cat').value, calidad: $('f-q').value, mic: $('f-mic').checked })); } catch (_) {} };
   function marcarFuente() {
     document.querySelectorAll('.src').forEach(b => b.classList.toggle('on', b.dataset.f === fuente));
     $('obs-box').hidden = fuente !== 'obs'; $('nav-box').hidden = fuente === 'obs'; $('b-prev').hidden = fuente === 'obs';
-    $('b-go').disabled = fuente !== 'obs' && !stream;
     if (fuente === 'obs') pintarOBS();
   }
   document.querySelectorAll('.src').forEach(b => b.onclick = () => { if (b.disabled || enVivo) return; fuente = b.dataset.f; detenerCaptura(); marcarFuente(); guardarPref(); });
@@ -641,10 +655,19 @@ async function vistaEstudio() {
     stream = null;
     mezcla?.cerrar(); mezcla = null;
     video.srcObject = null;
-    if (!enVivo) { pov.hidden = false; $('b-go').disabled = fuente !== 'obs'; }
+    if (!enVivo) pov.hidden = false;
   }
+  // iOS solo deja sonar un AudioContext creado/reanudado DURANTE el toque del usuario
+  let ctxAudio = null;
+  const prepararAudio = () => {
+    try {
+      ctxAudio = ctxAudio || new (window.AudioContext || window.webkitAudioContext)();
+      if (ctxAudio.state === 'suspended') ctxAudio.resume().catch(() => {});
+    } catch (_) {}
+  };
   function mezclador(fuentes) {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = ctxAudio || new (window.AudioContext || window.webkitAudioContext)();
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     const dest = ctx.createMediaStreamDestination();
     const nodos = {};
     for (const [k, s] of Object.entries(fuentes)) {
@@ -663,13 +686,56 @@ async function vistaEstudio() {
       raf = requestAnimationFrame(medir);
     };
     medir();
-    return { pista: dest.stream.getAudioTracks()[0] || null, nodos, ctx, cerrar() { cancelAnimationFrame(raf); ctx.close().catch(() => {}); } };
+    const fuentesAudio = Object.values(nodos);
+    return { pista: dest.stream.getAudioTracks()[0] || null, nodos, ctx, cerrar() {
+      cancelAnimationFrame(raf);
+      fuentesAudio.forEach(n => { try { n.g.disconnect(); } catch (_) {} });
+      if (ctx !== ctxAudio) ctx.close().catch(() => {});
+    } };
+  }
+  function errorCaptura(e) {
+    const n = e?.name || '';
+    if (!navigator.mediaDevices) return 'Este navegador no permite usar la cámara. Ábrelo en Chrome o Safari (no dentro de otra app) y vuelve a intentarlo.';
+    if (n === 'NotAllowedError' || n === 'SecurityError' || n === 'PermissionDeniedError')
+      return fuente === 'pantalla'
+        ? 'Cancelaste o bloqueaste el permiso para compartir pantalla. Vuelve a tocar el botón y elige qué compartir.'
+        : 'Bloqueaste el permiso de cámara o micrófono. Toca el candado 🔒 (o ⓘ) junto a la dirección del sitio → Permisos → permite Cámara y Micrófono, recarga la página y vuelve a intentarlo.';
+    if (n === 'NotFoundError' || n === 'DevicesNotFoundError' || n === 'OverconstrainedError') return 'No encontramos una cámara disponible en este dispositivo.';
+    if (n === 'NotSupportedError' || n === 'TypeError') return 'Este navegador no deja usar la cámara en esta página. Ábrela en Chrome o Safari actualizados (no dentro de otra app) y vuelve a intentarlo.';
+    if (n === 'NotReadableError' || n === 'TrackStartError' || n === 'AbortError') return 'La cámara está ocupada por otra app (cámara, videollamada, otra pestaña). Ciérrala y vuelve a intentarlo.';
+    return 'No se pudo iniciar la captura: ' + (e?.message || n || 'error desconocido');
+  }
+  const mostrarError = msg => { const el = $('cap-err'); if (!el) return toast(msg, 5000); el.textContent = msg ? '⚠️ ' + msg : ''; el.hidden = !msg; if (msg) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+  const reportar = (e, contexto) => { try { fetch(API + '/live/diag', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'captura', nombre: e?.name || 'Error', mensaje: e?.message || String(e), contexto }), keepalive: true }).catch(() => {}); } catch (_) {} };
+  // Cámara: de lo ideal a lo más simple. Si el micrófono se rechaza, sigue solo con video.
+  async function abrirCamara(q, conMic) {
+    const audio = conMic ? { echoCancellation: true, noiseSuppression: true } : false;
+    const intentos = [
+      { video: { width: { ideal: q.w }, height: { ideal: q.h }, frameRate: { ideal: q.fps }, facingMode: camara }, audio },
+      { video: { facingMode: camara }, audio },
+      { video: true, audio },
+    ];
+    let ultimo;
+    for (const c of intentos) {
+      try { return await navigator.mediaDevices.getUserMedia(c); }
+      catch (e) {
+        ultimo = e;
+        if (conMic && (e.name === 'NotAllowedError' || e.name === 'NotFoundError' || e.name === 'NotReadableError')) {
+          try { const v = await navigator.mediaDevices.getUserMedia({ ...c, audio: false }); toast('Sin acceso al micrófono: transmitirás solo video', 4500); return v; }
+          catch (e2) { ultimo = e2; }
+        }
+        if (e.name === 'NotAllowedError' || e.name === 'SecurityError') break;   // reintentar no cambia un permiso denegado
+      }
+    }
+    throw ultimo;
   }
   async function capturar() {
     detenerCaptura();
+    mostrarError('');
     const q = CALIDADES[$('f-q').value] || CALIDADES['720p30'];
     const conMic = $('f-mic').checked;
     let vid, mic = null;
+    if (!navigator.mediaDevices?.getUserMedia) { mostrarError(errorCaptura(null)); reportar({ name: 'SinMediaDevices', message: 'navigator.mediaDevices no existe' }, location.protocol); return false; }
     try {
       if (fuente === 'pantalla') {
         vid = await navigator.mediaDevices.getDisplayMedia({
@@ -679,12 +745,14 @@ async function vistaEstudio() {
         });
         if (conMic) mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).catch(() => { toast('No se pudo usar el micrófono'); return null; });
       } else {
-        vid = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: q.w }, height: { ideal: q.h }, frameRate: { ideal: q.fps }, facingMode: camara }, audio: conMic ? { echoCancellation: true, noiseSuppression: true } : false });
+        vid = await abrirCamara(q, conMic);
       }
     } catch (e) {
-      toast(e.name === 'NotAllowedError' ? 'Permiso denegado. Necesitamos acceso para transmitir.' : 'No se pudo iniciar la captura: ' + e.message, 4000);
+      mostrarError(errorCaptura(e));
+      reportar(e, `fuente=${fuente} mic=${conMic}`);
       return false;
     }
+    if (!vid.getVideoTracks().length) { mostrarError('La cámara no entregó video. Vuelve a intentarlo.'); vid.getTracks().forEach(t => t.stop()); return false; }
     const vt = vid.getVideoTracks()[0];
     if (vt && 'contentHint' in vt) vt.contentHint = 'motion';   // en juegos, fluidez antes que nitidez
     const juegoAudio = fuente === 'pantalla' && vid.getAudioTracks().length ? new MediaStream(vid.getAudioTracks()) : null;
@@ -704,7 +772,6 @@ async function vistaEstudio() {
       if (enVivo) { toast('Dejaste de compartir. Elige de nuevo qué transmitir o termina el live.', 5000); reemplazarVideo(); }
       else detenerCaptura();
     });
-    $('b-go').disabled = false;
     return true;
   }
   // Cambiar la pista de video en pleno directo sin cortar a los espectadores
@@ -796,9 +863,16 @@ async function vistaEstudio() {
   }
 
   // ── Iniciar / terminar ──
-  $('b-prev').onclick = () => capturar();
+  $('b-prev').onclick = () => { prepararAudio(); capturar(); };
   $('b-go').onclick = async () => {
-    if (fuente !== 'obs' && !stream && !(await capturar())) return;
+    if ($('b-go').dataset.ocupado) return;
+    prepararAudio();
+    if (fuente !== 'obs' && !stream) {
+      $('b-go').dataset.ocupado = '1'; $('b-go').innerHTML = '<ion-icon name="videocam"></ion-icon> Abriendo cámara…';
+      const ok = await capturar();
+      delete $('b-go').dataset.ocupado; $('b-go').innerHTML = '<ion-icon name="radio"></ion-icon> Iniciar transmisión';
+      if (!ok) return;
+    }
     guardarPref();
     $('b-go').disabled = true; $('b-go').innerHTML = '<ion-icon name="hourglass"></ion-icon> Iniciando…';
     try {
@@ -811,7 +885,8 @@ async function vistaEstudio() {
       }
       empezarDirecto(d.live);
     } catch (e) {
-      toast(e.message, 4000);
+      mostrarError(e.status === 403 ? e.message : `No se pudo iniciar el live: ${e.message}`);
+      reportar(e, 'iniciar');
       $('b-go').disabled = false; $('b-go').innerHTML = '<ion-icon name="radio"></ion-icon> Iniciar transmisión';
     }
   };
@@ -832,6 +907,20 @@ async function vistaEstudio() {
     // En el móvil el creador ve su cámara a pantalla completa con los comentarios encima
     if (esMovil()) inm.entrar();
     window.onbeforeunload = e => { if (enVivo) { e.preventDefault(); e.returnValue = ''; } };
+    // El celular apaga la pantalla a los pocos segundos y con ella la cámara: mantenerla encendida
+    let wake = null;
+    const pedirPantalla = async () => { try { if (enVivo && document.visibilityState === 'visible' && 'wakeLock' in navigator && !wake) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } } catch (_) {} };
+    const alVolver = () => {
+      if (!enVivo) return;
+      if (document.visibilityState === 'visible') { pedirPantalla(); if (fuera) toast('Volviste al live. Si tus espectadores dejaron de verte, ya se reconectan.', 4000); fuera = false; }
+      else fuera = true;
+    };
+    let fuera = false;
+    document.addEventListener('visibilitychange', alVolver);
+    liberarPantalla = () => { document.removeEventListener('visibilitychange', alVolver); wake?.release().catch(() => {}); wake = null; };
+    cleanup.push(liberarPantalla);
+    pedirPantalla();
+    if (esMovil()) setTimeout(() => toast('📱 No salgas de la app mientras transmites: el teléfono pausa la cámara en segundo plano.', 5000), 1500);
 
     conectar();
     $('side').classList.remove('vacio');
@@ -906,6 +995,7 @@ async function vistaEstudio() {
     enVivo = false; window.onbeforeunload = null;
     timers.forEach(clearInterval); timers.length = 0;
     inm.salir(); document.body.classList.remove('inm-on');
+    liberarPantalla?.();
     let resumen = null;
     if (!remoto) { try { resumen = (await api('/live/finalizar', { method: 'POST' })).resumen; } catch (_) {} }
     peers.forEach((_, p) => cerrarPeer(p)); whip?.cerrar(); whip = null;

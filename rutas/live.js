@@ -64,6 +64,15 @@ function registrar(app, server, deps) {
     const paypal = PayPal.crear(config, getPayPalAccessToken);
     const pp = paypal.req;
     const ppActivo = paypal.activo;
+    // Verificar credenciales con PayPal al arrancar (y reintentar si falla la red)
+    const revisarPayPal = () => paypal.verificar().then(e => {
+        if (e.ok) logger.info(`[pagos] PayPal verificado (modo ${config.PAYPAL_MODE}) ✓`);
+        else if (e.motivo === 'sin_configurar') logger.info('[pagos] PayPal sin configurar: compras desactivadas');
+        else logger.error(`[pagos] PAGOS DESACTIVADOS — ${e.detalle}`);
+        return e;
+    }).catch(() => {});
+    revisarPayPal();
+    setInterval(() => { if (paypal.configurado() && paypal.estado().ok !== true) revisarPayPal(); }, 10 * 60000).unref();
     const mtxSecreto = process.env.MEDIAMTX_AUTH_SECRET || '';
     const mtxApi = (process.env.MEDIAMTX_API_URL || '').replace(/\/+$/, '');
 
@@ -338,7 +347,20 @@ function registrar(app, server, deps) {
         regalos: L.REGALOS, paquetes: L.PAQUETES,
         comision: L.COMISION, retencionDias: L.RETENCION_DIAS, monedaUsd: L.MONEDA_USD,
         paypal: ppActivo() ? { clientId: config.PAYPAL_CLIENT_ID, modo: config.PAYPAL_MODE } : null,
+        pagos: ppActivo() ? 'ok' : (paypal.estado().motivo || 'sin_configurar'),
     }));
+
+    // Diagnóstico desde el navegador (cámara que no abre, procesador de pagos que no
+    // carga…): deja el error real en el log para poder corregirlo. Limitado por IP.
+    const limDiag = L.limitador(5, 0.05);
+    app.post('/live/diag', (req, res) => {
+        const ip = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+        if (!limDiag(ip)) return res.status(429).json({ success: false });
+        const b = req.body || {};
+        const t = (v, n) => String(v ?? '').replace(/[\r\n\t]+/g, ' ').slice(0, n);
+        logger.warn(`[diag] ${t(b.tipo, 30)} · ${t(b.nombre, 60)}: ${t(b.mensaje, 240)} · ${t(b.contexto, 160)} · UA: ${t(req.headers['user-agent'], 160)}`);
+        res.json({ success: true });
+    });
 
     app.get('/live/activos', async (req, res) => {
         try {
@@ -607,7 +629,7 @@ function registrar(app, server, deps) {
                 activos: activos.map(l => publico(l, sala(l._id))),
                 ventas: { usd: r2(t.compra?.usd), monedas: t.compra?.monedas || 0, compras: t.compra?.n || 0 },
                 regalos: { n: t.regalo?.n || 0, monedas: t.regalo?.monedas || 0, comisionPlataforma: r2(t.regalo?.plataforma), paraCreadores: r2(t.regalo?.creadores), retenido: r2(retenido[0]?.usd) },
-                config: { comision: L.COMISION, retencionDias: L.RETENCION_DIAS, proveedor: L.proveedor().tipo, paypal: ppActivo() },
+                config: { comision: L.COMISION, retencionDias: L.RETENCION_DIAS, proveedor: L.proveedor().tipo, paypal: ppActivo(), paypalEstado: paypal.estado() },
             });
         } catch (e) { logger.error(`[live] admin resumen: ${e.message}`); err(res, 500, 'Error al cargar el resumen'); }
     });

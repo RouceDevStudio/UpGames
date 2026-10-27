@@ -50,6 +50,15 @@
   .ugp-bal small{color:#A3A8B6;font-size:.75rem}`;
   function estilos() { if (document.getElementById('ugp-css')) return; const s = document.createElement('style'); s.id = 'ugp-css'; s.textContent = css; document.head.appendChild(s); }
 
+  // Reporta al servidor un fallo que solo ocurre en el navegador del usuario
+  const diag = (nombre, mensaje, contexto = '') => {
+    try { fetch(API + '/live/diag', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo: 'pagos', nombre, mensaje: String(mensaje).slice(0, 240), contexto }), keepalive: true }).catch(() => {}); } catch (_) {}
+  };
+  const MOTIVOS = {
+    sin_configurar: 'Los pagos con tarjeta se están activando. Vuelve en unos minutos.',
+    credenciales_invalidas: 'Los pagos con tarjeta están en mantenimiento en este momento. Mientras tanto puedes usar tus monedas.',
+    no_disponible: 'El procesador de pagos no responde en este momento. Inténtalo de nuevo en unos minutos.',
+  };
   let cfg = null, sdk = null;
   async function config() {
     if (!cfg) cfg = api('/live/config').catch(e => { cfg = null; throw e; });
@@ -63,7 +72,13 @@
       s.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(clientId)}&currency=USD&intent=capture&components=buttons,funding-eligibility&enable-funding=card&disable-funding=paylater,venmo`;
       s.async = true;
       s.onload = () => ok(window.paypal);
-      s.onerror = () => { sdk = null; ko(new Error('No se pudo cargar el procesador de pagos. Revisa tu conexión.')); };
+      s.onerror = () => {
+        sdk = null; s.remove();
+        diag('sdk_no_carga', 'El script de PayPal no cargó', navigator.onLine ? 'online' : 'offline');
+        ko(new Error(navigator.onLine
+          ? 'No se pudo cargar el procesador de pagos (PayPal). Si usas un bloqueador de anuncios o protección contra rastreo, desactívalo en esta página e inténtalo de nuevo.'
+          : 'Sin conexión a internet. Conéctate e inténtalo de nuevo.'));
+      };
       document.head.appendChild(s);
     });
     return sdk;
@@ -79,9 +94,14 @@
     el.innerHTML = `<div class="ugp"><div class="ugp-load"></div></div>`;
     let c;
     try { c = await config(); } catch (e) { el.innerHTML = `<p class="ugp-msg warn">${esc(e.message)}</p>`; return; }
-    if (!c.paypal) { el.innerHTML = `<p class="ugp-msg warn">Los pagos con tarjeta se están activando. Vuelve en unos minutos.</p>`; return; }
+    if (!c.paypal) { el.innerHTML = `<p class="ugp-msg warn">${esc(MOTIVOS[c.pagos] || MOTIVOS.sin_configurar)}</p>`; return; }
     let pp;
-    try { pp = await cargarSDK(c.paypal.clientId); } catch (e) { el.innerHTML = `<p class="ugp-msg warn">${esc(e.message)}</p>`; return; }
+    try { pp = await cargarSDK(c.paypal.clientId); }
+    catch (e) {
+      el.innerHTML = `<p class="ugp-msg warn">${esc(e.message)}</p><button type="button" class="ugp-pack" style="width:100%;margin-top:8px" data-ugp="reintentar">↻ Reintentar</button>`;
+      el.querySelector('[data-ugp="reintentar"]').onclick = () => botones(el, opts);
+      return;
+    }
     el.innerHTML = `<div class="ugp">
       <div class="ugp-card" data-ugp="card">
         <span class="ugp-tag">RECOMENDADO</span>
@@ -102,7 +122,7 @@
           (opts.alError || alert)(e.message);
         }
       },
-      onError: () => (opts.alError || alert)('No se pudo procesar el pago. Intenta de nuevo o usa otra tarjeta.'),
+      onError: err => { diag('boton_error', err?.message || err); (opts.alError || alert)('No se pudo procesar el pago. Intenta de nuevo o usa otra tarjeta.'); },
     };
     const card = pp.Buttons({ ...comunes, fundingSource: pp.FUNDING.CARD, style: { layout: 'vertical', shape: 'pill', height: 48 } });
     if (card.isEligible()) await card.render(el.querySelector('[data-ugp="card-btn"]')).catch(() => {});
@@ -125,8 +145,9 @@
     catch (e) { el.innerHTML = `<p class="ugp-msg warn">${esc(e.message)}</p>`; return; }
     el.innerHTML = `<div class="ugp">
       <div class="ugp-bal"><div><small>Tus monedas</small><br><b data-ugp="bal">🪙 ${fmt(saldo.monedas)}</b></div><small style="text-align:right">${aviso || 'Para regalos en lives y<br>acceso directo a enlaces'}</small></div>
-      <div class="ugp-packs">${c.paquetes.map(p => `<button type="button" class="ugp-pack" data-p="${esc(p.id)}">${p.extra ? `<span class="x">${esc(p.extra)}</span>` : ''}<div class="m">🪙 ${fmt(p.monedas)}</div><div class="u">US$${p.usd.toFixed(2)}</div></button>`).join('')}</div>
-      <div data-ugp="pago"><p class="ugp-msg">Elige un paquete para pagar con tarjeta o PayPal.</p></div>
+      ${c.paypal ? '' : `<p class="ugp-msg warn">${esc(MOTIVOS[c.pagos] || MOTIVOS.sin_configurar)}</p>`}
+      <div class="ugp-packs"${c.paypal ? '' : ' hidden'}>${c.paquetes.map(p => `<button type="button" class="ugp-pack" data-p="${esc(p.id)}">${p.extra ? `<span class="x">${esc(p.extra)}</span>` : ''}<div class="m">🪙 ${fmt(p.monedas)}</div><div class="u">US$${p.usd.toFixed(2)}</div></button>`).join('')}</div>
+      <div data-ugp="pago"${c.paypal ? '' : ' hidden'}><p class="ugp-msg">Elige un paquete para pagar con tarjeta o PayPal.</p></div>
       <p class="ugp-safe">Las monedas no son reembolsables ni canjeables por dinero. <a href="./terminos_condiciones.html#pagos" target="_blank" style="color:#32D583">Términos</a></p>
     </div>`;
     el.querySelectorAll('.ugp-pack').forEach(b => b.onclick = () => {

@@ -13,7 +13,31 @@ const https = require('https');
 
 function crear(config, getToken, { transporte } = {}) {
     const host = () => config.PAYPAL_MODE === 'live' ? 'api-m.paypal.com' : 'api-m.sandbox.paypal.com';
-    const activo = () => !!(config.PAYPAL_CLIENT_ID && config.PAYPAL_CLIENT_SECRET);
+    const configurado = () => !!(config.PAYPAL_CLIENT_ID && config.PAYPAL_CLIENT_SECRET);
+
+    // Verificación real con PayPal (OAuth). Si las credenciales están mal copiadas o
+    // no corresponden al modo (live/sandbox) los pagos se desactivan con un aviso claro
+    // en el log, en vez de mostrar botones que fallan en el navegador del comprador.
+    let estado = { ok: null, motivo: '', detalle: '' };
+    async function verificar() {
+        if (!configurado()) return (estado = { ok: false, motivo: 'sin_configurar', detalle: 'Faltan PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET' });
+        if (transporte) return (estado = { ok: true, motivo: '', detalle: '' });
+        try {
+            await getToken();
+            estado = { ok: true, motivo: '', detalle: '' };
+        } catch (e) {
+            const invalidas = /invalid_client|Client Authentication failed|401/i.test(e.message);
+            estado = {
+                ok: false, motivo: invalidas ? 'credenciales_invalidas' : 'no_disponible',
+                detalle: invalidas
+                    ? `PayPal rechazó PAYPAL_CLIENT_ID/PAYPAL_CLIENT_SECRET en modo "${config.PAYPAL_MODE}". Copia ambos completos desde developer.paypal.com → Apps & Credentials (pestaña ${config.PAYPAL_MODE === 'live' ? 'Live' : 'Sandbox'}). El Client ID mide unos 80 caracteres (el actual mide ${String(config.PAYPAL_CLIENT_ID).length}).`
+                    : `No se pudo contactar a PayPal: ${e.message.slice(0, 160)}`,
+            };
+        }
+        return estado;
+    }
+    // Pagos disponibles: configurado y no rechazado por PayPal (null = aún sin verificar)
+    const activo = () => configurado() && estado.ok !== false;
 
     async function req(method, path, body, extraHeaders = {}) {
         if (transporte) return transporte(method, path, body, extraHeaders);   // tests
@@ -82,7 +106,7 @@ function crear(config, getToken, { transporte } = {}) {
         return { captura, referencia: pu.reference_id };
     }
 
-    return { activo, req, crearOrden, capturar };
+    return { activo, configurado, verificar, estado: () => ({ ...estado }), req, crearOrden, capturar };
 }
 
 module.exports = { crear };
