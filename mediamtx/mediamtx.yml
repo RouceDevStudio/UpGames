@@ -1,0 +1,45 @@
+# ══════════════════════════════════════════════════════════════════
+#  UpGames Live — servidor de medios (MediaMTX) · OPCIONAL
+#  Entrada: OBS por RTMP (:1935) y navegador por WHIP (:8889)
+#  Salida:  LL-HLS (:8888) para los espectadores, sin límite de público
+#  Quién puede publicar lo decide el backend de UpGames (authMethod: http).
+#  Cualquier valor se puede sobrescribir con variables MTX_<CLAVE>, p. ej.
+#  MTX_AUTHHTTPADDRESS=https://backend/live/mediamtx/auth?s=SECRETO
+# ══════════════════════════════════════════════════════════════════
+logLevel: info
+
+authMethod: http
+authHTTPAddress: http://upgames.railway.internal:8080/live/mediamtx/auth?s=CAMBIA_ESTE_SECRETO
+authHTTPExclude:
+  - action: api
+  - action: metrics
+
+# API interna: el backend la consulta para saber qué canales están emitiendo.
+# No le pongas dominio público: úsala por la red privada de Railway.
+api: yes
+apiAddress: :9997
+
+rtmp: yes
+rtmpAddress: :1935
+
+hls: yes
+hlsAddress: :8888
+hlsAllowOrigin: '*'
+hlsVariant: lowLatency
+hlsSegmentCount: 7
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+hlsSegmentMaxSize: 50M
+# Sin espectadores no se generan segmentos HLS: ahorra CPU y ancho de banda
+hlsAlwaysRemux: no
+
+webrtc: yes
+webrtcAddress: :8889
+webrtcAllowOrigin: '*'
+
+rtsp: no
+srt: no
+
+paths:
+  # Solo se usan rutas live/<usuario>; el backend rechaza cualquier otra
+  all_others:

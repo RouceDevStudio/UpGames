@@ -11,7 +11,7 @@
 // IMPORTANTE: bump CACHE_VERSION cuando cambies archivos estáticos.
 // ========================================
 
-const CACHE_VERSION = 'upgames-v6.7.0';
+const CACHE_VERSION = 'upgames-v6.8.0';
 const CACHE_STATIC  = `${CACHE_VERSION}-static`;
 const CACHE_RUNTIME = `${CACHE_VERSION}-runtime`;
 const CACHE_API     = `${CACHE_VERSION}-api`;
@@ -22,6 +22,7 @@ const PRECACHE_URLS = [
     './biblioteca.html',
     './perfil-publico.html',
     './chats.html',
+    './live.html',
     './puente.html',
     './politica-privacidad.html',
     './terminos_condiciones.html',
@@ -83,6 +84,8 @@ self.addEventListener('fetch', (event) => {
     // Ignorar non-GET y extensiones
     if (request.method !== 'GET') return;
     if (url.protocol === 'chrome-extension:') return;
+    // Tiempo real y video en vivo: nunca pasar por caché (Socket.IO, HLS)
+    if (url.pathname.startsWith('/socket.io/') || /\.(m3u8|m4s|ts)(\?|$)/i.test(url.pathname)) return;
 
     // Estrategia 1: API calls → Network first, fallback a cache
     if (isApiRequest(url)) {

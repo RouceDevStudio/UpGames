@@ -5226,3 +5226,10 @@ button.pf2-stat { cursor: pointer; }
   #nxPanel.expanded{right:24px;left:24px;top:84px;bottom:24px;width:auto;height:auto;border-radius:26px;inset:84px 24px 24px 24px}
   .nx-form{padding-bottom:12px}
 }
+
+/* ── Live: acceso en el header y en el perfil ── */
+.hdr-live { position: relative; }
+.hdr-live-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: #ff4d6d; box-shadow: 0 0 0 0 rgba(255,77,109,.7); animation: hdrLivePulse 1.6s infinite; }
+@keyframes hdrLivePulse { 0% { box-shadow: 0 0 0 0 rgba(255,77,109,.7); } 70% { box-shadow: 0 0 0 7px rgba(255,77,109,0); } 100% { box-shadow: 0 0 0 0 rgba(255,77,109,0); } }
+.pf2-btn-live ion-icon { color: #ff4d6d; }
+@media (prefers-reduced-motion: reduce) { .hdr-live-dot { animation: none; } }

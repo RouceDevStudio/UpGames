@@ -62,6 +62,9 @@
     <div id="autocomplete-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#1a1a28;border:1px solid rgba(50,213,131,.2);border-radius:0 0 12px 12px;z-index:1000;max-height:280px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.5)"></div>
   </div>
   <div class="hdr-actions">
+    <button class="hdr-btn hdr-live" onclick="location.href='./live.html'" title="En vivo" aria-label="Transmisiones en vivo">
+      <ion-icon name="radio-outline"></ion-icon><span class="hdr-live-dot" id="hdr-live-dot" hidden></span>
+    </button>
     <button class="hdr-btn" onclick="switchTab('profile')" title="Subir contenido" aria-label="Subir contenido">
       <ion-icon name="cloud-upload-outline"></ion-icon>
     </button>
@@ -176,6 +179,7 @@
       <div class="pf2-actions">
         <button type="button" class="pf2-btn" onclick="pfOpenSettings()">Editar perfil</button>
         <button type="button" class="pf2-btn" onclick="pfShareProfile()">Compartir perfil</button>
+        <button type="button" class="pf2-btn pf2-btn-icon pf2-btn-live" onclick="window.location.href='./live.html?estudio=1'" aria-label="Ir en vivo" title="Ir en vivo"><ion-icon name="radio"></ion-icon></button>
         <button type="button" class="pf2-btn pf2-btn-icon" id="pf-chat-btn" onclick="window.location.href='./chats.html'" aria-label="Chats"><ion-icon name="chatbubbles-outline"></ion-icon><span class="pf2-chat-n" id="pf-chat-n" hidden></span></button>
         <button type="button" class="pf2-btn pf2-btn-icon pf2-btn-danger" onclick="pfLogout()" aria-label="Cerrar sesión"><ion-icon name="log-out-outline"></ion-icon></button>
       </div>

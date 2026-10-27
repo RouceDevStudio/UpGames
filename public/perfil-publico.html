@@ -712,7 +712,13 @@ display:block;
 #user-items .empty-msg, #user-videos .empty-msg { grid-column: 1 / -1; }
 .hero-bio { font-family: var(--ff-body, 'Manrope', system-ui, sans-serif) !important; font-size: .9rem !important; line-height: 1.45 !important; color: var(--txt2) !important; white-space: pre-line; letter-spacing: 0 !important; }
 @media (prefers-reduced-motion: reduce) { .pp-tile img { transition: none; } }
-</style>
+
+        .pp-live-banner { display: flex; align-items: center; gap: 10px; margin: 10px auto; padding: 10px 14px; max-width: 520px; border-radius: 14px; background: linear-gradient(90deg, rgba(255,77,109,.22), rgba(255,122,89,.1)); border: 1px solid rgba(255,77,109,.45); color: #fff; text-decoration: none; font-size: .88rem; }
+        .pp-live-banner b { color: #ff4d6d; letter-spacing: .06em; font-size: .75rem; }
+        .pp-live-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #d6d9e0; }
+        .pp-live-dot { width: 8px; height: 8px; border-radius: 50%; background: #ff4d6d; flex-shrink: 0; animation: ppLive 1.4s infinite; }
+        @keyframes ppLive { 50% { opacity: .3; } }
+    </style>
 
     <!-- ╔══════════════════════════════════════════════╗
          ║  UpGames · Configuración Centralizada        ║
@@ -848,7 +854,7 @@ display:block;
         const API_URL = window.UG_CONFIG?.API_URL ?? "https://upgames-production.up.railway.app";
         const usuarioActual = localStorage.getItem("user_admin");
         const params = new URLSearchParams(window.location.search);
-        const usuarioViendo = params.get("usuario");
+        const usuarioViendo = params.get("usuario") || params.get("u");   // ?u= lo usan push, notificaciones, admin y lives
 
         console.log("👤 Usuario actual:", usuarioActual);
         console.log("👁️ Viendo perfil de:", usuarioViendo);
@@ -968,6 +974,18 @@ display:block;
 
                 // Biografía
                 document.getElementById('user-bio').textContent = user.bio || 'Sin biografía';
+
+                // ¿Está en vivo ahora? → aviso que lleva a su directo
+                fetch(`${API_URL}/live/canal/${encodeURIComponent(user.usuario)}`).then(r => r.ok ? r.json() : null).then(d => {
+                    if (!d?.live) return;
+                    const a = document.createElement('a');
+                    a.href = `./live.html?u=${encodeURIComponent(user.usuario)}`;
+                    a.className = 'pp-live-banner';
+                    a.innerHTML = '<span class="pp-live-dot"></span><b>EN VIVO</b><span class="pp-live-t"></span><span>Ver ahora ›</span>';
+                    a.querySelector('.pp-live-t').textContent = d.live.titulo || '';
+                    const bio = document.getElementById('user-bio');
+                    bio.parentNode.insertBefore(a, bio);
+                }).catch(() => {});
 
                 // Estadísticas
                 document.getElementById('stat-uploads').textContent = user.publicaciones || 0;

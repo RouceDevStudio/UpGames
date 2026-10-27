@@ -4901,6 +4901,7 @@ function ugnMeta(n) {
   const t = n.itemTitle || '';
   if (n.tipo === 'sistema') {
     if (t.startsWith('Mensaje')) return { ic: 'chatbubbles', c: '#5AC8FA', cat: 'mensajes' };
+    if (t === 'En vivo') return { ic: 'radio', c: '#ff4d6d', cat: 'social' };
     if (t === 'Anuncio') return { ic: 'megaphone', c: '#32D583', cat: 'anuncios' };
     if (t === 'Revisión') return { ic: 'shield-checkmark', c: '#ff8a8d', cat: 'anuncios' };
     if (t === 'Equipo') return { ic: 'shield-half', c: '#a78bfa', cat: 'anuncios' };
@@ -4922,6 +4923,7 @@ function ugnTexto(n) {
     case 'descarga':   return { quien: e, accion: 'descargó tu contenido', sub: t };
   }
   if (t.startsWith('Mensaje')) return { quien: e, accion: 'te envió un mensaje', sub: 'Toca para responder' };
+  if (t === 'En vivo') return { quien: e, accion: 'está en vivo 🔴', sub: msg || 'Toca para verlo' };
   if (t === 'Anuncio') return { quien: 'UpGames', accion: '', sub: msg.replace(/^📢\s*/, ''), anuncio: true };
   if (t === 'Revisión') return { quien: 'Revisión', accion: '', sub: msg, anuncio: true };
   if (t === 'Equipo') return { quien: 'Equipo UpGames', accion: '', sub: msg, anuncio: true };
@@ -5052,6 +5054,7 @@ async function ugnAbrir(n) {
   }
   const t = n.itemTitle || '';
   if (n.tipo === 'sistema' && t.startsWith('Mensaje')) { location.href = `./chats.html?usuario=${encodeURIComponent(n.emisor || '')}`; return; }
+  if (n.tipo === 'sistema' && t === 'En vivo') { location.href = `./live.html?u=${encodeURIComponent(n.emisor || '')}`; return; }
   if (n.tipo === 'seguidor') { location.href = `./perfil-publico.html?u=${encodeURIComponent(n.emisor || '')}`; return; }
   if (t === 'Revisión') { ugnCerrar(); switchTab('profile'); return; }
   if (ugnTexto(n).anuncio) return;   // el anuncio ya se lee completo en la tarjeta
@@ -5533,4 +5536,21 @@ async function pfLoadLogros() {
   input.addEventListener('keydown', function(e) {
     if(e.key === 'Escape') closeDropdown();
   });
+})();
+
+
+// ── Live: punto rojo en el header si hay alguien transmitiendo ──
+(function ugLiveDot() {
+  const dot = document.getElementById('hdr-live-dot');
+  if (!dot) return;
+  const revisar = () => {
+    if (document.hidden) return;
+    fetch(`${API_URL}/live/activos`).then(r => r.ok ? r.json() : null).then(d => {
+      const n = d?.lives?.length || 0;
+      dot.hidden = !n;
+      dot.parentElement.title = n ? `${n} en vivo ahora` : 'En vivo';
+    }).catch(() => {});
+  };
+  setTimeout(revisar, 2500);
+  setInterval(revisar, 90000);
 })();

@@ -484,6 +484,10 @@ const UsuarioSchema = new mongoose.Schema({
     password:   { type: String, required: true, minlength: 6 },
     paypalEmail:{ type: String, default: '', lowercase: true, trim: true, match: [/^(\S+@\S+\.\S+)?$/, 'Email de PayPal inválido'] },
     saldo:      { type: Number, default: 0, min: 0 },
+    // Live: monedas compradas (para regalar) y ganancias de regalos aún en retención
+    monedas:       { type: Number, default: 0, min: 0 },
+    saldoRetenido: { type: Number, default: 0, min: 0 },
+    liveKey:       { type: String, default: null, select: false },   // clave de transmisión (OBS)
     descargasTotales:      { type: Number, default: 0, min: 0 },
     isVerificado:          { type: Boolean, default: false, index: true },
     solicitudPagoPendiente:{ type: Boolean, default: false },
@@ -915,7 +919,7 @@ app.post('/economia/solicitar-pago', verificarToken, async (req, res) => {
         if (usuario.solicitudPagoPendiente) return res.status(400).json({ success: false, error: "Ya tienes una solicitud de pago pendiente" });
 
         const juegoElegible = await Juego.findOne({ usuario: usuario.usuario, descargasEfectivas: { $gt: 0 } }).select('_id').lean();
-        if (!juegoElegible) return res.status(403).json({ success: false, error: "Ninguno de tus juegos tiene descargas registradas aún" });
+        if (!juegoElegible && !(await live.tieneIngresosLive(usuario.usuario))) return res.status(403).json({ success: false, error: "Aún no tienes ingresos por descargas ni por regalos en tus lives" });
 
         // Reclamo atómico de la marca: un doble clic creaba dos solicitudes por el mismo saldo
         const marcado = await Usuario.updateOne({ _id: usuario._id, solicitudPagoPendiente: { $ne: true } }, { $set: { solicitudPagoPendiente: true } });
@@ -934,13 +938,16 @@ app.post('/economia/solicitar-pago', verificarToken, async (req, res) => {
 app.get('/economia/mi-saldo', verificarToken, async (req, res) => {
     try {
         const usuario = await Usuario.findOne({ usuario: req.usuario })
-            .select('saldo descargasTotales paypalEmail isVerificado solicitudPagoPendiente verificadoNivel');
+            .select('saldo saldoRetenido monedas descargasTotales paypalEmail isVerificado solicitudPagoPendiente verificadoNivel');
         if (!usuario) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
 
-        const juegosElegibles = await Juego.countDocuments({ usuario: req.usuario, descargasEfectivas: { $gt: 0 } });
-        const puedeRetirar = usuario.saldo >= MIN_WITHDRAWAL && usuario.isVerificado && usuario.verificadoNivel >= 1 && usuario.paypalEmail && juegosElegibles > 0 && !usuario.solicitudPagoPendiente;
+        const [juegosElegibles, ingresosLive] = await Promise.all([
+            Juego.countDocuments({ usuario: req.usuario, descargasEfectivas: { $gt: 0 } }),
+            live.tieneIngresosLive(req.usuario),
+        ]);
+        const puedeRetirar = usuario.saldo >= MIN_WITHDRAWAL && usuario.isVerificado && usuario.verificadoNivel >= 1 && usuario.paypalEmail && (juegosElegibles > 0 || ingresosLive) && !usuario.solicitudPagoPendiente;
 
-        res.json({ success: true, saldo: usuario.saldo, descargasTotales: usuario.descargasTotales, paypalEmail: usuario.paypalEmail || '', isVerificado: usuario.isVerificado, verificadoNivel: usuario.verificadoNivel, solicitudPagoPendiente: usuario.solicitudPagoPendiente, juegosElegibles, puedeRetirar, minRetiro: MIN_WITHDRAWAL, requisitos: { saldoMinimo: MIN_WITHDRAWAL, verificacionNecesaria: 1 } });
+        res.json({ success: true, saldo: usuario.saldo, saldoRetenido: usuario.saldoRetenido || 0, monedas: usuario.monedas || 0, descargasTotales: usuario.descargasTotales, paypalEmail: usuario.paypalEmail || '', isVerificado: usuario.isVerificado, verificadoNivel: usuario.verificadoNivel, solicitudPagoPendiente: usuario.solicitudPagoPendiente, juegosElegibles, puedeRetirar, minRetiro: MIN_WITHDRAWAL, requisitos: { saldoMinimo: MIN_WITHDRAWAL, verificacionNecesaria: 1 } });
     } catch (error) {
         logger.error(`Error en mi-saldo: ${error.message}`);
         res.status(500).json({ success: false, error: "Error al obtener saldo" });
@@ -3481,6 +3488,14 @@ const rutasMejoras = require('./rutas/rutasMejoras');
 rutasMejoras.registrar(app, { verificarToken, verificarAdmin });
 // ================================
 
+// ========== LIVE: transmisiones, chat en tiempo real, monedas y regalos ==========
+const server = require('http').createServer(app);
+const live = require('./rutas/live').registrar(app, server, {
+    verificarToken, verificarAdmin, Usuario, Notificacion, logger, config, JWT_SECRET,
+    estaSuspendido: u => adminPanel.estaSuspendido(u), getPayPalAccessToken,
+});
+// =================================================================================
+
 // ========== MANEJO DE ERRORES ==========
 app.use((req, res) => {
     res.status(404).json({ error: "Endpoint no encontrado" });
@@ -3493,7 +3508,7 @@ app.use((err, req, res, next) => {
 
 // ========== INICIAR SERVIDOR ==========
 const PORT = config.PORT;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     logger.info(`SERVIDOR CORRIENDO EN PUERTO ${PORT}`);
     logger.info(`Endpoint: http://localhost:${PORT}`);
     logger.info(`Sistema de Economía: ACTIVO | CPM: $${CPM_VALUE} | Autor: ${AUTHOR_PERCENTAGE * 100}%`);

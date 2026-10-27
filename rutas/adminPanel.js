@@ -81,6 +81,7 @@ function permisoRequerido(method, path) {
     if (/^\/admin\/(sistema|cache)/.test(path)) return ['sistema'];
     if (/^\/(admin\/stats|analytics\/admin)/.test(path)) return ['estadisticas'];
     if (/^\/admin\/(finanzas|payments-pending)/.test(path)) return ['finanzas'];
+    if (/^\/admin\/live/.test(path)) return method === 'GET' ? ['finanzas', 'sanciones', 'estadisticas'] : ['sanciones'];
     if (/^\/admin\/users\/(ajustar-saldo|[^/]+\/reset-saldo)/.test(path)) return ['finanzas'];
     if (/^\/admin\/users\/suspender/.test(path)) return ['sanciones'];
     if (/^\/admin\/users\/[^/]+\/items$/.test(path)) return ['sanciones'];
