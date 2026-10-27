@@ -206,8 +206,8 @@ select.in{appearance:none;background-image:linear-gradient(45deg,transparent 50%
 .uc-s b{display:block;font-size:.98rem}.uc-s small{font-size:.66rem;color:var(--tx3);text-transform:uppercase;letter-spacing:.5px}
 .uc-nt{padding:8px 12px}
 .uc-nt textarea{width:100%;min-height:36px;max-height:80px;background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:10px;padding:7px 9px;color:var(--tx2);font-size:.76rem;resize:vertical}
-.uc-a{display:grid;grid-template-columns:repeat(6,1fr);border-top:1px solid var(--line)}
-.uc-a button{background:none;border:none;padding:11px 0;color:var(--tx2);font-size:1.08rem;display:flex;justify-content:center}
+.uc-a{display:flex;border-top:1px solid var(--line)}
+.uc-a button{flex:1;background:none;border:none;padding:11px 0;color:var(--tx2);font-size:1.08rem;display:flex;justify-content:center}
 .uc-a button+button{border-left:1px solid var(--line)}
 .uc-a button:hover:not(:disabled){background:var(--glass);color:var(--tx)}
 .uc-a button:disabled{opacity:.25;cursor:not-allowed}
@@ -229,6 +229,13 @@ select.in{appearance:none;background-image:linear-gradient(45deg,transparent 50%
 .rep-b{display:flex;gap:14px;flex-wrap:wrap;padding:10px 12px;background:rgba(0,0,0,.22);border-radius:11px;margin:10px 0;font-size:.8rem}
 
 /* ── Equipo / auditoría / API ── */
+.roles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.role-c{text-align:left;padding:12px;border-radius:14px;border:1px solid var(--line);background:rgba(0,0,0,.2);color:var(--tx);transition:all .18s}
+.role-c:hover{border-color:var(--line2)}
+.role-c.on{border-color:var(--g1);background:linear-gradient(135deg,rgba(50,213,131,.14),rgba(90,200,250,.08));box-shadow:0 0 0 1px rgba(50,213,131,.3)}
+.role-c .r-i{font-size:1.4rem}.role-c b{display:block;font-size:.84rem;margin-top:4px}.role-c .r-p{font-size:.68rem;color:var(--tx3);margin-top:3px;line-height:1.35}
+.eq-sum{margin-top:12px;padding:12px;border-radius:12px;background:rgba(50,213,131,.06);border:1px dashed rgba(50,213,131,.3);font-size:.84rem;line-height:1.7}
+body:not(.is-owner) .owner-only{display:none!important}
 .perm-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
 .perm{display:flex;gap:9px;align-items:flex-start;padding:10px;border-radius:12px;border:1px solid var(--line);background:rgba(0,0,0,.2);cursor:pointer}
 .perm input{margin-top:3px;accent-color:#32D583}
@@ -359,6 +366,7 @@ select.in{appearance:none;background-image:linear-gradient(45deg,transparent 50%
         <div class="grow"><div class="me-n" id="meN">—</div><div class="me-r" id="meR">—</div></div>
         <button class="btn icon ghost" onclick="logout()" title="Cerrar sesión"><ion-icon name="log-out-outline"></ion-icon></button>
       </div>
+      <div class="row" id="mePerm" style="gap:4px;margin-top:8px"></div>
       <div class="small muted" id="meExp" style="text-align:center;margin-top:8px"></div>
     </div>
   </aside>
@@ -437,7 +445,7 @@ select.in{appearance:none;background-image:linear-gradient(45deg,transparent 50%
 
     <!-- USUARIOS -->
     <section class="view" id="v-usrs">
-      <div class="vh"><div><h2>Usuarios</h2><p>Cuentas, verificación, saldos y sanciones</p></div></div>
+      <div class="vh"><div><h2>Usuarios</h2><p>Cuentas, verificación, saldos y sanciones</p></div><button class="btn sm owner-only" onclick="exportUsers()"><ion-icon name="download-outline"></ion-icon> Exportar CSV</button></div>
       <div class="qs" id="uQs"></div>
       <div class="row" style="gap:8px">
         <div class="chips grow" id="uF">
@@ -474,7 +482,7 @@ select.in{appearance:none;background-image:linear-gradient(45deg,transparent 50%
 
     <!-- PAGOS -->
     <section class="view" id="v-pays">
-      <div class="vh"><div><h2>Pagos</h2><p>Solicitudes de cobro de los creadores</p></div></div>
+      <div class="vh"><div><h2>Pagos</h2><p>Solicitudes de cobro de los creadores</p></div><button class="btn sm" onclick="exportPagos()"><ion-icon name="download-outline"></ion-icon> Exportar historial</button></div>
       <div class="chips" id="pF" style="margin-bottom:12px"><button class="chip on" data-f="pend">⏳ Pendientes</button><button class="chip" data-f="hist">📋 Historial</button></div>
       <div class="list" id="payList"></div>
     </section>
@@ -514,25 +522,31 @@ select.in{appearance:none;background-image:linear-gradient(45deg,transparent 50%
 
     <!-- EQUIPO -->
     <section class="view" id="v-equipo">
-      <div class="vh"><div><h2>Equipo</h2><p>Sub-administradores que trabajan contigo. Tú conservas el control total.</p></div></div>
-      <div class="grid2">
-        <div class="card">
-          <p class="ct" id="eqFormT">Añadir sub-administrador</p><p class="cs">La persona debe tener una cuenta en UpGames. Entrará al panel con su email y contraseña.</p>
-          <div class="fg"><label class="lbl">Usuario o email</label><input class="in" id="eqU" placeholder="@usuario o email" autocomplete="off"></div>
-          <div class="fg"><label class="lbl">Rol</label>
-            <div class="seg c2" id="eqRol"><button class="on" data-r="moderador">🧹 Moderador</button><button data-r="admin">🛡️ Admin</button></div></div>
-          <div class="fg"><label class="lbl">Permisos</label><div class="perm-grid" id="eqPerm"></div></div>
-          <div class="row"><button class="btn pri grow" onclick="guardarMiembro()"><ion-icon name="shield-checkmark-outline"></ion-icon> Guardar</button>
-            <button class="btn ghost" onclick="resetEq()">Limpiar</button></div>
+      <div class="vh"><div><h2>Equipo</h2><p>Asigna a cada sub-administrador un rol exclusivo: solo verá y podrá usar su área.</p></div>
+        <button class="btn bad" id="eqEmerg" onclick="emergencia()"><ion-icon name="warning-outline"></ion-icon> Pausar a todo el equipo</button></div>
+      <div class="card" style="margin-bottom:14px">
+        <p class="ct" id="eqFormT">Modo de asignación</p><p class="cs">1 · Elige la persona &nbsp; 2 · Elige su rol exclusivo &nbsp; 3 · Asigna</p>
+        <div class="row" style="align-items:flex-end">
+          <div class="fg grow" style="min-width:200px"><label class="lbl">Usuario o email (debe tener cuenta en UpGames)</label><input class="in" id="eqU" placeholder="@usuario o email" autocomplete="off" list="eqSug" oninput="resumenEq()"></div>
+          <div class="fg" style="min-width:170px"><label class="lbl">Acceso hasta (opcional)</label><input class="in" id="eqHasta" type="date"></div>
         </div>
-        <div class="card"><p class="ct">Miembros</p><p class="cs">Solo tú (dueño) puedes ver y cambiar esta lista</p><div id="eqList"></div></div>
+        <datalist id="eqSug"></datalist>
+        <label class="lbl">Rol exclusivo</label>
+        <div class="roles" id="eqRoles"></div>
+        <div id="eqCustom" style="display:none;margin-top:12px"><label class="lbl">Permisos a medida</label><div class="perm-grid" id="eqPerm"></div></div>
+        <div class="eq-sum" id="eqSum"></div>
+        <div class="row" style="margin-top:12px"><button class="btn pri grow" onclick="guardarMiembro()"><ion-icon name="shield-checkmark-outline"></ion-icon> <span id="eqBtnT">Asignar rol</span></button>
+          <button class="btn ghost" onclick="resetEq()">Limpiar</button></div>
       </div>
+      <div class="card"><p class="ct">Miembros del equipo</p><p class="cs">Pausa, limita en el tiempo o expulsa a cualquiera al instante. Sus acciones sensibles te llegan como notificación 🔔.</p><div id="eqList"></div></div>
     </section>
 
     <!-- AUDITORÍA -->
     <section class="view" id="v-audit">
       <div class="vh"><div><h2>Auditoría</h2><p>Cada cambio hecho desde el panel queda registrado 180 días</p></div>
-        <select class="in" id="auF" style="width:auto;padding:8px 34px 8px 12px" onchange="loadAudit()"><option value="">Todo el equipo</option></select></div>
+        <div class="row" style="gap:8px"><label class="chip" style="cursor:pointer"><input type="checkbox" id="auC" onchange="loadAudit()" style="accent-color:#32D583;margin:0"> Solo cambios</label>
+        <select class="in" id="auF" style="width:auto;padding:8px 34px 8px 12px" onchange="loadAudit()"><option value="">Todo el equipo</option></select>
+        <button class="btn sm" onclick="exportAudit()"><ion-icon name="download-outline"></ion-icon> CSV</button></div></div>
       <div class="card" style="padding:4px 6px"><div id="auList"></div></div>
       <div style="text-align:center;margin-top:14px"><button class="btn" id="auMore" onclick="loadAudit(true)">Cargar más</button></div>
     </section>
@@ -546,7 +560,7 @@ select.in{appearance:none;background-image:linear-gradient(45deg,transparent 50%
     <button class="btn sm info" onclick="doBulk('online')">Online</button>
     <button class="btn sm warn" onclick="doBulk('caido')">Caído</button>
     <button class="btn sm" onclick="doBulk('rechazar')">Rechazar</button>
-    <button class="btn sm bad" onclick="doBulk('eliminar')">Eliminar</button>
+    <button class="btn sm bad" id="bkDel" onclick="doBulk('eliminar')">Eliminar</button>
     <button class="btn sm ghost" onclick="toggleBulk(false)">✕</button>
   </div>
 </div>
@@ -623,13 +637,26 @@ let D = { items: [], users: [], comments: [], pagos: [], tarjetas: [] };
 let dash = null, view = 'dash', bulk = false, sel = new Set();
 let itF = 'all', vF = 'all', uF = 'all', pF = 'pend', tF = 'all', itLimit = 60, uLimit = 60;
 let auBefore = null;
-const ROLES = { owner: 'Dueño', admin: 'Admin', moderador: 'Moderador' };
-const PERM_TXT = {
-  contenido: ['Contenido', 'Revisión, entradas, videos, reportes y comentarios'],
-  usuarios:  ['Usuarios', 'Verificación, lista negra, suspensión y anuncios'],
-  finanzas:  ['Finanzas', 'Pagos, saldos y tarjetas'],
-  sistema:   ['Sistema', 'API Test, diagnóstico y caché'],
+let PERMS = {
+  revision: { nombre: 'Revisión', desc: 'Aprobar o rechazar entradas, marcar enlaces y limpiar reportes' },
+  contenido: { nombre: 'Contenido', desc: 'Editar y eliminar entradas y videos' },
+  comentarios: { nombre: 'Comentarios', desc: 'Moderar y eliminar comentarios' },
+  usuarios: { nombre: 'Usuarios', desc: 'Ver cuentas, verificación, lista negra y notas' },
+  sanciones: { nombre: 'Sanciones', desc: 'Suspender y eliminar cuentas' },
+  anuncios: { nombre: 'Anuncios', desc: 'Enviar notificaciones a la comunidad' },
+  finanzas: { nombre: 'Finanzas', desc: 'Pagos, saldos y tarjetas' },
+  estadisticas: { nombre: 'Estadísticas', desc: 'Inicio con métricas y gráficos' },
+  sistema: { nombre: 'Sistema', desc: 'API Test, diagnóstico y caché' },
 };
+let ROLES_CAT = {
+  revisor: { nombre: 'Revisor', icono: '🔍', permisos: ['revision'] }, editor: { nombre: 'Editor de contenido', icono: '✏️', permisos: ['revision', 'contenido'] },
+  moderador: { nombre: 'Moderador', icono: '🧹', permisos: ['comentarios'] }, soporte: { nombre: 'Soporte de usuarios', icono: '🎧', permisos: ['usuarios'] },
+  seguridad: { nombre: 'Seguridad', icono: '🛡️', permisos: ['usuarios', 'sanciones'] }, tesorero: { nombre: 'Tesorero', icono: '💰', permisos: ['finanzas'] },
+  comunicador: { nombre: 'Comunicación', icono: '📢', permisos: ['anuncios'] }, analista: { nombre: 'Analista', icono: '📊', permisos: ['estadisticas'] },
+  tecnico: { nombre: 'Técnico', icono: '🛠️', permisos: ['sistema'] }, admin: { nombre: 'Administrador general', icono: '⭐', permisos: ['revision', 'contenido', 'comentarios', 'usuarios', 'sanciones', 'anuncios', 'finanzas', 'estadisticas', 'sistema'] },
+  personalizado: { nombre: 'Personalizado', icono: '🧩', permisos: null },
+};
+const rolNombre = r => rolesCat()[r]?.nombre || r;
 
 // ─────────── Utilidades ───────────
 const $ = id => document.getElementById(id);
@@ -639,7 +666,9 @@ const money = n => '$' + (Number(n) || 0).toFixed(2);
 const num = n => (Number(n) || 0).toLocaleString('es');
 const fdate = d => d ? new Date(d).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 const ago = d => { if (!d) return '—'; const s = (Date.now() - new Date(d)) / 1000; if (s < 60) return 'ahora'; if (s < 3600) return Math.floor(s / 60) + ' min'; if (s < 86400) return Math.floor(s / 3600) + ' h'; if (s < 2592000) return Math.floor(s / 86400) + ' d'; return fdate(d); };
-const can = p => !!S.admin && (S.admin.rol === 'owner' || (p === 'owner' ? false : !p || (S.admin.permisos || []).includes(p)));
+// p: null (cualquiera) · 'owner' · 'permiso' · ['a','b'] (basta con uno)
+const can = p => !!S.admin && (S.admin.rol === 'owner' || (p !== 'owner' && (!p || [].concat(p).some(x => (S.admin.permisos || []).includes(x)))));
+const isOwner = () => S.admin?.rol === 'owner';
 const ytId = u => { const m = String(u || '').match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|v\/))([-\w]{11})/i); return m ? m[1] : null; };
 const PH = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200"><rect width="100%" height="100%" fill="#0d0f14"/><text x="50%" y="54%" fill="#3a3f4b" font-family="sans-serif" font-size="22" text-anchor="middle">UpGames</text></svg>');
 const thumb = i => { const y = ytId(i.image); if (y) return `https://img.youtube.com/vi/${y}/hqdefault.jpg`; const u = safeUrl(i.image); return u && !/\.(mp4|webm|mov)(\?|$)/i.test(u) ? u : PH; };
@@ -660,7 +689,7 @@ async function api(path, { method = 'GET', body, auth = true, raw = false } = {}
   const r = await fetch(API + path, { method, headers, body: body !== undefined ? (typeof body === 'string' ? body : JSON.stringify(body)) : undefined });
   let d = null; const txt = await r.text();
   try { d = JSON.parse(txt); } catch (_) { d = raw ? txt : {}; }
-  if (r.status === 401 && auth && S.token && !path.startsWith('/admin/auth/login')) { logout('Tu sesión expiró. Vuelve a entrar.'); throw new Error('401'); }
+  if (r.status === 401 && auth && S.token && !path.startsWith('/admin/auth/login')) { logout((d && d.error) || 'Tu sesión expiró. Vuelve a entrar.'); throw new Error('401'); }
   return { ok: r.ok, status: r.status, d };
 }
 
@@ -725,13 +754,15 @@ async function entrar() {
   if (!ok || !d.success) { logout(d?.error); return; }
   S.admin = d.admin; if (d.admin.expiraEn) S.exp = d.admin.expiraEn;
   S.ownerEmails = S.admin.rol === 'owner' && S.admin.email ? [S.admin.email.toLowerCase()] : [];
-  $('login').classList.add('hide'); $('app').classList.add('on');
-  $('meN').textContent = '@' + S.admin.usuario; $('meR').textContent = ROLES[S.admin.rol] || S.admin.rol;
+  $('login').classList.add('hide'); $('app').classList.add('on'); document.body.classList.toggle('is-owner', isOwner());
+  if (d.permisos) PERMS = d.permisos;
+  $('meN').textContent = '@' + S.admin.usuario; $('meR').textContent = S.admin.rolNombre || S.admin.rol;
+  $('mePerm').innerHTML = isOwner() ? '<span class="tag t-info">👑 Control total</span>' : (S.admin.permisos || []).map(p => `<span class="tag t-mut">${esc(PERMS[p]?.nombre || p)}</span>`).join('') + (S.admin.hasta ? `<div class="small muted" style="width:100%;margin-top:4px">Acceso hasta ${fdate(S.admin.hasta)}</div>` : '');
   $('meAv').textContent = (S.admin.usuario || 'A')[0].toUpperCase();
   $('hola').textContent = `Hola, ${S.admin.usuario} 👋`;
   buildNav();
   const h = (location.hash || '').slice(1);
-  go(NAV.some(n => n.id === h && can(n.perm)) ? h : 'dash');
+  go(NAV.some(n => n.id === h && navOk(n)) ? h : inicioDeRol());
   sync();
   clearInterval(timers.sync); timers.sync = setInterval(() => { if (!document.hidden) sync(); }, 30000);
   clearInterval(timers.exp); timers.exp = setInterval(tickExp, 30000); tickExp();
@@ -740,16 +771,16 @@ function tickExp() { const r = S.exp - Date.now(); if (r <= 0) return logout('Tu
 
 // ─────────── Navegación ───────────
 const NAV = [
-  { g: 'General' }, { id: 'dash', ic: 'grid-outline', t: 'Inicio', perm: null },
+  { g: 'General' }, { id: 'dash', ic: 'grid-outline', t: 'Inicio', perm: 'estadisticas' },
   { g: 'Contenido' },
-  { id: 'revn', ic: 'alert-circle-outline', t: 'Revisión', perm: 'contenido', b: () => D.items.filter(enRev).length, hot: true },
+  { id: 'revn', ic: 'alert-circle-outline', t: 'Revisión', perm: ['revision', 'contenido'], b: () => D.items.filter(enRev).length, hot: true },
   { id: 'apro', ic: 'albums-outline', t: 'Entradas', perm: 'contenido', b: () => D.items.length },
   { id: 'vids', ic: 'videocam-outline', t: 'Videos', perm: 'contenido', b: () => D.items.filter(isVid).length },
-  { id: 'reportes', ic: 'flag-outline', t: 'Reportes', perm: 'contenido', b: () => D.items.filter(i => i.reportes > 0).length, hot: true },
-  { id: 'comt', ic: 'chatbubbles-outline', t: 'Comentarios', perm: 'contenido', b: () => D.comments.length },
+  { id: 'reportes', ic: 'flag-outline', t: 'Reportes', perm: ['revision', 'contenido'], b: () => D.items.filter(i => i.reportes > 0).length, hot: true },
+  { id: 'comt', ic: 'chatbubbles-outline', t: 'Comentarios', perm: 'comentarios', b: () => D.comments.length },
   { g: 'Comunidad' },
-  { id: 'usrs', ic: 'people-outline', t: 'Usuarios', perm: 'usuarios', b: () => D.users.length },
-  { id: 'anun', ic: 'megaphone-outline', t: 'Anuncios', perm: 'usuarios' },
+  { id: 'usrs', ic: 'people-outline', t: 'Usuarios', perm: ['usuarios', 'sanciones', 'finanzas'], b: () => D.users.length },
+  { id: 'anun', ic: 'megaphone-outline', t: 'Anuncios', perm: 'anuncios' },
   { g: 'Finanzas' },
   { id: 'pays', ic: 'wallet-outline', t: 'Pagos', perm: 'finanzas', b: () => D.pagos.length, hot: true },
   { id: 'tarj', ic: 'card-outline', t: 'Tarjetas', perm: 'finanzas', b: () => D.tarjetas.length },
@@ -758,7 +789,9 @@ const NAV = [
   { id: 'equipo', ic: 'shield-checkmark-outline', t: 'Equipo', perm: 'owner' },
   { id: 'audit', ic: 'document-text-outline', t: 'Auditoría', perm: 'owner' },
 ];
-function navOk(n) { return n.perm === 'owner' ? S.admin?.rol === 'owner' : can(n.perm); }
+function navOk(n) { return can(n.perm); }
+// Primera pantalla según el rol: su área principal, no una vista de apoyo
+function inicioDeRol() { return ['dash', 'revn', 'pays', 'comt', 'anun', 'api', 'apro', 'usrs'].find(id => navOk(NAV.find(n => n.id === id))) || 'dash'; }
 function buildNav() {
   let html = '', pend = null;
   for (const n of NAV) {
@@ -768,9 +801,10 @@ function buildNav() {
     html += `<button class="nav-i" data-v="${n.id}" onclick="go('${n.id}')"><ion-icon name="${n.ic}"></ion-icon>${n.t}${n.b ? `<span class="nbadge" id="nb-${n.id}">0</span>` : ''}</button>`;
   }
   $('nav').innerHTML = html;
-  const prim = ['dash', 'revn', 'usrs', 'pays', 'apro', 'reportes', 'api'].map(id => NAV.find(n => n.id === id)).filter(n => n && navOk(n)).slice(0, 4);
+  const prim = ['dash', 'revn', 'usrs', 'pays', 'apro', 'reportes', 'comt', 'anun', 'tarj', 'api', 'equipo'].map(id => NAV.find(n => n.id === id)).filter(n => n && navOk(n)).slice(0, 4);
   $('bnav').innerHTML = prim.map(n => `<button class="bn" data-v="${n.id}" onclick="go('${n.id}')"><ion-icon name="${n.ic}"></ion-icon>${n.t}${n.b && n.hot ? `<span class="nbadge hot" id="bb-${n.id}" style="display:none">0</span>` : ''}</button>`).join('')
     + `<button class="bn" onclick="openMenu()"><ion-icon name="ellipsis-horizontal-circle-outline"></ion-icon>Más</button>`;
+  $('bnav').style.gridTemplateColumns = `repeat(${prim.length + 1},1fr)`;
 }
 function updBadges() {
   for (const n of NAV) {
@@ -781,7 +815,7 @@ function updBadges() {
   }
 }
 function go(v) {
-  const n = NAV.find(x => x.id === v); if (!n || !navOk(n)) v = 'dash';
+  const n = NAV.find(x => x.id === v); if (!n || !navOk(n)) v = inicioDeRol();
   view = v; if (bulk) toggleBulk(false);
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
   document.querySelectorAll('.nav-i,.bn').forEach(b => b.classList.toggle('on', b.dataset.v === v));
@@ -826,12 +860,12 @@ async function sync(manual) {
   const tryF = (n, p, def) => p.catch(e => { if (e.message !== '401') fallos.push(n); return def; });
   try {
     const [items, users, comments, pagos, tarj, dsh] = await Promise.all([
-      can('contenido') ? tryF('entradas', fetchAll('/admin/items', 'items', 200), D.items) : [],
-      can('usuarios') ? tryF('usuarios', fetchAll('/auth/users', 'users', 500), D.users) : [],
-      can('contenido') ? tryF('comentarios', api('/comentarios').then(r => Array.isArray(r.d) ? r.d : (r.d.comentarios || [])), D.comments) : [],
+      can(['revision', 'contenido']) ? tryF('entradas', fetchAll('/admin/items', 'items', 200), D.items) : [],
+      can(['usuarios', 'sanciones', 'finanzas']) ? tryF('usuarios', fetchAll('/auth/users', 'users', 500), D.users) : [],
+      can('comentarios') ? tryF('comentarios', api('/comentarios').then(r => Array.isArray(r.d) ? r.d : (r.d.comentarios || [])), D.comments) : [],
       can('finanzas') ? tryF('pagos', api('/admin/finanzas/solicitudes-pendientes').then(r => r.d.solicitudes || []), D.pagos) : [],
       can('finanzas') ? tryF('tarjetas', api('/admin/finanzas/tarjetas').then(r => r.d.tarjetas || []), D.tarjetas) : [],
-      tryF('inicio', api('/admin/stats/dashboard').then(r => r.d.success ? r.d.dashboard : dash), dash),
+      can('estadisticas') ? tryF('inicio', api('/admin/stats/dashboard').then(r => r.d.success ? r.d.dashboard : dash), dash) : null,
     ]);
     D = { items, users, comments, pagos, tarjetas: tarj }; dash = dsh;
     updBadges(); render();
@@ -853,10 +887,10 @@ function render() {
 function rDash() {
   const al = [];
   const rev = D.items.filter(enRev).length, rep = D.items.filter(i => i.reportes > 0).length;
-  if (can('contenido')) al.push(['revn', 'alert-circle', rev, 'en revisión', rev ? 'var(--warn)' : 'var(--ok)']);
-  if (can('contenido')) al.push(['reportes', 'flag', rep, 'con reportes', rep ? 'var(--bad)' : 'var(--ok)']);
+  if (can(['revision', 'contenido'])) al.push(['revn', 'alert-circle', rev, 'en revisión', rev ? 'var(--warn)' : 'var(--ok)']);
+  if (can(['revision', 'contenido'])) al.push(['reportes', 'flag', rep, 'con reportes', rep ? 'var(--bad)' : 'var(--ok)']);
   if (can('finanzas')) al.push(['pays', 'wallet', D.pagos.length, 'pagos pendientes', D.pagos.length ? 'var(--warn)' : 'var(--ok)']);
-  if (can('usuarios')) { const s = D.users.filter(u => u.suspendido).length; al.push(['usrs', 'ban', s, 'cuentas suspendidas', s ? 'var(--org)' : 'var(--tx3)']); }
+  if (can(['usuarios', 'sanciones'])) { const s = D.users.filter(u => u.suspendido).length; al.push(['usrs', 'ban', s, 'cuentas suspendidas', s ? 'var(--org)' : 'var(--tx3)']); }
   $('dAlerts').innerHTML = al.map(([v, ic, n, l, c]) => `<div class="card alert" onclick="go('${v}')"><div class="a-ic" style="background:color-mix(in srgb,${c} 16%,transparent);color:${c}"><ion-icon name="${ic}"></ion-icon></div><div><div class="a-n">${num(n)}</div><div class="a-l">${l}</div></div><ion-icon name="chevron-forward" style="margin-left:auto;color:var(--tx3)"></ion-icon></div>`).join('');
   if (!dash) { $('dKpis').innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div>'; return; }
   const d = dash;
@@ -894,9 +928,9 @@ document.addEventListener('pointerover', e => { const b = e.target.closest('[dat
 function itemCard(j, mode) {
   const s = sel.has(j._id), rep = j.reportes || 0, dias = Math.floor((Date.now() - new Date(j.createdAt || Date.now())) / 864e5);
   const tags = `<div class="it-tags"><span>${lsTag(j.linkStatus || 'online')}</span><span style="display:flex;gap:4px">${rep ? `<span class="tag t-bad"><ion-icon name="flag"></ion-icon>${rep}</span>` : ''}${j.status === 'pendiente' || j.status === 'pending' ? '<span class="tag t-warn">Pendiente</span>' : j.status === 'rechazado' ? '<span class="tag t-bad">Rechazado</span>' : ''}${isVid(j) ? `<span class="tag t-info">▶ ${esc(j.videoType || 'Video')}</span>` : ''}</span></div>`;
-  let acts;
-  if (mode === 'rev') acts = `<button class="c-info" onclick="openEdit('${j._id}')"><ion-icon name="create-outline"></ion-icon><span>Editar</span></button><button class="c-ok" onclick="aprobar('${j._id}')"><ion-icon name="checkmark-circle-outline"></ion-icon><span>Aprobar</span></button><button class="c-bad" onclick="setLink('${j._id}','caido')"><ion-icon name="close-circle-outline"></ion-icon><span>Caído</span></button>`;
-  else if (mode === 'vid') acts = `<button class="c-info" onclick="openVideo('${j._id}')"><ion-icon name="play-circle-outline"></ion-icon><span>Ver</span></button><button onclick="openEdit('${j._id}')"><ion-icon name="create-outline"></ion-icon><span>Editar</span></button><button class="c-bad" onclick="delItem('${j._id}')"><ion-icon name="trash-outline"></ion-icon><span>Borrar</span></button>`;
+  let acts; const ed = can('contenido');
+  if (mode === 'rev') acts = `${ed ? `<button class="c-info" onclick="openEdit('${j._id}')"><ion-icon name="create-outline"></ion-icon><span>Editar</span></button>` : `<a style="flex:1;display:flex" href="${esc(safeUrl(j.link) || '#')}" target="_blank" rel="noopener noreferrer"><button style="width:100%"><ion-icon name="open-outline"></ion-icon><span>Probar</span></button></a>`}<button class="c-ok" onclick="aprobar('${j._id}')"><ion-icon name="checkmark-circle-outline"></ion-icon><span>Aprobar</span></button><button class="c-bad" onclick="setLink('${j._id}','caido')"><ion-icon name="close-circle-outline"></ion-icon><span>Caído</span></button>`;
+  else if (mode === 'vid') acts = `<button class="c-info" onclick="openVideo('${j._id}')"><ion-icon name="play-circle-outline"></ion-icon><span>Ver</span></button>${ed ? `<button onclick="openEdit('${j._id}')"><ion-icon name="create-outline"></ion-icon><span>Editar</span></button><button class="c-bad" onclick="delItem('${j._id}')"><ion-icon name="trash-outline"></ion-icon><span>Borrar</span></button>` : `<button class="c-ok" onclick="aprobar('${j._id}')"><ion-icon name="checkmark-circle-outline"></ion-icon><span>Aprobar</span></button>`}`;
   else acts = `<button class="c-info" onclick="openEdit('${j._id}')"><ion-icon name="create-outline"></ion-icon><span>Editar</span></button><a style="flex:1;display:flex" href="${esc(safeUrl(j.link) || '#')}" target="_blank" rel="noopener noreferrer"><button style="width:100%"><ion-icon name="open-outline"></ion-icon><span>Abrir</span></button></a><button class="c-bad" onclick="delItem('${j._id}')"><ion-icon name="trash-outline"></ion-icon><span>Borrar</span></button>`;
   return `<div class="card it ${s ? 'sel' : ''}" id="ic-${j._id}">
     <div class="it-img" ${bulk ? `onclick="toggleSel('${j._id}')" style="cursor:pointer"` : ''}><img loading="lazy" src="${esc(thumb(j))}" alt="" onerror="this.src='${PH}'">${tags}${bulk ? `<div class="it-chk">${s ? '✓' : ''}</div>` : ''}</div>
@@ -930,15 +964,15 @@ function rRep() {
     <div class="rep-b"><span>🔗 <b>${d.caido || 0}</b> caído</span><span>⏳ <b>${d.viejo || 0}</b> obsoleto</span><span>🛡️ <b style="color:${d.malware ? 'var(--bad)' : 'inherit'}">${d.malware || 0}</b> malware</span></div>
     <div class="row"><button class="btn sm ok" onclick="resetRep('${i._id}')"><ion-icon name="checkmark-circle-outline"></ion-icon> Funciona (online)</button>
       <button class="btn sm warn" onclick="setLink('${i._id}','caido')"><ion-icon name="close-circle-outline"></ion-icon> Caído</button>
-      <button class="btn sm" onclick="openEdit('${i._id}')"><ion-icon name="create-outline"></ion-icon> Editar</button>
+      ${can('contenido') ? `<button class="btn sm" onclick="openEdit('${i._id}')"><ion-icon name="create-outline"></ion-icon> Editar</button>` : ''}
       <a class="btn sm ghost" href="${esc(safeUrl(i.link) || '#')}" target="_blank" rel="noopener noreferrer"><ion-icon name="open-outline"></ion-icon> Probar enlace</a>
-      <button class="btn sm bad" onclick="delItem('${i._id}')"><ion-icon name="trash-outline"></ion-icon></button></div></div>`; }).join('') : '<div class="empty"><ion-icon name="shield-checkmark-outline"></ion-icon>Sin reportes pendientes</div>';
+      ${can('contenido') ? `<button class="btn sm bad" onclick="delItem('${i._id}')"><ion-icon name="trash-outline"></ion-icon></button>` : ''}</div></div>`; }).join('') : '<div class="empty"><ion-icon name="shield-checkmark-outline"></ion-icon>Sin reportes pendientes</div>';
 }
 
 // Selección múltiple
 function toggleBulk(on) { bulk = on === undefined ? !bulk : on; if (!bulk) sel.clear(); updBulk(); if (on !== false || view) render(); }
 function toggleSel(id) { sel.has(id) ? sel.delete(id) : sel.add(id); const c = $('ic-' + id); if (c) { c.classList.toggle('sel', sel.has(id)); const k = c.querySelector('.it-chk'); if (k) k.textContent = sel.has(id) ? '✓' : ''; } updBulk(); }
-function updBulk() { $('bulk').classList.toggle('on', bulk); $('bkN').textContent = `${sel.size} sel.`; }
+function updBulk() { $('bkDel').style.display = can('contenido') ? '' : 'none'; $('bulk').classList.toggle('on', bulk); $('bkN').textContent = `${sel.size} sel.`; }
 async function doBulk(action) {
   if (!sel.size) return toast('Selecciona al menos una entrada', 'warn');
   const L = { aprobar: 'aprobar', online: 'marcar online', caido: 'marcar caídas', rechazar: 'rechazar', eliminar: 'ELIMINAR' };
@@ -996,7 +1030,7 @@ function openVideo(id) {
   else if (/\.(mp4|webm|mov)(\?|$)|res\.cloudinary\.com/i.test(link)) { const v = document.createElement('video'); v.src = link; v.controls = true; v.playsInline = true; v.style.cssText = 'width:100%;height:100%'; box.appendChild(v); }
   else box.innerHTML = `<div style="height:100%;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;color:var(--tx3)"><ion-icon name="film-outline" style="font-size:2.4rem"></ion-icon>${link ? `<a href="${esc(link)}" target="_blank" rel="noopener noreferrer">Abrir enlace externo</a>` : 'Sin vista previa'}</div>`;
   $('mvKv').innerHTML = [['Autor', '@' + it.usuario], ['Tipo', it.videoType || '—'], ['Categoría', it.category || '—'], ['Descargas', num(it.descargasEfectivas)], ['Reportes', it.reportes || 0], ['Estado', it.linkStatus || 'online']].map(([a, b]) => `<div><small>${a}</small><span>${esc(b)}</span></div>`).join('');
-  $('mvAct').innerHTML = `<button class="btn ok" onclick="aprobar('${id}');cm('mVideo')">✓ Aprobar</button><button class="btn warn" onclick="putItem('${id}',{linkStatus:'revision'},'⚠ En revisión');cm('mVideo')">⚠ Revisión</button><button class="btn info" onclick="openEdit('${id}')">✏️ Editar</button><button class="btn bad" onclick="delItem('${id}')">🗑 Eliminar</button>`;
+  $('mvAct').innerHTML = `<button class="btn ok" onclick="aprobar('${id}');cm('mVideo')">✓ Aprobar</button><button class="btn warn" onclick="putItem('${id}',{linkStatus:'revision'},'⚠ En revisión');cm('mVideo')">⚠ Revisión</button>${can('contenido') ? `<button class="btn info" onclick="openEdit('${id}')">✏️ Editar</button><button class="btn bad" onclick="delItem('${id}')">🗑 Eliminar</button>` : ''}`;
   om('mVideo');
 }
 
@@ -1025,7 +1059,7 @@ function rUsers() {
 }
 function userCard(u) {
   const p = protegido(u), own = isOwnerUser(u), av = safeUrl(u.avatar);
-  const tags = [own ? '<span class="tag t-info">👑 Dueño</span>' : '', u.adminRol ? `<span class="tag t-info">🛡️ ${esc(ROLES[u.adminRol] || u.adminRol)}</span>` : '', u.suspendido ? '<span class="tag t-bad">⛔ Suspendido</span>' : '', u.listaNegraAdmin ? '<span class="tag t-org">🚫 Lista negra</span>' : '', u.emailVerificado ? '<span class="tag t-ok">✉ verificado</span>' : '<span class="tag t-mut">✉ sin verificar</span>'].join('');
+  const tags = [own ? '<span class="tag t-info">👑 Dueño</span>' : '', u.adminRol ? `<span class="tag t-info">🛡️ ${esc(rolNombre(u.adminRol))}</span>` : '', u.suspendido ? '<span class="tag t-bad">⛔ Suspendido</span>' : '', u.listaNegraAdmin ? '<span class="tag t-org">🚫 Lista negra</span>' : '', u.emailVerificado ? '<span class="tag t-ok">✉ verificado</span>' : '<span class="tag t-mut">✉ sin verificar</span>'].join('');
   const dis = p ? 'disabled title="Protegido: es parte del equipo"' : '';
   return `<div class="card uc ${u.suspendido ? 'sus' : u.listaNegraAdmin ? 'neg' : ''}">
     <div class="uc-h"><div class="av">${av ? `<img src="${esc(av)}" alt="" onerror="this.remove()">` : esc((u.usuario || '?')[0].toUpperCase())}</div>
@@ -1037,14 +1071,14 @@ function userCard(u) {
       <div class="uc-f"><span>IP registro</span><span class="mono" onclick="cp(this.textContent)">${esc(u.registrationIP || '—')}</span></div>
     </div>
     <div class="uc-s"><div><b style="color:var(--warn)">${money(u.saldo)}</b><small>Saldo</small></div><div><b>${num(u.descargasTotales)}</b><small>Descargas</small></div><div><b>${num((u.listaSeguidores || []).length)}</b><small>Seguidores</small></div></div>
-    <div class="uc-nt"><textarea placeholder="Notas privadas del equipo…" onblur="saveNotas('${u._id}',this.value)" ${dis}>${esc(u.notasAdmin || '')}</textarea></div>
+    ${can('usuarios') ? `<div class="uc-nt"><textarea placeholder="Notas privadas del equipo…" onblur="saveNotas('${u._id}',this.value)" ${dis}>${esc(u.notasAdmin || '')}</textarea></div>` : ''}
     <div class="uc-a">
       <button onclick="omDetail('${u._id}')" title="Detalle"><ion-icon name="eye-outline"></ion-icon></button>
-      <button onclick="omVerif('${u._id}')" title="Verificación" ${dis}><ion-icon name="checkmark-circle-outline" class="v2"></ion-icon></button>
-      <button onclick="omNeg('${u._id}')" title="Lista negra" ${dis}><ion-icon name="eye-off-outline" style="color:var(--org)"></ion-icon></button>
-      <button onclick="omSus('${u._id}')" title="${u.suspendido ? 'Reactivar' : 'Suspender'}" ${dis || (own ? 'disabled' : '')}><ion-icon name="${u.suspendido ? 'lock-open-outline' : 'ban-outline'}" style="color:var(--bad)"></ion-icon></button>
-      <button onclick="omSaldo('${u._id}')" title="Saldo" ${can('finanzas') ? dis : 'disabled'}><ion-icon name="cash-outline" style="color:var(--warn)"></ion-icon></button>
-      <button onclick="delUser('${u._id}')" title="Eliminar" ${dis || (own ? 'disabled' : '')}><ion-icon name="trash-outline" style="color:var(--bad)"></ion-icon></button>
+      ${can('usuarios') ? `<button onclick="omVerif('${u._id}')" title="Verificación" ${dis}><ion-icon name="checkmark-circle-outline" class="v2"></ion-icon></button>
+      <button onclick="omNeg('${u._id}')" title="Lista negra" ${dis}><ion-icon name="eye-off-outline" style="color:var(--org)"></ion-icon></button>` : ''}
+      ${can('sanciones') ? `<button onclick="omSus('${u._id}')" title="${u.suspendido ? 'Reactivar' : 'Suspender'}" ${own ? 'disabled' : dis}><ion-icon name="${u.suspendido ? 'lock-open-outline' : 'ban-outline'}" style="color:var(--bad)"></ion-icon></button>` : ''}
+      ${can('finanzas') ? `<button onclick="omSaldo('${u._id}')" title="Ajustar saldo" ${dis}><ion-icon name="cash-outline" style="color:var(--warn)"></ion-icon></button>` : ''}
+      ${can('sanciones') ? `<button onclick="delUser('${u._id}')" title="Eliminar" ${own ? 'disabled' : dis}><ion-icon name="trash-outline" style="color:var(--bad)"></ion-icon></button>` : ''}
     </div></div>`;
 }
 const U = id => D.users.find(x => x._id === id);
@@ -1090,18 +1124,19 @@ function omDetail(id) {
   $('mdT').textContent = '@' + u.usuario;
   const kv = [['Email', u.email], ['PayPal', u.paypalEmail || '—'], ['Verificación', ['Sin verificar', 'Bronce', 'Oro', 'Élite'][u.verificadoNivel || 0]], ['Saldo', money(u.saldo)], ['Descargas', num(u.descargasTotales)], ['Publicaciones', its.length],
     ['Seguidores', num((u.listaSeguidores || []).length)], ['Siguiendo', num((u.siguiendo || []).length)], ['Registro', fdate(u.fecha || u.createdAt)], ['Última actividad', ago(u.ultimoLogin)], ['IP registro', u.registrationIP || '—'], ['Pago pendiente', u.solicitudPagoPendiente ? 'Sí' : 'No'],
-    ['Rol', isOwnerUser(u) ? 'Dueño' : (ROLES[u.adminRol] || 'Usuario')], ['Estado', u.suspendido ? 'Suspendido' + (u.motivoSuspension ? ': ' + u.motivoSuspension : '') : 'Activo']];
+    ['Rol', isOwnerUser(u) ? 'Dueño' : (u.adminRol ? rolNombre(u.adminRol) : 'Usuario')], ['Estado', u.suspendido ? 'Suspendido' + (u.motivoSuspension ? ': ' + u.motivoSuspension : '') : 'Activo']];
   $('mdB').innerHTML = `<div class="kv">${kv.map(([a, b]) => `<div><small>${a}</small><span title="${esc(b)}">${esc(b)}</span></div>`).join('')}</div>
     ${u.notasAdmin ? `<div class="card" style="padding:10px 12px;margin-bottom:10px"><div class="small muted">📝 Notas del equipo</div><div class="small" style="white-space:pre-wrap">${esc(u.notasAdmin)}</div></div>` : ''}
     ${its.length ? `<p class="ct" style="margin-top:6px">Publicaciones (${its.length})</p><table class="tbl" style="margin-bottom:10px">${its.slice(0, 8).map(i => `<tr><td class="ell">${esc(i.title)}</td><td>${lsTag(i.linkStatus)}</td><td class="num">${num(i.descargasEfectivas)} ↓</td></tr>`).join('')}</table>` : ''}
     ${tj.length ? `<p class="ct">Tarjetas (${tj.length})</p>${tj.map(t => `<div class="row small" style="margin:6px 0"><span class="tj-logo tj-${esc(t.tipo)}">${esc((t.tipo || '').toUpperCase().slice(0, 4))}</span><span class="mono">•••• ${esc(t.ultimos4)}</span><span class="muted">${esc(t.proposito)}</span>${t.esPrincipal ? '⭐' : ''}</div>`).join('')}` : ''}
     <div class="seg c2" style="margin-top:14px">
       <a class="btn" href="../public/perfil-publico.html?u=${encodeURIComponent(u.usuario)}" target="_blank" rel="noopener">👤 Ver perfil</a>
-      <button class="btn" onclick="cm('mDetail');$('q').value='${esc(u.usuario)}';go('apro')">📦 Sus entradas</button>
-      ${p ? '' : `<button class="btn" onclick="cm('mDetail');omVerif('${id}')">✅ Verificación</button>
-      <button class="btn warn" onclick="cm('mDetail');omSus('${id}')">${u.suspendido ? '🔓 Reactivar' : '⛔ Suspender'}</button>
-      ${can('usuarios') ? `<button class="btn" onclick="cm('mDetail');anunciarA('${esc(u.usuario)}')">📢 Notificar</button>` : ''}
-      ${!isOwnerUser(u) ? `<button class="btn bad" onclick="delUser('${id}')">🗑 Eliminar</button>` : ''}`}
+      ${can('contenido') ? `<button class="btn" onclick="cm('mDetail');$('q').value='${esc(u.usuario)}';go('apro')">📦 Sus entradas</button>` : ''}
+      ${p ? '' : `${can('usuarios') ? `<button class="btn" onclick="cm('mDetail');omVerif('${id}')">✅ Verificación</button>` : ''}
+      ${can('sanciones') && !isOwnerUser(u) ? `<button class="btn warn" onclick="cm('mDetail');omSus('${id}')">${u.suspendido ? '🔓 Reactivar' : '⛔ Suspender'}</button>` : ''}
+      ${can('finanzas') ? `<button class="btn" onclick="cm('mDetail');omSaldo('${id}')">💰 Saldo</button>` : ''}
+      ${can('anuncios') ? `<button class="btn" onclick="cm('mDetail');anunciarA('${esc(u.usuario)}')">📢 Notificar</button>` : ''}
+      ${can('sanciones') && !isOwnerUser(u) ? `<button class="btn bad" onclick="delUser('${id}')">🗑 Eliminar</button>` : ''}`}
     </div>`;
   om('mDetail');
 }
@@ -1213,40 +1248,100 @@ async function runConsole() {
   } catch (e) { $('cMeta').textContent = ''; $('cOut').textContent = 'Error de red: ' + e.message; }
 }
 
-// ─────────── Equipo ───────────
-let eqRol = 'moderador', eqData = null;
-function permBoxes(sel) { $('eqPerm').innerHTML = Object.entries(PERM_TXT).map(([k, [t, d]]) => `<label class="perm"><input type="checkbox" value="${k}" ${sel.includes(k) ? 'checked' : ''}><span><b>${t}</b><small>${d}</small></span></label>`).join(''); }
-$('eqRol').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; eqRol = b.dataset.r; $('eqRol').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); permBoxes(eqData?.plantillas?.[eqRol] || (eqRol === 'admin' ? ['contenido', 'usuarios', 'finanzas', 'sistema'] : ['contenido'])); });
-function resetEq() { $('eqU').value = ''; $('eqU').disabled = false; $('eqFormT').textContent = 'Añadir sub-administrador'; $('eqRol').querySelector('[data-r="moderador"]').click(); }
+// ─────────── Equipo (modo de asignación) ───────────
+let eqSel = 'revisor', eqData = null;
+const rolesCat = () => eqData?.roles || ROLES_CAT;
+function renderRoles() {
+  $('eqRoles').innerHTML = Object.entries(rolesCat()).map(([k, r]) => `<button type="button" class="role-c ${k === eqSel ? 'on' : ''}" data-r="${k}"><div class="r-i">${esc(r.icono)}</div><b>${esc(r.nombre)}</b><div class="r-p">${r.permisos ? r.permisos.map(p => esc(PERMS[p]?.nombre || p)).join(' · ') : 'Tú eliges los permisos'}</div></button>`).join('');
+  $('eqCustom').style.display = eqSel === 'personalizado' ? '' : 'none';
+  resumenEq();
+}
+$('eqRoles').addEventListener('click', e => { const b = e.target.closest('.role-c'); if (!b) return; eqSel = b.dataset.r; renderRoles(); });
+function permBoxes(sel) { $('eqPerm').innerHTML = Object.entries(PERMS).map(([k, v]) => `<label class="perm"><input type="checkbox" value="${k}" ${sel.includes(k) ? 'checked' : ''} onchange="resumenEq()"><span><b>${esc(v.nombre)}</b><small>${esc(v.desc)}</small></span></label>`).join(''); }
+function permisosElegidos() { return eqSel === 'personalizado' ? [...$('eqPerm').querySelectorAll('input:checked')].map(i => i.value) : (rolesCat()[eqSel]?.permisos || []); }
+function resumenEq() {
+  const ps = permisosElegidos(), u = $('eqU').value.trim() || 'Esta persona';
+  $('eqSum').innerHTML = ps.length ? `<b>${esc(u)}</b> tendrá acceso <b>solo</b> a: ${ps.map(p => `<span class="tag t-ok">${esc(PERMS[p]?.nombre || p)}</span>`).join(' ')}<div class="small muted">${ps.map(p => esc(PERMS[p]?.desc || '')).join(' · ')}. Todo lo demás del panel le quedará oculto y bloqueado.</div>` : '<span class="muted">Elige al menos un permiso</span>';
+}
+function resetEq() { $('eqU').value = ''; $('eqU').disabled = false; $('eqHasta').value = ''; $('eqFormT').textContent = 'Modo de asignación'; $('eqBtnT').textContent = 'Asignar rol'; eqSel = 'revisor'; permBoxes([]); renderRoles(); }
 async function loadEquipo() {
-  if (!$('eqPerm').innerHTML) permBoxes(['contenido']);
   $('eqList').innerHTML = '<div class="skel"></div>';
+  $('eqSug').innerHTML = D.users.filter(u => !u.adminRol && !u.esDueno && !u.suspendido).slice(0, 500).map(u => `<option value="${esc(u.usuario)}">`).join('');
   try { const { d } = await api('/admin/equipo'); if (!d.success) { $('eqList').innerHTML = `<div class="empty">${esc(d.error)}</div>`; return; }
-    eqData = d; S.ownerEmails = d.equipo.filter(m => m.rol === 'owner').map(m => (m.email || '').toLowerCase());
-    $('eqList').innerHTML = d.equipo.map(m => `<div class="tm" style="padding:12px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+    const primera = !eqData; eqData = d; PERMS = d.permisos || PERMS;
+    if (primera) { permBoxes([]); renderRoles(); }
+    S.ownerEmails = d.equipo.filter(m => m.rol === 'owner').map(m => (m.email || '').toLowerCase());
+    const subs = d.equipo.filter(m => m.rol !== 'owner');
+    const todos = subs.length && subs.every(m => m.pausado);
+    $('eqEmerg').innerHTML = todos ? '<ion-icon name="play-outline"></ion-icon> Reanudar a todo el equipo' : '<ion-icon name="warning-outline"></ion-icon> Pausar a todo el equipo';
+    $('eqEmerg').className = 'btn ' + (todos ? 'ok' : 'bad'); $('eqEmerg').style.display = subs.length ? '' : 'none';
+    $('eqList').innerHTML = d.equipo.map(m => {
+      const est = m.rol === 'owner' ? '' : m.pausado ? '<span class="tag t-warn">⏸ Pausado</span>' : m.vencido ? '<span class="tag t-bad">⌛ Acceso vencido</span>' : m.suspendido ? '<span class="tag t-bad">Suspendido</span>' : '<span class="tag t-ok">● Activo</span>';
+      const U = esc(m.usuario);
+      return `<div class="tm" style="padding:12px 0;border-bottom:1px solid rgba(255,255,255,.05);flex-wrap:wrap">
       <div class="av">${safeUrl(m.avatar) ? `<img src="${esc(m.avatar)}" alt="" onerror="this.remove()">` : esc(m.usuario[0].toUpperCase())}</div>
-      <div class="grow" style="min-width:0"><div style="font-weight:700">@${esc(m.usuario)} <span class="tag ${m.rol === 'owner' ? 't-info' : m.rol === 'admin' ? 't-vio' : 't-ok'}">${m.rol === 'owner' ? '👑 Dueño' : esc(ROLES[m.rol])}</span>${m.suspendido ? ' <span class="tag t-bad">suspendido</span>' : ''}</div>
-        <div class="small muted">${esc(m.email)} · ${m.acciones} acciones · última ${ago(m.ultimaAccion)}${m.por ? ' · añadido por @' + esc(m.por) : ''}</div>
-        <div class="tm-p">${(m.permisos || []).map(p => `<span class="tag t-mut">${esc(PERM_TXT[p]?.[0] || p)}</span>`).join('')}</div></div>
-      ${m.rol === 'owner' ? '' : `<div class="row" style="gap:6px;flex-wrap:nowrap"><button class="btn sm" onclick="editMiembro('${esc(m.usuario)}')"><ion-icon name="create-outline"></ion-icon></button><button class="btn sm" onclick="$('auF').value='${esc(m.usuario)}';go('audit')" title="Ver su actividad"><ion-icon name="document-text-outline"></ion-icon></button><button class="btn sm bad" onclick="quitarMiembro('${esc(m.usuario)}')"><ion-icon name="person-remove-outline"></ion-icon></button></div>`}</div>`).join('')
-      + (d.equipo.length < 2 ? '<p class="small muted" style="margin:14px 0 0">Aún no tienes sub-administradores. Añade a alguien de confianza con el formulario.</p>' : '');
-    const f = $('auF'), cur = f.value; f.innerHTML = '<option value="">Todo el equipo</option>' + d.equipo.map(m => `<option value="${esc(m.usuario)}">@${esc(m.usuario)}</option>`).join('') + '<option value="llave-maestra">Llave maestra</option>'; f.value = cur;
+      <div class="grow" style="min-width:200px"><div style="font-weight:700">@${U} <span class="tag ${m.rol === 'owner' ? 't-info' : 't-vio'}">${m.rol === 'owner' ? '👑 Dueño' : esc((rolesCat()[m.rol]?.icono || '🧩') + ' ' + m.rolNombre)}</span> ${est}</div>
+        <div class="small muted">${esc(m.email)} · ${m.acciones} acciones · última ${ago(m.ultimaAccion)}${m.hasta ? ' · acceso hasta ' + fdate(m.hasta) : ''}${m.por ? ' · añadido por @' + esc(m.por) : ''}</div>
+        <div class="tm-p">${m.rol === 'owner' ? '<span class="tag t-info">Control total</span>' : (m.permisos || []).map(p => `<span class="tag t-mut">${esc(PERMS[p]?.nombre || p)}</span>`).join('')}</div></div>
+      <div class="row" style="gap:6px">${m.rol === 'owner'
+        ? (m.usuario === S.admin.usuario ? `<button class="btn sm" onclick="cerrarSesiones('${U}')" title="Cierra el panel en todos tus dispositivos"><ion-icon name="log-out-outline"></ion-icon> Cerrar mis sesiones</button>` : '')
+        : `<button class="btn sm" onclick="editMiembro('${U}')" title="Cambiar rol"><ion-icon name="create-outline"></ion-icon></button>
+           <button class="btn sm ${m.pausado ? 'ok' : 'warn'}" onclick="pausar('${U}',${!m.pausado})" title="${m.pausado ? 'Reanudar' : 'Pausar'}"><ion-icon name="${m.pausado ? 'play-outline' : 'pause-outline'}"></ion-icon></button>
+           <button class="btn sm" onclick="cerrarSesiones('${U}')" title="Cerrar todas sus sesiones"><ion-icon name="log-out-outline"></ion-icon></button>
+           <button class="btn sm" onclick="$('auF').value='${U}';go('audit')" title="Ver su actividad"><ion-icon name="document-text-outline"></ion-icon></button>
+           <button class="btn sm bad" onclick="quitarMiembro('${U}')" title="Quitar del equipo"><ion-icon name="person-remove-outline"></ion-icon></button>`}</div></div>`; }).join('')
+      + (subs.length ? '' : '<p class="small muted" style="margin:14px 0 0">Aún no tienes sub-administradores. Usa el modo de asignación de arriba.</p>');
+    fillAuF();
   } catch (_) {}
 }
-function editMiembro(u) { const m = eqData?.equipo.find(x => x.usuario === u); if (!m) return; $('eqU').value = m.usuario; $('eqU').disabled = true; $('eqFormT').textContent = 'Editar a @' + m.usuario; $('eqRol').querySelector(`[data-r="${m.rol}"]`)?.click(); permBoxes(m.permisos || []); $('eqU').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+function fillAuF() { if (!eqData) return; const f = $('auF'), cur = f.value; f.innerHTML = '<option value="">Todo el equipo</option>' + eqData.equipo.map(m => `<option value="${esc(m.usuario)}">@${esc(m.usuario)}</option>`).join('') + '<option value="llave-maestra">Llave maestra</option>'; f.value = cur; }
+function editMiembro(u) {
+  const m = eqData?.equipo.find(x => x.usuario === u); if (!m) return;
+  $('eqU').value = m.usuario; $('eqU').disabled = true; $('eqFormT').textContent = 'Cambiar rol de @' + m.usuario; $('eqBtnT').textContent = 'Guardar cambios';
+  $('eqHasta').value = m.hasta ? new Date(m.hasta).toISOString().slice(0, 10) : '';
+  eqSel = rolesCat()[m.rol] ? m.rol : 'personalizado'; permBoxes(m.permisos || []); renderRoles();
+  $('v-equipo').scrollIntoView({ behavior: 'smooth' });
+}
 async function guardarMiembro() {
   const u = $('eqU').value.trim().replace(/^@/, ''); if (!u) return toast('Escribe el usuario o email', 'warn');
-  const permisos = [...$('eqPerm').querySelectorAll('input:checked')].map(i => i.value); if (!permisos.length) return toast('Elige al menos un permiso', 'warn');
-  try { const { d } = await api(`/admin/equipo/${encodeURIComponent(u)}`, { method: 'PUT', body: { rol: eqRol, permisos } });
-    if (d.success) { toast(`🛡️ @${d.usuario} ahora es ${ROLES[d.rol]}`); resetEq(); loadEquipo(); } else toast(d.error || 'Error', 'err'); } catch (_) {}
+  const permisos = permisosElegidos(); if (!permisos.length) return toast('Elige al menos un permiso', 'warn');
+  const h = $('eqHasta').value;
+  try { const { d } = await api(`/admin/equipo/${encodeURIComponent(u)}`, { method: 'PUT', body: { rol: eqSel, permisos: eqSel === 'personalizado' ? permisos : undefined, hasta: h ? new Date(h + 'T23:59:59').toISOString() : null } });
+    if (d.success) { toast(`🛡️ @${d.usuario} → ${d.rolNombre}`); resetEq(); loadEquipo(); } else toast(d.error || 'Error', 'err'); } catch (_) {}
+}
+async function pausar(u, pausado) { try { const { d } = await api(`/admin/equipo/${encodeURIComponent(u)}/pausa`, { method: 'PUT', body: { pausado } }); if (d.success) { toast(pausado ? `⏸ @${u} pausado: ya no puede entrar` : `▶ @${u} reactivado`, pausado ? 'warn' : ''); loadEquipo(); } else toast(d.error || 'Error', 'err'); } catch (_) {} }
+async function cerrarSesiones(u) {
+  const yo = u === S.admin.usuario;
+  if (!confirm(yo ? '¿Cerrar el panel en TODOS tus dispositivos (incluido este)?' : `¿Cerrar todas las sesiones abiertas de @${u}? Tendrá que volver a entrar.`)) return;
+  try { const { d } = await api(`/admin/equipo/${encodeURIComponent(u)}/cerrar-sesiones`, { method: 'POST' }); if (d.success) { if (yo) return logout('Cerraste tus sesiones. Vuelve a entrar.'); toast(`🔒 Sesiones de @${u} cerradas`); } else toast(d.error || 'Error', 'err'); } catch (_) {}
+}
+async function emergencia() {
+  if (!eqData) await loadEquipo();
+  const subs = (eqData?.equipo || []).filter(m => m.rol !== 'owner'), pausar = !(subs.length && subs.every(m => m.pausado));
+  if (!confirm(pausar ? '🚨 ¿Pausar a TODO el equipo y cerrar sus sesiones ahora mismo? Solo tú podrás usar el panel.' : '¿Reanudar el acceso de todo el equipo?')) return;
+  try { const { d } = await api('/admin/equipo-emergencia', { method: 'POST', body: { pausar } }); if (d.success) { toast(pausar ? `🚨 ${d.afectados} miembros pausados` : '▶ Equipo reactivado', pausar ? 'warn' : ''); loadEquipo(); } else toast(d.error || 'Error', 'err'); } catch (_) {}
 }
 async function quitarMiembro(u) { if (!confirm(`¿Quitar a @${u} del equipo? Perderá el acceso al panel al instante.`)) return;
   try { const { d } = await api(`/admin/equipo/${encodeURIComponent(u)}`, { method: 'DELETE' }); if (d.success) { toast(`@${u} ya no es parte del equipo`); loadEquipo(); } else toast(d.error || 'Error', 'err'); } catch (_) {} }
 
+// ─────────── Exportar CSV ───────────
+function csv(nombre, filas) {
+  const celda = v => { let t = String(v ?? ''); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return '"' + t.replace(/"/g, '""') + '"'; };   // evita inyección de fórmulas
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + filas.map(f => f.map(celda).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+  a.download = `${nombre}-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+function exportUsers() { csv('usuarios-upgames', [['usuario', 'email', 'paypal', 'verificacion', 'saldo', 'descargas', 'seguidores', 'registro', 'ultima_actividad', 'suspendido', 'lista_negra', 'rol_panel', 'ip_registro'],
+  ...D.users.map(u => [u.usuario, u.email, u.paypalEmail, u.verificadoNivel || 0, (u.saldo || 0).toFixed(2), u.descargasTotales || 0, (u.listaSeguidores || []).length, u.fecha || u.createdAt, u.ultimoLogin, u.suspendido ? 'si' : 'no', u.listaNegraAdmin ? 'si' : 'no', u.esDueno ? 'dueño' : (u.adminRol || ''), u.registrationIP])]); }
+async function exportPagos() { try { const { d } = await api('/admin/finanzas/historial-completo?limite=5000'); csv('pagos-upgames', [['fecha', 'usuario', 'monto', 'estado', 'paypal', 'notas'], ...(d.historial || []).map(p => [p.fecha, p.usuario, (p.monto || 0).toFixed(2), p.estado, p.paypalEmail, p.notas])]); } catch (_) {} }
+async function exportAudit() { try { const qs = new URLSearchParams({ limite: 1000 }); if ($('auF').value) qs.set('admin', $('auF').value); if ($('auC').checked) qs.set('soloCambios', '1');
+  const { d } = await api('/admin/auditoria?' + qs); csv('auditoria-upgames', [['fecha', 'admin', 'rol', 'accion', 'descripcion', 'objetivo', 'detalle', 'estado', 'ip'], ...(d.logs || []).map(l => [l.fecha, l.admin, l.rol, l.accion, descAccion(l.accion), l.objetivo, l.detalle, l.estado, l.ip])]); } catch (_) {} }
+
 // ─────────── Auditoría ───────────
 function descAccion(a) {
   const M = [[/^LOGIN$/, '🔑 Inició sesión'], [/^LOGIN pin/, '🗝️ Entró con la llave maestra'], [/^LOGIN denegado/, '🚷 Intento de acceso sin permiso'], [/^LOGOUT/, '👋 Cerró sesión'], [/^BLOQUEADO/, '⛔ Acción bloqueada'],
-    [/PUT \/admin\/equipo/, '🛡️ Cambió permisos de un miembro'], [/DELETE \/admin\/equipo/, '🛡️ Quitó a un miembro'], [/suspender/, '⛔ Suspensión de cuenta'], [/anuncio/, '📢 Envió un anuncio'],
+    [/equipo-emergencia/, '🚨 Pausa de emergencia del equipo'], [/\/pausa$/, '⏸ Pausó o reanudó a un miembro'], [/cerrar-sesiones/, '🔒 Cerró sesiones de un miembro'],
+    [/PUT \/admin\/equipo/, '🛡️ Asignó un rol'], [/DELETE \/admin\/equipo/, '🛡️ Quitó a un miembro'], [/suspender/, '⛔ Suspensión de cuenta'], [/anuncio/, '📢 Envió un anuncio'],
     [/ajustar-saldo|reset-saldo/, '💰 Ajustó un saldo'], [/procesar-pago/, '✅ Marcó un pago'], [/rechazar-pago/, '✗ Rechazó un pago'], [/tarjetas/, '💳 Cambió una tarjeta'],
     [/lista-negra/, '🚫 Lista negra'], [/notas/, '📝 Nota interna'], [/verificacion/, '🏅 Cambió verificación'], [/DELETE \/auth\/users/, '🗑 Eliminó una cuenta'], [/DELETE \/admin\/users\/.*\/items/, '🗑 Borró las publicaciones de un usuario'],
     [/bulk-action/, '☑️ Acción masiva'], [/reset-reports/, '🧹 Limpió reportes'], [/DELETE \/items/, '🗑 Eliminó una publicación'], [/\/admin\/items/, '✏️ Editó una publicación'], [/DELETE \/comentarios/, '💬 Eliminó un comentario'], [/cache/, '⚙️ Caché']];
@@ -1254,16 +1349,15 @@ function descAccion(a) {
 }
 async function loadAudit(more) {
   if (!more) { auBefore = null; $('auList').innerHTML = '<div class="skel" style="margin:6px"></div>'; }
-  const qs = new URLSearchParams({ limite: 60 }); if ($('auF').value) qs.set('admin', $('auF').value); if (more && auBefore) qs.set('antes', auBefore);
+  const qs = new URLSearchParams({ limite: 60 }); if ($('auF').value) qs.set('admin', $('auF').value); if ($('auC').checked) qs.set('soloCambios', '1'); if (more && auBefore) qs.set('antes', auBefore);
   try { const { d } = await api('/admin/auditoria?' + qs); const logs = d.logs || [];
     const html = logs.map(l => `<div class="log"><span class="l-i tag ${l.estado >= 400 ? 't-bad' : 't-ok'}">${l.estado || ''}</span><div style="min-width:0"><div class="l-x"><span class="l-a" style="color:var(--g1)">@${esc(l.admin)}</span> ${esc(descAccion(l.accion))}</div>
       <div class="l-d mono">${esc(l.accion)}${l.objetivo ? ' · ' + esc(l.objetivo) : ''}${l.detalle ? ' · ' + esc(l.detalle) : ''}</div></div><div class="l-t">${ago(l.fecha)}<br>${esc(l.ip || '')}</div></div>`).join('');
     if (more) $('auList').insertAdjacentHTML('beforeend', html); else $('auList').innerHTML = html || '<div class="empty"><ion-icon name="document-text-outline"></ion-icon>Sin actividad registrada</div>';
     auBefore = logs.length ? logs[logs.length - 1].fecha : auBefore; $('auMore').style.display = logs.length === 60 ? '' : 'none';
-    if (!eqData) loadEquipoSilencioso();
+    if (!eqData) api('/admin/equipo').then(r => { if (r.d.success) { eqData = r.d; PERMS = r.d.permisos || PERMS; fillAuF(); } }).catch(() => {});
   } catch (_) {}
 }
-async function loadEquipoSilencioso() { try { const { d } = await api('/admin/equipo'); if (d.success) { eqData = d; const f = $('auF'), cur = f.value; f.innerHTML = '<option value="">Todo el equipo</option>' + d.equipo.map(m => `<option value="${esc(m.usuario)}">@${esc(m.usuario)}</option>`).join('') + '<option value="llave-maestra">Llave maestra</option>'; f.value = cur; } } catch (_) {} }
 
 // ─────────── Inicio de la app ───────────
 (async () => {

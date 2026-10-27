@@ -2,26 +2,26 @@
  * ══════════════════════════════════════════════════════════════════
  *  adminPanel.js — Autenticación y gobierno del panel de administración
  *
- *  Roles:
- *    • owner      → dueño. Cuenta(s) cuyo email está en OWNER_EMAIL
- *                   (por defecto jhonatandavidcastrogalviz@gmail.com).
- *                   Todos los permisos + gestionar el equipo + auditoría.
- *                   Nadie puede quitarle el rol ni tocar su cuenta.
- *    • admin      → sub-administrador con los permisos que el dueño elija.
- *    • moderador  → igual que admin pero pensado para contenido.
+ *  • Dueño (owner): la(s) cuenta(s) cuyo email está en OWNER_EMAIL
+ *    (por defecto jhonatandavidcastrogalviz@gmail.com). Tiene todo,
+ *    gestiona el equipo y ve la auditoría. Nadie puede tocar su cuenta.
+ *  • Sub-administradores: el dueño les asigna un ROL EXCLUSIVO (plantilla)
+ *    o permisos a medida. Cada uno solo ve y solo puede usar su área.
  *
- *  Permisos: contenido · usuarios · finanzas · sistema
+ *  Permisos (granulares):
+ *    revision · contenido · comentarios · usuarios · sanciones ·
+ *    anuncios · finanzas · estadisticas · sistema
  *
- *  Login: email/usuario + contraseña de la cuenta de UpGames (+ 2FA si
- *  está activo). ADMIN_PIN (variable de entorno) queda como llave de
- *  emergencia del dueño. El PIN ya NO es el JWT_SECRET.
+ *  Controles del dueño sobre cada miembro: pausar, acceso hasta una fecha,
+ *  cerrar todas sus sesiones, quitarlo, y "pausar a todo el equipo"
+ *  (emergencia). Las acciones sensibles de un sub-admin le llegan al dueño
+ *  como notificación.
  *
- *  La sesión es un JWT de 8 h, pero el rol se relee de la BD en cada
- *  petición (caché 15 s): si el dueño quita a un sub-admin, pierde el
- *  acceso al instante, y un reinicio del servidor ya no cierra sesiones.
+ *  Login: email/usuario + contraseña de la cuenta (+ 2FA si está activo).
+ *  ADMIN_PIN (variable de entorno) es la llave maestra de emergencia.
  *
- *  Todo lo que un admin cambia (POST/PUT/PATCH/DELETE) queda en la
- *  colección adminlogs (180 días) y solo el dueño la consulta.
+ *  La sesión es un JWT de 8 h; el rol se relee de la BD en cada petición
+ *  (caché 15 s). Todo cambio queda en adminlogs (180 días).
  * ══════════════════════════════════════════════════════════════════
  */
 'use strict';
@@ -32,30 +32,83 @@ const mongoose = require('mongoose');
 const jwt      = require('jsonwebtoken');
 const bcrypt   = require('bcryptjs');
 
-const PERMISOS = ['contenido', 'usuarios', 'finanzas', 'sistema'];
-const PERMISOS_POR_ROL = {
-    admin:     ['contenido', 'usuarios', 'finanzas', 'sistema'],
-    moderador: ['contenido'],
+const PERMISOS = {
+    revision:     { nombre: 'Revisión',      desc: 'Aprobar o rechazar entradas, marcar enlaces online/caídos y limpiar reportes' },
+    contenido:    { nombre: 'Contenido',     desc: 'Editar y eliminar entradas y videos' },
+    comentarios:  { nombre: 'Comentarios',   desc: 'Moderar y eliminar comentarios' },
+    usuarios:     { nombre: 'Usuarios',      desc: 'Ver cuentas, verificación, lista negra y notas' },
+    sanciones:    { nombre: 'Sanciones',     desc: 'Suspender y eliminar cuentas' },
+    anuncios:     { nombre: 'Anuncios',      desc: 'Enviar notificaciones a la comunidad' },
+    finanzas:     { nombre: 'Finanzas',      desc: 'Pagos, saldos y tarjetas' },
+    estadisticas: { nombre: 'Estadísticas',  desc: 'Inicio con métricas, gráficos y rankings' },
+    sistema:      { nombre: 'Sistema',       desc: 'API Test, diagnóstico y caché' },
 };
-const SESION_MS = 8 * 60 * 60 * 1000;
+const CLAVES = Object.keys(PERMISOS);
 
+// Roles exclusivos listos para asignar. "personalizado" = permisos a mano.
+const ROLES = {
+    revisor:     { nombre: 'Revisor',              icono: '🔍', permisos: ['revision'] },
+    editor:      { nombre: 'Editor de contenido',  icono: '✏️', permisos: ['revision', 'contenido'] },
+    moderador:   { nombre: 'Moderador',            icono: '🧹', permisos: ['comentarios'] },
+    soporte:     { nombre: 'Soporte de usuarios',  icono: '🎧', permisos: ['usuarios'] },
+    seguridad:   { nombre: 'Seguridad',            icono: '🛡️', permisos: ['usuarios', 'sanciones'] },
+    tesorero:    { nombre: 'Tesorero',             icono: '💰', permisos: ['finanzas'] },
+    comunicador: { nombre: 'Comunicación',         icono: '📢', permisos: ['anuncios'] },
+    analista:    { nombre: 'Analista',             icono: '📊', permisos: ['estadisticas'] },
+    tecnico:     { nombre: 'Técnico',              icono: '🛠️', permisos: ['sistema'] },
+    admin:       { nombre: 'Administrador general', icono: '⭐', permisos: CLAVES.slice() },
+    personalizado: { nombre: 'Personalizado',      icono: '🧩', permisos: null },
+};
+
+// Permisos de la primera versión (antes de los roles exclusivos)
+const LEGADO = { contenido: ['revision', 'contenido', 'comentarios'], usuarios: ['usuarios', 'sanciones', 'anuncios'], finanzas: ['finanzas'], sistema: ['sistema'] };
+
+const SESION_MS = 8 * 60 * 60 * 1000;
 const ownerEmails = () => (process.env.OWNER_EMAIL || 'jhonatandavidcastrogalviz@gmail.com')
     .split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
 const esOwnerEmail = email => ownerEmails().includes(String(email || '').toLowerCase());
 
-// ¿Qué permiso exige cada ruta? null = cualquier admin; 'owner' = solo dueño.
+/**
+ * Permisos que habilitan una ruta: array = basta con tener UNO;
+ * 'owner' = solo el dueño; null = cualquier admin con sesión.
+ */
 function permisoRequerido(method, path) {
     if (/^\/admin\/(equipo|auditoria)/.test(path)) return 'owner';
-    if (/^\/admin\/sistema\/anuncio/.test(path)) return 'usuarios';
-    if (/^\/admin\/(sistema|cache)/.test(path)) return 'sistema';
-    if (/^\/admin\/(finanzas|payments-pending)/.test(path)) return 'finanzas';
-    if (/^\/admin\/users\/(ajustar-saldo|[^/]+\/reset-saldo)/.test(path)) return 'finanzas';
-    if (/^\/admin\/users\/[^/]+\/items$/.test(path)) return 'contenido';
-    if (/^\/(admin\/users|auth\/users|auth\/admin|admin\/fraud|admin\/nexus)/.test(path)) return 'usuarios';
-    if (/^\/(admin\/items|items\/|admin\/links|comentarios)/.test(path)) return 'contenido';
-    if (/^\/(admin\/stats|analytics\/admin|admin\/auth)/.test(path)) return null;
-    return 'sistema';
+    if (/^\/admin\/auth/.test(path)) return null;
+    if (/^\/admin\/sistema\/anuncio/.test(path)) return ['anuncios'];
+    if (/^\/admin\/(sistema|cache)/.test(path)) return ['sistema'];
+    if (/^\/(admin\/stats|analytics\/admin)/.test(path)) return ['estadisticas'];
+    if (/^\/admin\/(finanzas|payments-pending)/.test(path)) return ['finanzas'];
+    if (/^\/admin\/users\/(ajustar-saldo|[^/]+\/reset-saldo)/.test(path)) return ['finanzas'];
+    if (/^\/admin\/users\/suspender/.test(path)) return ['sanciones'];
+    if (/^\/admin\/users\/[^/]+\/items$/.test(path)) return ['sanciones'];
+    if (method === 'DELETE' && /^\/auth\/users\//.test(path)) return ['sanciones'];
+    if (method === 'GET' && /^\/(auth\/users|admin\/users\/detalle)/.test(path)) return ['usuarios', 'sanciones', 'finanzas'];
+    if (/^\/(admin\/users|auth\/users|auth\/admin|admin\/fraud|admin\/nexus)/.test(path)) return ['usuarios'];
+    if (/^\/comentarios/.test(path)) return ['comentarios'];
+    if (method === 'DELETE' && /^\/items\//.test(path)) return ['contenido'];
+    if (/^\/(admin\/items|items\/|admin\/links)/.test(path)) return ['revision', 'contenido'];
+    return ['sistema'];
 }
+
+// Quien solo tiene "revision" no puede editar textos/enlaces ni borrar
+function limiteRevision(req) {
+    if (req.method === 'PUT' && /^\/admin\/items\/bulk-action$/.test(req.path))
+        return req.body?.action === 'eliminar' ? 'Eliminar entradas requiere el permiso "Contenido"' : null;
+    if (req.method === 'PUT' && /^\/admin\/items\/[^/]+$/.test(req.path)) {
+        const extra = Object.keys(req.body || {}).filter(k => !['status', 'linkStatus', 'reportes'].includes(k));
+        return extra.length ? 'Tu rol solo permite cambiar el estado de las entradas' : null;
+    }
+    return null;
+}
+
+// Acciones de un sub-admin que se notifican al dueño
+const SENSIBLES = [
+    [/DELETE \/auth\/users/, 'eliminó una cuenta'], [/DELETE \/admin\/users\/[^/]+\/items/, 'borró todas las publicaciones de un usuario'],
+    [/suspender/, 'cambió la suspensión de una cuenta'], [/ajustar-saldo|reset-saldo/, 'ajustó un saldo'],
+    [/procesar-pago/, 'marcó un pago como enviado'], [/rechazar-pago/, 'rechazó un pago'], [/DELETE \/admin\/finanzas\/tarjetas/, 'eliminó una tarjeta'],
+    [/anuncio/, 'envió un anuncio'], [/bulk-action/, 'hizo una acción masiva'],
+];
 
 function limpiarBody(body) {
     if (!body || typeof body !== 'object') return '';
@@ -69,6 +122,12 @@ function limpiarBody(body) {
 }
 
 const escHtml = s => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function normalizarPermisos(u) {
+    const base = (u.adminPermisos || []);
+    const lista = u.adminPermisosV >= 2 ? base : base.flatMap(p => LEGADO[p] || [p]).concat(base.length ? ['estadisticas'] : []);
+    return [...new Set(lista)].filter(p => CLAVES.includes(p));
+}
 
 function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SECRET, logger, twoFactor, authLimiter, NEXUS_API }) {
     const ADMIN_SECRET = JWT_SECRET + '_ADMIN';
@@ -86,7 +145,8 @@ function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SE
 
     const registrarLog = (datos) => AdminLog.create(datos).catch(e => logger.warn(`[admin-log] ${e.message}`));
 
-    // jti de sesiones cerradas con "Salir" (las demás caducan solas a las 8 h)
+    // jti de sesiones cerradas con "Salir" (las demás caducan a las 8 h o
+    // al subir adminSesionVer desde "Cerrar sesiones")
     const revocadas = new Map();
     setInterval(() => {
         const lim = Date.now() - SESION_MS;
@@ -98,10 +158,17 @@ function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SE
     async function rolDe(usuario) {
         const c = cacheRol.get(usuario);
         if (c && Date.now() - c.t < 15000) return c.v;
-        const u = await Usuario.findOne({ usuario }).select('usuario email adminRol adminPermisos suspendido').lean();
+        const u = await Usuario.findOne({ usuario })
+            .select('usuario email adminRol adminPermisos adminPermisosV adminPausado adminHasta adminSesionVer suspendido').lean();
         let v = null;
-        if (u && esOwnerEmail(u.email)) v = { usuario: u.usuario, email: u.email, rol: 'owner', permisos: [...PERMISOS] };
-        else if (u && u.adminRol && !u.suspendido) v = { usuario: u.usuario, email: u.email, rol: u.adminRol, permisos: (u.adminPermisos || []).filter(p => PERMISOS.includes(p)) };
+        if (u && esOwnerEmail(u.email)) v = { usuario: u.usuario, email: u.email, rol: 'owner', permisos: CLAVES.slice(), ver: u.adminSesionVer || 0 };
+        else if (u && u.adminRol) {
+            let bloqueo = null;
+            if (u.suspendido) bloqueo = 'Tu cuenta está suspendida';
+            else if (u.adminPausado) bloqueo = 'El dueño pausó tu acceso al panel';
+            else if (u.adminHasta && new Date(u.adminHasta) < new Date()) bloqueo = 'Tu acceso temporal al panel terminó';
+            v = bloqueo ? { bloqueo } : { usuario: u.usuario, email: u.email, rol: u.adminRol, permisos: normalizarPermisos(u), ver: u.adminSesionVer || 0, hasta: u.adminHasta || null };
+        }
         cacheRol.set(usuario, { v, t: Date.now() });
         return v;
     }
@@ -109,7 +176,7 @@ function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SE
 
     function firmarSesion(adm) {
         const jti = crypto.randomBytes(12).toString('hex');
-        const adminToken = jwt.sign({ adm: adm.usuario, rol: adm.rol, jti }, ADMIN_SECRET, { expiresIn: '8h' });
+        const adminToken = jwt.sign({ adm: adm.usuario, rol: adm.rol, jti, v: adm.ver || 0 }, ADMIN_SECRET, { expiresIn: '8h' });
         return { adminToken, expiresIn: '8h', expiraEn: Date.now() + SESION_MS };
     }
 
@@ -120,9 +187,11 @@ function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SE
         try { p = jwt.verify(token, ADMIN_SECRET); }
         catch (e) { return { status: 401, error: e.name === 'TokenExpiredError' ? 'Sesión admin expirada' : 'Sesión admin inválida' }; }
         if (!p.adm || (p.jti && revocadas.has(p.jti))) return { status: 401, error: 'Sesión admin cerrada' };
-        if (p.adm === '__pin__') return { admin: { usuario: 'llave-maestra', rol: 'owner', permisos: [...PERMISOS], jti: p.jti, exp: p.exp } };
+        if (p.adm === '__pin__') return { admin: { usuario: 'llave-maestra', rol: 'owner', permisos: CLAVES.slice(), jti: p.jti, exp: p.exp } };
         const r = await rolDe(p.adm);
-        if (!r) return { status: 403, error: 'Tu cuenta ya no tiene acceso al panel' };
+        if (!r) return { status: 401, error: 'Tu cuenta ya no tiene acceso al panel' };
+        if (r.bloqueo) return { status: 401, error: r.bloqueo };
+        if ((p.v || 0) !== r.ver) return { status: 401, error: 'Tu sesión fue cerrada. Vuelve a entrar.' };
         return { admin: { ...r, jti: p.jti, exp: p.exp } };
     }
 
@@ -136,6 +205,22 @@ function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SE
         return !!t && (esOwnerEmail(t.email) || !!t.adminRol);
     }
 
+    // Dueños a los que avisar (caché 10 min)
+    let duenos = { lista: [], t: 0 };
+    async function nombresDueno() {
+        if (Date.now() - duenos.t < 600000) return duenos.lista;
+        const l = await Usuario.find({ email: { $in: ownerEmails() } }).select('usuario').lean();
+        duenos = { lista: l.map(u => u.usuario), t: Date.now() };
+        return duenos.lista;
+    }
+    async function avisarDueno(adm, accion, objetivo) {
+        const m = SENSIBLES.find(([r]) => r.test(accion)); if (!m) return;
+        const destino = await nombresDueno();
+        const obj = objetivo && !/^[a-f\d]{24}(,|$)/i.test(objetivo) ? ' · ' + objetivo : '';
+        const txt = escHtml(`🛡️ @${adm.usuario} (${ROLES[adm.rol]?.nombre || adm.rol}) ${m[1]}${obj}. Revísalo en Auditoría.`);
+        await Notificacion.insertMany(destino.map(d => ({ destinatario: d, tipo: 'sistema', emisor: adm.usuario, itemTitle: 'Equipo', mensaje: txt, leida: false, fecha: new Date() })));
+    }
+
     const verificarAdmin = async (req, res, next) => {
         try {
             const s = await sesionDesdeToken(req.headers['x-admin-token']);
@@ -146,18 +231,23 @@ function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SE
                 return res.status(403).json({ success: false, error, ...extra });
             };
             const req_ = permisoRequerido(req.method, req.path);
-            if (req_ === 'owner' && adm.rol !== 'owner') return negar('Solo el dueño puede hacer esto');
-            if (req_ && req_ !== 'owner' && !adm.permisos.includes(req_)) return negar(`Necesitas el permiso "${req_}"`, { permiso: req_ });
-            if (adm.rol !== 'owner' && req.method !== 'GET' && await objetivoProtegido(req))
-                return negar('No puedes modificar al dueño ni a otros administradores');
+            if (adm.rol !== 'owner') {
+                if (req_ === 'owner') return negar('Solo el dueño puede hacer esto');
+                if (Array.isArray(req_) && !req_.some(p => adm.permisos.includes(p)))
+                    return negar(`Tu rol no incluye: ${req_.map(p => PERMISOS[p]?.nombre || p).join(' o ')}`, { permiso: req_ });
+                if (!adm.permisos.includes('contenido')) { const lim = limiteRevision(req); if (lim) return negar(lim); }
+                if (req.method !== 'GET' && await objetivoProtegido(req))
+                    return negar('No puedes modificar al dueño ni a otros administradores');
+            }
 
             req.admin = adm;
             if (req.method !== 'GET') {
-                res.on('finish', () => registrarLog({
-                    admin: adm.usuario, rol: adm.rol, accion: `${req.method} ${req.path}`,
-                    objetivo: Object.values(req.params || {}).join(',').slice(0, 80),
-                    detalle: limpiarBody(req.body), estado: res.statusCode, ip: req.ip,
-                }));
+                res.on('finish', () => {
+                    const accion = `${req.method} ${req.path}`;
+                    const objetivo = Object.values(req.params || {}).join(',').slice(0, 80);
+                    registrarLog({ admin: adm.usuario, rol: adm.rol, accion, objetivo, detalle: limpiarBody(req.body), estado: res.statusCode, ip: req.ip });
+                    if (adm.rol !== 'owner' && res.statusCode < 400) avisarDueno(adm, accion, objetivo).catch(() => {});
+                });
             }
             next();
         } catch (e) {
@@ -178,6 +268,8 @@ function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SE
     if (mongoose.connection.readyState === 1) recargarSuspendidos();
     setInterval(recargarSuspendidos, 5 * 60 * 1000).unref();
 
+    const infoAdmin = a => ({ usuario: a.usuario, email: a.email || '', rol: a.rol, rolNombre: a.rol === 'owner' ? 'Dueño' : (ROLES[a.rol]?.nombre || a.rol), permisos: a.permisos, hasta: a.hasta || null });
+
     // ══════════════ AUTH ══════════════
     app.use('/admin/auth/login', authLimiter);
 
@@ -196,12 +288,12 @@ function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SE
                     return res.status(401).json({ success: false, error: PIN ? 'PIN incorrecto' : 'La llave maestra no está configurada (ADMIN_PIN)' });
                 }
                 registrarLog({ admin: 'llave-maestra', rol: 'owner', accion: 'LOGIN pin', estado: 200, ip });
-                return res.json({ success: true, ...firmarSesion({ usuario: '__pin__', rol: 'owner' }), admin: { usuario: 'llave-maestra', rol: 'owner', permisos: PERMISOS } });
+                return res.json({ success: true, ...firmarSesion({ usuario: '__pin__', rol: 'owner' }), admin: infoAdmin({ usuario: 'llave-maestra', rol: 'owner', permisos: CLAVES }) });
             }
 
             const id = String(email || '').toLowerCase().trim();
             if (!id || !password) return res.status(400).json({ success: false, error: 'Escribe tu email y contraseña' });
-            const u = await Usuario.findOne({ $or: [{ email: id }, { usuario: id }] }).select('usuario email password adminRol adminPermisos suspendido');
+            const u = await Usuario.findOne({ $or: [{ email: id }, { usuario: id }] }).select('usuario email password');
             const valida = u && await bcrypt.compare(String(password), u.password);
             if (!valida) {
                 logger.warn(`Login admin fallido (${id}) - IP: ${ip}`);
@@ -209,9 +301,9 @@ function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SE
             }
             olvidarRol(u.usuario);
             const adm = await rolDe(u.usuario);
-            if (!adm) {
-                registrarLog({ admin: u.usuario, rol: '', accion: 'LOGIN denegado (sin rol)', estado: 403, ip });
-                return res.status(403).json({ success: false, error: 'Tu cuenta no tiene acceso al panel de administración' });
+            if (!adm || adm.bloqueo) {
+                registrarLog({ admin: u.usuario, rol: '', accion: 'LOGIN denegado', detalle: adm?.bloqueo || 'sin rol', estado: 403, ip });
+                return res.status(403).json({ success: false, error: adm?.bloqueo || 'Tu cuenta no tiene acceso al panel de administración' });
             }
             if (await twoFactor.tieneActivo(u.usuario)) {
                 if (!token2fa) return res.status(401).json({ success: false, error: 'Escribe tu código 2FA', require2FA: true });
@@ -220,7 +312,7 @@ function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SE
             }
             registrarLog({ admin: adm.usuario, rol: adm.rol, accion: 'LOGIN', estado: 200, ip });
             logger.info(`Sesión admin: @${adm.usuario} (${adm.rol}) - IP: ${ip}`);
-            res.json({ success: true, ...firmarSesion(adm), admin: { usuario: adm.usuario, email: adm.email, rol: adm.rol, permisos: adm.permisos } });
+            res.json({ success: true, ...firmarSesion(adm), admin: infoAdmin(adm) });
         } catch (e) {
             logger.error(`[admin login] ${e.message}`);
             res.status(500).json({ success: false, error: 'Error al iniciar sesión' });
@@ -234,8 +326,7 @@ function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SE
     });
 
     app.get('/admin/auth/me', verificarAdmin, (req, res) => {
-        const { usuario, email, rol, permisos, exp } = req.admin;
-        res.json({ success: true, admin: { usuario, email: email || '', rol, permisos, expiraEn: exp ? exp * 1000 : null } });
+        res.json({ success: true, admin: { ...infoAdmin(req.admin), expiraEn: req.admin.exp ? req.admin.exp * 1000 : null }, permisos: PERMISOS });
     });
 
     app.post('/admin/auth/logout', async (req, res) => {
@@ -250,47 +341,92 @@ function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SE
     // ══════════════ EQUIPO (solo dueño) ══════════════
     app.get('/admin/equipo', verificarAdmin, async (req, res) => {
         try {
-            const lista = await Usuario.find({ $or: [{ adminRol: { $in: ['admin', 'moderador'] } }, { email: { $in: ownerEmails() } }] })
-                .select('usuario email avatar adminRol adminPermisos adminDesde adminPor ultimoLogin suspendido').lean();
+            const lista = await Usuario.find({ $or: [{ adminRol: { $nin: ['', null] } }, { email: { $in: ownerEmails() } }] })
+                .select('usuario email avatar adminRol adminPermisos adminPermisosV adminDesde adminPor adminPausado adminHasta ultimoLogin suspendido').lean();
             const ultimos = await AdminLog.aggregate([
                 { $match: { admin: { $in: lista.map(u => u.usuario) } } },
                 { $group: { _id: '$admin', ultima: { $max: '$fecha' }, acciones: { $sum: 1 } } },
             ]);
             const act = Object.fromEntries(ultimos.map(x => [x._id, x]));
             res.json({
-                success: true, permisos: PERMISOS, plantillas: PERMISOS_POR_ROL,
-                equipo: lista.map(u => ({
-                    usuario: u.usuario, email: u.email, avatar: u.avatar || '',
-                    rol: esOwnerEmail(u.email) ? 'owner' : u.adminRol,
-                    permisos: esOwnerEmail(u.email) ? PERMISOS : (u.adminPermisos || []),
-                    desde: u.adminDesde || null, por: u.adminPor || '', ultimoLogin: u.ultimoLogin || null,
-                    ultimaAccion: act[u.usuario]?.ultima || null, acciones: act[u.usuario]?.acciones || 0,
-                    suspendido: !!u.suspendido,
-                })).sort((a, b) => (a.rol === 'owner' ? -1 : b.rol === 'owner' ? 1 : a.usuario.localeCompare(b.usuario))),
+                success: true, permisos: PERMISOS, roles: ROLES,
+                equipo: lista.map(u => {
+                    const owner = esOwnerEmail(u.email);
+                    return {
+                        usuario: u.usuario, email: u.email, avatar: u.avatar || '',
+                        rol: owner ? 'owner' : u.adminRol,
+                        rolNombre: owner ? 'Dueño' : (ROLES[u.adminRol]?.nombre || u.adminRol),
+                        permisos: owner ? CLAVES : normalizarPermisos(u),
+                        desde: u.adminDesde || null, por: u.adminPor || '', ultimoLogin: u.ultimoLogin || null,
+                        ultimaAccion: act[u.usuario]?.ultima || null, acciones: act[u.usuario]?.acciones || 0,
+                        pausado: !!u.adminPausado, hasta: u.adminHasta || null,
+                        vencido: !!(u.adminHasta && new Date(u.adminHasta) < new Date()), suspendido: !!u.suspendido,
+                    };
+                }).sort((a, b) => (a.rol === 'owner' ? -1 : b.rol === 'owner' ? 1 : a.usuario.localeCompare(b.usuario))),
             });
         } catch (e) { res.status(500).json({ success: false, error: e.message }); }
     });
 
-    // Crear o actualizar sub-admin: { rol: 'admin'|'moderador', permisos: [...] }
+    // Asignar rol: { rol: <clave de ROLES>, permisos?: [...] (solo "personalizado"), hasta?: fecha ISO | null }
     app.put('/admin/equipo/:usuario', verificarAdmin, async (req, res) => {
         try {
             const nombre = String(req.params.usuario || '').toLowerCase().replace(/^@/, '').trim();
             const rol = req.body?.rol;
-            if (!['admin', 'moderador'].includes(rol)) return res.status(400).json({ success: false, error: 'Rol inválido' });
-            let permisos = Array.isArray(req.body?.permisos) ? req.body.permisos.filter(p => PERMISOS.includes(p)) : PERMISOS_POR_ROL[rol];
+            if (!ROLES[rol]) return res.status(400).json({ success: false, error: 'Elige un rol válido' });
+            const permisos = ROLES[rol].permisos
+                ? ROLES[rol].permisos.slice()
+                : [...new Set((Array.isArray(req.body?.permisos) ? req.body.permisos : []).filter(p => CLAVES.includes(p)))];
             if (!permisos.length) return res.status(400).json({ success: false, error: 'Elige al menos un permiso' });
+            let hasta = null;
+            if (req.body?.hasta) {
+                hasta = new Date(req.body.hasta);
+                if (isNaN(hasta) || hasta < new Date()) return res.status(400).json({ success: false, error: 'La fecha de fin de acceso debe ser futura' });
+            }
             const u = await Usuario.findOne({ $or: [{ usuario: nombre }, { email: nombre }] });
             if (!u) return res.status(404).json({ success: false, error: 'No existe ninguna cuenta con ese usuario o email' });
             if (esOwnerEmail(u.email)) return res.status(400).json({ success: false, error: 'El dueño ya tiene todos los permisos' });
             if (u.suspendido) return res.status(400).json({ success: false, error: 'La cuenta está suspendida' });
             const nuevo = !u.adminRol;
-            u.adminRol = rol; u.adminPermisos = permisos;
+            Object.assign(u, { adminRol: rol, adminPermisos: permisos, adminPermisosV: 2, adminHasta: hasta, adminPausado: false });
             if (nuevo) { u.adminDesde = new Date(); u.adminPor = req.admin.usuario; }
             await u.save();
             olvidarRol(u.usuario);
+            const rn = ROLES[rol].nombre;
             Notificacion.create({ destinatario: u.usuario, tipo: 'sistema', emisor: 'UpGames', itemTitle: 'Equipo',
-                mensaje: escHtml(nuevo ? `🛡️ Ahora eres ${rol} de UpGames. Entra al panel con tu email y contraseña.` : `🛡️ Tus permisos de administración se actualizaron: ${permisos.join(', ')}`) }).catch(() => {});
-            res.json({ success: true, usuario: u.usuario, rol, permisos });
+                mensaje: escHtml(nuevo ? `🛡️ Ahora formas parte del equipo de UpGames como ${rn}. Entra al panel con tu email y contraseña.` : `🛡️ Tu rol en el panel cambió a: ${rn}`) }).catch(() => {});
+            res.json({ success: true, usuario: u.usuario, rol, rolNombre: rn, permisos, hasta });
+        } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+    });
+
+    // Pausar / reanudar sin perder la configuración
+    app.put('/admin/equipo/:usuario/pausa', verificarAdmin, async (req, res) => {
+        try {
+            const u = await Usuario.findOne({ usuario: String(req.params.usuario).toLowerCase() });
+            if (!u || !u.adminRol || esOwnerEmail(u.email)) return res.status(404).json({ success: false, error: 'No es un sub-administrador' });
+            u.adminPausado = !!req.body?.pausado;
+            await u.save(); olvidarRol(u.usuario);
+            res.json({ success: true, pausado: u.adminPausado });
+        } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+    });
+
+    // Cerrar todas las sesiones abiertas de un miembro (también las tuyas)
+    app.post('/admin/equipo/:usuario/cerrar-sesiones', verificarAdmin, async (req, res) => {
+        try {
+            const u = await Usuario.findOneAndUpdate({ usuario: String(req.params.usuario).toLowerCase() }, { $inc: { adminSesionVer: 1 } }, { new: true });
+            if (!u) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+            olvidarRol(u.usuario);
+            res.json({ success: true });
+        } catch (e) { res.status(500).json({ success: false, error: e.message }); }
+    });
+
+    // Emergencia: pausa (o reanuda) a TODO el equipo y cierra sus sesiones
+    app.post('/admin/equipo-emergencia', verificarAdmin, async (req, res) => {
+        try {
+            const pausar = req.body?.pausar !== false;
+            const upd = pausar ? { $set: { adminPausado: true }, $inc: { adminSesionVer: 1 } } : { $set: { adminPausado: false } };
+            const r = await Usuario.updateMany({ adminRol: { $nin: ['', null] }, email: { $nin: ownerEmails() } }, upd);
+            cacheRol.clear();
+            res.json({ success: true, afectados: r.modifiedCount || 0, pausado: pausar });
         } catch (e) { res.status(500).json({ success: false, error: e.message }); }
     });
 
@@ -299,7 +435,7 @@ function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SE
             const u = await Usuario.findOne({ usuario: String(req.params.usuario).toLowerCase() });
             if (!u || !u.adminRol) return res.status(404).json({ success: false, error: 'No es parte del equipo' });
             if (esOwnerEmail(u.email)) return res.status(400).json({ success: false, error: 'No se puede quitar al dueño' });
-            u.adminRol = ''; u.adminPermisos = [];
+            Object.assign(u, { adminRol: '', adminPermisos: [], adminPausado: false, adminHasta: null, adminSesionVer: (u.adminSesionVer || 0) + 1 });
             await u.save();
             olvidarRol(u.usuario);
             res.json({ success: true });
@@ -311,8 +447,9 @@ function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SE
         try {
             const q = {};
             if (req.query.admin) q.admin = String(req.query.admin).toLowerCase();
+            if (req.query.soloCambios === '1') q.accion = { $not: /^(LOGIN|LOGOUT)/ };
             if (req.query.antes) q.fecha = { $lt: new Date(req.query.antes) };
-            const limite = Math.min(parseInt(req.query.limite) || 100, 300);
+            const limite = Math.min(parseInt(req.query.limite) || 100, 1000);
             const logs = await AdminLog.find(q).sort({ fecha: -1 }).limit(limite).lean();
             res.json({ success: true, logs });
         } catch (e) { res.status(500).json({ success: false, error: e.message }); }
@@ -345,7 +482,7 @@ function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SE
             const destino = req.body?.destino || 'todos';
             let nombres;
             if (destino === 'usuario') {
-                const u = await Usuario.findOne({ usuario: String(req.body?.usuario || '').toLowerCase().replace(/^@/, '') }).select('usuario').lean();
+                const u = await Usuario.findOne({ usuario: String(req.body?.usuario || '').toLowerCase().replace(/^@/, '').trim() }).select('usuario').lean();
                 if (!u) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
                 nombres = [u.usuario];
             } else if (destino === 'creadores') {
@@ -371,7 +508,7 @@ function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SE
                 const [usuarios, items, comentarios, pagosPend, suspendidosN, equipo] = await Promise.all([
                     Usuario.estimatedDocumentCount(), Juego.estimatedDocumentCount(), Comentario.estimatedDocumentCount(),
                     Pago.countDocuments({ estado: 'pendiente' }), Usuario.countDocuments({ suspendido: true }),
-                    Usuario.countDocuments({ adminRol: { $in: ['admin', 'moderador'] } }),
+                    Usuario.countDocuments({ adminRol: { $nin: ['', null] } }),
                 ]);
                 return { usuarios, items, comentarios, pagosPend, suspendidos: suspendidosN, subAdmins: equipo };
             }),
@@ -395,7 +532,7 @@ function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SE
             db, conteos, nexus,
             config: {   // solo si existen, nunca los valores
                 groq: !!process.env.GROQ_API_KEY, nexusSecret: !!process.env.NEXUS_INTERNAL_SECRET,
-                email: !!(process.env.SMTP_HOST || process.env.RESEND_API_KEY || process.env.SENDGRID_API_KEY || process.env.EMAIL_USER),
+                email: !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD),
                 cloudinary: !!(process.env.CLOUDINARY_URL || process.env.CLOUDINARY_API_KEY),
                 adminPin: !!process.env.ADMIN_PIN, ownerEmails: ownerEmails().length,
             },
@@ -411,4 +548,4 @@ function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SE
     };
 }
 
-module.exports = { registrar, permisoRequerido, PERMISOS };
+module.exports = { registrar, permisoRequerido, limiteRevision, normalizarPermisos, PERMISOS, ROLES };

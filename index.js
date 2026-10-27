@@ -467,10 +467,14 @@ const UsuarioSchema = new mongoose.Schema({
     resetPasswordExpires:{ type: Date, default: null },
     bloqueados:  { type: [String], default: [] },   // usuarios bloqueados en el chat
     // Panel admin: '' = usuario normal. El dueño se reconoce por OWNER_EMAIL (rutas/adminPanel.js)
-    adminRol:      { type: String, enum: ['', 'admin', 'moderador'], default: '', index: true },
+    adminRol:      { type: String, default: '', index: true },   // clave de ROLES en rutas/adminPanel.js
     adminPermisos: { type: [String], default: [] },
+    adminPermisosV:{ type: Number, default: 0 },    // 2 = permisos granulares (roles exclusivos)
     adminDesde:    { type: Date, default: null },
     adminPor:      { type: String, default: '' },
+    adminPausado:  { type: Boolean, default: false },
+    adminHasta:    { type: Date, default: null },   // acceso temporal
+    adminSesionVer:{ type: Number, default: 0 },    // +1 = cierra todas sus sesiones del panel
     suspendido:       { type: Boolean, default: false, index: true },   // no puede iniciar sesión ni usar su token
     motivoSuspension: { type: String, default: '', maxlength: 300 },
     fechaSuspension:  { type: Date, default: null },
@@ -856,10 +860,12 @@ app.post('/economia/solicitar-pago', verificarToken, async (req, res) => {
         const juegoElegible = await Juego.findOne({ usuario: usuario.usuario, descargasEfectivas: { $gt: 0 } }).select('_id').lean();
         if (!juegoElegible) return res.status(403).json({ success: false, error: "Ninguno de tus juegos tiene descargas registradas aún" });
 
+        // Reclamo atómico de la marca: un doble clic creaba dos solicitudes por el mismo saldo
+        const marcado = await Usuario.updateOne({ _id: usuario._id, solicitudPagoPendiente: { $ne: true } }, { $set: { solicitudPagoPendiente: true } });
+        if (!marcado.modifiedCount) return res.status(400).json({ success: false, error: "Ya tienes una solicitud de pago pendiente" });
         const nuevoPago = new Pago({ usuario: usuario.usuario, monto: usuario.saldo, paypalEmail: usuario.paypalEmail, estado: 'pendiente' });
-        await nuevoPago.save();
-        usuario.solicitudPagoPendiente = true;
-        await usuario.save();
+        try { await nuevoPago.save(); }
+        catch (e) { await Usuario.updateOne({ _id: usuario._id }, { $set: { solicitudPagoPendiente: false } }); throw e; }
         logger.info(`Solicitud de pago creada - @${usuario.usuario}, Monto: $${usuario.saldo.toFixed(2)}`);
         res.json({ success: true, mensaje: "Solicitud de pago enviada. El administrador la revisará pronto.", solicitud: { monto: usuario.saldo, paypalEmail: usuario.paypalEmail, fecha: nuevoPago.fecha } });
     } catch (error) {
@@ -1066,9 +1072,12 @@ app.post('/admin/finanzas/procesar-pago/:id', verificarAdmin, [param('id').isMon
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: "ID inválido" });
         const { id } = req.params;
         const { notas } = req.body;
-        const pago = await Pago.findById(id);
-        if (!pago) return res.status(404).json({ success: false, error: "Pago no encontrado" });
-        if (pago.estado !== 'pendiente') return res.status(400).json({ success: false, error: "Este pago ya fue procesado" });
+        // Reclamo atómico: dos clics o dos admins a la vez ya no pueden pagar dos veces
+        const pago = await Pago.findOneAndUpdate({ _id: id, estado: 'pendiente' }, { $set: { estado: 'procesado' } }, { new: true });
+        if (!pago) {
+            const existe = await Pago.exists({ _id: id });
+            return res.status(existe ? 409 : 404).json({ success: false, error: existe ? "Este pago ya fue procesado (o se está procesando)" : "Pago no encontrado" });
+        }
 
         const pagoAutomatico = config.FEATURES.ENABLE_AUTO_PAYMENTS;
         let paypalBatchId = null;
@@ -1082,6 +1091,7 @@ app.post('/admin/finanzas/procesar-pago/:id', verificarAdmin, [param('id').isMon
                 logger.info(`PayPal Payout enviado - @${pago.usuario} → ${pago.paypalEmail} | $${pago.monto.toFixed(2)} | Batch: ${paypalBatchId}`);
             } catch (paypalError) {
                 logger.error(`PayPal Payout falló para @${pago.usuario}: ${paypalError.message}`);
+                await Pago.updateOne({ _id: id, estado: 'procesado' }, { $set: { estado: 'pendiente' } });
                 return res.status(502).json({ success: false, error: `El pago no se pudo enviar vía PayPal: ${paypalError.message}`, detalle: 'El saldo del usuario NO fue modificado. Revisa las credenciales de PayPal o procesa manualmente.', paypalEmail: pago.paypalEmail, monto: pago.monto });
             }
         }
@@ -1090,13 +1100,9 @@ app.post('/admin/finanzas/procesar-pago/:id', verificarAdmin, [param('id').isMon
         pago.notas = notas || (pagoAutomatico ? `Pago automático vía PayPal Payouts el ${new Date().toLocaleString('es-ES')}. Batch ID: ${paypalBatchId}` : `Pago procesado manualmente el ${new Date().toLocaleString('es-ES')}`);
         await pago.save();
 
-        const usuario = await Usuario.findOne({ usuario: pago.usuario });
-        if (usuario) {
-            usuario.saldo = Math.max(0, usuario.saldo - pago.monto);
-            usuario.solicitudPagoPendiente = false;
-            await usuario.save();
-            gamification.onPagoRecibido(pago.usuario, pago.monto).catch(() => {});
-        }
+        // Descuento atómico (otra descarga podía sumar saldo entre leer y guardar)
+        const r = await Usuario.updateOne({ usuario: pago.usuario }, [{ $set: { saldo: { $max: [0, { $subtract: ['$saldo', pago.monto] }] }, solicitudPagoPendiente: false } }]);
+        if (r.matchedCount) gamification.onPagoRecibido(pago.usuario, pago.monto).catch(() => {});
 
         logger.info(`Pago procesado [${metodoProcesamiento}] - @${pago.usuario}, Monto: $${pago.monto.toFixed(2)}`);
         res.json({ success: true, mensaje: pagoAutomatico ? `Pago enviado automáticamente vía PayPal a ${pago.paypalEmail}` : "Pago marcado como procesado manualmente", metodo: pagoAutomatico ? 'paypal_automatico' : 'manual', paypalBatchId: paypalBatchId || null, pago: { usuario: pago.usuario, monto: pago.monto, paypalEmail: pago.paypalEmail, fecha: pago.fecha } });
@@ -1108,12 +1114,12 @@ app.post('/admin/finanzas/procesar-pago/:id', verificarAdmin, [param('id').isMon
 
 app.post('/admin/finanzas/rechazar-pago/:id', verificarAdmin, [param('id').isMongoId(), body('motivo').optional().trim()], async (req, res) => {
     try {
-        const pago = await Pago.findById(req.params.id);
-        if (!pago) return res.status(404).json({ success: false, error: "Pago no encontrado" });
-        if (pago.estado !== 'pendiente') return res.status(400).json({ success: false, error: "El pago ya fue procesado" });
-        pago.estado = 'rechazado';
-        pago.notas = req.body.motivo || 'Rechazado por el administrador';
-        await pago.save();
+        const pago = await Pago.findOneAndUpdate({ _id: req.params.id, estado: 'pendiente' },
+            { $set: { estado: 'rechazado', notas: req.body.motivo || 'Rechazado por el administrador' } }, { new: true });
+        if (!pago) {
+            const existe = await Pago.exists({ _id: req.params.id });
+            return res.status(existe ? 409 : 404).json({ success: false, error: existe ? "El pago ya fue procesado" : "Pago no encontrado" });
+        }
         await Usuario.updateOne({ usuario: pago.usuario }, { $set: { solicitudPagoPendiente: false } });
         logger.warn(`Pago rechazado - @${pago.usuario}`);
         res.json({ success: true, mensaje: "Pago rechazado", pago: { usuario: pago.usuario, monto: pago.monto, motivo: pago.notas } });
@@ -1424,7 +1430,7 @@ app.put('/admin/users/ajustar-saldo/:id', verificarAdmin, [param('id').isMongoId
     }
 });
 
-app.put('/admin/items/bulk-action', verificarAdmin, [body('ids').isArray({ min: 1 }), body('action').isIn(['aprobar', 'rechazar', 'eliminar', 'online', 'caido'])], async (req, res) => {
+app.put('/admin/items/bulk-action', verificarAdmin, [body('ids').isArray({ min: 1, max: 500 }), body('ids.*').isMongoId(), body('action').isIn(['aprobar', 'rechazar', 'eliminar', 'online', 'caido'])], async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: "Datos inválidos" });
@@ -1445,12 +1451,12 @@ app.put('/admin/items/bulk-action', verificarAdmin, [body('ids').isArray({ min: 
 
 app.post('/admin/finanzas/rechazar-pago-admin/:id', verificarAdmin, [param('id').isMongoId(), body('motivo').optional().trim()], async (req, res) => {
     try {
-        const pago = await Pago.findById(req.params.id);
-        if (!pago) return res.status(404).json({ success: false, error: "Pago no encontrado" });
-        if (pago.estado !== 'pendiente') return res.status(400).json({ success: false, error: "El pago ya fue procesado" });
-        pago.estado = 'rechazado';
-        pago.notas = req.body.motivo || 'Rechazado por el administrador';
-        await pago.save();
+        const pago = await Pago.findOneAndUpdate({ _id: req.params.id, estado: 'pendiente' },
+            { $set: { estado: 'rechazado', notas: req.body.motivo || 'Rechazado por el administrador' } }, { new: true });
+        if (!pago) {
+            const existe = await Pago.exists({ _id: req.params.id });
+            return res.status(existe ? 409 : 404).json({ success: false, error: existe ? "El pago ya fue procesado" : "Pago no encontrado" });
+        }
         await Usuario.updateOne({ usuario: pago.usuario }, { $set: { solicitudPagoPendiente: false } });
         logger.warn(`ADMIN: Pago rechazado @${pago.usuario}`);
         res.json({ success: true, mensaje: "Pago rechazado" });
@@ -2280,6 +2286,8 @@ app.put('/usuarios/update-email', [verificarToken, body('nuevoEmail').isEmail().
             if (diffDays < 30) { const restante = Math.ceil(30 - diffDays); return res.status(429).json({ success: false, error: `Debes esperar ${restante} día${restante !== 1 ? 's' : ''} más para cambiar tu email` }); }
         }
         if (nuevoEmail.toLowerCase() === String(usuario.email || '').toLowerCase()) return res.status(400).json({ success: false, error: 'Ese ya es tu email actual' });
+        // El email del dueño es la llave del panel: si cambiara, otra persona podría registrarse con él y quedarse con el control
+        if (adminPanel.esOwnerEmail(usuario.email)) return res.status(403).json({ success: false, error: 'Esta cuenta es la del dueño: su email está ligado al panel de administración. Para cambiarlo, actualiza primero OWNER_EMAIL en el servidor.' });
         const existe = await Usuario.findOne({ email: nuevoEmail.toLowerCase() }).select('_id').lean();
         if (existe) return res.status(409).json({ success: false, error: 'Ese email ya está registrado en otra cuenta' });
         const verifToken = crypto.randomBytes(32).toString('hex');
