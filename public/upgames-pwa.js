@@ -88,7 +88,7 @@
         prompt.innerHTML = `
             <div class="ug-install-backdrop"></div>
             <div class="ug-install-card">
-                <img class="ug-install-icon" src="./icons/icon-192.png" alt="" width="72" height="72">
+                <img class="ug-install-icon" src="${new URL("icons/icon-192.png?v=2", BASE).href}" alt="" width="72" height="72">
                 <h3>Instala UpGames</h3>
                 <p>Ábrelo desde tu pantalla de inicio, a pantalla completa y más rápido.</p>
                 <div class="ug-install-actions">
