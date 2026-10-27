@@ -1,32 +1,35 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <!-- No cachear esta página — fuerza re-validación de sesión en cada visita -->
-    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
-    <script>
-      // Guardia de autenticación — ejecuta ANTES de que cargue cualquier otra cosa
-      (function() {
-        var user  = localStorage.getItem('user_admin');
-        var token = localStorage.getItem('token');
-        if (!user || !token) {
-          // Redirigir SIN dejar biblioteca en el historial
-          location.replace('../index.html');
-        }
-      })();
-    </script>
 <meta charset="UTF-8">
+    <script>
+      // Navegar, buscar y descargar es libre (también para Google). Publicar, comprar,
+      // comentar, seguir, dar favorito, chatear y Nexus piden iniciar sesión.
+      window.UG_INVITADO = (function () { try { return !localStorage.getItem('user_admin') || !localStorage.getItem('token'); } catch (_) { return true; } })();
+      if (window.UG_INVITADO) document.documentElement.classList.add('ug-invitado');
+    </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0A0B0F">
-<title>UpGames — La Nube de Contenido</title>
+<title>UpGames — Descarga juegos, ROMs, mods y apps gratis</title>
+<meta name="description" content="Catálogo gratuito de juegos, ROMs, mods, apps, software y videos compartidos por la comunidad. Mira y descarga sin registrarte; crea una cuenta para comentar, seguir creadores, ver lives y ganar dinero con tus aportes.">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<link rel="canonical" href="https://roucedevstudio.github.io/UpGames/public/biblioteca.html">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="UpGames">
+<meta property="og:locale" content="es_LA">
+<meta property="og:url" content="https://roucedevstudio.github.io/UpGames/public/biblioteca.html">
+<meta property="og:title" content="UpGames — Juegos, ROMs, mods y apps gratis">
+<meta property="og:description" content="Catálogo gratuito de juegos, ROMs, mods, apps y videos compartidos por la comunidad.">
+<meta property="og:image" content="https://roucedevstudio.github.io/UpGames/public/og-cover.png">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"UpGames","url":"https://roucedevstudio.github.io/UpGames/public/biblioteca.html","inLanguage":"es","potentialAction":{"@type":"SearchAction","target":"https://roucedevstudio.github.io/UpGames/public/biblioteca.html?q={search_term_string}","query-input":"required name=search_term_string"}}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://upgames-production.up.railway.app" crossorigin>
 <link rel="dns-prefetch" href="https://upgames-production.up.railway.app">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="biblioteca.css?v=20261027t">
-<link rel="stylesheet" href="upgames-glass.css?v=20261027t">
+<link rel="stylesheet" href="biblioteca.css?v=20261028a">
+<link rel="stylesheet" href="upgames-glass.css?v=20261028a">
 <!-- Widget de subida: solo se usa al publicar → diferido (antes bloqueaba el primer render) -->
 <script src="https://upload-widget.cloudinary.com/global/all.js" defer></script>
 
@@ -66,7 +69,7 @@
     <button class="hdr-btn hdr-live" onclick="location.href='./live.html'" title="En vivo" aria-label="Transmisiones en vivo">
       <ion-icon name="radio-outline"></ion-icon><span class="hdr-live-dot" id="hdr-live-dot" hidden></span>
     </button>
-    <button class="hdr-btn" onclick="switchTab('profile')" title="Subir contenido" aria-label="Subir contenido">
+    <button class="hdr-btn" onclick="switchTab('upload')" title="Subir contenido" aria-label="Subir contenido">
       <ion-icon name="cloud-upload-outline"></ion-icon>
     </button>
     <button class="hdr-btn" onclick="handleMail()" title="Reportar abuso" aria-label="Contactar soporte">
@@ -144,9 +147,10 @@
     <ion-icon name="person-circle-outline"></ion-icon>
     <h3>No has iniciado sesión</h3>
     <p>Accede para gestionar tu perfil,<br>subir contenido y monetizar</p>
-    <a href="../index.html" class="btn-login-action">
-      <ion-icon name="log-in-outline"></ion-icon> Iniciar Sesión
+    <a href="../index.html?volver=.%2Fpublic%2Fbiblioteca.html&amp;registro=1" class="btn-login-action">
+      <ion-icon name="person-add-outline"></ion-icon> Crear cuenta gratis
     </a>
+    <p style="margin-top:10px;font-size:.85rem"><a href="../index.html" style="color:#32D583">Ya tengo cuenta · Iniciar sesión</a></p>
   </div>
 
   <!-- Logged in content -->
@@ -1775,8 +1779,8 @@
             <a href="https://apps.derechodeautor.gov.co/Certificados-API/api/v1/dnda/certificates/registrations/filing/QzY3NDJGQkVFQThCRUY3QkQ3MTVGMTA0QUIzN0NGMkU" target="_blank" rel="noopener">Ver certificado</a></div>
         </div>
         <div class="ob-legal-link" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-          <a href="./terminos_condiciones.html" target="_blank" style="color:inherit">Términos v5.1</a> ·
-          <a href="./politica-privacidad.html" target="_blank" style="color:inherit">Privacidad v3.1</a> ·
+          <a href="./terminos_condiciones.html" target="_blank" style="color:inherit">Términos v5.2</a> ·
+          <a href="./politica-privacidad.html" target="_blank" style="color:inherit">Privacidad v3.2</a> ·
           <a href="./terminos_condiciones.html#pagos" target="_blank" style="color:inherit">Pagos</a> ·
           <a href="./terminos_condiciones.html#ia" target="_blank" style="color:inherit">IA</a> ·
           <a href="./terminos_condiciones.html#derechos-autor" target="_blank" style="color:inherit">Derechos de autor</a>
@@ -1964,9 +1968,9 @@
 <!-- ION ICONS -->
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
-<script src="script.js?v=20261027t"></script>
-<script src="upgames-autoinfo.js?v=20261027t"></script>
-<script src="upgames-motion.js?v=20261027t"></script>
+<script src="script.js?v=20261028a"></script>
+<script src="upgames-autoinfo.js?v=20261028a"></script>
+<script src="upgames-motion.js?v=20261028a"></script>
 
 <!-- ══════════════════════════════════════
   EXTENSIÓN DE PERFIL: Nombre / Email / Contraseña / Links

@@ -48,6 +48,51 @@ const LS = {
   }
 };
 
+// ── INVITADOS ────────────────────────────────────────────
+// Ver, buscar y descargar es libre. Interactuar (comentar, favoritos, seguir, reportar,
+// publicar, comprar, chatear en lives y Nexus) pide una cuenta: se muestra una hoja
+// que lleva al login y luego devuelve al usuario exactamente a donde estaba.
+const ugSesion = () => !!(LS.get('token') && LS.get('user_admin'));
+function ugUrlLogin(registro) {
+  const aqui = './public/' + location.pathname.split('/').pop() + location.search.replace(/[^\w=&%.~+?-]/g, '');
+  return `../index.html?volver=${encodeURIComponent(aqui)}${registro ? '&registro=1' : ''}`;
+}
+function ugPedirSesion(accion = 'interactuar') {
+  if (ugSesion()) return true;
+  let h = document.getElementById('ug-login-sheet');
+  if (!h) {
+    const st = document.createElement('style');
+    st.textContent = `#ug-login-sheet{position:fixed;inset:0;z-index:99990;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)}
+#ug-login-sheet .ugl{width:min(440px,100%);background:#12141b;border:1px solid rgba(50,213,131,.25);border-radius:22px 22px 0 0;padding:22px 20px calc(22px + env(safe-area-inset-bottom));text-align:center;color:#e9ecf3;animation:uglUp .22s ease}
+@media(min-width:600px){#ug-login-sheet{align-items:center}#ug-login-sheet .ugl{border-radius:22px}}
+@keyframes uglUp{from{transform:translateY(30px);opacity:0}}
+#ug-login-sheet .ic{font-size:2.2rem}#ug-login-sheet h3{margin:6px 0 4px;font-size:1.15rem}#ug-login-sheet p{margin:0 0 16px;color:#A3A8B6;font-size:.9rem;line-height:1.45}
+#ug-login-sheet a{display:block;padding:13px;border-radius:14px;font-weight:800;text-decoration:none;margin-top:8px;font-size:.95rem}
+#ug-login-sheet .p{background:#32D583;color:#04110a}#ug-login-sheet .s{border:1px solid rgba(255,255,255,.14);color:#e9ecf3}
+#ug-login-sheet button{margin-top:10px;background:none;border:0;color:#8a90a0;font-size:.85rem;padding:6px 12px;cursor:pointer}`;
+    document.head.appendChild(st);
+    h = document.createElement('div'); h.id = 'ug-login-sheet'; h.setAttribute('role', 'dialog'); h.setAttribute('aria-modal', 'true');
+    h.onclick = e => { if (e.target === h || e.target.dataset.cerrar !== undefined) h.remove(); };
+  }
+  h.innerHTML = `<div class="ugl"><div class="ic">🎮</div><h3>Crea tu cuenta gratis para ${escH(accion)}</h3>
+    <p>Sin cuenta puedes ver y descargar todo. Con una cuenta además comentas, guardas favoritos, sigues creadores, chateas en los lives, publicas, ganas dinero y usas NEXUS IA.</p>
+    <a class="p" href="${ugUrlLogin(true)}">Crear cuenta gratis</a><a class="s" href="${ugUrlLogin(false)}">Ya tengo cuenta · Iniciar sesión</a>
+    <button type="button" data-cerrar>Ahora no</button></div>`;
+  document.body.appendChild(h);
+  return false;
+}
+window.ugPedirSesion = ugPedirSesion;
+// Invitados: botón "Entrar" en la cabecera (en lugar de pedir cuenta para mirar)
+document.addEventListener('DOMContentLoaded', () => {
+  if (ugSesion()) return;
+  const acc = document.querySelector('.hdr-actions');
+  if (!acc || document.getElementById('hdr-entrar')) return;
+  const a = document.createElement('a');
+  a.id = 'hdr-entrar'; a.href = ugUrlLogin(false); a.textContent = 'Entrar';
+  a.style.cssText = 'display:inline-flex;align-items:center;padding:0 14px;height:38px;border-radius:999px;background:#32D583;color:#04110a;font-weight:800;font-size:.85rem;text-decoration:none;white-space:nowrap';
+  acc.appendChild(a);
+});
+
 // State
 let todosLosItems = [];
 let filteredItems = [];
@@ -679,9 +724,11 @@ async function loadContent() {
 
     // Deep link
     const sid = new URLSearchParams(window.location.search).get('id');
-    if(sid) {
-      setTimeout(()=>{
-        const item = todosLosItems.find(i=>i._id===sid);
+    if(sid && /^[a-f\d]{24}$/i.test(sid)) {
+      setTimeout(async ()=>{
+        let item = todosLosItems.find(i=>i._id===sid);
+        // Enlaces de Google o compartidos: la publicación puede no estar en la primera página
+        if(!item) { try { const r = await fetch(`${API_URL}/items/${sid}`); if(r.ok) { const d = await r.json(); item = d && d._id ? d : (d.item || null); } } catch(_) {} }
         if(item) openDetail(item);
       }, 600);
     }
@@ -804,8 +851,47 @@ function registrarVista(item) {
 }
 
 // ── OPEN DETAIL SHEET ─────────────────────────────────────
+// ── SEO por publicación: título, descripción, imagen y datos estructurados ──
+const UG_SEO_BASE = { title: document.title, url: 'https://roucedevstudio.github.io/UpGames/public/biblioteca.html' };
+function ugMeta(attr, key, val) {
+  let m = document.head.querySelector(`meta[${attr}="${key}"]`);
+  if (!m) { m = document.createElement('meta'); m.setAttribute(attr, key); document.head.appendChild(m); }
+  m.setAttribute('content', val);
+}
+function ugSeo(item) {
+  try {
+    const canon = document.head.querySelector('link[rel="canonical"]') || document.head.appendChild(Object.assign(document.createElement('link'), { rel: 'canonical' }));
+    let ld = document.getElementById('ug-ld-item');
+    if (!item) {
+      document.title = UG_SEO_BASE.title; canon.href = UG_SEO_BASE.url; if (ld) ld.remove();
+      try { const u = new URL(location.href); if (u.searchParams.has('id')) { u.searchParams.delete('id'); history.replaceState(null, '', u.pathname + u.search); } } catch(_) {}
+      return;
+    }
+    const url = `${UG_SEO_BASE.url}?id=${item._id}`;
+    const desc = String(item.description || `${item.category || 'Contenido'} compartido por @${item.usuario} en UpGames.`).replace(/\s+/g, ' ').slice(0, 160);
+    const img = /^https:\/\//.test(item.image || '') ? item.image : 'https://roucedevstudio.github.io/UpGames/public/og-cover.png';
+    document.title = `${item.title} — ${item.category || 'Descargar'} | UpGames`;
+    canon.href = url;
+    ugMeta('name', 'description', desc);
+    ugMeta('property', 'og:title', `${item.title} | UpGames`); ugMeta('property', 'og:description', desc);
+    ugMeta('property', 'og:image', img); ugMeta('property', 'og:url', url); ugMeta('property', 'og:type', 'website');
+    ugMeta('name', 'twitter:card', 'summary_large_image');
+    const tipo = item.category === 'Video' ? 'VideoObject' : (['Juego', 'ROMs'].includes(item.category) ? 'VideoGame' : 'SoftwareApplication');
+    const datos = { '@context': 'https://schema.org', '@type': tipo, name: item.title, description: desc, image: img, url,
+      author: { '@type': 'Person', name: item.usuario, url: `https://roucedevstudio.github.io/UpGames/public/perfil-publico.html?usuario=${encodeURIComponent(item.usuario)}` },
+      ...(item.createdAt ? { datePublished: item.createdAt } : {}),
+      ...(tipo === 'VideoObject' ? { thumbnailUrl: img, uploadDate: item.createdAt || undefined, contentUrl: item.link } : { applicationCategory: tipo === 'VideoGame' ? 'Game' : 'Utilities', operatingSystem: 'Windows, Android', offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' } }),
+      interactionStatistic: { '@type': 'InteractionCounter', interactionType: 'https://schema.org/DownloadAction', userInteractionCount: item.descargasEfectivas || 0 } };
+    if (!ld) { ld = document.createElement('script'); ld.type = 'application/ld+json'; ld.id = 'ug-ld-item'; document.head.appendChild(ld); }
+    ld.textContent = JSON.stringify(datos).replace(/</g, '\\u003c');
+    // URL propia para compartir y para que Google la asocie a esta publicación
+    try { const u = new URL(location.href); if (u.searchParams.get('id') !== item._id) { u.searchParams.set('id', item._id); history.replaceState(null, '', u.pathname + u.search); } } catch(_) {}
+  } catch (_) {}
+}
+
 function openDetail(item) {
   currentItem = item;
+  ugSeo(item);
   const ls = item.linkStatus||(item.reportes>=3?'revision':'online');
   const isVideoItem = item.category === 'Video';
 
@@ -1170,6 +1256,7 @@ function renderFeaturedEntry(container, item) {
 }
 
 function closeDetail() {
+  ugSeo(null);
   // Cancelar vista pendiente si el usuario cierra antes del minuto
   if(_vistaTimer) { clearTimeout(_vistaTimer); _vistaTimer = null; }
   document.getElementById('detail-overlay').classList.remove('show');
@@ -1263,7 +1350,7 @@ async function loadComments(id) {
 
 async function postComment(id) {
   const user = LS.get('user_admin');
-  if(!user) { toast('⚠️ Debes iniciar sesión para comentar'); return; }
+  if(!user) { ugPedirSesion('comentar'); return; }
   const input = document.getElementById('ds-comment-input');
   const texto = input.value.trim();
   if(!texto) return;
@@ -1284,7 +1371,7 @@ async function postComment(id) {
 // ── FAVORITES ────────────────────────────────────────────
 async function fav(id) {
   const user = LS.get('user_admin');
-  if(!user) { toast('⚠️ Inicia sesión para guardar favoritos'); return; }
+  if(!user) { ugPedirSesion('guardar favoritos'); return; }
   try {
     const cr = await fetch(`${API_URL}/favoritos/${user}`);
     const favs = await cr.json();
@@ -1367,6 +1454,7 @@ function fallbackCopy(t) {
 
 // ── REPORT ────────────────────────────────────────────────
 function openReportModal(id) {
+  if (!ugPedirSesion('reportar contenido')) return;
   reportItemId=id;
   document.getElementById('report-modal').classList.add('show');
 }
@@ -1387,7 +1475,7 @@ async function sendReport(id, motivo) {
     const user=LS.get('user_admin','Anónimo');
     const r=await fetch(`${API_URL}/items/report/${id}`,{
       method:'PUT',
-      headers:{'Content-Type':'application/json'},
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${LS.get('token')}`},
       body:JSON.stringify({motivo,usuario:user})
     });
     const data=await r.json();
@@ -1429,6 +1517,7 @@ document.querySelectorAll('.nav-tab[data-tab]').forEach(tab=>{
 });
 
 function switchTab(t) {
+  if (t === 'upload' && !ugPedirSesion('publicar contenido')) return;
   const abrirPublicar = t === 'upload';
   if(t==='upload') t='profile';
   if(abrirPublicar) setTimeout(() => pfOpenPublish && pfOpenPublish(true), 150);
@@ -1462,7 +1551,7 @@ async function renderFavs() {
     cont.innerHTML=`<div class="empty-state">
       <ion-icon name="person-circle-outline"></ion-icon>
       <h3>Inicia sesión</h3>
-      <p>Necesitas una cuenta para guardar favoritos</p>
+      <p>Guarda tus juegos favoritos y recíbelos en todos tus dispositivos.</p><a href="${ugUrlLogin(true)}" class="btn-login-action" style="margin-top:14px;display:inline-flex">Crear cuenta gratis</a><p style="margin-top:10px;font-size:.82rem"><a href="${ugUrlLogin(false)}" style="color:#32D583">Ya tengo cuenta</a></p>
     </div>`;
     return;
   }
@@ -1511,7 +1600,7 @@ async function renderEconomia() {
       <div class="empty-state" style="padding:40px 20px">
         <ion-icon name="person-circle-outline"></ion-icon>
         <h3>Inicia sesión</h3>
-        <p>Necesitas una cuenta para ver tu economía</p>
+        <p>Con una cuenta ganas dinero por cada descarga de lo que publicas, recibes regalos en tus lives y puedes comprar un Pase sin anuncios (con monedas de regalo).</p><a href="${ugUrlLogin(true)}" class="btn-login-action" style="margin-top:14px;display:inline-flex">Crear cuenta gratis</a><p style="margin-top:10px;font-size:.82rem"><a href="${ugUrlLogin(false)}" style="color:#32D583">Ya tengo cuenta</a></p>
       </div>`;
     return;
   }
@@ -3871,6 +3960,7 @@ document.addEventListener('keydown', e => {
 // ── ONBOARDING MODAL — 5 slides + términos ───────────────
 (function initOnboarding() {
   const WEEK_MS = 7 * 24 * 60 * 60 * 1000; // 1 semana en ms
+  if (window.UG_INVITADO) return;   // invitados: sin pantalla completa (los términos se aceptan al crear la cuenta)
   const lastSeen = LS.getJSON('upgames_terms_seen_ts');
   if (lastSeen && (Date.now() - lastSeen) < WEEK_MS) return; // visto hace menos de 1 semana
 
@@ -3970,6 +4060,7 @@ const nxToken = () => { const t = LS.get('token'); return t && t !== 'null' && t
 const nxHeaders = () => { const h = { 'Content-Type':'application/json' }; const t = nxToken(); if (t) h.Authorization = `Bearer ${t}`; return h; };
 
 function nxToggle() {
+  if (!nxOpen && !ugPedirSesion('usar NEXUS IA')) return;
   nxOpen=!nxOpen;
   document.getElementById('nxPanel').classList.toggle('open',nxOpen);
   document.body.style.overflow = nxOpen && innerWidth < 900 ? 'hidden' : '';   // en escritorio es una ventana flotante
@@ -4147,6 +4238,7 @@ function nxEjecutar(a) {
 
 // Abre Nexus y le hace una pregunta en nombre del usuario (botones "Pregúntale a Nexus")
 async function nexusPreguntar(texto) {
+  if (!ugPedirSesion('preguntarle a NEXUS IA')) return;
   const itemId = document.getElementById('detail-sheet')?.classList.contains('open') ? _viewItemId : null;
   if (typeof closeDetail === 'function' && document.getElementById('detail-sheet')?.classList.contains('open')) { try { closeDetail(); } catch (_) {} }
   if (!nxOpen) nxToggle();
@@ -5596,13 +5688,13 @@ let _ugPagosJs = null;
 const ugPagosListo = () => (_ugPagosJs = _ugPagosJs || new Promise((ok, ko) => {
   if (window.UGPagos) return ok();
   const s = document.createElement('script');
-  s.src = './upgames-pagos.js?v=20261027t'; s.onload = ok; s.onerror = () => { _ugPagosJs = null; ko(); };
+  s.src = './upgames-pagos.js?v=20261028a'; s.onload = ok; s.onerror = () => { _ugPagosJs = null; ko(); };
   document.head.appendChild(s);
 }));
 function ecoAbrirTienda() {
   const box = document.getElementById('eco-tienda');
   if (!box) return;
-  if (!LS.get('token')) { toast('Inicia sesión para comprar'); return; }
+  if (!LS.get('token')) { ugPedirSesion('comprar monedas'); return; }
   box.innerHTML = '<div class="eco-spin"><ion-icon name="sync-outline"></ion-icon></div>';
   ugPagosListo().then(() => window.UGPagos.tienda(box, {
     alComprar: d => { toast(`✅ +${d.acreditadas} monedas`); pfLoadEconomia(); },
@@ -5663,8 +5755,8 @@ async function ecoCargarPlan(desplazar) {
         <div><b>${p ? esc(p.nombre) : 'Sin pase activo'}</b><small>${p ? `Vence el ${fecha(p.hasta)} · ${p.diasRestantes} día${p.diasRestantes === 1 ? '' : 's'}` : (d.vencido ? `Tu ${esc(d.vencido.nombre || 'pase')} venció el ${fecha(d.vencido.hasta)}` : 'Navega sin anuncios y abre cada enlace al instante')}</small></div>
         <span class="eco-plan-estado ${p ? 'on' : 'off'}">${p ? 'ACTIVO' : 'INACTIVO'}</span>
       </div>
-      ${p ? `<div class="eco-plan-bar"><i style="width:${Math.max(4, Math.min(100, p.diasRestantes / p.dias * 100))}%"></i></div>` : `
-      <ul class="eco-plan-ventajas"><li>⚡ Enlaces directos: sin los 30 s de espera</li><li>🚫 Sin la publicidad de la página puente</li><li>💚 Los creadores siguen cobrando por cada descarga</li></ul>`}
+      ${p ? `<div class="eco-plan-bar"><i style="width:${Math.max(4, Math.min(100, p.diasRestantes / p.dias * 100))}%"></i></div>` : ''}
+      ${`<ul class="eco-plan-ventajas">${(d.beneficios || []).map(x => `<li>✓ ${esc(x)}</li>`).join('')}<li>💚 Los creadores siguen cobrando por cada descarga</li></ul>`}
       <div class="eco-plan-acc">
         ${p ? `<button class="p" data-a="renovar">Renovar (+${p.dias} días)</button><button class="s" data-a="cambiar">Cambiar de plan</button>` : `<button class="p" data-a="cambiar">${d.vencido ? 'Renovar mi pase' : 'Ver planes'}</button>`}
       </div>
@@ -5692,3 +5784,11 @@ async function ecoCargarPlan(desplazar) {
 if (new URLSearchParams(location.search).get('plan') === '1') {
   setTimeout(() => { try { switchTab('economia'); } catch (_) {} setTimeout(() => ecoCargarPlan(true), 600); }, 1500);
 }
+
+// ── ?q=búsqueda (buscador de Google y enlaces compartidos) ──
+(function buscarDesdeURL() {
+  const q = (new URLSearchParams(location.search).get('q') || '').slice(0, 80);
+  if (!q) return;
+  const go = () => { const i = document.getElementById('buscador'); if (!i) return; i.value = q; i.dispatchEvent(new Event('input', { bubbles: true })); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(go, 800)); else setTimeout(go, 800);
+})();

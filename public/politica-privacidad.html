@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0A0B0F">
-<title>Política de Privacidad v3.1 | UpGames</title>
+<title>Política de Privacidad v3.2 | UpGames</title>
 <meta name="description" content="Cómo UpGames recopila, usa y protege tus datos. Cumple Ley 1581 de 2012 (Colombia), GDPR y CCPA. Incluye NEXUS IA y reconocimiento automático de títulos.">
 <link rel="icon" type="image/png" sizes="96x96" href="./icons/icon-96.png?v=2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -31,15 +31,15 @@
     <p>Recopilamos solo los datos necesarios para operar UpGames. <strong>Nunca vendemos tus datos personales.</strong>
       Esta política cumple la Ley 1581 de 2012 (Colombia), el GDPR (Unión Europea) y la CCPA (California).</p>
     <div class="lg-meta">
-      <span>Versión 3.1</span><span>Vigente desde octubre de 2026</span><span>Ley 1581 de 2012</span><span>GDPR · CCPA</span>
+      <span>Versión 3.2</span><span>Vigente desde octubre de 2026</span><span>Ley 1581 de 2012</span><span>GDPR · CCPA</span>
     </div>
   </section>
 
   <div class="lg-note g"><span class="ic">🛡️</span><div><strong>Resumen.</strong> Usamos tu usuario, email y contraseña (cifrada con
     bcrypt) para autenticarte; opcionalmente tu email de PayPal para pagarte. Registramos tu IP de forma temporal contra el
     fraude. Si usas NEXUS IA, guardamos un registro mínimo de tus preguntas (30 días) para mejorarla. Cuando escribes un título al
-    publicar, solo enviamos ese texto para reconocerlo. Si pagas con tarjeta, <strong>los datos de la tarjeta los procesa
-    PayPal, no nosotros</strong>: solo guardamos qué compraste y el estado del pago. Tus lives no se graban. Nada más, y nunca lo vendemos.</div></div>
+    publicar, solo enviamos ese texto para reconocerlo. Si pagas con tarjeta, <strong>los datos de la tarjeta los procesan
+    Mercado Pago o PayPal, no nosotros</strong>: solo guardamos qué compraste y el estado del pago. Tus lives no se graban. Nada más, y nunca lo vendemos.</div></div>
 
   <nav class="lg-card lg-toc" aria-label="Índice">
     <h2>ÍNDICE</h2>
@@ -85,14 +85,17 @@
       <li><strong>Tarjetas registradas antes de octubre de 2026</strong> — titular, alias, últimos 4 dígitos, vencimiento y marca. Ya no se registran
         tarjetas nuevas; puedes pedir el borrado de las existentes.</li>
     </ul>
-    <h3>2.2.1 Pagos con tarjeta o PayPal (monedas y acceso directo)</h3>
+    <h3>2.2.1 Pagos con tarjeta, PayPal, saldo o monedas (pases, monedas y acceso directo)</h3>
     <ul>
       <li><strong>Los datos de tu tarjeta los reciben y procesan exclusivamente Mercado Pago o PayPal</strong> en sus formularios seguros (PCI DSS).
         Para pagos con Mercado Pago, este puede pedirte tu documento de identidad y email, que se envían directamente a Mercado Pago.
         UpGames <strong>nunca</strong> ve, transmite ni guarda el número, la fecha de vencimiento ni el CVV.</li>
       <li>De cada pago guardamos: identificador de la orden y del cobro, monto, moneda, fecha, estado, qué compraste
-        (paquete de monedas o enlace desbloqueado) y tu usuario.</li>
-      <li>PayPal nos notifica reembolsos y contracargos para anular lo comprado y prevenir fraude.</li>
+        (pase, paquete de monedas o enlace desbloqueado), las monedas de regalo incluidas y tu usuario.</li>
+      <li><strong>Pase</strong> — plan, fecha de vencimiento y si quieres el recordatorio antes de que venza. Mientras está vigente,
+        se muestra una insignia ⭐ junto a tu nombre en el chat de los lives (visible para los demás espectadores).</li>
+      <li>Para no mostrar anuncios con un pase activo, la página puente guarda en tu navegador tu usuario y la fecha de vencimiento del pase.</li>
+      <li>Mercado Pago y PayPal nos notifican reembolsos y contracargos para anular lo comprado y prevenir fraude.</li>
     </ul>
     <h3>2.2.2 Transmisiones en vivo</h3>
     <ul>
@@ -106,6 +109,8 @@
     </ul>
     <h3>2.3 Datos técnicos automáticos</h3>
     <ul>
+      <li><strong>Visitas sin cuenta</strong> — puedes ver y descargar sin registrarte. En ese caso no te identificamos: solo se usan la IP
+        (anti-bots, borrada a las 24 horas) y el almacenamiento local de tu navegador (caché del catálogo). No creamos perfiles de visitantes.</li>
       <li><strong>IP por descarga</strong> — anti-bots y límite diario; se elimina automáticamente a las 24 horas.</li>
       <li><strong>Último acceso</strong> — para la purga de cuentas inactivas (2 años).</li>
       <li><strong>Registros del servidor</strong> — método, ruta y tiempo de respuesta; sin el cuerpo de las solicitudes.</li>
@@ -118,6 +123,9 @@
     </ul>
     <h3>2.5 Contenido publicado</h3>
     <ul>
+      <li><strong>Visible en buscadores:</strong> las publicaciones aprobadas y los perfiles públicos (usuario, avatar, biografía y aportes) se pueden
+        ver sin cuenta y aparecer en Google y otros buscadores. Tu email, saldo, pagos, mensajes privados y datos de cuenta <strong>nunca</strong> son públicos.
+        Si borras una publicación o tu cuenta, deja de mostrarse en UpGames y los buscadores la retiran en su siguiente visita.</li>
       <li>Título, descripción, enlace externo, imágenes, categoría (incluida ROM), campos extra y estadísticas (descargas, likes, reportes).</li>
       <li>Comentarios y favoritos asociados a tu usuario.</li>
     </ul>
@@ -235,10 +243,12 @@
       <li><strong>Caché de catálogo</strong> — carga instantánea (minutos).</li>
       <li><strong>Preferencias del estudio en vivo</strong> — título, categoría, calidad y fuente de tu último directo.</li>
       <li><strong>Preferencias</strong> — onboarding visto, favoritos locales y ajustes de vista.</li>
+      <li><strong>ug_pase_hasta</strong> — usuario y vencimiento de tu pase, para no cargar anuncios en la página puente.</li>
       <li><strong>Service Worker</strong> — guarda archivos de la app para que funcione más rápido y sin conexión.</li>
     </ul>
     <h3>De terceros</h3>
-    <p>Al pagar, PayPal carga su propio script y puede usar cookies para prevenir fraude.</p>
+    <p>Al pagar, Mercado Pago o PayPal cargan su propio script y pueden usar cookies para prevenir fraude.</p>
+    <p>Con un pase activo la página puente <strong>no carga</strong> las redes publicitarias.</p>
     <p>Las redes publicitarias de la página puente (highperformanceformat.com, effectivegatecpm.com y
       profitablecpmratenetwork.com) pueden instalar cookies propias. Puedes bloquearlas con extensiones como
       uBlock Origin o Privacy Badger sin afectar la funcionalidad principal.</p>
@@ -262,13 +272,13 @@
     <h2><span class="n">12</span>Cambios y contacto</h2>
     <ul>
       <li>Los cambios sustanciales se notificarán por email y con un aviso en la plataforma con al menos 15 días de antelación.</li>
-      <li>La versión y fecha de vigencia se actualizan en cada revisión (actualmente v3.1).</li>
+      <li>La versión y fecha de vigencia se actualizan en cada revisión (actualmente v3.2).</li>
       <li>Responsable de protección de datos: Jhonatan David Castro Galviz — <a href="mailto:mr.m0onster@protonmail.com">mr.m0onster@protonmail.com</a> — respuesta en 5–10 días hábiles.</li>
     </ul>
   </section>
 
   <footer class="lg-foot">
-    © 2026 UpGames · Política de Privacidad v3.1 · Vigente desde octubre de 2026<br><br>
+    © 2026 UpGames · Política de Privacidad v3.2 · Vigente desde octubre de 2026<br><br>
     <a href="./terminos_condiciones.html">Términos</a>·<a href="./politica-privacidad.html">Privacidad</a>·<a href="./biblioteca.html">Volver a UpGames</a>
   </footer>
 </main>

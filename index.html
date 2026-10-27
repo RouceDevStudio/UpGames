@@ -7,9 +7,12 @@
     <script>
       (function() {
         var p = new URLSearchParams(window.location.search);
+        // ?volver=./public/... → tras iniciar sesión vuelve a donde estaba (solo rutas internas)
+        var v = p.get('volver') || '';
+        window.UG_VOLVER = /^\.\/public\/[\w.-]+\.html(\?[\w=&%.~+-]*)?$/.test(v) ? v : './public/biblioteca.html';
         if (!p.get('reset_token') && !p.get('verif')) {
           if (localStorage.getItem('user_admin') && localStorage.getItem('token')) {
-            location.replace('./public/biblioteca.html');
+            location.replace(window.UG_VOLVER);
           }
         }
       })();
@@ -538,6 +541,7 @@
                     <span id="switch-text">¿No tienes cuenta?</span> 
                     <a href="#" id="toggle-mode">Regístrate aquí</a>
                 </p>
+                <p style="margin-top:10px"><a href="./public/biblioteca.html" id="explorar-link" style="display:inline-block;padding:9px 16px;border-radius:999px;border:1px solid rgba(50,213,131,.35);color:#32D583;font-weight:700;font-size:13px;text-decoration:none">Explorar sin cuenta →</a></p>
                 <p id="forgot-link-wrap" style="margin-top:6px">
                     <a href="#" id="forgot-link" style="font-size:12px;color:#a0a0b8;text-decoration:none">¿Olvidaste tu contraseña?</a>
                 </p>
@@ -612,7 +616,7 @@
 
     <script>
         const API_URL = window.UG_CONFIG?.API_URL ?? "https://upgames-production.up.railway.app";
-        const REDIRECT_URL = "./public/biblioteca.html";
+        const REDIRECT_URL = window.UG_VOLVER || "./public/biblioteca.html";
         let isLoginMode = true;
 
         // Cache de selectores
@@ -1222,6 +1226,9 @@
                 setTimeout(showTutStep, 350); // esperar transición
             }
         };
+
+        // ?registro=1 (desde "Crear cuenta gratis" en la biblioteca): abrir directo en modo registro
+        if (new URLSearchParams(location.search).get('registro') === '1' && isLoginMode) els.toggle.onclick(new Event('click'));
 
         // Mostrar tutorial automáticamente la primera vez
         window.addEventListener("load", () => {

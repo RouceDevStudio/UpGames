@@ -44,7 +44,9 @@ async function api(path, opts = {}) {
   if (!r.ok || d.success === false) { const e = new Error(d.error || 'Error de conexión'); e.status = r.status; e.data = d; throw e; }
   return d;
 }
-const irLogin = () => { location.href = '../index.html'; };
+// Login que devuelve al mismo live (o al directorio) al terminar
+const urlLogin = () => `../index.html?volver=${encodeURIComponent('./public/live.html' + location.search.replace(/[^\w=&%.~+?-]/g, ''))}`;
+const irLogin = () => { location.href = urlLogin(); };
 // Deja en el log del servidor fallos que solo ocurren en el dispositivo del usuario
 const diag = (tipo, nombre, mensaje, contexto = '') => {
   try { fetch(API + '/live/diag', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tipo, nombre, mensaje: String(mensaje).slice(0, 240), contexto }), keepalive: true }).catch(() => {}); } catch (_) {}
@@ -129,7 +131,7 @@ function crearChat(raiz, { liveId, esHost, alEnviar }) {
         <input id="chat-in" maxlength="200" placeholder="${esHost ? 'Habla con tu comunidad…' : 'Escribe un mensaje…'}" aria-label="Mensaje">
         ${esHost ? '' : '<button type="button" class="heart-btn" id="btn-like" aria-label="Me gusta"><ion-icon name="heart"></ion-icon></button>'}
         <button class="send" aria-label="Enviar"><ion-icon name="send"></ion-icon></button>
-      </form>` : `<div class="chat-login"><a href="../index.html">Inicia sesión</a> para chatear y enviar regalos</div>`}`;
+      </form>` : `<div class="chat-login"><a href="${urlLogin()}">Inicia sesión</a> para chatear y enviar regalos</div>`}`;
   const list = raiz.querySelector('#chat-list'), nuevo = raiz.querySelector('#chat-new'), top = raiz.querySelector('#top-list');
   raiz.querySelectorAll('.side-tabs button').forEach(b => b.onclick = () => {
     raiz.querySelectorAll('.side-tabs button').forEach(x => x.classList.toggle('on', x === b));
@@ -149,7 +151,7 @@ function crearChat(raiz, { liveId, esHost, alEnviar }) {
     el.className = 'msg'; el.dataset.id = m.id; el.dataset.u = m.u;
     const color = `hsl(${hue(m.u)} 75% 68%)`;
     el.innerHTML = `${m.av && /^https:\/\//.test(m.av) ? `<img class="mav" src="${esc(cld(m.av, 'c_fill,w_48,h_48,q_auto,f_auto'))}" alt="">` : `<div class="mav" style="background:hsl(${hue(m.u)} 60% 45%)">${esc(m.u[0].toUpperCase())}</div>`}
-      <div class="mb">${m.host ? '<span class="badge-host">CREADOR</span>' : ''}<span class="mu" style="color:${color}">${esc(m.u)}${m.v ? ' <ion-icon class="verif" name="checkmark-circle"></ion-icon>' : ''}</span>${esc(m.t)}</div>
+      <div class="mb">${m.host ? '<span class="badge-host">CREADOR</span>' : ''}<span class="mu" style="color:${color}">${esc(m.u)}${m.v ? ' <ion-icon class="verif" name="checkmark-circle"></ion-icon>' : ''}${m.pase ? ' <span class="badge-pase" title="Tiene un Pase UpGames">⭐</span>' : ''}</span>${esc(m.t)}</div>
       ${esHost && !m.host ? `<div class="mod"><button data-a="borrar" title="Borrar mensaje"><ion-icon name="trash-outline"></ion-icon></button><button data-a="silenciar" title="Silenciar a @${esc(m.u)}"><ion-icon name="volume-mute-outline"></ion-icon></button></div>` : ''}`;
     el.querySelector('.mu').onclick = () => window.open(`./perfil-publico.html?u=${encodeURIComponent(m.u)}`, '_blank');
     el.querySelectorAll('.mod button').forEach(b => b.onclick = () => {
@@ -220,7 +222,7 @@ function burbujas(el, max = 6) {
     ? `<img class="mav" src="${esc(cld(av, 'c_fill,w_48,h_48,q_auto,f_auto'))}" alt="">`
     : `<span class="mav" style="background:hsl(${hue(u)} 60% 45%)">${esc((u || '?')[0].toUpperCase())}</span>`;
   return {
-    add: m => poner(`${mini(m.u, m.av)}<div><b style="color:hsl(${hue(m.u)} 85% 76%)">${esc(m.u)}</b>${esc(m.t)}</div>`, m.host ? 'host' : '', { id: m.id, u: m.u }),
+    add: m => poner(`${mini(m.u, m.av)}<div><b style="color:hsl(${hue(m.u)} 85% 76%)">${esc(m.u)}${m.pase ? ' ⭐' : ''}</b>${esc(m.t)}</div>`, m.host ? 'host' : '', { id: m.id, u: m.u }),
     regalo: g => poner(`<span style="font-size:1.15rem;line-height:1">${esc(g.regalo.emoji)}</span><div><b>${esc(g.de)}</b>envió ${esc(g.regalo.nombre)}${g.cantidad > 1 ? ` ×${g.cantidad}` : ''}</div>`, 'regalo'),
     sys: t => poner(`<div>${esc(t)}</div>`, 'sys'),
     borrar: id => el.querySelector(`[data-id="${CSS.escape(id)}"]`)?.remove(),
@@ -373,7 +375,7 @@ async function vistaEspectador(usuario) {
           <button id="ov-toggle" aria-label="Mostrar u ocultar comentarios"><span class="i">💬</span>Chat</button>
         </div>
         ${TOKEN ? `<form class="ov-bar" id="ov-form" autocomplete="off"><input id="ov-in" maxlength="200" placeholder="Agrega un comentario…" enterkeyhint="send" aria-label="Comentario"><button class="send" aria-label="Enviar"><ion-icon name="send"></ion-icon></button></form>`
-                : `<div class="ov-bar"><a href="../index.html">Inicia sesión para comentar y enviar regalos</a></div>`}
+                : `<div class="ov-bar"><a href="${urlLogin()}">Inicia sesión para comentar y enviar regalos</a></div>`}
         <button class="unmute" id="unmute" hidden><ion-icon name="volume-high"></ion-icon> Activar sonido</button>
         <div class="p-ctrls">
           <button class="ico-btn" id="b-mute" aria-label="Silenciar"><ion-icon name="volume-mute"></ion-icon></button>

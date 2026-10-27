@@ -1793,13 +1793,13 @@ app.put("/admin/items/:id/link-status", verificarAdmin, [param('id').isMongoId()
 });
 
 
-app.put("/items/report/:id", [param('id').isMongoId(), body('motivo').isIn(['caido', 'viejo', 'malware'])], async (req, res) => {
+app.put("/items/report/:id", [verificarToken, param('id').isMongoId(), body('motivo').isIn(['caido', 'viejo', 'malware'])], async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: "Datos inválidos" });
         const { motivo } = req.body;
         const ip = req.ip || 'unknown';
-        const usuarioReportante = req.body.usuario || 'Anónimo';
+        const usuarioReportante = req.usuario;   // reportar exige sesión (antes era anónimo)
         const hace24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
         const reporteExistente = await Reporte.findOne({ juegoId: req.params.id, ip, fecha: { $gte: hace24h } });
         if (reporteExistente) return res.status(429).json({ success: false, error: "Ya reportaste este contenido. Espera 24h." });
@@ -3644,10 +3644,38 @@ const accesoDirecto = require('./rutas/accesoDirecto').registrar(app, { verifica
 // Tienda: pases sin anuncios, "Mi plan", tarjeta con Mercado Pago, PayPal, saldo y monedas
 const tienda = require('./rutas/tienda').registrar(app, {
     verificarToken, Usuario, LiveTx: live.LiveTx, Notificacion, paypal: live.paypal, mp: mercadoPago,
-    acceso: accesoDirecto, logger, apiUrlSelf: API_URL_SELF,
+    acceso: accesoDirecto, logger, apiUrlSelf: API_URL_SELF, olvidarPerfil: live.olvidarPerfil,
 });
 live.alRevertir(captureId => tienda.revertir(captureId, 'PayPal'));   // contracargos de pases pagados con PayPal
 // =================================================================================
+
+// ========== SEO: SITEMAP ==========
+// Lista pública de todo lo indexable (publicaciones aprobadas y perfiles con aportes).
+// Una acción de GitHub la copia a diario a public/sitemap.xml del sitio (mismo dominio
+// que las páginas, como exige Google).
+const SITIO = 'https://roucedevstudio.github.io/UpGames/public';
+const xmlEsc = v => String(v).replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
+app.get('/seo/sitemap.xml', async (req, res) => {
+    try {
+        const xml = await cacheado('seo:sitemap', 3600, async () => {
+            const items = await Juego.find({ status: 'aprobado', linkStatus: { $in: ['online', 'revision'] } })
+                .select('_id usuario updatedAt createdAt').sort({ createdAt: -1 }).limit(40000).lean();
+            const autores = new Map();
+            for (const j of items) { const f = j.updatedAt || j.createdAt; if (!autores.has(j.usuario) || f > autores.get(j.usuario)) autores.set(j.usuario, f); }
+            const dia = f => (f ? new Date(f) : new Date()).toISOString().slice(0, 10);
+            const url = (loc, lastmod, freq, prio) => `<url><loc>${xmlEsc(loc)}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ''}<changefreq>${freq}</changefreq><priority>${prio}</priority></url>`;
+            return '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + [
+                url(`${SITIO}/biblioteca.html`, dia(items[0]?.createdAt), 'hourly', '1.0'),
+                url(`${SITIO}/live.html`, null, 'hourly', '0.8'),
+                ...items.map(j => url(`${SITIO}/biblioteca.html?id=${j._id}`, dia(j.updatedAt || j.createdAt), 'weekly', '0.7')),
+                ...[...autores].map(([u, f]) => url(`${SITIO}/perfil-publico.html?usuario=${encodeURIComponent(u)}`, dia(f), 'weekly', '0.5')),
+                url(`${SITIO}/terminos_condiciones.html`, null, 'monthly', '0.2'),
+                url(`${SITIO}/politica-privacidad.html`, null, 'monthly', '0.2'),
+            ].join('\n') + '\n</urlset>\n';
+        });
+        res.type('application/xml').set('Cache-Control', 'public, max-age=3600').send(xml);
+    } catch (e) { logger.error(`[seo] sitemap: ${e.message}`); res.status(500).type('text/plain').send('error'); }
+});
 
 // ========== MANEJO DE ERRORES ==========
 app.use((req, res) => {

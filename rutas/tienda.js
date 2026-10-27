@@ -20,10 +20,19 @@ const L = require('../modulos/live');
 const MP = require('../modulos/mercadopago');
 
 const PLANES = [
-    { id: 'pase7',   nombre: 'Pase 7 días',  dias: 7,   usd: 1.99,  monedas: 199,  resumen: 'Ideal para probar' },
-    { id: 'pase30',  nombre: 'Pase 30 días', dias: 30,  usd: 4.99,  monedas: 499,  resumen: 'El más elegido', destacado: true },
-    { id: 'pase365', nombre: 'Pase 1 año',   dias: 365, usd: 39.99, monedas: 3999, resumen: 'Ahorra 33%' },
+    { id: 'pase7',   nombre: 'Pase 7 días',  dias: 7,   usd: 1.99,  monedas: 199,  monedasRegalo: 50,   resumen: 'Ideal para probar' },
+    { id: 'pase30',  nombre: 'Pase 30 días', dias: 30,  usd: 4.99,  monedas: 499,  monedasRegalo: 200,  resumen: 'El más elegido', destacado: true },
+    { id: 'pase365', nombre: 'Pase 1 año',   dias: 365, usd: 39.99, monedas: 3999, monedasRegalo: 2500, resumen: 'Ahorra 33%' },
 ];
+// Beneficios que todos los pases tienen mientras están vigentes (se muestran en la tienda y en "Mi plan")
+const BENEFICIOS_PASE = [
+    'Enlaces directos: sin los 30 s de espera',
+    'Sin publicidad en la página puente',
+    'Monedas de regalo al comprar o renovar',
+    '+10% de monedas extra en cada paquete que compres',
+    'Insignia ⭐ junto a tu nombre en el chat de los lives',
+];
+const BONO_PAQUETE = 0.10;
 const plan = id => PLANES.find(p => p.id === id) || null;
 const r2 = n => Math.round(n * 100) / 100;
 
@@ -46,6 +55,7 @@ const descripcion = p => p.tipo === 'monedas' ? `${p.paquete.monedas} monedas Up
 
 function registrar(app, deps) {
     const { verificarToken, Usuario, LiveTx, Notificacion, paypal, acceso, logger, apiUrlSelf } = deps;
+    const olvidarPerfil = deps.olvidarPerfil || (() => {});
     const mp = deps.mp || MP.crear();
     const ok = (res, d) => res.json({ success: true, ...d });
     const err = (res, code, error, extra) => res.status(code).json({ success: false, error, ...extra });
@@ -68,26 +78,33 @@ function registrar(app, deps) {
     // ── Entrega (idempotente por ref) ───────────────────────────────────────
     async function entregar(usuario, p, { ref, captureId = '', metodo, usd }) {
         if (p.tipo === 'monedas') {
-            try { await LiveTx.create({ tipo: 'compra', usuario, monedas: p.paquete.monedas, usd, ref, captureId, metodo, estado: 'completada' }); }
+            // Con un pase vigente cada paquete trae un 10% extra
+            const yo = await Usuario.findOne({ usuario }).select('planHasta').lean();
+            const bono = yo?.planHasta && new Date(yo.planHasta) > new Date() ? Math.floor(p.paquete.monedas * BONO_PAQUETE) : 0;
+            const total = p.paquete.monedas + bono;
+            try { await LiveTx.create({ tipo: 'compra', usuario, monedas: total, bonoMonedas: bono, usd, ref, captureId, metodo, estado: 'completada' }); }
             catch (e) { if (e.code !== 11000) throw e; const u = await Usuario.findOne({ usuario }).select('monedas').lean(); return { monedas: u?.monedas || 0, repetida: true }; }
-            const u = await Usuario.findOneAndUpdate({ usuario }, { $inc: { monedas: p.paquete.monedas } }, { new: true }).select('monedas').lean();
-            logger.info(`[tienda] @${usuario}: +${p.paquete.monedas} monedas (${metodo}, US$${usd})`);
-            return { monedas: u?.monedas || 0, acreditadas: p.paquete.monedas };
+            const u = await Usuario.findOneAndUpdate({ usuario }, { $inc: { monedas: total } }, { new: true }).select('monedas').lean();
+            logger.info(`[tienda] @${usuario}: +${total} monedas${bono ? ` (incluye ${bono} de bono del pase)` : ''} (${metodo}, US$${usd})`);
+            return { monedas: u?.monedas || 0, acreditadas: total, bono };
         }
         if (p.tipo === 'acceso') {
             const via = { paypal: 'tarjeta_paypal', tarjeta_mp: 'tarjeta_mp', saldo: 'saldo' }[metodo] || 'tarjeta_mp';
             return acceso.entregarPagado({ usuario, juegoId: p.juegoId, ref, captureId, via, metodo });
         }
         // Pase: suma días desde el vencimiento actual (o desde ahora si ya venció)
-        try { await LiveTx.create({ tipo: 'plan', usuario, monedas: metodo === 'monedas' ? p.plan.monedas : 0, usd, planId: p.plan.id, ref, captureId, metodo, estado: 'completada' }); }
-        catch (e) { if (e.code !== 11000) throw e; const u = await Usuario.findOne({ usuario }).select('planId planHasta').lean(); return { plan: u?.planId, hasta: u?.planHasta, repetida: true }; }
+        const regalo = p.plan.monedasRegalo || 0;
+        try { await LiveTx.create({ tipo: 'plan', usuario, monedas: metodo === 'monedas' ? p.plan.monedas : 0, bonoMonedas: regalo, usd, planId: p.plan.id, ref, captureId, metodo, estado: 'completada' }); }
+        catch (e) { if (e.code !== 11000) throw e; const u = await Usuario.findOne({ usuario }).select('planId planHasta monedas').lean(); return { plan: u?.planId, hasta: u?.planHasta, monedas: u?.monedas || 0, repetida: true }; }
         const u = await Usuario.findOneAndUpdate({ usuario }, [{ $set: {
             planId: p.plan.id,
             planHasta: { $add: [{ $max: ['$$NOW', { $ifNull: ['$planHasta', '$$NOW'] }] }, p.plan.dias * 864e5] },
             planAvisadoHasta: null,
-        } }], { new: true }).select('planId planHasta').lean();
-        logger.info(`[tienda] @${usuario}: ${p.plan.nombre} (${metodo}) → vence ${u?.planHasta?.toISOString?.().slice(0, 10)}`);
-        return { plan: u?.planId, hasta: u?.planHasta };
+            monedas: { $add: [{ $ifNull: ['$monedas', 0] }, regalo] },
+        } }], { new: true }).select('planId planHasta monedas').lean();
+        olvidarPerfil(usuario);   // la insignia ⭐ del chat aparece al instante
+        logger.info(`[tienda] @${usuario}: ${p.plan.nombre} (${metodo}) +${regalo} monedas de regalo → vence ${u?.planHasta?.toISOString?.().slice(0, 10)}`);
+        return { plan: u?.planId, hasta: u?.planHasta, monedas: u?.monedas || 0, monedasRegalo: regalo };
     }
 
     /** Anula una compra reembolsada o con contracargo (Mercado Pago o PayPal). */
@@ -99,7 +116,10 @@ function registrar(app, deps) {
             if (tx.estado === 'retenida') await Usuario.updateOne({ usuario: tx.destinatario }, [{ $set: { saldoRetenido: { $max: [0, { $subtract: [{ $ifNull: ['$saldoRetenido', 0] }, tx.creadorUsd] }] } } }]);
             await mongoose.connection.collection('accesos_directos').deleteOne({ usuario: tx.usuario, juegoId: tx.juegoId }).catch(() => {});
         }
-        if (tx.tipo === 'plan') await Usuario.updateOne({ usuario: tx.usuario }, { $set: { planHasta: new Date() } });
+        if (tx.tipo === 'plan') {
+            await Usuario.updateOne({ usuario: tx.usuario }, [{ $set: { planHasta: '$$NOW', monedas: { $max: [0, { $subtract: [{ $ifNull: ['$monedas', 0] }, tx.bonoMonedas || 0] }] } } }]);
+            olvidarPerfil(tx.usuario);
+        }
         await Usuario.updateOne({ usuario: tx.usuario }, { $set: { listaNegraAdmin: true, notasAdmin: `Reembolso/contracargo (${motivo}) de ${tx.tipo}`, fechaListaNegra: new Date() } });
         logger.warn(`[tienda] ${motivo}: ${tx.tipo} de @${tx.usuario} revertido (${captureId})`);
         return true;
@@ -120,7 +140,7 @@ function registrar(app, deps) {
     app.get('/tienda/catalogo', (req, res) => {
         const m = metodos();
         ok(res, {
-            planes: PLANES, paquetes: L.PAQUETES, acceso: { usd: 1, monedas: 100 }, monedaUsd: L.MONEDA_USD,
+            planes: PLANES, beneficios: BENEFICIOS_PASE, bonoPaquete: BONO_PAQUETE, paquetes: L.PAQUETES, acceso: { usd: 1, monedas: 100 }, monedaUsd: L.MONEDA_USD,
             metodos: m,
             pagos: m.tarjeta ? 'ok' : (paypal.estado().motivo === 'credenciales_invalidas' || mp.estado().motivo === 'credenciales_invalidas' ? 'credenciales_invalidas' : 'sin_configurar'),
             // Precios en moneda local para la tarjeta (Mercado Pago)
@@ -150,7 +170,7 @@ function registrar(app, deps) {
                 recordatorio: u.planRecordatorio !== false,
                 saldo: u.saldo || 0, saldoBloqueado: !!u.solicitudPagoPendiente, monedas: u.monedas || 0,
                 accesosComprados: accesos, descargasConPase30d: conPase,
-                historial, planes: PLANES, metodos: metodos(),
+                historial, planes: PLANES, beneficios: BENEFICIOS_PASE, metodos: metodos(),
             });
         } catch (e) { logger.error(`[tienda] mi-plan: ${e.message}`); err(res, 500, 'Error al cargar tu plan'); }
     });
@@ -313,4 +333,4 @@ function registrar(app, deps) {
     return { PLANES, parsear, precioUsd, entregar, revertir, mp, metodos };
 }
 
-module.exports = { registrar, PLANES, parsear, precioUsd };
+module.exports = { registrar, PLANES, BENEFICIOS_PASE, BONO_PAQUETE, parsear, precioUsd };

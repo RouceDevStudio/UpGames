@@ -975,6 +975,15 @@ display:block;
 
                 // Biografía
                 document.getElementById('user-bio').textContent = user.bio || 'Sin biografía';
+                // SEO: título y descripción propios de cada creador
+                try {
+                    document.title = `@${user.usuario || usuarioViendo} — Juegos, mods y apps | UpGames`;
+                    const md = document.querySelector('meta[name="description"]');
+                    if (md) md.setAttribute('content', `Publicaciones de @${user.usuario || usuarioViendo} en UpGames${user.bio ? ': ' + String(user.bio).slice(0, 120) : ''}. Descarga gratis y síguelo para no perderte nada.`);
+                    let c = document.querySelector('link[rel="canonical"]');
+                    if (!c) { c = document.createElement('link'); c.rel = 'canonical'; document.head.appendChild(c); }
+                    c.href = `https://roucedevstudio.github.io/UpGames/public/perfil-publico.html?usuario=${encodeURIComponent(user.usuario || usuarioViendo)}`;
+                } catch (_) {}
 
                 // ¿Está en vivo ahora? → aviso que lleva a su directo
                 fetch(`${API_URL}/live/canal/${encodeURIComponent(user.usuario)}`).then(r => r.ok ? r.json() : null).then(d => {
@@ -1118,8 +1127,9 @@ display:block;
             const btnMensaje = document.getElementById('btn-mensaje');
             
             if (!usuarioActual) {
-                btnSeguir.innerHTML = `<ion-icon name="log-in-outline"></ion-icon> Iniciar sesión`;
-                btnSeguir.onclick = () => window.location.href = './index.html';
+                // Invitado: el perfil se ve completo; seguir pide cuenta y luego vuelve aquí
+                btnSeguir.innerHTML = `<ion-icon name="person-add-outline"></ion-icon> Seguir`;
+                btnSeguir.onclick = () => window.location.href = `../index.html?volver=${encodeURIComponent('./public/perfil-publico.html' + location.search.replace(/[^\w=&%.~+?-]/g, ''))}` + '&registro=1';
                 btnSeguir.disabled = false;
                 btnSeguir.className = 'btn-seguir';
                 if (btnMensaje) btnMensaje.style.display = 'none';
@@ -1152,8 +1162,7 @@ display:block;
         // ✅ SEGUIR USUARIO
         async function seguirUsuario() {
             if (!usuarioActual) {
-                alert("Debes iniciar sesión para seguir usuarios");
-                window.location.href = './puente.html';
+                window.location.href = `../index.html?volver=${encodeURIComponent('./public/perfil-publico.html' + location.search.replace(/[^\w=&%.~+?-]/g, ''))}`;
                 return;
             }
 

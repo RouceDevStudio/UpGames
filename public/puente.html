@@ -130,7 +130,7 @@
         <div id="debug-info" class="debug-info" style="display:none;"></div>
     </div>
 
-    <script src="./upgames-pagos.js?v=20261027t" defer></script>
+    <script src="./upgames-pagos.js?v=20261028a" defer></script>
     <script>
         // ⭐ CONFIGURACIÓN
         const API_URL   = "https://upgames-production.up.railway.app";
@@ -554,7 +554,7 @@
                 }
                 const conMonedas = est.monedas >= est.precioMonedas;
                 const conSaldo = est.saldo >= est.precioUsd;
-                const lnkPase = `<a class="ad-pass-btn coins" style="display:block;text-align:center;text-decoration:none" href="./biblioteca.html?plan=1">⭐ Hazte un Pase: sin anuncios en todo desde US$1.99</a>`;
+                const lnkPase = `<a class="ad-pass-btn coins" style="display:block;text-align:center;text-decoration:none" href="./biblioteca.html?plan=1">⭐ Pase sin anuncios desde US$1.99 + monedas de regalo</a>`;
                 box.innerHTML = cabecera() + `<div class="ad-pass-btns">
                     ${est.pagosActivos || conSaldo ? '<button class="ad-pass-btn card" id="ad-pay-card">💳 Pagar US$1 con tarjeta o saldo</button>' : ''}
                     ${conMonedas ? `<button class="ad-pass-btn coins" id="ad-pay-coins">🪙 Usar ${est.precioMonedas} monedas (tienes ${est.monedas})</button>` : ''}

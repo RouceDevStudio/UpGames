@@ -48,6 +48,8 @@
   .ugp-precio small{display:block;color:#A3A8B6;font-size:.68rem;font-weight:600}
   .ugp-or{display:flex;align-items:center;gap:10px;color:#6C7180;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
   .ugp-or::before,.ugp-or::after{content:'';flex:1;height:1px;background:rgba(255,255,255,.1)}
+  .ugp-resumen{padding:11px 13px;border-radius:12px;background:rgba(90,200,250,.07);border:1px solid rgba(90,200,250,.22);font-size:.82rem;line-height:1.5;color:#dfe6f2}
+  .ugp-resumen small{display:block;margin-top:6px;color:#9aa3b5;font-size:.72rem}.ugp-resumen a{color:#5AC8FA}
   .ugp-safe{font-size:.72rem;color:#8a90a0;line-height:1.5;text-align:center;margin:0}
   .ugp-msg{font-size:.8rem;color:#A3A8B6;text-align:center;padding:10px;border-radius:12px;background:rgba(255,255,255,.04);margin:0}
   .ugp-msg.warn{color:#ffd27a;background:rgba(255,204,77,.08);border:1px solid rgba(255,204,77,.22)}
@@ -118,13 +120,22 @@
     const m = c.metodos, producto = opts.producto, usd = usdDe(c, producto, 'tarjeta');
     const aviso = msg => { el.querySelector('[data-ugp="aviso"]').innerHTML = msg ? `<p class="ugp-msg warn">${esc(msg)}</p>` : ''; (opts.alError || (() => {}))(msg); };
     const exito = d => { if (d?.hasta) try { localStorage.setItem('ug_pase_hasta', localStorage.getItem('user_admin') + '|' + (+new Date(d.hasta))); } catch (_) {}
-      el.querySelector('[data-ugp="aviso"]').innerHTML = '<p class="ugp-msg ok">✅ ¡Pago confirmado!</p>'; opts.alExito?.(d); };
+      const extra = d?.monedasRegalo ? ` Recibiste 🪙 ${fmt(d.monedasRegalo)} de regalo.` : d?.bono ? ` Incluye 🪙 ${fmt(d.bono)} extra por tu pase.` : '';
+      el.querySelector('[data-ugp="aviso"]').innerHTML = `<p class="ugp-msg ok">✅ ¡Pago confirmado!${extra}</p>`; opts.alExito?.(d); };
     const costoSaldo = usdDe(c, producto, 'saldo');
     const plan = producto.startsWith('plan:') ? c.planes.find(x => `plan:${x.id}` === producto) : null;
     const puedeSaldo = opts.saldo !== false && est && !producto.startsWith('acceso:x');
     const puedeMonedas = plan && opts.monedas !== false && est;
 
+    // Lo que recibe, dicho antes de pagar (Ley 1480: información clara y previa)
+    const paq = producto.startsWith('monedas:') ? c.paquetes.find(x => `monedas:${x.id}` === producto) : null;
+    const recibes = plan ? `<b>${esc(plan.nombre)}</b>: enlaces directos y sin anuncios durante ${plan.dias} días + 🪙 ${fmt(plan.monedasRegalo || 0)} de regalo, +10% de monedas en cada paquete e insignia ⭐ en los lives. Los días se suman si ya tienes un pase.`
+      : paq ? `<b>🪙 ${fmt(paq.monedas)} monedas</b>${est?.plan ? ` + ${fmt(Math.floor(paq.monedas * (c.bonoPaquete || 0.1)))} extra por tu pase` : ''}, para regalos en los lives, pases o accesos directos. No vencen.`
+      : `<b>Acceso directo</b> a esta publicación: se abre al instante, sin espera ni anuncios, y queda desbloqueada en tu cuenta.`;
+    const resumen = `<div class="ugp-resumen"><div>${recibes}</div><small>Pago único · <b>sin renovación automática</b> · retracto en 5 días hábiles si no lo has usado · <a href="./terminos_condiciones.html#pagos" target="_blank" rel="noopener">Términos</a></small></div>`;
+
     el.innerHTML = `<div class="ugp">
+      ${resumen}
       <div data-ugp="aviso"></div>
       ${m.tarjeta ? `<div class="ugp-card">
         <span class="ugp-tag">RECOMENDADO</span>
@@ -215,8 +226,8 @@
     el.innerHTML = `<div class="ugp">
       <div class="ugp-bal"><div><small>Tus monedas</small><br><b data-ugp="bal">🪙 ${fmt(est.monedas)}</b></div><small style="text-align:right">${aviso || `Saldo de UpGames: US$${(est.saldo || 0).toFixed(2)}<br>también sirve para comprar`}</small></div>
       <div class="ugp-packs">${c.paquetes.map(p => `<button type="button" class="ugp-pack" data-p="${esc(p.id)}">${p.extra ? `<span class="x">${esc(p.extra)}</span>` : ''}<div class="m">🪙 ${fmt(p.monedas)}</div><div class="u">US$${p.usd.toFixed(2)}</div></button>`).join('')}</div>
-      <div data-ugp="pago"><p class="ugp-msg">Elige un paquete para pagar con tarjeta, PayPal o tu saldo.</p></div>
-      <p class="ugp-safe">Las monedas no son reembolsables ni canjeables por dinero. <a href="./terminos_condiciones.html#pagos" target="_blank" style="color:#32D583">Términos</a></p>
+      <div data-ugp="pago"><p class="ugp-msg">Elige un paquete para pagar con tarjeta, PayPal o tu saldo.${est.plan ? ` <b style="color:#FFC83D">Tu pase te da +${Math.round((c.bonoPaquete || 0.1) * 100)}% de monedas extra.</b>` : ''}</p></div>
+      <p class="ugp-safe">Las monedas no se cambian por dinero. Si no las usas, puedes retractarte en 5 días hábiles. <a href="./terminos_condiciones.html#pagos" target="_blank" style="color:#32D583">Términos</a></p>
     </div>`;
     el.querySelectorAll('.ugp-pack').forEach(b => b.onclick = () => {
       el.querySelectorAll('.ugp-pack').forEach(x => x.classList.toggle('on', x === b));
@@ -235,7 +246,7 @@
     try { [c, est] = await Promise.all([catalogo(), est ? Promise.resolve(est) : api('/tienda/mi-plan')]); }
     catch (e) { el.innerHTML = `<p class="ugp-msg warn">${esc(e.message)}</p>`; return; }
     el.innerHTML = `<div class="ugp">
-      <div class="ugp-packs">${c.planes.map(p => `<button type="button" class="ugp-pack ugp-plan" data-p="${esc(p.id)}">${p.destacado ? '<span class="x">POPULAR</span>' : ''}<div class="m">${esc(p.nombre)}</div><div class="u">US$${p.usd.toFixed(2)}</div><div class="u" style="font-weight:500;font-size:.7rem">${esc(p.resumen)}</div></button>`).join('')}</div>
+      <div class="ugp-packs">${c.planes.map(p => `<button type="button" class="ugp-pack ugp-plan" data-p="${esc(p.id)}">${p.destacado ? '<span class="x">POPULAR</span>' : ''}<div class="m">${esc(p.nombre)}</div><div class="u">US$${p.usd.toFixed(2)}</div><div class="u" style="font-weight:700;font-size:.72rem;color:#FFC83D">+🪙 ${fmt(p.monedasRegalo || 0)} de regalo</div><div class="u" style="font-weight:500;font-size:.7rem">${esc(p.dias)} días · ${esc(p.resumen)}</div></button>`).join('')}</div>
       <div data-ugp="pago"><p class="ugp-msg">Elige un pase. ${est.plan ? 'Los días se suman a tu pase actual.' : 'Sin cobros automáticos: pagas solo cuando quieras renovar.'}</p></div>
     </div>`;
     el.querySelectorAll('.ugp-pack').forEach(b => b.onclick = () => {

@@ -49,6 +49,7 @@ const TxSchema = new mongoose.Schema({
     liveId:       { type: String, default: '', index: true },
     juegoId:      { type: String, default: '' },                   // acceso directo
     planId:       { type: String, default: '' },                   // pase sin anuncios
+    bonoMonedas:  { type: Number, default: 0 },                    // monedas de regalo incluidas (pases y bono del pase)
     metodo:       { type: String, default: '' },                   // tarjeta_mp | paypal | monedas | saldo | pase
     ref:          { type: String, required: true, unique: true },  // idempotencia (orden PayPal / clave del regalo)
     captureId:    { type: String, default: '', index: true },
@@ -114,8 +115,8 @@ function registrar(app, server, deps) {
     async function perfil(u) {
         const c = perfilCache.get(u);
         if (c && Date.now() - c.ts < 5 * 60000) return c;
-        const d = await Usuario.findOne({ usuario: u }).select('avatar verificadoNivel').lean().catch(() => null);
-        const p = { avatar: d?.avatar || '', verificado: d?.verificadoNivel || 0, ts: Date.now() };
+        const d = await Usuario.findOne({ usuario: u }).select('avatar verificadoNivel planHasta').lean().catch(() => null);
+        const p = { avatar: d?.avatar || '', verificado: d?.verificadoNivel || 0, pase: !!(d?.planHasta && new Date(d.planHasta) > new Date()), ts: Date.now() };
         if (perfilCache.size > 5000) perfilCache.clear();
         perfilCache.set(u, p);
         return p;
@@ -262,7 +263,7 @@ function registrar(app, server, deps) {
             const t = L.limpiarChat(p.texto);
             if (!t) return responder({ ok: false });
             const pf = await perfil(u);
-            const m = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, u, t, ts: Date.now(), av: pf.avatar, v: pf.verificado, host: u === s.live.creador };
+            const m = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, u, t, ts: Date.now(), av: pf.avatar, v: pf.verificado, pase: pf.pase || undefined, host: u === s.live.creador };
             s.chat.push(m); if (s.chat.length > 80) s.chat.splice(0, s.chat.length - 80);
             io.to(rid(id)).emit('chat', m);
             responder({ ok: true });
@@ -686,7 +687,7 @@ function registrar(app, server, deps) {
     // ¿Tiene ingresos de regalos o accesos directos ya liberados? (habilita el retiro sin descargas)
     const tieneIngresosLive = usuario => LiveTx.exists({ tipo: { $in: ['regalo', 'acceso'] }, destinatario: usuario, estado: 'liberada' }).then(Boolean).catch(() => false);
     let reversorExtra = null;   // la tienda revierte pases (registrado después)
-    return { io, Live, LiveTx, finalizar, tieneIngresosLive, paypal, alRevertir: fn => { reversorExtra = fn; } };
+    return { io, Live, LiveTx, finalizar, tieneIngresosLive, paypal, alRevertir: fn => { reversorExtra = fn; }, olvidarPerfil: u => perfilCache.delete(u) };
 }
 
 module.exports = { registrar, LiveSchema, TxSchema };

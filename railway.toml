@@ -1,0 +1,16 @@
+# Railway solo vuelve a desplegar el servidor cuando cambian archivos del backend.
+# Así los cambios del frontend (GitHub Pages) y el sitemap diario no reinician el
+# servidor ni cortan los lives en curso.
+[build]
+watchPatterns = [
+  "index.js",
+  "rutas/**",
+  "modulos/**",
+  "mediamtx/**",
+  "package.json",
+  "package-lock.json",
+  "nixpacks.toml",
+  "railway.toml",
+  "public/pb2-touch.js",
+  "public/pb2-touch.css",
+]

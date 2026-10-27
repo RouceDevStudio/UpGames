@@ -1,0 +1,36 @@
+# Copia a diario el sitemap generado por el backend a public/sitemap.xml
+# (Google exige que el sitemap esté en el mismo dominio que las páginas).
+name: Sitemap
+
+on:
+  schedule:
+    - cron: '17 9 * * *'   # todos los días, 4:17 a. m. hora Colombia
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sitemap
+  cancel-in-progress: true
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Descargar sitemap
+        run: |
+          curl -fsS --retry 3 --max-time 60 https://upgames-production.up.railway.app/seo/sitemap.xml -o /tmp/sitemap.xml
+          grep -q '<urlset' /tmp/sitemap.xml
+          cp /tmp/sitemap.xml public/sitemap.xml
+      - name: Publicar si cambió
+        run: |
+          if git diff --quiet -- public/sitemap.xml && git ls-files --error-unmatch public/sitemap.xml >/dev/null 2>&1; then
+            echo "Sin cambios"; exit 0
+          fi
+          git config user.name "upgames-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/sitemap.xml
+          git commit -m "SEO: sitemap actualizado"
+          git push
