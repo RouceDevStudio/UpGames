@@ -11,7 +11,7 @@
 // IMPORTANTE: bump CACHE_VERSION cuando cambies archivos estáticos.
 // ========================================
 
-const CACHE_VERSION = 'upgames-v6.11.0';
+const CACHE_VERSION = 'upgames-v6.12.1';
 const CACHE_STATIC  = `${CACHE_VERSION}-static`;
 const CACHE_RUNTIME = `${CACHE_VERSION}-runtime`;
 const CACHE_API     = `${CACHE_VERSION}-api`;
@@ -87,7 +87,7 @@ self.addEventListener('fetch', (event) => {
     // Tiempo real y video en vivo: nunca pasar por caché (Socket.IO, HLS)
     if (url.pathname.startsWith('/socket.io/') || /\.(m3u8|m4s|ts)(\?|$)/i.test(url.pathname)) return;
     // Pagos: el SDK de PayPal es dinámico (sesión, riesgo, idioma) → siempre de la red
-    if (/(^|\.)paypal\.com$|(^|\.)paypalobjects\.com$/i.test(url.hostname)) return;
+    if (/(^|\.)(paypal|paypalobjects|mercadopago|mercadolibre|mlstatic|mercadolivre)\.com(\.\w+)?$/i.test(url.hostname)) return;
 
     // Estrategia 1: API calls → Network first, fallback a cache
     if (isApiRequest(url)) {

@@ -62,10 +62,11 @@ function escapeRegExp(str) {
  * Ejemplo: "gta" → /g.?t.?a/i
  */
 function buildFuzzyRegex(term) {
-    const safe = escapeRegExp(term);
-    if (safe.length < 4) return new RegExp(safe, 'i');
-    const chars = safe.split('');
-    return new RegExp(chars.join('.?'), 'i');
+    const t = String(term).slice(0, 60);
+    if (t.length < 4) return new RegExp(escapeRegExp(t), 'i');
+    // Escapar CADA carácter por separado: antes se escapaba todo y luego se partía,
+    // separando la "\\" de lo que escapaba ("c++" → regex inválida → error 500)
+    return new RegExp([...t].map(escapeRegExp).join('.?'), 'i');
 }
 
 // ======================================================================
@@ -141,7 +142,8 @@ async function buscar(opts = {}) {
 
     if (tieneQuery) {
         // Términos individuales para scoring de relevancia
-        const terminos = qNorm.split(' ').filter(t => t.length >= 2);
+        let terminos = qNorm.split(' ').filter(t => t.length >= 2);
+        if (!terminos.length) terminos = [qNorm.trim() || qNorm];   // "a", "((((" → antes $or vacío = error 500
 
         const orConditions = [];
         for (const t of terminos) {

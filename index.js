@@ -49,6 +49,18 @@ const {
     recalcularTodosLosScores,
 } = require('./modulos/scoreHelpers');
 
+// ========== ERRORES GLOBALES DEL PROCESO ==========
+// Node 22 termina el proceso ante una promesa rechazada sin catch: un solo descuido en
+// cualquier módulo reiniciaba el servidor y cortaba todos los lives. Ahora se registra.
+process.on('unhandledRejection', err => {
+    logger.error(`[proceso] Promesa rechazada sin manejar: ${err?.stack || err}`);
+});
+// Una excepción síncrona deja el proceso en estado dudoso: registrar y reiniciar ordenadamente
+process.on('uncaughtException', err => {
+    logger.error(`[proceso] Excepción no capturada, reiniciando: ${err?.stack || err}`);
+    setTimeout(() => process.exit(1), 1000).unref();
+});
+
 // ========== MÓDULOS DE MEJORAS v2 ==========
 const gamification    = require('./modulos/gamification');
 const recommendations = require('./modulos/recommendations');
@@ -171,6 +183,13 @@ async function enviarPagoPayPal(paypalEmail, monto, pagoId) {
 
 
 const app = express();
+// Railway pone UN proxy delante: confiar solo en ese salto. Así req.ip es la IP real
+// del visitante (la que agrega Railway) y no la primera de X-Forwarded-For, que el
+// cliente puede inventar. Sin esto los límites de peticiones se compartían entre
+// todos los usuarios y el anti-fraude de descargas se podía burlar.
+app.set('trust proxy', parseInt(process.env.TRUST_PROXY_HOPS || '1', 10));
+// Todas las rutas con :id esperan un ObjectId de Mongo: uno mal formado era un 500 (CastError)
+app.param('id', (req, res, next, id) => mongoose.isValidObjectId(id) ? next() : res.status(404).json({ success: false, error: 'No encontrado' }));
 
 // ========== PROXY PLAZMA BURST 2 (TÁCTIL) ==========
 // Reservir el juego original H5 same-origin + inyectar controles táctiles.
@@ -295,11 +314,13 @@ const MONGODB_URI = config.MONGODB_URI;
 const JWT_SECRET  = config.JWT_SECRET;
 
 cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dd4w2plxn',
     api_key:    process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET,
     secure: true
 });
+// Subidas con o sin credenciales de servidor + copia de portadas externas (modulos/imagenes.js)
+const imagenes = require('./modulos/imagenes').crear({ cloudinary, logger });
 
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 
@@ -316,12 +337,15 @@ const API_URL_SELF = process.env.RAILWAY_PUBLIC_DOMAIN
 // ── NODEMAILER — Gmail ───────────────────────────────────────────────
 let emailTransporter = null;
 try {
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) throw new Error('sin credenciales');
     emailTransporter = nodemailer.createTransport({
         service: 'gmail',
         auth: {
             user: process.env.GMAIL_USER,
             pass: process.env.GMAIL_APP_PASSWORD,
         },
+        // Sin límites, un Gmail lento dejaba colgada la petición (registro, reenvío…)
+        connectionTimeout: 15000, greetingTimeout: 10000, socketTimeout: 20000,
     });
     logger.info('📧 Transporter de email configurado (Gmail)');
 } catch (e) {
@@ -486,6 +510,7 @@ JuegoSchema.post(['save', 'insertMany', 'updateOne', 'updateMany', 'findOneAndUp
     if (typeof this?.getUpdate === 'function' && soloContadores(this.getUpdate())) return;
     memCache.invalidate('items:*');
 });
+JuegoSchema.add({ imageOrigen: { type: String, default: '' }, portadaMigrada: { type: Boolean, default: false } });
 const Juego = mongoose.model('Juego', JuegoSchema);
 
 // ── Caché de lecturas públicas calientes ──
@@ -514,6 +539,13 @@ const UsuarioSchema = new mongoose.Schema({
     monedas:       { type: Number, default: 0, min: 0 },
     saldoRetenido: { type: Number, default: 0, min: 0 },
     liveKey:       { type: String, default: null, select: false },   // clave de transmisión (OBS)
+    sesionVer:     { type: Number, default: 0 },
+    avisoVerifEnviado: { type: Boolean, default: false },   // notificación "verifica tu email" ya enviada
+    // Pase sin anuncios (prepago, sin cobros automáticos)
+    planId:           { type: String, default: '' },
+    planHasta:        { type: Date, default: null },
+    planRecordatorio: { type: Boolean, default: true },   // avisar 2 días antes de que venza
+    planAvisadoHasta: { type: Date, default: null },      // vencimiento ya avisado (un aviso por periodo)   // +1 al cambiar/restablecer la contraseña → cierra las demás sesiones
     descargasTotales:      { type: Number, default: 0, min: 0 },
     isVerificado:          { type: Boolean, default: false, index: true },
     solicitudPagoPendiente:{ type: Boolean, default: false },
@@ -668,6 +700,27 @@ const StorySchema = new mongoose.Schema({
 }, { collection: 'stories', timestamps: false });
 const Story = mongoose.model('Story', StorySchema);
 
+// ========== SESIONES ==========
+// Todo token lleva la versión de sesión del usuario (sv). Al cambiar o restablecer la
+// contraseña la versión sube y los tokens anteriores dejan de valer (antes un token
+// robado seguía sirviendo 30 días aunque cambiaras la contraseña).
+const firmarToken = u => jwt.sign({ usuario: u.usuario, email: u.email, sv: u.sesionVer || 0 }, JWT_SECRET, { expiresIn: '30d' });
+const versionSesion = new Map();   // usuario → { v, t } (caché 60 s: no consultar Mongo en cada petición)
+async function versionActual(usuario) {
+    const c = versionSesion.get(usuario);
+    if (c && Date.now() - c.t < 60000) return c.v;
+    const u = await Usuario.findOne({ usuario }).select('sesionVer').lean();
+    const v = u ? (u.sesionVer || 0) : -1;
+    if (versionSesion.size > 50000) versionSesion.clear();
+    versionSesion.set(usuario, { v, t: Date.now() });
+    return v;
+}
+async function cerrarOtrasSesiones(usuario) {
+    const u = await Usuario.findOneAndUpdate({ usuario }, { $inc: { sesionVer: 1 } }, { new: true }).select('usuario email sesionVer').lean();
+    versionSesion.delete(usuario);
+    return u;
+}
+
 // ========== MIDDLEWARE JWT ==========
 const presenciaEscrita = new Map();   // usuario → ms de la última escritura de ultimoLogin
 const verificarToken = (req, res, next) => {
@@ -695,7 +748,12 @@ const verificarToken = (req, res, next) => {
             Usuario.updateOne({ usuario: decoded.usuario }, { $set: { ultimoLogin: new Date() } }).catch(() => {});
         }
 
-        next();
+        // Sesión revocada (cambió la contraseña en otro dispositivo) o cuenta eliminada
+        versionActual(decoded.usuario).then(v => {
+            if (v === -1) return res.status(401).json({ success: false, error: 'La cuenta ya no existe', code: 'TOKEN_INVALID' });
+            if ((decoded.sv || 0) !== v) return res.status(401).json({ success: false, error: 'Tu contraseña cambió. Vuelve a iniciar sesión.', code: 'SESSION_REVOKED' });
+            next();
+        }, () => next());   // si Mongo falla un instante, no tumbar todas las sesiones
     } catch (error) {
         // Distinguir expirado vs firma inválida
         const code = error.name === 'TokenExpiredError' ? 'TOKEN_EXPIRED' : 'TOKEN_INVALID';
@@ -766,6 +824,37 @@ app.post('/auth/resend-verification', [body('email').isEmail().normalizeEmail(EM
     }
 });
 
+// Estado y reenvío para la sesión iniciada (el aviso de la biblioteca y la notificación)
+const enviosVerif = new Map();   // usuario → [timestamps]
+const enmascarar = e => String(e || '').replace(/^(.{1,2})[^@]*(@.*)$/, (_, a, b) => a + '•••' + b);
+app.get('/auth/email-estado', verificarToken, async (req, res) => {
+    const u = await Usuario.findOne({ usuario: req.usuario }).select('email emailVerificado').lean().catch(() => null);
+    if (!u) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+    res.json({ success: true, verificado: !!u.emailVerificado, email: enmascarar(u.email) });
+});
+app.post('/auth/email-reenviar', verificarToken, async (req, res) => {
+    try {
+        const ahora = Date.now();
+        const h = (enviosVerif.get(req.usuario) || []).filter(t => ahora - t < 864e5);
+        if (h.length && ahora - h[h.length - 1] < 120000) return res.status(429).json({ success: false, error: 'Ya te enviamos el correo. Espera 2 minutos para pedir otro.' });
+        if (h.length >= 5) return res.status(429).json({ success: false, error: 'Llegaste al límite de reenvíos de hoy. Revisa tu carpeta de spam.' });
+        const usuario = await Usuario.findOne({ usuario: req.usuario });
+        if (!usuario) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+        if (usuario.emailVerificado) return res.json({ success: true, yaVerificado: true });
+        usuario.emailVerifToken   = crypto.randomBytes(32).toString('hex');
+        usuario.emailVerifExpires = new Date(ahora + 24 * 60 * 60 * 1000);
+        await usuario.save();
+        const enviado = await sendEmail({ to: usuario.email, subject: '✅ Verifica tu email en UpGames', html: emailVerifTemplate(usuario.usuario, `${API_URL_SELF}/auth/verify-email/${usuario.emailVerifToken}`) });
+        if (!enviado) return res.status(503).json({ success: false, error: 'No pudimos enviar el correo ahora mismo. Inténtalo en unos minutos.' });
+        h.push(ahora); enviosVerif.set(req.usuario, h);
+        if (enviosVerif.size > 20000) enviosVerif.clear();
+        res.json({ success: true, email: enmascarar(usuario.email) });
+    } catch (err) {
+        logger.error(`Error en email-reenviar: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error interno' });
+    }
+});
+
 // ══════════════════════════════════════════════════════════════
 //  RECUPERACIÓN DE CONTRASEÑA
 // ══════════════════════════════════════════════════════════════
@@ -798,6 +887,8 @@ app.post('/auth/reset-password', [body('token').notEmpty(), body('password').isL
         const usuario = await Usuario.findOne({ resetPasswordToken: token, resetPasswordExpires: { $gt: new Date() } });
         if (!usuario) return res.status(400).json({ success: false, error: 'El link es inválido o ya expiró. Solicita uno nuevo.' });
         usuario.password             = await bcrypt.hash(password, 10);
+        usuario.sesionVer            = (usuario.sesionVer || 0) + 1;   // cierra todas las sesiones abiertas
+        versionSesion.delete(usuario.usuario);
         usuario.resetPasswordToken   = null;
         usuario.resetPasswordExpires = null;
         await usuario.save();
@@ -829,10 +920,7 @@ app.post('/economia/validar-descarga', [body('juegoId').isMongoId()], async (req
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: "ID de juego inválido", details: errors.array() });
 
         const { juegoId, tieneAdBlocker } = req.body;
-        const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() ||
-                   req.headers['x-real-ip'] ||
-                   req.connection.remoteAddress ||
-                   req.socket.remoteAddress;
+        const ip = req.ip;
 
         logger.info(`Validación de descarga - Juego: ${juegoId}, IP: ${ip}, AdBlocker: ${tieneAdBlocker ? '⚠️ SÍ' : '✅ NO'}`);
 
@@ -940,6 +1028,7 @@ app.post('/economia/solicitar-pago', verificarToken, async (req, res) => {
         const usuario = await Usuario.findOne({ usuario: req.usuario });
         if (!usuario) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
         if (!usuario.isVerificado || usuario.verificadoNivel < 1) return res.status(403).json({ success: false, error: "Debes ser verificado (nivel 1+) para solicitar pagos" });
+        if (!usuario.emailVerificado) return res.status(403).json({ success: false, error: "Verifica tu email antes de retirar dinero (revisa tu correo o pide uno nuevo desde el aviso de la biblioteca)", code: 'EMAIL_NO_VERIFICADO' });
         if (usuario.saldo < MIN_WITHDRAWAL) return res.status(400).json({ success: false, error: `Saldo mínimo para retiro: $${MIN_WITHDRAWAL} USD. Tu saldo: $${usuario.saldo.toFixed(2)}` });
         if (!usuario.paypalEmail?.trim()) return res.status(400).json({ success: false, error: "Debes configurar tu email de PayPal primero" });
         if (usuario.solicitudPagoPendiente) return res.status(400).json({ success: false, error: "Ya tienes una solicitud de pago pendiente" });
@@ -964,16 +1053,16 @@ app.post('/economia/solicitar-pago', verificarToken, async (req, res) => {
 app.get('/economia/mi-saldo', verificarToken, async (req, res) => {
     try {
         const usuario = await Usuario.findOne({ usuario: req.usuario })
-            .select('saldo saldoRetenido monedas descargasTotales paypalEmail isVerificado solicitudPagoPendiente verificadoNivel');
+            .select('saldo saldoRetenido monedas descargasTotales paypalEmail isVerificado solicitudPagoPendiente verificadoNivel emailVerificado');
         if (!usuario) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
 
         const [juegosElegibles, ingresosLive] = await Promise.all([
             Juego.countDocuments({ usuario: req.usuario, descargasEfectivas: { $gt: 0 } }),
             live.tieneIngresosLive(req.usuario),
         ]);
-        const puedeRetirar = usuario.saldo >= MIN_WITHDRAWAL && usuario.isVerificado && usuario.verificadoNivel >= 1 && usuario.paypalEmail && (juegosElegibles > 0 || ingresosLive) && !usuario.solicitudPagoPendiente;
+        const puedeRetirar = usuario.saldo >= MIN_WITHDRAWAL && usuario.isVerificado && usuario.verificadoNivel >= 1 && usuario.paypalEmail && (juegosElegibles > 0 || ingresosLive) && !usuario.solicitudPagoPendiente && !!usuario.emailVerificado;
 
-        res.json({ success: true, saldo: usuario.saldo, saldoRetenido: usuario.saldoRetenido || 0, monedas: usuario.monedas || 0, descargasTotales: usuario.descargasTotales, paypalEmail: usuario.paypalEmail || '', isVerificado: usuario.isVerificado, verificadoNivel: usuario.verificadoNivel, solicitudPagoPendiente: usuario.solicitudPagoPendiente, juegosElegibles, puedeRetirar, minRetiro: MIN_WITHDRAWAL, requisitos: { saldoMinimo: MIN_WITHDRAWAL, verificacionNecesaria: 1 } });
+        res.json({ success: true, saldo: usuario.saldo, saldoRetenido: usuario.saldoRetenido || 0, monedas: usuario.monedas || 0, emailVerificado: !!usuario.emailVerificado, descargasTotales: usuario.descargasTotales, paypalEmail: usuario.paypalEmail || '', isVerificado: usuario.isVerificado, verificadoNivel: usuario.verificadoNivel, solicitudPagoPendiente: usuario.solicitudPagoPendiente, juegosElegibles, puedeRetirar, minRetiro: MIN_WITHDRAWAL, requisitos: { saldoMinimo: MIN_WITHDRAWAL, verificacionNecesaria: 1 } });
     } catch (error) {
         logger.error(`Error en mi-saldo: ${error.message}`);
         res.status(500).json({ success: false, error: "Error al obtener saldo" });
@@ -1317,7 +1406,7 @@ function mensajeDuplicado(err) {
 const _dispHits = new Map();
 // GET /auth/disponibilidad?usuario=&email= — comprobación en vivo al escribir
 app.get('/auth/disponibilidad', async (req, res) => {
-    const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket?.remoteAddress || '';
+    const ip = req.ip || '';
     const now = Date.now(); const h = _dispHits.get(ip) || { t: now, n: 0 };
     if (now - h.t > 60000) { h.t = now; h.n = 0; }
     h.n++; _dispHits.set(ip, h);
@@ -1361,7 +1450,7 @@ app.post('/auth/register', [
         const { usuario, email, password } = req.body;
         const errNombre = errorNombreUsuario(usuario);
         if (errNombre) return res.status(400).json({ success: false, error: errNombre, campo: 'usuario' });
-        const registrationIP = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.headers['x-real-ip'] || req.connection?.remoteAddress || req.socket?.remoteAddress || '';
+        const registrationIP = req.ip;
 
         const [existeUsuario, existeEmail] = await Promise.all([
             Usuario.findOne({ usuario: usuario.toLowerCase() }).select('_id').lean(),
@@ -1389,7 +1478,7 @@ app.post('/auth/register', [
         const verifLink = `${API_URL_SELF}/auth/verify-email/${verifToken}`;
         sendEmail({ to: email, subject: '✅ Verifica tu email en UpGames', html: emailVerifTemplate(usuario, verifLink) }).catch(() => {});
 
-        const token = jwt.sign({ usuario: nuevoUsuario.usuario, email: nuevoUsuario.email }, JWT_SECRET, { expiresIn: '30d' });
+        const token = firmarToken(nuevoUsuario);
         res.status(201).json({ success: true, ok: true, token, usuario: nuevoUsuario.usuario, email: nuevoUsuario.email, emailVerificado: false, mensaje: 'Cuenta creada. Revisa tu email para verificar tu cuenta.', datosUsuario: { usuario: nuevoUsuario.usuario, email: nuevoUsuario.email, verificadoNivel: nuevoUsuario.verificadoNivel, isVerificado: nuevoUsuario.isVerificado, emailVerificado: false } });
     } catch (error) {
         // Dos registros simultáneos con el mismo nombre/email: el índice único lo frena
@@ -1400,7 +1489,7 @@ app.post('/auth/register', [
     }
 });
 
-app.post('/auth/login', [body('usuario').notEmpty(), body('password').notEmpty()], async (req, res) => {
+app.post('/auth/login', [body('usuario').isString().notEmpty(), body('password').isString().notEmpty()], async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: "Datos inválidos" });
@@ -1431,7 +1520,7 @@ app.post('/auth/login', [body('usuario').notEmpty(), body('password').notEmpty()
             }
         }
 
-        const token = jwt.sign({ usuario: usuario.usuario, email: usuario.email }, JWT_SECRET, { expiresIn: '30d' });
+        const token = firmarToken(usuario);
         logger.info(`Login exitoso: @${usuario.usuario}`);
 
         // ── Hook gamificación: racha diaria (fire & forget) ──
@@ -1709,7 +1798,7 @@ app.put("/items/report/:id", [param('id').isMongoId(), body('motivo').isIn(['cai
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: "Datos inválidos" });
         const { motivo } = req.body;
-        const ip = req.ip || req.headers['x-forwarded-for'] || 'unknown';
+        const ip = req.ip || 'unknown';
         const usuarioReportante = req.body.usuario || 'Anónimo';
         const hace24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
         const reporteExistente = await Reporte.findOne({ juegoId: req.params.id, ip, fecha: { $gte: hace24h } });
@@ -1753,7 +1842,7 @@ app.put('/items/vistas/:id', [param('id').isMongoId()], async (req, res) => {
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'ID inválido' });
         const juegoId = req.params.id;
-        const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.headers['x-real-ip'] || req.connection.remoteAddress || req.socket.remoteAddress;
+        const ip = req.ip;
         const juego = await Juego.findById(juegoId).select('title category descargasEfectivas');
         if (!juego) return res.status(404).json({ success: false, error: 'Item no encontrado' });
         const vistaExistente = await DescargaIP.findOne({ juegoId, ip });
@@ -2414,7 +2503,7 @@ app.put('/usuarios/update-username', [verificarToken, body('nuevoUsuario').trim(
             Usuario.updateMany({ listaSeguidores: oldName }, { $set: { 'listaSeguidores.$': newName } }),
             Usuario.updateMany({ siguiendo: oldName }, { $set: { 'siguiendo.$': newName } })
         ]);
-        const nuevoToken = jwt.sign({ usuario: newName, email: usuario.email }, JWT_SECRET, { expiresIn: '30d' });
+        const nuevoToken = firmarToken({ ...usuario.toObject?.() ?? usuario, usuario: newName });
         logger.info(`[update-username] ${oldName} → ${newName} | Cascada completada`);
         res.json({ success: true, nuevoToken, nuevoUsuario: newName });
     } catch (err) {
@@ -2445,7 +2534,7 @@ app.put('/usuarios/update-email', [verificarToken, body('nuevoEmail').isEmail().
         if (existe) return res.status(409).json({ success: false, error: 'Ese email ya está registrado en otra cuenta' });
         const verifToken = crypto.randomBytes(32).toString('hex');
         await Usuario.updateOne({ usuario: req.usuario.toLowerCase() }, { $set: { email: nuevoEmail.toLowerCase(), lastEmailChange: new Date(), emailVerificado: false, emailVerifToken: verifToken, emailVerifExpires: new Date(Date.now() + 24 * 60 * 60 * 1000) } });
-        const nuevoToken = jwt.sign({ usuario: req.usuario.toLowerCase(), email: nuevoEmail.toLowerCase() }, JWT_SECRET, { expiresIn: '30d' });
+        const nuevoToken = firmarToken({ usuario: req.usuario.toLowerCase(), email: nuevoEmail.toLowerCase(), sesionVer: await versionActual(req.usuario.toLowerCase()) });
         logger.info(`Usuario ${req.usuario} cambió su email a ${nuevoEmail}`);
         const verifLink = `${API_URL_SELF}/auth/verify-email/${verifToken}`;
         sendEmail({ to: nuevoEmail, subject: '✅ Verifica tu nuevo email en UpGames', html: emailVerifTemplate(req.usuario.toLowerCase(), verifLink) }).catch(() => {});
@@ -2470,8 +2559,9 @@ app.put('/usuarios/update-password', [verificarToken, body('passwordActual').not
         if (await bcrypt.compare(nuevaPassword, usuario.password)) return res.status(400).json({ success: false, error: 'La nueva contraseña no puede ser igual a la actual' });
         const hashed = await bcrypt.hash(nuevaPassword, 10);
         await Usuario.updateOne({ usuario: req.usuario.toLowerCase() }, { $set: { password: hashed } });
-        logger.info(`Usuario ${req.usuario} cambió su contraseña`);
-        res.json({ success: true });
+        const actualizado = await cerrarOtrasSesiones(req.usuario.toLowerCase());
+        logger.info(`Usuario ${req.usuario} cambió su contraseña (otras sesiones cerradas)`);
+        res.json({ success: true, token: firmarToken(actualizado), mensaje: 'Contraseña actualizada. Se cerró tu sesión en los demás dispositivos.' });
     } catch (err) {
         logger.error(`Error en update-password: ${err.message}`);
         res.status(500).json({ success: false, error: 'Error al actualizar contraseña' });
@@ -3159,8 +3249,8 @@ app.post('/chat/imagen', verificarToken, async (req, res) => {
         const { imagen } = req.body;
         if (!imagen) return res.status(400).json({ success: false, error: 'Imagen requerida' });
         if (imagen.length > 5 * 1024 * 1024) return res.status(400).json({ success: false, error: 'Imagen demasiado grande (máx 5MB)' });
-        const result = await cloudinary.uploader.upload(imagen, { folder: 'chat_images', transformation: [{ width: 1080, height: 1080, crop: 'limit', quality: 'auto:good' }] });
-        res.json({ success: true, url: result.secure_url });
+        if (typeof imagen !== 'string' || !/^data:image\/(png|jpe?g|webp|gif|heic|heif);base64,/i.test(imagen)) return res.status(400).json({ success: false, error: 'Formato de imagen no válido' });
+        res.json({ success: true, url: await imagenes.subir(imagen, { carpeta: 'chat_images', ancho: 1080, alto: 1080 }) });
     } catch (err) {
         logger.error(`Error subiendo imagen de chat: ${err.message}`);
         res.status(500).json({ success: false, error: 'Error al subir imagen' });
@@ -3175,8 +3265,8 @@ app.post('/stories/crear', verificarToken, async (req, res) => {
         if (!imagen && !texto?.trim()) return res.status(400).json({ success: false, error: 'Imagen o texto requerido' });
         let imgUrl = '';
         if (imagen) {
-            const result = await cloudinary.uploader.upload(imagen, { folder: 'stories', transformation: [{ width: 1080, height: 1920, crop: 'limit', quality: 'auto:good' }] });
-            imgUrl = result.secure_url;
+            if (typeof imagen !== 'string' || !/^data:image\/(png|jpe?g|webp|gif|heic|heif);base64,/i.test(imagen)) return res.status(400).json({ success: false, error: 'Formato de imagen no válido' });
+            imgUrl = await imagenes.subir(imagen, { carpeta: 'stories', ancho: 1080, alto: 1920 });
         }
         const story = new Story({ usuario: req.usuario, imagen: imgUrl, texto: texto?.trim() || '' });
         await story.save();
@@ -3248,6 +3338,24 @@ app.get('/', (req, res) => {
 // ============================================================
 
 function iniciarJobsAutomaticos() {
+    // Aviso único "verifica tu email" a las cuentas que aún no lo hicieron (en lotes)
+    async function avisarSinVerificar() {
+        try {
+            const pendientes = await Usuario.find({ emailVerificado: { $ne: true }, avisoVerifEnviado: { $ne: true }, suspendido: { $ne: true } }).select('usuario').limit(500).lean();
+            if (!pendientes.length) return;
+            await Notificacion.insertMany(pendientes.map(u => ({ destinatario: u.usuario, tipo: 'sistema', emisor: 'UpGames', itemTitle: 'Verifica tu email', mensaje: '📧 Confirma tu correo para proteger tu cuenta y poder retirar tus ganancias. Toca para reenviar el enlace.', leida: false, fecha: new Date() })), { ordered: false });
+            await Usuario.updateMany({ usuario: { $in: pendientes.map(u => u.usuario) } }, { $set: { avisoVerifEnviado: true } });
+            logger.info(`[verificación] Aviso enviado a ${pendientes.length} cuenta(s) sin email verificado`);
+        } catch (e) { logger.warn(`[verificación] avisarSinVerificar: ${e.message}`); }
+    }
+    setTimeout(avisarSinVerificar, 90000).unref();
+    setInterval(avisarSinVerificar, 6 * 60 * 60000).unref();
+
+    // Portadas externas → Cloudinary (poco a poco: 15 cada 20 min, primero al minuto de arrancar)
+    const migrar = () => imagenes.migrarPortadas(Juego).catch(e => logger.warn(`[imagenes] migración: ${e.message}`));
+    setTimeout(migrar, 60000).unref();
+    setInterval(migrar, 20 * 60000).unref();
+
 
     // JOB 2: Limpiar comentarios vacíos y duplicados (cada 24h)
     async function limpiarComentarios() {
@@ -3317,11 +3425,18 @@ function iniciarJobsAutomaticos() {
     async function autoVerificarUsuarios() {
         try {
             const usuarios = await Usuario.find({}).select('usuario listaSeguidores verificadoNivel').lean();
+            // Solo cuentan seguidores "reales": email verificado, 7+ días de antigüedad y fuera
+            // de la lista negra. Antes 100 cuentas recién creadas que se seguían entre sí
+            // desbloqueaban el nivel necesario para retirar dinero.
+            const reales = new Set((await Usuario.find({
+                emailVerificado: true, listaNegraAdmin: { $ne: true }, suspendido: { $ne: true },
+                fecha: { $lte: new Date(Date.now() - 7 * 864e5) },
+            }).select('usuario').lean()).map(u => u.usuario));
             const ops = [];
             const subieron = [];
 
             for (const user of usuarios) {
-                const seg = (user.listaSeguidores || []).length;
+                const seg = (user.listaSeguidores || []).filter(f => reales.has(f)).length;
                 let nivelMerecido = 0;
                 if (seg >= 1000) nivelMerecido = 3;
                 else if (seg >= 500)  nivelMerecido = 2;
@@ -3523,8 +3638,15 @@ const live = require('./rutas/live').registrar(app, server, {
     verificarToken, verificarAdmin, Usuario, Notificacion, logger, config, JWT_SECRET,
     estaSuspendido: u => adminPanel.estaSuspendido(u), getPayPalAccessToken,
 });
-// Acceso directo: US$1 o 100 monedas para saltarse la página puente
-require('./rutas/accesoDirecto').registrar(app, { verificarToken, Juego, Usuario, LiveTx: live.LiveTx, paypal: live.paypal, logger });
+// Acceso directo: US$1 o 100 monedas para saltarse la página puente (o gratis con un pase)
+const mercadoPago = require('./modulos/mercadopago').crear();
+const accesoDirecto = require('./rutas/accesoDirecto').registrar(app, { verificarToken, Juego, Usuario, LiveTx: live.LiveTx, paypal: live.paypal, mp: mercadoPago, logger });
+// Tienda: pases sin anuncios, "Mi plan", tarjeta con Mercado Pago, PayPal, saldo y monedas
+const tienda = require('./rutas/tienda').registrar(app, {
+    verificarToken, Usuario, LiveTx: live.LiveTx, Notificacion, paypal: live.paypal, mp: mercadoPago,
+    acceso: accesoDirecto, logger, apiUrlSelf: API_URL_SELF,
+});
+live.alRevertir(captureId => tienda.revertir(captureId, 'PayPal'));   // contracargos de pases pagados con PayPal
 // =================================================================================
 
 // ========== MANEJO DE ERRORES ==========
@@ -3536,6 +3658,19 @@ app.use((err, req, res, next) => {
     logger.error(`Error: ${err?.message || "unknown"}`);
     res.status(500).json({ error: "Error interno del servidor" });
 });
+
+// ========== APAGADO ORDENADO (cada deploy de Railway envía SIGTERM) ==========
+let apagando = false;
+function apagar(senal) {
+    if (apagando) return;
+    apagando = true;
+    logger.info(`[proceso] ${senal} recibido: cerrando conexiones…`);
+    live.io.close();                      // los clientes de Socket.IO se reconectan solos al nuevo proceso
+    server.close(() => mongoose.connection.close(false).finally(() => process.exit(0)));
+    setTimeout(() => process.exit(0), 8000).unref();
+}
+process.on('SIGTERM', () => apagar('SIGTERM'));
+process.on('SIGINT', () => apagar('SIGINT'));
 
 // ========== INICIAR SERVIDOR ==========
 const PORT = config.PORT;

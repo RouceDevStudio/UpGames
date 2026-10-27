@@ -70,6 +70,7 @@ function categoria(n) {
     if (['seguidor', 'favorito', 'comentario', 'logro'].includes(n.tipo)) return 'social';
     const t = n.itemTitle || '';
     if (t === 'En vivo') return 'publicaciones';
+    if (t === 'Verifica tu email' || t === 'Tu pase vence') return 'cuenta';
     if (t.startsWith('Mensaje')) return 'mensajes';
     if (t === 'Revisión' || t === 'Equipo') return 'cuenta';      // siempre (importa a tu cuenta)
     return 'anuncios';
@@ -92,6 +93,8 @@ function contenido(n) {
     const t = n.itemTitle || '';
     if (t.startsWith('Mensaje')) return { title: `Nuevo mensaje de ${e}`, body: recorta(msg || 'Toca para responder', 140), url: `${BASE}chats.html?usuario=${encodeURIComponent(n.emisor)}`, tag: `chat-${n.emisor}`, urgente: true };
     if (t === 'En vivo') return { title: `🔴 ${e} está en vivo`, body: recorta(msg || 'Toca para verlo ahora', 140), url: `${BASE}live.html?u=${encodeURIComponent(n.emisor)}`, tag: `live-${n.emisor}`, urgente: true };
+    if (t === 'Verifica tu email') return { title: '📧 Verifica tu email', body: recorta(msg, 160), url: `${BASE}biblioteca.html?verificar=1`, tag: 'verificar-email' };
+    if (t === 'Tu pase vence') return { title: '⏳ Tu pase sin anuncios vence pronto', body: recorta(msg.replace(/^⏳\s*/, ''), 180), url: `${BASE}biblioteca.html?plan=1`, tag: 'pase-vence' };
     if (t === 'Anuncio') return { title: '📢 UpGames', body: recorta(msg.replace(/^📢\s*/, ''), 200), url: `${BASE}biblioteca.html`, tag: `anuncio-${Date.now()}` };
     if (t === 'Revisión') return { title: 'Revisión de tu publicación', body: recorta(msg, 200), url: `${BASE}biblioteca.html?tab=perfil`, tag: `rev-${n.itemId}` };
     if (t === 'Equipo') return { title: '🛡️ Equipo UpGames', body: recorta(msg, 200), url: `${BASE}biblioteca.html`, tag: `equipo-${Date.now()}` };

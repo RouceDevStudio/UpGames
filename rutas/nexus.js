@@ -50,7 +50,7 @@ function registrar(app, deps) {
         const mensaje = String(req.body?.mensaje || '').trim();
         if (!mensaje) return res.status(400).json({ ok: false, error: 'Escribe un mensaje' });
         if (mensaje.length > 1500) return res.status(400).json({ ok: false, error: 'Mensaje demasiado largo (máx. 1500 caracteres)' });
-        const lim = usuario ? limUsuario(usuario) : limInvitado(String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip);
+        const lim = usuario ? limUsuario(usuario) : limInvitado(req.ip);
         if (lim) return res.status(429).json({ ok: false, error: lim });
 
         // Contexto de la pantalla (validado; el título del item se lee de la BD)

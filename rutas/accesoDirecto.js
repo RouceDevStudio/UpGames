@@ -18,17 +18,21 @@ const num = (v, d) => { const n = parseFloat(v); return Number.isFinite(n) ? n :
 const PRECIO_USD     = 1.00;
 const PRECIO_MONEDAS = Math.round(PRECIO_USD / L.MONEDA_USD);   // 100
 const PARTE_CREADOR  = Math.min(1, Math.max(0, num(process.env.ACCESO_CREADOR, 0.30)));
+// Con un pase activo, la primera vez que un usuario abre una publicación paga esto a su creador
+const PASE_CREADOR_USD = Math.max(0, num(process.env.PASE_CREADOR_USD, 0.01));
+const PASE_TOPE_DIA    = Math.max(0, num(process.env.PASE_TOPE_DIA, 30));   // descargas con pase que pagan al creador, por usuario y día
 
 const AccesoSchema = new mongoose.Schema({
     usuario: { type: String, required: true },
     juegoId: { type: String, required: true },
-    via:     { type: String, enum: ['monedas', 'tarjeta_paypal'], required: true },
+    via:     { type: String, enum: ['monedas', 'tarjeta_paypal', 'tarjeta_mp', 'saldo'], required: true },
     fecha:   { type: Date, default: Date.now },
 }, { collection: 'accesos_directos', timestamps: false });
 AccesoSchema.index({ usuario: 1, juegoId: 1 }, { unique: true });
 const Acceso = mongoose.models.Acceso || mongoose.model('Acceso', AccesoSchema);
 
-function registrar(app, { verificarToken, Juego, Usuario, LiveTx, paypal, logger }) {
+function registrar(app, { verificarToken, Juego, Usuario, LiveTx, paypal, mp, logger }) {
+    const tarjetaActiva = () => paypal.activo() || !!mp?.activo();
     const ok = (res, d) => res.json({ success: true, ...d });
     const err = (res, code, error, extra) => res.status(code).json({ success: false, error, ...extra });
     const r4 = n => Math.round(n * 10000) / 10000;
@@ -65,13 +69,15 @@ function registrar(app, { verificarToken, Juego, Usuario, LiveTx, paypal, logger
             if (!juego) return err(res, 404, 'Publicación no disponible');
             const [acc, u] = await Promise.all([
                 Acceso.exists({ usuario: req.usuario, juegoId: String(juego._id) }),
-                Usuario.findOne({ usuario: req.usuario }).select('monedas').lean(),
+                Usuario.findOne({ usuario: req.usuario }).select('monedas saldo planId planHasta solicitudPagoPendiente').lean(),
             ]);
             const propio = juego.usuario === req.usuario;
+            const pase = u?.planHasta && new Date(u.planHasta) > new Date() ? { plan: u.planId, hasta: u.planHasta } : null;
             ok(res, {
                 desbloqueado: !!acc || propio, link: acc || propio ? juego.link : undefined,
                 precioUsd: PRECIO_USD, precioMonedas: PRECIO_MONEDAS, monedas: u?.monedas || 0,
-                pagosActivos: paypal.activo(),
+                saldo: u?.solicitudPagoPendiente ? 0 : (u?.saldo || 0),
+                pase, pagosActivos: tarjetaActiva(),
             });
         } catch (e) { logger.error(`[acceso] estado: ${e.message}`); err(res, 500, 'Error al consultar el acceso'); }
     });
@@ -159,8 +165,53 @@ function registrar(app, { verificarToken, Juego, Usuario, LiveTx, paypal, logger
         }
     });
 
-    logger.info(`[acceso] Acceso directo activo · US$${PRECIO_USD} o ${PRECIO_MONEDAS} monedas · creador ${Math.round(PARTE_CREADOR * 100)}%`);
-    return { Acceso, PRECIO_USD, PRECIO_MONEDAS, PARTE_CREADOR };
+    /** Entrega un acceso ya cobrado (tarjeta, PayPal o saldo). Idempotente por ref. */
+    async function entregarPagado({ usuario, juegoId, ref, captureId = '', via, metodo }) {
+        const juego = await cargarJuego(juegoId);
+        if (!juego) { const e = new Error('Publicación no disponible'); e.status = 404; throw e; }
+        try {
+            const tx = await LiveTx.create(datosTx(juego, usuario, { ref, captureId, monedas: 0, metodo }));
+            await desbloquear(usuario, String(juego._id), via);
+            await abonarCreador(juego, tx);
+            logger.info(`[acceso] @${usuario} desbloqueó ${juego._id} (${metodo})`);
+        } catch (e) {
+            if (e.code !== 11000) throw e;   // ya entregado antes: devolver el enlace igual
+            await desbloquear(usuario, String(juego._id), via);
+        }
+        return { link: juego.link };
+    }
+
+    // Con un pase activo: enlace directo. El creador cobra PASE_CREADOR_USD una vez al
+    // día por usuario y publicación (retenido como los regalos) y la descarga le cuenta.
+    app.post('/acceso-directo/:id/pase', verificarToken, async (req, res) => {
+        try {
+            const juego = await cargarJuego(req.params.id);
+            if (!juego) return err(res, 404, 'Publicación no disponible');
+            const u = await Usuario.findOne({ usuario: req.usuario }).select('planHasta planId').lean();
+            if (!u?.planHasta || new Date(u.planHasta) <= new Date()) return err(res, 402, 'No tienes un pase activo', { sinPase: true });
+            // El creador cobra una vez por usuario y publicación, con tope diario por usuario:
+            // así un pase no sirve para "ordeñar" las publicaciones de un cómplice.
+            const hoy = new Date(); hoy.setUTCHours(0, 0, 0, 0);
+            const pagadasHoy = juego.usuario !== req.usuario && PASE_CREADOR_USD > 0
+                ? await LiveTx.countDocuments({ usuario: req.usuario, metodo: 'pase', fecha: { $gte: hoy } }) : Infinity;
+            if (pagadasHoy < PASE_TOPE_DIA) {
+                const retener = L.RETENCION_DIAS > 0;
+                try {
+                    await LiveTx.create({
+                        tipo: 'acceso', usuario: req.usuario, destinatario: juego.usuario, monedas: 0, usd: 0, metodo: 'pase', planId: u.planId,
+                        creadorUsd: PASE_CREADOR_USD, plataformaUsd: 0, juegoId: String(juego._id), ref: `pase:${req.usuario}:${juego._id}`,
+                        estado: retener ? 'retenida' : 'liberada', liberarEn: retener ? new Date(Date.now() + L.RETENCION_DIAS * 864e5) : null,
+                    });
+                    await Usuario.updateOne({ usuario: juego.usuario }, { $inc: retener ? { saldoRetenido: PASE_CREADOR_USD } : { saldo: PASE_CREADOR_USD } });
+                    Juego.updateOne({ _id: juego._id }, { $inc: { descargasEfectivas: 1 } }).catch(() => {});
+                } catch (e) { if (e.code !== 11000) throw e; }   // ya contó antes
+            }
+            ok(res, { link: juego.link, hasta: u.planHasta });
+        } catch (e) { logger.error(`[acceso] pase: ${e.message}`); err(res, 500, 'No se pudo abrir el enlace'); }
+    });
+
+    logger.info(`[acceso] Acceso directo activo · US$${PRECIO_USD} o ${PRECIO_MONEDAS} monedas · creador ${Math.round(PARTE_CREADOR * 100)}% · pase: US$${PASE_CREADOR_USD}/descarga al creador (máx. ${PASE_TOPE_DIA}/usuario/día)`);
+    return { Acceso, PRECIO_USD, PRECIO_MONEDAS, PARTE_CREADOR, entregarPagado, cargarJuego };
 }
 
 module.exports = { registrar, PRECIO_USD, PRECIO_MONEDAS };

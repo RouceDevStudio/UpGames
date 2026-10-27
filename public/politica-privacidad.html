@@ -87,7 +87,8 @@
     </ul>
     <h3>2.2.1 Pagos con tarjeta o PayPal (monedas y acceso directo)</h3>
     <ul>
-      <li><strong>Los datos de tu tarjeta los recibe y procesa exclusivamente PayPal</strong> en su formulario seguro (PCI DSS).
+      <li><strong>Los datos de tu tarjeta los reciben y procesan exclusivamente Mercado Pago o PayPal</strong> en sus formularios seguros (PCI DSS).
+        Para pagos con Mercado Pago, este puede pedirte tu documento de identidad y email, que se envían directamente a Mercado Pago.
         UpGames <strong>nunca</strong> ve, transmite ni guarda el número, la fecha de vencimiento ni el CVV.</li>
       <li>De cada pago guardamos: identificador de la orden y del cobro, monto, moneda, fecha, estado, qué compraste
         (paquete de monedas o enlace desbloqueado) y tu usuario.</li>
@@ -166,6 +167,7 @@
   <section class="lg-sec lg-card" id="terceros">
     <h2><span class="n">05</span>Terceros que pueden recibir datos</h2>
     <div class="lg-grid">
+      <div class="lg-tile"><b>💳 Mercado Pago</b>Procesa los pagos con tarjeta (recibe los datos de la tarjeta y de identificación directamente; nosotros no).</div>
       <div class="lg-tile"><b>💳 PayPal</b>Procesa los pagos con tarjeta o PayPal (recibe los datos de la tarjeta directamente; nosotros no) y los retiros a tu email de PayPal.</div>
       <div class="lg-tile"><b>📡 Servidores STUN/TURN</b>Google y Cloudflare ayudan a conectar el video en vivo; ven direcciones IP, no contenido.</div>
       <div class="lg-tile"><b>🗄️ MongoDB Atlas</b>Base de datos principal, cifrada en reposo.</div>
@@ -191,6 +193,7 @@
       <tr><td>Mensajes de chat</td><td>90 días</td><td>TTL automático</td></tr>
       <tr><td>Registros de actividad sospechosa</td><td>Mientras sean necesarios para la investigación</td><td>Módulo anti-fraude</td></tr>
       <tr><td>Historial de pagos, compras de monedas, regalos y accesos directos</td><td>7 años</td><td>Obligación fiscal y prevención de fraude</td></tr>
+      <tr><td>Pase sin anuncios (plan, vencimiento, preferencias de recordatorio)</td><td>Mientras exista la cuenta</td><td>Eliminación a petición</td></tr>
       <tr><td>Datos de cada live (sin video)</td><td>Mientras exista la cuenta</td><td>Eliminación a petición</td></tr>
       <tr><td>Chat de un live</td><td>Solo durante el directo</td><td>En memoria, nunca en la base de datos</td></tr>
       <tr><td>Registro de NEXUS</td><td>30 días (eventos de uso: 90 días)</td><td>Borrado a petición</td></tr>

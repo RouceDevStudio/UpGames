@@ -5277,3 +5277,49 @@ button.pf2-stat { cursor: pointer; }
   .eco-kpi-strip { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
   .eco-kpi-lbl { letter-spacing: .5px; }
 }
+
+/* ── Aviso de email sin verificar ── */
+.ug-verif { display: flex; align-items: center; gap: 10px; margin: 10px 14px 4px; padding: 11px 12px; border-radius: 14px; background: linear-gradient(135deg, rgba(255,204,77,.14), rgba(90,200,250,.08)); border: 1px solid rgba(255,204,77,.4); animation: ugVerifIn .35s ease; }
+.ug-verif[hidden] { display: none; }
+@keyframes ugVerifIn { from { opacity: 0; transform: translateY(-6px); } }
+.ug-verif-ic { font-size: 1.4rem; flex-shrink: 0; }
+.ug-verif-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ug-verif-txt b { font-size: .86rem; color: #fff; }
+.ug-verif-txt span { font-size: .74rem; color: #c9ccd6; line-height: 1.35; }
+.ug-verif-btn { flex-shrink: 0; padding: 9px 12px; border-radius: 10px; border: 0; background: #ffcc4d; color: #241a00; font-weight: 800; font-size: .76rem; cursor: pointer; font-family: inherit; }
+.ug-verif-btn:disabled { opacity: .6; cursor: default; }
+.ug-verif-x { flex-shrink: 0; width: 28px; height: 28px; border-radius: 8px; border: 0; background: transparent; color: #9aa0ae; font-size: .9rem; cursor: pointer; }
+.ug-verif.ok { border-color: rgba(50,213,131,.5); background: rgba(50,213,131,.1); }
+@media (max-width: 380px) { .ug-verif { flex-wrap: wrap; } .ug-verif-btn { margin-left: 34px; } }
+
+/* ── Mi plan (pase sin anuncios) ── */
+.eco-plan { margin: 6px 0 18px; padding: 16px; border-radius: 18px; background: linear-gradient(135deg, rgba(90,200,250,.13), rgba(167,139,250,.08)); border: 1.5px solid rgba(90,200,250,.45); }
+.eco-plan-h { display: flex; align-items: center; gap: 12px; }
+.eco-plan-ic { width: 46px; height: 46px; border-radius: 14px; background: #5AC8FA; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; }
+.eco-plan-h b { display: block; font-size: 1.02rem; color: #fff; }
+.eco-plan-h small { display: block; font-size: .78rem; color: #c3cad6; margin-top: 2px; }
+.eco-plan-estado { margin-left: auto; padding: 3px 9px; border-radius: 99px; font-size: .66rem; font-weight: 800; letter-spacing: .05em; flex-shrink: 0; }
+.eco-plan-estado.on { background: rgba(50,213,131,.18); color: #32D583; }
+.eco-plan-estado.off { background: rgba(255,255,255,.08); color: #A3A8B6; }
+.eco-plan-bar { height: 7px; border-radius: 7px; background: rgba(255,255,255,.08); margin: 14px 0 6px; overflow: hidden; }
+.eco-plan-bar i { display: block; height: 100%; background: linear-gradient(90deg, #5AC8FA, #32D583); border-radius: 7px; }
+.eco-plan-acc { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.eco-plan-acc button { padding: 12px; border-radius: 12px; border: 0; font-weight: 800; font-size: .85rem; cursor: pointer; font-family: inherit; }
+.eco-plan-acc .p { background: #5AC8FA; color: #001522; }
+.eco-plan-acc .s { background: rgba(255,255,255,.08); color: #fff; border: 1px solid rgba(255,255,255,.14); }
+.eco-plan-acc button:only-child { grid-column: 1 / -1; }
+.eco-plan-ventajas { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 5px; font-size: .82rem; color: #d6d9e0; }
+.eco-plan-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 0; border-top: 1px solid rgba(255,255,255,.08); margin-top: 12px; font-size: .84rem; color: #d6d9e0; }
+.eco-plan-row input { width: 42px; height: 24px; accent-color: #32D583; }
+.eco-plan-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.eco-plan-stats div { padding: 10px; border-radius: 12px; background: rgba(0,0,0,.2); text-align: center; }
+.eco-plan-stats b { display: block; font-size: 1.1rem; color: #fff; }
+.eco-plan-stats small { font-size: .68rem; color: #A3A8B6; }
+.eco-plan-nota { font-size: .74rem; color: #A3A8B6; line-height: 1.5; margin: 10px 0 0; }
+.eco-plan-hist { margin-top: 12px; }
+.eco-plan-hist summary { cursor: pointer; font-size: .82rem; font-weight: 700; color: #5AC8FA; padding: 6px 0; }
+.eco-plan-hist ul { list-style: none; padding: 0; margin: 6px 0 0; display: grid; gap: 6px; }
+.eco-plan-hist li { display: flex; justify-content: space-between; gap: 10px; font-size: .76rem; color: #c3cad6; padding: 8px 10px; border-radius: 10px; background: rgba(0,0,0,.18); }
+.eco-plan-hist li span:last-child { white-space: nowrap; color: #fff; font-weight: 700; }
+.eco-plan-hist li.rev span:last-child { color: #ff8a8a; text-decoration: line-through; }
+#eco-plan-pago { margin-top: 12px; }

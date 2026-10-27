@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "node test/nexusPublish.test.js && node test/adminPanel.test.js && node test/revisionIA.test.js && node test/series.test.js && node test/nexus.test.js && node test/live.test.js && node test/paypal.test.js"
+    "test": "node test/nexusPublish.test.js && node test/adminPanel.test.js && node test/revisionIA.test.js && node test/series.test.js && node test/nexus.test.js && node test/live.test.js && node test/paypal.test.js && node test/tienda.test.js"
   },
   "keywords": [
     "games",
@@ -30,8 +30,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.0.3",
     "multer": "^1.4.5-lts.1",
-    "node-cron": "^3.0.3",
-    "nodemailer": "^6.9.13",
+    "nodemailer": "^10.2.1",
     "socket.io": "^4.8.1",
     "web-push": "^3.6.7",
     "winston": "^3.11.0"

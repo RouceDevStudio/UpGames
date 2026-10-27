@@ -37,7 +37,7 @@ const LiveSchema = new mongoose.Schema({
 LiveSchema.index({ creador: 1 }, { unique: true, partialFilterExpression: { estado: 'en_vivo' }, name: 'un_live_activo' });
 
 const TxSchema = new mongoose.Schema({
-    tipo:         { type: String, enum: ['compra', 'regalo', 'acceso'], required: true },   // acceso = saltar la página puente
+    tipo:         { type: String, enum: ['compra', 'regalo', 'acceso', 'plan'], required: true },   // acceso = saltar la página puente · plan = pase sin anuncios
     usuario:      { type: String, required: true, index: true },   // quien paga
     destinatario: { type: String, default: '', index: true },      // creador (regalos)
     monedas:      { type: Number, required: true },
@@ -48,6 +48,8 @@ const TxSchema = new mongoose.Schema({
     cantidad:     { type: Number, default: 1 },
     liveId:       { type: String, default: '', index: true },
     juegoId:      { type: String, default: '' },                   // acceso directo
+    planId:       { type: String, default: '' },                   // pase sin anuncios
+    metodo:       { type: String, default: '' },                   // tarjeta_mp | paypal | monedas | saldo | pase
     ref:          { type: String, required: true, unique: true },  // idempotencia (orden PayPal / clave del regalo)
     captureId:    { type: String, default: '', index: true },
     estado:       { type: String, enum: ['completada', 'retenida', 'liberada', 'revertida'], default: 'completada' },
@@ -354,7 +356,7 @@ function registrar(app, server, deps) {
     // carga…): deja el error real en el log para poder corregirlo. Limitado por IP.
     const limDiag = L.limitador(5, 0.05);
     app.post('/live/diag', (req, res) => {
-        const ip = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+        const ip = req.ip;
         if (!limDiag(ip)) return res.status(429).json({ success: false });
         const b = req.body || {};
         const t = (v, n) => String(v ?? '').replace(/[\r\n\t]+/g, ' ').slice(0, n);
@@ -547,7 +549,7 @@ function registrar(app, server, deps) {
                 return res.sendStatus(200);
             }
             const compra = captureId && await LiveTx.findOneAndUpdate({ tipo: 'compra', captureId, estado: 'completada' }, { $set: { estado: 'revertida' } }, { new: true }).lean();
-            if (!compra) return res.sendStatus(200);
+            if (!compra) { if (captureId && reversorExtra) await reversorExtra(captureId).catch(() => {}); return res.sendStatus(200); }
             await Usuario.updateOne({ usuario: compra.usuario }, [{ $set: { monedas: { $max: [0, { $subtract: [{ $ifNull: ['$monedas', 0] }, compra.monedas] }] } } }]);
             // Todo lo que pagó con monedas y sigue retenido (regalos y accesos directos)
             const regalos = await LiveTx.find({ tipo: { $in: ['regalo', 'acceso'] }, usuario: compra.usuario, estado: 'retenida', captureId: '' }).lean();
@@ -683,7 +685,8 @@ function registrar(app, server, deps) {
 
     // ¿Tiene ingresos de regalos o accesos directos ya liberados? (habilita el retiro sin descargas)
     const tieneIngresosLive = usuario => LiveTx.exists({ tipo: { $in: ['regalo', 'acceso'] }, destinatario: usuario, estado: 'liberada' }).then(Boolean).catch(() => false);
-    return { io, Live, LiveTx, finalizar, tieneIngresosLive, paypal };
+    let reversorExtra = null;   // la tienda revierte pases (registrado después)
+    return { io, Live, LiveTx, finalizar, tieneIngresosLive, paypal, alRevertir: fn => { reversorExtra = fn; } };
 }
 
 module.exports = { registrar, LiveSchema, TxSchema };

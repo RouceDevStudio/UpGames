@@ -675,6 +675,8 @@
         const _urlP       = new URLSearchParams(window.location.search);
         const _resetToken = _urlP.get('reset_token');
         const _verifStatus= _urlP.get('verif');
+        // Motivo de un cierre de sesión forzado (contraseña cambiada en otro dispositivo, token vencido)
+        try { const m = sessionStorage.getItem('ug_sesion_msg'); if (m) { sessionStorage.removeItem('ug_sesion_msg'); setTimeout(() => showMsg('🔒 ' + m, '#ffcc00'), 300); } } catch (_) {}
         const _verifUser  = _urlP.get('u');
         // Limpiar URL
         if (_resetToken || _verifStatus) history.replaceState({}, '', window.location.pathname);
@@ -697,6 +699,8 @@
             // 2. Mensajes de verificación de email
             if (_verifStatus === 'ok') {
                 showMsg('✅ Email verificado' + (_verifUser ? ', @'+_verifUser : '') + '. Ya puedes iniciar sesión.', '#32D583');
+                // Con la sesión ya iniciada (verificó desde el mismo dispositivo): volver a la biblioteca
+                if (localStorage.getItem('user_admin') && localStorage.getItem('token')) setTimeout(() => location.replace('./public/biblioteca.html?verif=ok'), 1400);
             } else if (_verifStatus === 'error') {
                 showMsg('❌ El link de verificación es inválido o expiró.', '#ff4343');
             }

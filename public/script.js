@@ -6,6 +6,29 @@
 
 const API_URL = "https://upgames-production.up.railway.app";
 
+// ── Sesión caducada o revocada: salir limpio en vez de quedar "conectado" con todo fallando ──
+// (pasa al cambiar la contraseña en otro dispositivo, o cuando el token vence a los 30 días)
+(function vigilarSesion() {
+  const original = window.fetch.bind(window);
+  let saliendo = false;
+  window.fetch = async (input, init = {}) => {
+    const r = await original(input, init);
+    try {
+      const url = typeof input === 'string' ? input : input?.url || '';
+      const auth = init?.headers && (init.headers.Authorization || init.headers.authorization || (init.headers.get && init.headers.get('Authorization')));
+      if (r.status === 401 && auth && url.startsWith(API_URL) && !saliendo) {
+        const d = await r.clone().json().catch(() => ({}));
+        if (['SESSION_REVOKED', 'TOKEN_EXPIRED', 'TOKEN_INVALID'].includes(d.code)) {
+          saliendo = true;
+          try { localStorage.removeItem('token'); localStorage.removeItem('user_admin'); sessionStorage.setItem('ug_sesion_msg', d.error || 'Vuelve a iniciar sesión'); } catch (_) {}
+          location.replace('../index.html');
+        }
+      }
+    } catch (_) {}
+    return r;
+  };
+})();
+
 // ── SAFE LOCALSTORAGE (modo incógnito estricto no rompe la app) ──────────
 const LS = {
   get(k, fallback='') {
@@ -1425,7 +1448,7 @@ function switchTab(t) {
   economiaView.classList.toggle('active', t==='economia');
   profileView.classList.toggle('active',  t==='profile');
   if(t==='favs')     renderFavs();
-  if(t==='economia') { renderEconomia(); pfStartEcoPolling(); }
+  if(t==='economia') { renderEconomia(); pfStartEcoPolling(); ecoCargarPlan(); }
   else               { pfStopEcoPolling(); }
   if(t==='profile')  renderProfile();
 }
@@ -4908,6 +4931,8 @@ function ugnMeta(n) {
   if (n.tipo === 'sistema') {
     if (t.startsWith('Mensaje')) return { ic: 'chatbubbles', c: '#5AC8FA', cat: 'mensajes' };
     if (t === 'En vivo') return { ic: 'radio', c: '#ff4d6d', cat: 'social' };
+    if (t === 'Verifica tu email') return { ic: 'mail-unread', c: '#ffcc4d', cat: 'anuncios' };
+    if (t === 'Tu pase vence') return { ic: 'star', c: '#5AC8FA', cat: 'anuncios' };
     if (t === 'Anuncio') return { ic: 'megaphone', c: '#32D583', cat: 'anuncios' };
     if (t === 'Revisión') return { ic: 'shield-checkmark', c: '#ff8a8d', cat: 'anuncios' };
     if (t === 'Equipo') return { ic: 'shield-half', c: '#a78bfa', cat: 'anuncios' };
@@ -4930,6 +4955,8 @@ function ugnTexto(n) {
   }
   if (t.startsWith('Mensaje')) return { quien: e, accion: 'te envió un mensaje', sub: 'Toca para responder' };
   if (t === 'En vivo') return { quien: e, accion: 'está en vivo 🔴', sub: msg || 'Toca para verlo' };
+  if (t === 'Verifica tu email') return { quien: 'Verifica tu email', accion: '', sub: msg.replace(/^📧\s*/, '') };
+  if (t === 'Tu pase vence') return { quien: 'Tu pase vence pronto', accion: '', sub: msg.replace(/^⏳\s*/, '') };
   if (t === 'Anuncio') return { quien: 'UpGames', accion: '', sub: msg.replace(/^📢\s*/, ''), anuncio: true };
   if (t === 'Revisión') return { quien: 'Revisión', accion: '', sub: msg, anuncio: true };
   if (t === 'Equipo') return { quien: 'Equipo UpGames', accion: '', sub: msg, anuncio: true };
@@ -5060,6 +5087,8 @@ async function ugnAbrir(n) {
   }
   const t = n.itemTitle || '';
   if (n.tipo === 'sistema' && t.startsWith('Mensaje')) { location.href = `./chats.html?usuario=${encodeURIComponent(n.emisor || '')}`; return; }
+  if (n.tipo === 'sistema' && t === 'Verifica tu email') { ugnCerrar(); window.ugVerifMostrar?.(); return; }
+  if (n.tipo === 'sistema' && t === 'Tu pase vence') { ugnCerrar(); switchTab('economia'); setTimeout(() => ecoCargarPlan(true), 500); return; }
   if (n.tipo === 'sistema' && t === 'En vivo') { location.href = `./live.html?u=${encodeURIComponent(n.emisor || '')}`; return; }
   if (n.tipo === 'seguidor') { location.href = `./perfil-publico.html?u=${encodeURIComponent(n.emisor || '')}`; return; }
   if (t === 'Revisión') { ugnCerrar(); switchTab('profile'); return; }
@@ -5564,17 +5593,102 @@ async function pfLoadLogros() {
 
 // ── Economía: tienda de monedas con tarjeta (carga el procesador solo al abrirla) ──
 let _ugPagosJs = null;
+const ugPagosListo = () => (_ugPagosJs = _ugPagosJs || new Promise((ok, ko) => {
+  if (window.UGPagos) return ok();
+  const s = document.createElement('script');
+  s.src = './upgames-pagos.js?v=20261027t'; s.onload = ok; s.onerror = () => { _ugPagosJs = null; ko(); };
+  document.head.appendChild(s);
+}));
 function ecoAbrirTienda() {
   const box = document.getElementById('eco-tienda');
   if (!box) return;
   if (!LS.get('token')) { toast('Inicia sesión para comprar'); return; }
   box.innerHTML = '<div class="eco-spin"><ion-icon name="sync-outline"></ion-icon></div>';
-  _ugPagosJs = _ugPagosJs || new Promise((ok, ko) => {
-    const s = document.createElement('script');
-    s.src = './upgames-pagos.js?v=20261027r'; s.onload = ok; s.onerror = () => { _ugPagosJs = null; ko(); };
-    document.head.appendChild(s);
-  });
-  _ugPagosJs.then(() => window.UGPagos.tienda(box, {
+  ugPagosListo().then(() => window.UGPagos.tienda(box, {
     alComprar: d => { toast(`✅ +${d.acreditadas} monedas`); pfLoadEconomia(); },
   })).catch(() => { box.innerHTML = '<button type="button" class="eco-pay-open" onclick="ecoAbrirTienda()">Reintentar</button>'; });
+}
+
+
+// ── Verificación de email: aviso con reenvío (solo a quien aún no verificó) ──
+(function ugVerif() {
+  const box = document.getElementById('ug-verif');
+  const token = LS.get('token');
+  if (!box || !token) return;
+  const H = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const forzado = new URLSearchParams(location.search).get('verificar') === '1';
+  let oculto = false; try { oculto = Date.now() - (+localStorage.getItem('ug_verif_oculto') || 0) < 864e5; } catch (_) {}
+  function mostrar(email) {
+    if (email) document.getElementById('ug-verif-sub').textContent = `Te enviaremos un enlace a ${email} para proteger tu cuenta y desbloquear los retiros.`;
+    box.hidden = false;
+    if (forzado) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+  window.ugVerifMostrar = () => fetch(`${API_URL}/auth/email-estado`, { headers: H }).then(r => r.json()).then(d => { if (d.success && !d.verificado) mostrar(d.email); else if (d.verificado) toast('✅ Tu email ya está verificado'); }).catch(() => {});
+  if (!oculto || forzado) setTimeout(window.ugVerifMostrar, 1800);
+  document.getElementById('ug-verif-x').onclick = () => { box.hidden = true; try { localStorage.setItem('ug_verif_oculto', String(Date.now())); } catch (_) {} };
+  document.getElementById('ug-verif-btn').onclick = async e => {
+    const b = e.currentTarget; b.disabled = true; b.textContent = 'Enviando…';
+    try {
+      const d = await fetch(`${API_URL}/auth/email-reenviar`, { method: 'POST', headers: H }).then(r => r.json());
+      if (d.yaVerificado) { box.hidden = true; toast('✅ Tu email ya estaba verificado'); return; }
+      if (!d.success) throw new Error(d.error);
+      box.classList.add('ok');
+      document.getElementById('ug-verif-sub').textContent = `Listo: revisa ${d.email} (también la carpeta de spam) y toca el enlace.`;
+      b.textContent = 'Enviado ✓';
+      setTimeout(() => { b.disabled = false; b.textContent = 'Reenviar'; }, 120000);
+    } catch (err) { toast(err.message || 'No se pudo enviar el correo'); b.disabled = false; b.textContent = 'Reintentar'; }
+  };
+  // Volver de verificar: avisar y ocultar
+  if (new URLSearchParams(location.search).get('verif') === 'ok') { toast('✅ ¡Email verificado!'); box.hidden = true; }
+})();
+
+
+// ── Mi plan: pase sin anuncios (ver, renovar, cambiar, recordatorio, historial) ──
+const ECO_METODO = { tarjeta_mp: 'Tarjeta', paypal: 'PayPal', saldo: 'Saldo', monedas: 'Monedas', '': '—' };
+async function ecoCargarPlan(desplazar) {
+  const box = document.getElementById('eco-plan');
+  if (!box || !LS.get('token')) return;
+  try {
+    await ugPagosListo();
+    const d = await window.UGPagos.api('/tienda/mi-plan');
+    const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const fecha = f => new Date(f).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
+    const p = d.plan;
+    try { p ? localStorage.setItem('ug_pase_hasta', localStorage.getItem('user_admin') + '|' + (+new Date(p.hasta))) : localStorage.removeItem('ug_pase_hasta'); } catch (_) {}   // la página puente no carga anuncios con pase
+    const concepto = h => h.tipo === 'plan' ? (d.planes.find(x => x.id === h.planId)?.nombre || 'Pase') : h.tipo === 'acceso' ? 'Acceso directo a un enlace' : `${h.monedas} monedas`;
+    const monto = h => h.metodo === 'monedas' ? `🪙 ${h.monedas}` : `US$${(h.usd || 0).toFixed(2)}`;
+    box.innerHTML = `
+      <div class="eco-plan-h">
+        <div class="eco-plan-ic">⭐</div>
+        <div><b>${p ? esc(p.nombre) : 'Sin pase activo'}</b><small>${p ? `Vence el ${fecha(p.hasta)} · ${p.diasRestantes} día${p.diasRestantes === 1 ? '' : 's'}` : (d.vencido ? `Tu ${esc(d.vencido.nombre || 'pase')} venció el ${fecha(d.vencido.hasta)}` : 'Navega sin anuncios y abre cada enlace al instante')}</small></div>
+        <span class="eco-plan-estado ${p ? 'on' : 'off'}">${p ? 'ACTIVO' : 'INACTIVO'}</span>
+      </div>
+      ${p ? `<div class="eco-plan-bar"><i style="width:${Math.max(4, Math.min(100, p.diasRestantes / p.dias * 100))}%"></i></div>` : `
+      <ul class="eco-plan-ventajas"><li>⚡ Enlaces directos: sin los 30 s de espera</li><li>🚫 Sin la publicidad de la página puente</li><li>💚 Los creadores siguen cobrando por cada descarga</li></ul>`}
+      <div class="eco-plan-acc">
+        ${p ? `<button class="p" data-a="renovar">Renovar (+${p.dias} días)</button><button class="s" data-a="cambiar">Cambiar de plan</button>` : `<button class="p" data-a="cambiar">${d.vencido ? 'Renovar mi pase' : 'Ver planes'}</button>`}
+      </div>
+      <div id="eco-plan-pago"></div>
+      ${p ? `<div class="eco-plan-stats"><div><b>${d.descargasConPase30d}</b><small>Enlaces abiertos con el pase (30 días)</small></div><div><b>${d.accesosComprados}</b><small>Accesos directos comprados</small></div></div>` : ''}
+      <label class="eco-plan-row"><span>Avisarme 2 días antes de que venza</span><input type="checkbox" id="eco-plan-rec" ${d.recordatorio ? 'checked' : ''}></label>
+      <p class="eco-plan-nota">🔁 <b>Sin cobros automáticos:</b> nunca te cobramos sin que lo pidas. Renovar o cambiar de plan suma los días al vencimiento actual; si no renuevas, el pase simplemente vence y vuelves a la página puente gratuita.</p>
+      ${d.historial.length ? `<details class="eco-plan-hist"><summary>Historial de compras (${d.historial.length})</summary><ul>${d.historial.map(h => `<li class="${h.estado === 'revertida' ? 'rev' : ''}"><span>${fecha(h.fecha)} · ${esc(concepto(h))} · ${esc(ECO_METODO[h.metodo] || h.metodo || '—')}</span><span>${monto(h)}</span></li>`).join('')}</ul></details>` : ''}`;
+    const pago = document.getElementById('eco-plan-pago');
+    const alComprar = () => { toast('✅ ¡Tu pase está activo!'); ecoCargarPlan(); pfLoadEconomia(); };
+    box.querySelectorAll('[data-a]').forEach(b => b.onclick = () => {
+      box.querySelectorAll('[data-a]').forEach(x => x.classList.toggle('s', x !== b));
+      if (b.dataset.a === 'renovar') window.UGPagos.pagar(pago, { producto: `plan:${p.id}`, estado: d, alExito: alComprar });
+      else window.UGPagos.planes(pago, { estado: d, alComprar });
+      pago.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+    document.getElementById('eco-plan-rec').onchange = e => window.UGPagos.api('/tienda/mi-plan/recordatorio', { method: 'PUT', body: { activo: e.target.checked } })
+      .then(() => toast(e.target.checked ? 'Te avisaremos antes de que venza' : 'Recordatorio desactivado')).catch(() => toast('No se pudo guardar'));
+    if (desplazar) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    box.innerHTML = '<p style="font-size:.82rem;color:#A3A8B6;text-align:center">No se pudo cargar tu plan. <a href="#" onclick="ecoCargarPlan();return false" style="color:#5AC8FA">Reintentar</a></p>';
+  }
+}
+// Enlace directo a Mi plan: biblioteca.html?plan=1 (desde el puente o el aviso de vencimiento)
+if (new URLSearchParams(location.search).get('plan') === '1') {
+  setTimeout(() => { try { switchTab('economia'); } catch (_) {} setTimeout(() => ecoCargarPlan(true), 600); }, 1500);
 }
