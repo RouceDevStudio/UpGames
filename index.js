@@ -1519,6 +1519,26 @@ app.get('/admin/payments-pending', verificarAdmin, async (req, res) => {
     }
 });
 
+// GET /admin/items/:id/analisis-ia — recomendación de Nexus para revisar (caché 6 h; ?forzar=1 rehace)
+const revisionIA = require('./modulos/revisionIA');
+app.get('/admin/items/:id/analisis-ia', verificarAdmin, [param('id').isMongoId()], async (req, res) => {
+    try {
+        if (!validationResult(req).isEmpty()) return res.status(400).json({ success: false, error: 'ID inválido' });
+        const item = await Juego.findById(req.params.id).lean();
+        if (!item) return res.status(404).json({ success: false, error: 'Publicación no encontrada' });
+        const previo = item.analisisIA;
+        if (previo && req.query.forzar !== '1' && Date.now() - new Date(previo.fecha) < 6 * 3600e3) return res.json({ success: true, analisis: previo, cache: true });
+        const analisis = await revisionIA.analizar(item, { Juego, Usuario, errorLinkPublicacion, gameDetector, nexusClient, logger });
+        // timestamps:false → no reinicia el plazo de revisión (JOB 4 usa updatedAt)
+        await Juego.updateOne({ _id: item._id }, { $set: { analisisIA: analisis } }, { timestamps: false });
+        logger.info(`[revisionIA] "${item.title}" → ${analisis.decision} (${analisis.puntos} pts, IA: ${analisis.ia?.fuente || 'no'})`);
+        res.json({ success: true, analisis, cache: false });
+    } catch (e) {
+        logger.error(`[revisionIA] ${e.message}`);
+        res.status(500).json({ success: false, error: 'No se pudo analizar la publicación' });
+    }
+});
+
 app.put("/admin/items/:id", verificarAdmin, [
     param('id').isMongoId(), body('title').optional().trim().isLength({ max: 200 }),
     body('description').optional().trim().isLength({ max: 1000 }), body('link').optional().trim(),
@@ -1531,8 +1551,16 @@ app.put("/admin/items/:id", verificarAdmin, [
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: "Datos inválidos", details: errors.array() });
         const updates = {};
         ['title', 'description', 'link', 'image', 'images', 'category', 'status', 'linkStatus', 'reportes'].forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
+        if (updates.status === 'rechazado') updates.motivoRechazo = String(req.body.motivo || '').trim().slice(0, 300);
+        const antes = await Juego.findById(req.params.id).select('status').lean();
         const item = await Juego.findByIdAndUpdate(req.params.id, { $set: updates }, { new: true, runValidators: true });
         if (!item) return res.status(404).json({ success: false, error: "Item no encontrado" });
+        // Avisar al autor cuando su publicación se rechaza (antes desaparecía sin explicación)
+        if (updates.status === 'rechazado' && antes?.status !== 'rechazado') {
+            const motivo = updates.motivoRechazo ? `: ${updates.motivoRechazo}` : '. Revisa las normas de publicación y vuelve a intentarlo.';
+            Notificacion.create({ destinatario: item.usuario, tipo: 'sistema', emisor: 'UpGames', itemId: item._id.toString(), itemTitle: 'Revisión',
+                mensaje: `❌ Tu publicación “${String(item.title).replace(/[<>&"']/g, '')}” no fue aprobada${motivo.replace(/[<>&"']/g, '')}` }).catch(() => {});
+        }
         logger.info(`ADMIN: Item ${item._id} actualizado`);
         res.json({ success: true, item });
     } catch (error) {

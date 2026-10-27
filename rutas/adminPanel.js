@@ -96,7 +96,7 @@ function limiteRevision(req) {
     if (req.method === 'PUT' && /^\/admin\/items\/bulk-action$/.test(req.path))
         return req.body?.action === 'eliminar' ? 'Eliminar entradas requiere el permiso "Contenido"' : null;
     if (req.method === 'PUT' && /^\/admin\/items\/[^/]+$/.test(req.path)) {
-        const extra = Object.keys(req.body || {}).filter(k => !['status', 'linkStatus', 'reportes'].includes(k));
+        const extra = Object.keys(req.body || {}).filter(k => !['status', 'linkStatus', 'reportes', 'motivo'].includes(k));
         return extra.length ? 'Tu rol solo permite cambiar el estado de las entradas' : null;
     }
     return null;

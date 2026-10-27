@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "node test/nexusPublish.test.js && node test/adminPanel.test.js"
+    "test": "node test/nexusPublish.test.js && node test/adminPanel.test.js && node test/revisionIA.test.js"
   },
   "keywords": [
     "games",
