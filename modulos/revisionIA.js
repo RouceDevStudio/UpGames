@@ -185,7 +185,9 @@ async function analizar(item, deps) {
         Juego.find({ _id: { $ne: item._id }, link: item.link, createdAt: { $lt: item.createdAt || new Date() } }).select('title usuario status').limit(3).lean(),
         Juego.find({ _id: { $ne: item._id }, createdAt: { $lt: item.createdAt || new Date() }, title: { $regex: `^${escRegex(String(item.title || '').trim())}$`, $options: 'i' } }).select('title usuario').limit(3).lean(),
     ]);
-    if (mismoLink.length) add('bad', 'duplicado', `El mismo enlace ya está publicado por ${mismoLink.map(j => '@' + j.usuario).join(', ')}`, -25);
+    const ajenos = [...new Set(mismoLink.filter(j => j.usuario !== item.usuario).map(j => '@' + j.usuario))];
+    if (ajenos.length) add('bad', 'duplicado', `El mismo enlace ya está publicado por ${ajenos.join(', ')} (posible copia de contenido ajeno)`, -25);
+    else if (mismoLink.length) add('warn', 'duplicado', `El autor ya usó este mismo enlace en ${mismoLink.length} publicación(es) anterior(es)`, -8);
     else if (mismoTitulo.some(j => j.usuario !== item.usuario)) add('warn', 'duplicado', `Ya existe otra publicación con el mismo título (de ${mismoTitulo.map(j => '@' + j.usuario).join(', ')})`, -10);
     else if (mismoTitulo.length) add('info', 'duplicado', 'El autor ya tiene otra publicación con este título (¿actualización?)', -3);
     else add('ok', 'duplicado', 'No hay duplicados', 3);
@@ -228,7 +230,7 @@ async function analizar(item, deps) {
     let reglas = duros.length ? 'rechazar' : puntos >= 70 ? 'aprobar' : puntos < 40 ? 'rechazar' : 'revisar';
 
     // ── 8. IA ───────────────────────────────────────────────────
-    const ia = await opinionIA({ nexusClient, item, hechos, logger }).catch(() => null);
+    const ia = deps.sinIA ? null : await opinionIA({ nexusClient, item, hechos, logger }).catch(() => null);
     let decision = reglas, confianza;
     if (duros.length) { decision = 'rechazar'; confianza = 0.95; }
     else if (ia) {

@@ -347,6 +347,41 @@ body:not(.is-owner) .owner-only{display:none!important}
 .ia-prev{display:flex;gap:12px;margin-bottom:10px}.ia-prev img{width:120px;height:76px;object-fit:cover;border-radius:10px;background:#06070a;flex-shrink:0}
 .bar-p{height:6px;border-radius:6px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:6px}.bar-p i{display:block;height:100%;border-radius:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Nexus: asistente de administración ── */
+.nx-fab{position:fixed;right:20px;bottom:calc(22px + var(--safe-b));z-index:65;display:flex;align-items:center;gap:8px;padding:12px 16px 12px 12px;border-radius:999px;border:none;cursor:pointer;color:#fff;font-weight:800;font-size:.86rem;
+  background:linear-gradient(135deg,#7c5cff,#5AC8FA);box-shadow:0 10px 30px rgba(124,92,255,.45);transition:transform .15s}
+.nx-fab:hover{transform:translateY(-2px)}.nx-fab .nx-star{width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:1rem}
+.nx-fab .nx-dot{position:absolute;top:2px;right:2px;min-width:18px;height:18px;border-radius:999px;background:var(--bad);font-size:.66rem;display:none;align-items:center;justify-content:center;padding:0 4px}
+.nx-dock{position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);z-index:7000;display:flex;flex-direction:column;transform:translateX(105%);transition:transform .3s var(--ease);
+  background:rgba(16,18,26,.92);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border-left:1px solid rgba(167,139,250,.3);box-shadow:-20px 0 60px rgba(0,0,0,.5)}
+.nx-dock.open{transform:none}
+.nx-hd{display:flex;align-items:center;gap:10px;padding:14px 14px 12px;border-bottom:1px solid var(--line)}
+.nx-av{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;color:#fff;background:linear-gradient(135deg,#7c5cff,#5AC8FA);box-shadow:0 6px 18px rgba(124,92,255,.4);flex-shrink:0}
+.nx-hd b{display:block;font-size:.95rem}.nx-hd small{display:block;font-size:.72rem;color:var(--tx3)}
+.nx-scroll{flex:1;overflow-y:auto;padding:14px}
+.nx-brief{padding:14px;border-radius:16px;background:linear-gradient(135deg,rgba(124,92,255,.14),rgba(90,200,250,.06));border:1px solid rgba(167,139,250,.3);margin-bottom:12px}
+.nx-brief p{margin:0 0 10px;font-size:.86rem;line-height:1.5}
+.nx-act{display:flex;gap:10px;align-items:flex-start;width:100%;padding:9px 10px;margin-top:6px;border-radius:12px;border:1px solid var(--line);background:rgba(0,0,0,.22);color:var(--tx);font-size:.8rem;text-align:left;cursor:pointer;line-height:1.35}
+.nx-act:hover{border-color:var(--line2)}.nx-act .p{flex-shrink:0;width:7px;height:7px;border-radius:50%;margin-top:6px}
+.nx-act .p.alta{background:var(--bad);box-shadow:0 0 0 3px rgba(255,90,95,.2)}.nx-act .p.media{background:var(--warn)}.nx-act .p.baja{background:var(--tx3)}
+.nx-act>ion-icon{margin-left:auto;color:var(--tx3);flex-shrink:0;margin-top:2px}
+.nx-quick{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 12px}
+.nx-quick button{padding:7px 11px;border-radius:999px;border:1px solid rgba(167,139,250,.35);background:rgba(124,92,255,.08);color:#d4c8ff;font-size:.74rem;font-weight:600;cursor:pointer}
+.nx-msg{margin:10px 0;display:flex;gap:8px}.nx-msg.yo{justify-content:flex-end}
+.nx-bub{max-width:88%;padding:10px 12px;border-radius:16px;font-size:.84rem;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.nx-msg.yo .nx-bub{background:var(--grad);color:#06140c;border-bottom-right-radius:6px}
+.nx-msg.nx .nx-bub{background:rgba(255,255,255,.06);border:1px solid var(--line);border-bottom-left-radius:6px}
+.nx-msg.nx .nx-bub b{color:#d4c8ff}
+.nx-src{display:block;font-size:.66rem;color:var(--tx3);margin-top:6px;white-space:normal}
+.nx-typing span{display:inline-block;width:6px;height:6px;margin:0 2px;border-radius:50%;background:#a78bfa;animation:nxb 1s infinite}
+.nx-typing span:nth-child(2){animation-delay:.15s}.nx-typing span:nth-child(3){animation-delay:.3s}
+@keyframes nxb{0%,100%{opacity:.25;transform:translateY(0)}50%{opacity:1;transform:translateY(-3px)}}
+.nx-in{display:flex;gap:8px;padding:12px 14px calc(12px + var(--safe-b));border-top:1px solid var(--line)}
+.nx-in textarea{flex:1;resize:none;min-height:42px;max-height:120px}
+.dash-nx{display:flex;gap:14px;align-items:flex-start;margin-bottom:14px;background:linear-gradient(135deg,rgba(124,92,255,.14),rgba(90,200,250,.06));border-color:rgba(167,139,250,.32)}
+.dash-nx p{margin:4px 0 8px;font-size:.88rem;line-height:1.5}
+@media (max-width:900px){ .nx-fab{bottom:calc(86px + var(--safe-b));right:14px;padding:10px}.nx-fab .nx-lbl{display:none} .nx-dock{width:100vw;border-left:none} .dash-nx .nx-av{display:none} }
 </style>
 </head>
 <body>
@@ -411,6 +446,8 @@ body:not(.is-owner) .owner-only{display:none!important}
     <!-- INICIO -->
     <section class="view" id="v-dash">
       <div class="vh"><div><h2 id="hola">Hola 👋</h2><p>Resumen de UpGames en tiempo real</p></div></div>
+      <div class="card dash-nx" id="dashNx"><div class="nx-av">✦</div><div class="grow"><div class="small" style="color:#c4b5fd;font-weight:700">Briefing de Nexus</div><p id="dashNxTxt">Nexus está revisando el panel…</p><div id="dashNxAct"></div>
+        <button class="btn sm" style="margin-top:8px;border-color:rgba(167,139,250,.45);color:#d4c8ff" onclick="nxAbrir()">✦ Hablar con Nexus</button></div></div>
       <div class="alerts" id="dAlerts"></div>
       <div class="kpis" id="dKpis"><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
       <div class="grid2" style="margin-bottom:14px">
@@ -580,6 +617,19 @@ body:not(.is-owner) .owner-only{display:none!important}
 
   </main>
 
+  <button class="nx-fab" id="nxFab" onclick="nxAbrir()" title="Nexus · asistente de administración"><span class="nx-star">✦</span><span class="nx-lbl">Nexus</span><span class="nx-dot" id="nxDot"></span></button>
+  <aside class="nx-dock" id="nxDock" aria-label="Asistente Nexus">
+    <div class="nx-hd"><div class="nx-av">✦</div><div class="grow"><b>Nexus</b><small id="nxSub">Asistente de administración</small></div>
+      <button class="btn icon ghost" onclick="nxBriefing(true)" title="Actualizar"><ion-icon name="refresh-outline"></ion-icon></button>
+      <button class="btn icon ghost" onclick="nxCerrar()" title="Cerrar"><ion-icon name="close-outline"></ion-icon></button></div>
+    <div class="nx-scroll" id="nxScroll">
+      <div id="nxBrief"></div>
+      <div class="nx-quick" id="nxQuick"></div>
+      <div id="nxMsgs"></div>
+    </div>
+    <form class="nx-in" id="nxForm"><textarea class="in" id="nxQ" rows="1" placeholder="Pregúntale a Nexus… (puedes mencionar @usuarios o &quot;títulos&quot;)"></textarea>
+      <button class="btn pri icon" style="width:44px;height:44px" title="Enviar"><ion-icon name="send"></ion-icon></button></form>
+  </aside>
   <nav class="bnav glass" id="bnav"></nav>
   <div class="bulk glass" id="bulk">
     <b id="bkN">0 sel.</b>
@@ -728,7 +778,7 @@ async function api(path, { method = 'GET', body, auth = true, raw = false } = {}
 function om(id) { $(id).classList.add('on'); document.body.style.overflow = 'hidden'; }
 function cm(id) { $(id).classList.remove('on'); if (!document.querySelector('.modal.on')) document.body.style.overflow = ''; if (id === 'mVideo') $('mvBox').innerHTML = ''; }
 document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) cm(m.id); }));
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { document.querySelectorAll('.modal.on').forEach(m => cm(m.id)); closeMenu(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { document.querySelectorAll('.modal.on').forEach(m => cm(m.id)); closeMenu(); $('nxDock')?.classList.remove('open'); } });
 
 // ─────────── Login ───────────
 let usePin = false;
@@ -777,7 +827,8 @@ async function logout(msg) {
   try { sessionStorage.removeItem('ugAdmin'); localStorage.removeItem('ugAdmin'); } catch (_) {}
   $('app').classList.remove('on'); $('login').classList.remove('hide');
   if (msg) $('lgErr').textContent = msg;
-  clearInterval(timers.sync); clearInterval(timers.exp);
+  clearInterval(timers.sync); clearInterval(timers.exp); clearInterval(timers.nx);
+  $('nxDock')?.classList.remove('open');
 }
 
 const timers = {};
@@ -796,6 +847,8 @@ async function entrar() {
   const h = (location.hash || '').slice(1);
   go(NAV.some(n => n.id === h && navOk(n)) ? h : inicioDeRol());
   sync();
+  nxHist = []; nxBrief = null; $('nxMsgs').innerHTML = ''; setTimeout(() => nxBriefing(), 1200);
+  clearInterval(timers.nx); timers.nx = setInterval(() => { if (!document.hidden) nxBriefing(); }, 10 * 60e3);
   clearInterval(timers.sync); timers.sync = setInterval(() => { if (!document.hidden) sync(); }, 30000);
   clearInterval(timers.exp); timers.exp = setInterval(tickExp, 30000); tickExp();
 }
@@ -1458,6 +1511,65 @@ async function emergencia() {
 }
 async function quitarMiembro(u) { if (!confirm(`¿Quitar a @${u} del equipo? Perderá el acceso al panel al instante.`)) return;
   try { const { d } = await api(`/admin/equipo/${encodeURIComponent(u)}`, { method: 'DELETE' }); if (d.success) { toast(`@${u} ya no es parte del equipo`); loadEquipo(); } else toast(d.error || 'Error', 'err'); } catch (_) {} }
+
+
+// ─────────── Nexus: asistente de administración ───────────
+let nxHist = [], nxBrief = null, nxBusy = false;
+const NX_QUICK = [
+  ['¿Qué debo revisar primero hoy?', null], ['¿Qué publicaciones en revisión son más arriesgadas?', ['revision', 'contenido']],
+  ['¿Ves señales de fraude o multicuentas?', ['usuarios', 'sanciones']], ['Resume los pagos pendientes y sus riesgos', 'finanzas'],
+  ['¿Cómo va el crecimiento esta semana?', 'estadisticas'], ['¿Qué hizo mi equipo en las últimas 24 h?', 'owner'],
+];
+function nxFmt(t) {
+  return esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/^#{1,4}\s*(.+)$/gm, '<b>$1</b>').replace(/^\s*[-*•]\s+/gm, '• ');
+}
+function nxAbrir() {
+  $('nxDock').classList.add('open');
+  $('nxQuick').innerHTML = NX_QUICK.filter(([, p]) => p === 'owner' ? isOwner() : can(p)).map(([q]) => `<button type="button">${esc(q)}</button>`).join('');
+  if (!nxBrief) nxBriefing(); else pintarBrief();
+  setTimeout(() => $('nxQ').focus(), 250);
+}
+function nxCerrar() { $('nxDock').classList.remove('open'); }
+$('nxQuick').addEventListener('click', e => { const b = e.target.closest('button'); if (b) nxPreguntar(b.textContent); });
+$('nxForm').addEventListener('submit', e => { e.preventDefault(); nxPreguntar($('nxQ').value); });
+$('nxQ').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); nxPreguntar($('nxQ').value); } });
+$('nxQ').addEventListener('input', () => { const q = $('nxQ'); q.style.height = 'auto'; q.style.height = Math.min(q.scrollHeight, 120) + 'px'; });
+
+function accionesHTML(lista, max) {
+  return (lista || []).slice(0, max).map(a => `<button class="nx-act" onclick="nxCerrar();go('${esc(a.vista)}')"><span class="p ${esc(a.prioridad)}"></span><span>${esc(a.icono)} ${esc(a.texto)}</span><ion-icon name="chevron-forward"></ion-icon></button>`).join('')
+    || '<div class="small" style="color:#6ff0ae;margin-top:6px">✅ Nada pendiente en tus áreas.</div>';
+}
+function pintarBrief() {
+  const b = nxBrief; if (!b) return;
+  $('nxBrief').innerHTML = `<div class="nx-brief"><div class="small" style="color:#c4b5fd;font-weight:700;margin-bottom:6px">Briefing · ${ago(b.generado)}</div><p>${nxFmt(b.resumen || '')}</p>${accionesHTML(b.acciones, 8)}
+    <span class="nx-src">${b.fuente ? 'Redactado por ' + esc(b.fuente) : 'Prioridades calculadas por Nexus (IA de redacción no disponible)'}</span></div>`;
+  const altas = (b.acciones || []).filter(a => a.prioridad === 'alta').length, dot = $('nxDot');
+  dot.style.display = altas ? 'flex' : 'none'; dot.textContent = altas;
+  if ($('dashNx')) { $('dashNxTxt').innerHTML = nxFmt(b.resumen || ''); $('dashNxAct').innerHTML = accionesHTML(b.acciones, 4); }
+}
+async function nxBriefing(forzar) {
+  if (!S.token) return;
+  if (forzar) $('nxBrief').innerHTML = '<div class="nx-brief"><span class="nx-typing"><span></span><span></span><span></span></span> Nexus está revisando el panel…</div>';
+  try { const { d } = await api('/admin/nexus/briefing' + (forzar ? '?forzar=1' : '')); if (d.success) { nxBrief = d; pintarBrief(); } } catch (_) {}
+}
+function nxBurbuja(rol, html) {
+  const el = document.createElement('div'); el.className = 'nx-msg ' + (rol === 'user' ? 'yo' : 'nx');
+  el.innerHTML = `<div class="nx-bub">${html}</div>`; $('nxMsgs').appendChild(el);
+  $('nxScroll').scrollTop = $('nxScroll').scrollHeight; return el;
+}
+async function nxPreguntar(texto) {
+  texto = String(texto || '').trim(); if (!texto || nxBusy) return;
+  nxBusy = true; $('nxQ').value = ''; $('nxQ').style.height = 'auto';
+  nxBurbuja('user', esc(texto));
+  const pend = nxBurbuja('nx', '<span class="nx-typing"><span></span><span></span><span></span></span>');
+  try {
+    const { d } = await api('/admin/nexus/chat', { method: 'POST', body: { mensaje: texto, historial: nxHist } });
+    const r = d.success ? d.respuesta : (d.error || 'No pude responder ahora.');
+    pend.querySelector('.nx-bub').innerHTML = nxFmt(r) + `<span class="nx-src">${d.fuente ? esc(d.fuente) + ' · con datos actuales del panel' : 'Respuesta sin IA (solo reglas)'}</span>`;
+    nxHist.push({ role: 'user', content: texto }, { role: 'assistant', content: r }); nxHist = nxHist.slice(-10);
+  } catch (_) { pend.remove(); }
+  nxBusy = false; $('nxScroll').scrollTop = $('nxScroll').scrollHeight;
+}
 
 // ─────────── Exportar CSV ───────────
 function csv(nombre, filas) {

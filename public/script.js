@@ -221,7 +221,7 @@ function getTileExtras(item) {
   if(!badges.length) return '';
   return `<div class="tile-extras">
     ${badges.slice(0,2).map(b =>
-      `<span class="tile-extra-badge"><ion-icon name="${b.icon}"></ion-icon>${b.text}</span>`
+      `<span class="tile-extra-badge"><ion-icon name="${b.icon}"></ion-icon>${escH(b.text)}</span>`
     ).join('')}
   </div>`;
 }
@@ -230,9 +230,63 @@ function getTileExtras(item) {
 const CAT_LABEL = { Ajustes:'Herramientas', Optimizacion:'Optimización', Juego:'Juego', ROM:'ROM', Mod:'Mod', Apps:'App', Software:'Software', Video:'Video' };
 const catLabel = c => CAT_LABEL[c] || c || 'General';
 
+// ── SERIES POR PARTES ─────────────────────────────────────
+// Un mod grande se publica en partes ("… parte 1", "… parte 2"). En el detalle
+// se ve la parte siguiente; al descargar una parte se desbloquea la próxima.
+// Cada parte es su propia publicación: cada descarga cuenta para el autor.
+const SERIE_CACHE = new Map();
+function partesDescargadas() { try { return new Set(JSON.parse(localStorage.getItem('ug_descargadas') || '[]')); } catch (_) { return new Set(); } }
+function marcarDescargada(id) {
+  try { const s = [...partesDescargadas()]; if (!s.includes(id)) { s.push(id); localStorage.setItem('ug_descargadas', JSON.stringify(s.slice(-3000))); } } catch (_) {}
+}
+const pareceParte = it => !!(it.serie?.clave || it.serieInfo || /\b(parte|part|pt|disco|disc|cd|vol)\.?\s*#?\s*(\d{1,3}|[ivx]{1,4})\b|[([]\s*\d{1,3}\s*(\/|de|of)\s*\d{1,3}\s*[)\]]/i.test(it.title || ''));
+async function renderSerieDetalle(item) {
+  const box = document.getElementById('ds-serie'); if (!box) return;
+  box.style.display = 'none'; box.innerHTML = '';
+  if (!item?._id || !pareceParte(item)) return;
+  const clave = item.serie?.clave;
+  let serie = clave && SERIE_CACHE.get(clave);
+  if (!serie) {
+    try { const r = await fetchTimeout(`${API_URL}/items/${item._id}/serie`, 8000); if (r.ok) serie = (await r.json()).serie; } catch (_) {}
+    if (serie) SERIE_CACHE.set(serie.clave, serie);
+  }
+  if (!serie || currentItem?._id !== item._id) return;
+  const partes = serie.partes, idx = partes.findIndex(p => p._id === item._id);
+  if (idx < 0) return;
+  const desc = partesDescargadas();
+  const hechas = partes.filter(p => desc.has(p._id)).length;
+  let ultima = -1; partes.forEach((p, i) => { if (desc.has(p._id)) ultima = i; });
+  const visibleHasta = Math.min(partes.length - 1, Math.max(idx, ultima) + 1);
+  const pct = Math.round(hechas / partes.length * 100);
+  const filas = partes.slice(0, visibleHasta + 1).map((p, i) => {
+    const n = p.serie?.parte || i + 1, hecha = desc.has(p._id), actual = i === idx, siguiente = i === visibleHasta && !hecha && !actual;
+    const estado = actual ? '<span class="ds-serie-tag cur">Estás aquí</span>' : hecha ? '<span class="ds-serie-tag ok">✓ Descargada</span>' : siguiente ? '<span class="ds-serie-tag next">Siguiente</span>' : '';
+    return `<button class="ds-serie-row ${actual ? 'cur' : ''} ${siguiente ? 'next' : ''}" data-i="${i}" ${actual ? 'disabled' : ''}>
+      <span class="ds-serie-n">${hecha ? '✓' : n}</span><span class="ds-serie-t">Parte ${n}${p.linkStatus === 'caido' ? ' · ⚠️ enlace caído' : ''}</span>${estado}${actual ? '' : '<ion-icon name="chevron-forward"></ion-icon>'}</button>`;
+  }).join('');
+  const bloqueadas = partes.length - 1 - visibleHasta;
+  box.innerHTML = `<div class="ds-serie">
+    <div class="ds-serie-h"><ion-icon name="folder-open"></ion-icon><div><b>${escH(serie.base || 'Serie')}</b><small>Contenido dividido en ${partes.length} partes · ${fmt(serie.descargas || 0)} descargas en total</small></div></div>
+    <div class="ds-serie-bar"><i style="width:${pct}%"></i></div><div class="ds-serie-prog">Has descargado ${hechas} de ${partes.length} partes</div>
+    <div class="ds-serie-list">${filas}</div>
+    ${bloqueadas > 0 ? `<div class="ds-serie-lock"><ion-icon name="lock-closed-outline"></ion-icon> ${bloqueadas} parte${bloqueadas > 1 ? 's' : ''} más: se desbloquean a medida que descargas</div>` : `<div class="ds-serie-lock ok"><ion-icon name="checkmark-done-outline"></ion-icon> Todas las partes disponibles</div>`}
+  </div>`;
+  box.style.display = '';
+  box.querySelectorAll('.ds-serie-row:not([disabled])').forEach(b => b.addEventListener('click', () => {
+    const p = partes[+b.dataset.i]; if (p) openDetail(todosLosItems.find(x => x._id === p._id) || p);
+    document.querySelector('#detail-sheet .sheet-scroll')?.scrollTo?.({ top: 0, behavior: 'smooth' });
+  }));
+}
+
+// Escapa texto de usuarios antes de meterlo en HTML (títulos, autores, URLs…).
+// Antes los títulos se insertaban tal cual: un título con <img onerror> ejecutaba código en el catálogo.
+const escH = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 // ── CREATE TILE ───────────────────────────────────────────
 function createTile(item, isFeatured=false) {
   const ls = item.linkStatus || (item.reportes>=3?'revision':'online');
+  // Serie por partes: el catálogo muestra el título base + "📁 N partes"
+  const tituloT = item.serieInfo?.base || item.title;
   const isOnline = ls==='online';
   const statusLabel = ls==='online'?'Online':ls==='revision'?'Revisión':'Caído';
   const cat = item.category || 'General';
@@ -242,31 +296,31 @@ function createTile(item, isFeatured=false) {
   const imgSrc = item.image || '';
   const isVid = !isVideo && /\.(mp4|webm|mov)$/i.test(imgSrc);
   const media = isVid
-    ? `<video data-src="${imgSrc}" muted loop playsinline preload="none" class="lazy-vid"></video>`
-    : `<img src="${imgSrc}" alt="${item.title}" loading="lazy" onerror="this.src='https://via.placeholder.com/300x170/12121f/555570?text=Sin+imagen'">`;
+    ? `<video data-src="${escH(imgSrc)}" muted loop playsinline preload="none" class="lazy-vid"></video>`
+    : `<img src="${escH(imgSrc)}" alt="${escH(tituloT)}" loading="lazy" onerror="this.src='https://via.placeholder.com/300x170/12121f/555570?text=Sin+imagen'">`;
 
   const favIds = LS.getJSON('favoritos', []);
   const isFav = favIds.includes(item._id);
   const dl = item.descargasEfectivas||0;
   const lk = item.likesCount||0;
-  const extraBadges = getTileExtras(item);
+  const extraBadges = (item.serieInfo ? `<span class="tile-extra-badge tile-serie-badge"><ion-icon name="folder-open"></ion-icon>${item.serieInfo.partes} partes</span>` : '') + getTileExtras(item);
 
   if(isFeatured) {
     const el = document.createElement('div');
     el.className='featured-tile';
     el.dataset.id=item._id;
     const ftMedia = isVid
-      ? `<video data-src="${imgSrc}" muted loop playsinline preload="none" class="lazy-vid"></video>`
-      : `<img src="${imgSrc}" alt="${item.title}" loading="lazy" onerror="this.src='https://via.placeholder.com/600x260/12121f/555570?text=Sin+imagen'">`;
+      ? `<video data-src="${escH(imgSrc)}" muted loop playsinline preload="none" class="lazy-vid"></video>`
+      : `<img src="${escH(imgSrc)}" alt="${escH(tituloT)}" loading="lazy" onerror="this.src='https://via.placeholder.com/600x260/12121f/555570?text=Sin+imagen'">`;
     el.innerHTML=`
       <div class="thumb-wrap">${ftMedia}
         ${isVideo?'<div class="tile-video-overlay"><ion-icon name="play-circle"></ion-icon></div>':''}
       </div>
       <div class="ft-info">
         <div class="ft-badge">${isVideo?'▶ '+( item.videoType||'Video'):'⭐ Destacado'}</div>
-        <div class="ft-title">${item.title}</div>
+        <div class="ft-title">${escH(tituloT)}</div>
         <div class="ft-meta">
-          <div class="ft-user">@${item.usuario||'Cloud'}${getBadge(item.usuario)}</div>
+          <div class="ft-user">@${escH(item.usuario||'Cloud')}${getBadge(item.usuario)}</div>
           ${lk?`<div class="ft-dl"><ion-icon name="heart"></ion-icon>${fmt(lk)}</div>`:''}
         </div>
       </div>`;
@@ -291,15 +345,15 @@ function createTile(item, isFeatured=false) {
         <button class="tile-fav-quick ${isFav?'active':''}" data-id="${item._id}" title="Favorito" aria-label="${isFav?'Quitar de favoritos':'Añadir a favoritos'}">
           <ion-icon name="${isFav?'heart':'heart-outline'}"></ion-icon>
         </button>
-        ${item.videoType?`<div class="tile-vid-type-badge">${item.videoType}</div>`:''}
+        ${item.videoType?`<div class="tile-vid-type-badge">${escH(item.videoType)}</div>`:''}
         ${duracion?`<div class="tile-duration-badge">${duracion}</div>`:''}
       </div>
       <div class="tile-info tile-info--yt">
         <div class="tile-yt-avatar">${avatarLetter(item.usuario)}</div>
         <div class="tile-yt-body">
-          <div class="tile-title">${item.title}</div>
+          <div class="tile-title">${escH(tituloT)}</div>
           <div class="tile-yt-meta">
-            <span class="tile-user">@${item.usuario||'Cloud'}${getBadge(item.usuario)}</span>
+            <span class="tile-user">@${escH(item.usuario||'Cloud')}${getBadge(item.usuario)}</span>
             ${dl?`<span class="tile-yt-dot">·</span><span class="tile-yt-views"><ion-icon name="eye-outline"></ion-icon>${fmt(dl)}</span>`:''}
             ${lk?`<span class="tile-yt-dot">·</span><span class="tile-yt-likes"><ion-icon name="heart"></ion-icon>${fmt(lk)}</span>`:''}
           </div>
@@ -320,10 +374,10 @@ function createTile(item, isFeatured=false) {
       <div class="tile-info">
         <div class="tile-cat">${catLabel(cat)}</div>
         ${extraBadges}
-        <div class="tile-title">${item.title}</div>
+        <div class="tile-title">${escH(tituloT)}</div>
         <div class="tile-meta">
           <div class="tile-avatar">${avatarLetter(item.usuario)}</div>
-          <div class="tile-user">@${item.usuario||'Cloud'}</div>
+          <div class="tile-user">@${escH(item.usuario||'Cloud')}</div>
           ${lk?`<div class="tile-downloads"><ion-icon name="heart"></ion-icon>${fmt(lk)}</div>`:''}
         </div>
       </div>`;
@@ -395,19 +449,19 @@ function initHeroCarousel(items, isVideoMode) {
 
     // Tipo de video (Tutorial, Gameplay, etc.)
     const vidTypeHTML = isVideoMode && item.videoType
-      ? `<div class="hero-vid-type">${item.videoType}</div>`
+      ? `<div class="hero-vid-type">${escH(item.videoType)}</div>`
       : '';
 
     slide.innerHTML = `
-      <img src="${mediaSrc}" alt="${item.title}" loading="${i===0?'eager':'lazy'}"
+      <img src="${escH(mediaSrc)}" alt="${escH(item.title)}" loading="${i===0?'eager':'lazy'}"
            onerror="this.src='https://via.placeholder.com/600x260/12121f/555570?text=UpGames'">
       ${isYT || isMp4 || isVideoMode ? '<div class="yt-play-badge large"><ion-icon name="play-circle"></ion-icon></div>' : ''}
       <div class="hero-info">
         ${badgeHTML}
         ${vidTypeHTML}
-        <div class="hero-title">${item.title}</div>
+        <div class="hero-title">${escH(item.title)}</div>
         <div class="hero-meta">
-          <span class="hero-user">@${item.usuario||'Cloud'}${getBadge(item.usuario)}</span>
+          <span class="hero-user">@${escH(item.usuario||'Cloud')}${getBadge(item.usuario)}</span>
           ${isVideoMode && vistas ? `<span class="hero-dl"><ion-icon name="eye-outline"></ion-icon>${fmt(vistas)}</span>` : ''}
           ${lk ? `<span class="hero-dl"><ion-icon name="heart"></ion-icon>${fmt(lk)}</span>` : ''}
         </div>
@@ -527,8 +581,12 @@ function render(list, reset=true) {
       <ion-icon name="cloud-offline-outline"></ion-icon>
       <h3>Sin resultados</h3>
       <p>No hay coincidencias en la nube.</p>
-      <a href="./perfil.html" class="empty-action">Subir Ahora</a>
+      <button type="button" class="empty-action empty-action--nexus" id="empty-ask-nexus"><span>✦</span> Pregúntale a Nexus</button>
+      <button type="button" class="empty-action" onclick="switchTab('profile');setTimeout(()=>window.pfOpenPublish&&pfOpenPublish(),300)">Subir ahora</button>
     </div>`;
+    const qBusq = document.getElementById('buscador')?.value?.trim();
+    document.getElementById('empty-ask-nexus')?.addEventListener('click', () =>
+      nexusPreguntar(qBusq ? `Busco "${qBusq}" en UpGames y no aparece. ¿Hay algo parecido o qué me recomiendas?` : '¿Qué me recomiendas descargar hoy en UpGames?'));
     return;
   }
   const frag = document.createDocumentFragment();
@@ -890,6 +948,11 @@ function openDetail(item) {
   document.getElementById('ds-dl').textContent=fmt(item.descargasEfectivas||0);
   document.getElementById('ds-rep').textContent=item.reportes||0;
   document.getElementById('ds-desc').textContent=item.description||'Sin descripción.';
+  renderSerieDetalle(item);
+  const askBtn = document.getElementById('ds-btn-nexus');
+  if (askBtn) askBtn.onclick = () => nexusPreguntar(item.category === 'Video'
+    ? `Cuéntame sobre el video "${item.title}" de @${item.usuario} y qué contenido relacionado hay en UpGames.`
+    : `¿Qué es "${item.title}" (${catLabel(item.category)}) de @${item.usuario}? ¿Cómo lo instalo y qué necesito? ¿Hay algo parecido en UpGames?`);
 
   // ── Entrada destacada (solo para videos) ───────────────
   const featEl = document.getElementById('ds-featured-entry');
@@ -931,7 +994,7 @@ function openDetail(item) {
 
   // Author
   document.getElementById('ds-av-letter').textContent=avatarLetter(item.usuario);
-  document.getElementById('ds-author-name').innerHTML=`@${item.usuario||'Cloud'} ${getBadge(item.usuario)}`;
+  document.getElementById('ds-author-name').innerHTML=`@${escH(item.usuario||'Cloud')} ${getBadge(item.usuario)}`;
   document.getElementById('ds-author').onclick=()=>visitarPerfil(item.usuario);
 
   // Status
@@ -961,6 +1024,7 @@ function openDetail(item) {
     dlBtn.href = `puente.html?id=${item._id}&media=${_puenteMediaEnc}&title=${_puenteTitle}`;
     dlBtn.innerHTML = '<ion-icon name="cloud-download-outline"></ion-icon> OBTENER LINK';
     dlBtn.onclick = function(e) {
+      marcarDescargada(item._id);
       if(ls === 'caido') {
         e.preventDefault();
         if(confirm('⚠️ Este link está reportado como caído.\n¿Deseas intentar acceder de todas formas?')) {
@@ -1164,11 +1228,11 @@ async function loadComments(id) {
     list.innerHTML=comms.map(c=>`
       <div class="comment-item">
         <div class="comment-head">
-          <div class="comment-avatar">${avatarLetter(c.usuario)}</div>
-          <div class="comment-user">@${c.usuario}${getBadge(c.usuario)}</div>
+          <div class="comment-avatar">${escH(avatarLetter(c.usuario))}</div>
+          <div class="comment-user">@${escH(c.usuario)}${getBadge(c.usuario)}</div>
           <div class="comment-time">${timeAgo(c.fecha)}</div>
         </div>
-        <div class="comment-text">${c.texto}</div>
+        <div class="comment-text">${escH(c.texto)}</div>
       </div>`).join('');
   } catch(e) {
     list.innerHTML='<div class="no-comments" style="color:#ff4343">Error al cargar</div>';
@@ -1402,7 +1466,7 @@ async function renderFavs() {
         <img src="${item.image||'https://via.placeholder.com/300x170?text=Sin+Imagen'}" alt="${item.title||''}" onerror="this.src='https://via.placeholder.com/300x170?text=Sin+Imagen'">
         <div class="pf-vault-info">
           <div class="pf-vault-title">${(item.title||'Sin título').substring(0,40)}</div>
-          <div class="pf-vault-user">@${item.usuario||'Anónimo'}</div>
+          <div class="pf-vault-user">@${escH(item.usuario||'Anónimo')}</div>
           <div class="pf-vault-actions">
             <button class="pf-vault-btn access" onclick="window.open('puente.html?id=${item._id}','_blank')"><ion-icon name="cloud-download"></ion-icon> Acceder</button>
             <button class="pf-vault-btn remove" onclick="pfRemoveFav('${item._id}')"><ion-icon name="trash"></ion-icon> Quitar</button>
@@ -2204,6 +2268,43 @@ async function pfSubirVideo() {
   finally { btn.innerHTML='<ion-icon name="cloud-upload"></ion-icon> PUBLICAR VIDEO'; btn.disabled=false; }
 }
 
+// ── NEXUS: revisar la publicación antes de enviarla ──
+let _pfNx = null;   // { firma, res } — última revisión hecha
+function pfFormPublicacion() {
+  const v = id => (document.getElementById(id)?.value || '').trim();
+  return { title: v('pf-addTitle'), description: v('pf-addDescription'), link: v('pf-addLink'), image: v('pf-addImage'),
+    images: ['pf-addImage2', 'pf-addImage3', 'pf-addImage4'].map(v).filter(Boolean), category: document.getElementById('pf-addCategory')?.value || pfCurrentCategory };
+}
+async function pfRevisarConNexus(conIA) {
+  const d = pfFormPublicacion(), out = document.getElementById('pf-nexus-res'), btn = document.getElementById('pf-nexus-btn');
+  if (!d.title || !d.link) { if (conIA) toast('✦ Escribe al menos el título y el enlace para que Nexus lo revise'); return null; }
+  const token = LS.get('token'); if (!token) return null;
+  if (conIA && out) {
+    out.innerHTML = `<div class="pf-nx-load"><span class="pf-nx-orb"></span><div><b>Nexus está revisando tu publicación…</b><small>Abriendo tu enlace, comprobando la portada y el texto</small></div></div>`;
+    if (btn) btn.disabled = true;
+  }
+  try {
+    const r = await fetch(`${PF_API}/items/precheck`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ ...d, ia: !!conIA }) });
+    const res = await r.json().catch(() => ({}));
+    if (!r.ok || !res.success) { if (out && conIA) out.innerHTML = `<div class="pf-nx-res warn">${ugEsc(res.error || 'Nexus no pudo revisar ahora. Puedes publicar igualmente.')}</div>`; return null; }
+    _pfNx = { firma: [d.title, d.link, d.image, d.description.length].join('|'), res };
+    if (out) pfPintarNexus(res, out);
+    return res;
+  } catch (_) { return null; } finally { if (btn) btn.disabled = false; }
+}
+function pfPintarNexus(r, out) {
+  const ic = { ok: '✅', info: 'ℹ️', warn: '⚠️', bad: '❌' };
+  const orden = { bad: 0, warn: 1, info: 2, ok: 3 };
+  const hechos = [...r.hechos].sort((a, b) => orden[a.tipo] - orden[b.tipo]);
+  out.innerHTML = `<div class="pf-nx-res ${r.problemas ? 'bad' : r.avisos ? 'warn' : 'ok'}">
+    <div class="pf-nx-h"><span class="pf-nexus-ic">✦</span><b>${r.problemas ? `${r.problemas} problema(s) por corregir` : r.avisos ? 'Casi lista: revisa los avisos' : '¡Lista para publicar!'}</b></div>
+    <p>${ugEsc(r.resumen || '')}</p>
+    <ul>${hechos.map(h => `<li class="${h.tipo}"><span>${ic[h.tipo] || '•'}</span>${ugEsc(h.texto)}</li>`).join('')}</ul>
+    ${(r.sugerencias || []).length ? `<div class="pf-nx-sug"><b>Sugerencias de Nexus</b>${r.sugerencias.slice(0, 4).map(x => `<div>💡 ${ugEsc(x)}</div>`).join('')}</div>` : ''}
+    <small class="pf-nx-src">${r.fuente ? 'Analizado por ' + ugEsc(r.fuente) : 'Comprobaciones automáticas de Nexus'}</small>
+  </div>`;
+}
+
 async function pfSubirJuego() {
   if(!pfUser) return alert('Debes iniciar sesión.');
   const ahora = Date.now();
@@ -2268,6 +2369,18 @@ async function pfSubirJuego() {
   if(!token) { alert('⚠️ Sesión expirada.'); location.href='./index.html'; return; }
 
   const btn = document.getElementById('pf-subirBtn');
+  // Nexus revisa rápido (sin IA) antes de enviar, salvo que ya lo hayas revisado con estos datos
+  const firma = [titulo, link, imagen, desc.length].join('|');
+  let rev = _pfNx && _pfNx.firma === firma ? _pfNx.res : null;
+  if(!rev) {
+    btn.innerHTML = '<span class="pf-nexus-ic">✦</span> Nexus está revisando…'; btn.disabled = true;
+    rev = await pfRevisarConNexus(false);
+    btn.innerHTML = '<ion-icon name="cloud-upload"></ion-icon> ENVIAR A REVISIÓN'; btn.disabled = false;
+  }
+  if(rev && rev.problemas > 0) {
+    const lista = rev.hechos.filter(h => h.tipo === 'bad').map(h => '• ' + h.texto).join('\n');
+    if(!confirm(`Nexus encontró ${rev.problemas} problema(s) que harían que rechacen tu publicación:\n\n${lista}\n\n¿Publicar igualmente?`)) return;
+  }
   btn.textContent = 'Enviando...'; btn.disabled = true;
   try {
     const res = await fetch(`${PF_API}/items/add`, {
@@ -2379,9 +2492,17 @@ function pfOpenPostSheet(i) {
   if (!item) return;
   const isVideo   = item.category === 'Video';
   const isPending = item.status === 'pendiente' || item.status === 'pending';
+  const isRejected = item.status === 'rechazado';
   const ls = item.linkStatus || 'online';
   const lsTxt = ls === 'online' ? '🟢 Online' : ls === 'revision' ? '🟡 En revisión' : '🔴 Caído';
   const img = item.image && !UG_VIDEO_RE.test(item.image) ? cldOpt(item.image, 'c_fill,g_auto,w_900,h_506,q_auto,f_auto') : '';
+  const m = item.nexusMentor;
+  const mentorHTML = m && (m.analisis || (m.mejoras || []).length) ? `<div class="pf2-nexus">
+      <div class="pf2-nexus-h"><span class="pf2-nexus-ic">✦</span><b>Consejos de Nexus</b>${m.puntuacion != null ? `<span class="pf2-nexus-score">${ugEsc(Number(m.puntuacion).toFixed(1))}/10</span>` : ''}</div>
+      ${m.analisis ? `<p>${ugEsc(String(m.analisis).slice(0, 400))}</p>` : ''}
+      ${(m.mejoras || []).length ? `<ul>${m.mejoras.slice(0, 4).map(x => `<li>${ugEsc(x)}</li>`).join('')}</ul>` : ''}
+      ${(m.alertas || []).length ? `<div class="pf2-nexus-alert">⚠️ ${ugEsc(m.alertas.slice(0, 2).join(' · '))}</div>` : ''}
+    </div>` : '';
   let ov = document.getElementById('pf2-sheet');
   if (!ov) {
     ov = document.createElement('div');
@@ -2393,7 +2514,7 @@ function pfOpenPostSheet(i) {
       <span class="pf2-sheet-grab"></span>
       ${img ? `<img class="pf2-sheet-img" src="${ugEsc(img)}" alt="" onerror="this.remove()">` : ''}
       <div class="pf2-sheet-body">
-        <div class="pf2-sheet-cat">${ugEsc(catLabel(item.category))} · <span class="${isPending ? 'warn' : 'ok'}">${isPending ? 'Pendiente de revisión' : 'Aprobado'}</span></div>
+        <div class="pf2-sheet-cat">${ugEsc(catLabel(item.category))} · <span class="${isRejected ? 'bad' : isPending ? 'warn' : 'ok'}">${isRejected ? 'Rechazado' : isPending ? 'Pendiente de revisión' : 'Aprobado'}</span></div>
         <h3>${ugEsc(item.title || 'Sin título')}</h3>
         <div class="pf2-sheet-stats">
           <div><b>${item.descargasEfectivas || 0}</b><span>${isVideo ? 'Vistas' : 'Descargas'}</span></div>
@@ -2401,8 +2522,11 @@ function pfOpenPostSheet(i) {
           <div><b style="color:${(item.reportes || 0) >= 3 ? '#ff4343' : 'inherit'}">${item.reportes || 0}</b><span>Reportes</span></div>
           <div><b style="font-size:.78rem">${lsTxt}</b><span>Enlace</span></div>
         </div>
+        ${isRejected ? `<div class="pf2-rechazo"><b>Motivo del rechazo:</b> ${ugEsc(item.motivoRechazo || 'No cumple las normas de publicación.')}<br><small>Corrígelo con Editar o publícalo de nuevo.</small></div>` : ''}
+        ${mentorHTML}
+        <button type="button" class="pf2-btn pf2-btn-nexus" onclick="pfClosePostSheet();nexusPreguntar(${ugEsc(JSON.stringify(`¿Cómo puedo mejorar mi publicación "${item.title}" para conseguir más descargas?`))})"><span class="pf2-nexus-ic">✦</span> Pedir consejo a Nexus</button>
         <div class="pf2-sheet-actions">
-          ${!isPending ? `<button type="button" class="pf2-btn pf2-btn-primary" onclick="pfVerPublicacion(${i})"><ion-icon name="open-outline"></ion-icon> Ver publicación</button>` : ''}
+          ${!isPending && !isRejected ? `<button type="button" class="pf2-btn pf2-btn-primary" onclick="pfVerPublicacion(${i})"><ion-icon name="open-outline"></ion-icon> Ver publicación</button>` : ''}
           <button type="button" class="pf2-btn" onclick="pfClosePostSheet();${isVideo ? `pfOpenEditVideoModal('${item._id}')` : `pfOpenEditModal('${item._id}')`}"><ion-icon name="create-outline"></ion-icon> Editar</button>
           <button type="button" class="pf2-btn pf2-btn-danger" onclick="pfClosePostSheet();${isVideo ? `pfEliminarVideo('${item._id}')` : `pfEliminar('${item._id}')`}"><ion-icon name="trash-outline"></ion-icon> Borrar</button>
         </div>
@@ -2662,7 +2786,7 @@ async function pfLoadBoveda() {
         <img src="${item.image||'https://via.placeholder.com/300x170?text=Sin+Imagen'}" alt="${item.title||''}" onerror="this.src='https://via.placeholder.com/300x170?text=Sin+Imagen'">
         <div class="pf-vault-info">
           <div class="pf-vault-title">${(item.title||'Sin título').substring(0,40)}</div>
-          <div class="pf-vault-user">@${item.usuario||'Anónimo'}</div>
+          <div class="pf-vault-user">@${escH(item.usuario||'Anónimo')}</div>
           <div class="pf-vault-actions">
             <button class="pf-vault-btn access" onclick="window.open('puente.html?id=${item._id}','_blank')"><ion-icon name="cloud-download"></ion-icon> Acceder</button>
             <button class="pf-vault-btn remove" onclick="pfRemoveFav('${item._id}')"><ion-icon name="trash"></ion-icon> Quitar</button>
@@ -2716,7 +2840,7 @@ async function pfLoadReportes() {
       card.style.borderLeftColor = sColor;
       card.innerHTML=`
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
-          <div><div class="pf-reporte-title">${pub.title}</div>
+          <div><div class="pf-reporte-title">${escH(pub.title)}</div>
           <div class="pf-reporte-date">${new Date(pub.createdAt).toLocaleDateString('es-ES')}</div></div>
           <div style="text-align:right">
             <div class="pf-reporte-badge">${pub.reportes} Reportes</div>
@@ -4547,6 +4671,24 @@ function nexusContexto() {
     busquedaActiva: document.getElementById('buscador')?.value?.trim() || null
   };
 }
+// Abre Nexus y le hace una pregunta en nombre del usuario (botones "Pregúntale a Nexus")
+let _nxPregunta = null;
+function nexusPreguntar(texto) {
+  _nxPregunta = String(texto || '').slice(0, 600);
+  if (typeof closeDetail === 'function' && document.getElementById('detail-sheet')?.classList.contains('open')) { try { closeDetail(); } catch (_) {} }
+  if (!nxOpen) nxToggle();
+  nxEnsureFrame();
+  const frame = document.getElementById('nxFrame');
+  if (frame?.dataset.loaded) nexusEnviarPregunta();
+}
+function nexusEnviarPregunta() {
+  const frame = document.getElementById('nxFrame');
+  if (!_nxPregunta || !frame?.contentWindow) return;
+  const t = _nxPregunta; _nxPregunta = null;
+  setTimeout(() => { try { frame.contentWindow.postMessage({ type: 'NX_ASK', text: t }, NEXUS_ORIGIN); } catch (_) {} }, 450);
+}
+window.nexusPreguntar = nexusPreguntar;
+
 function nexusEnviarContexto() {
   const frame = document.getElementById('nxFrame');
   if (!frame || !frame.contentWindow || !frame.dataset.loaded) return;
@@ -4576,6 +4718,7 @@ window.addEventListener('message', function(event) {
       const frame = document.getElementById('nxFrame');
       if (frame) frame.dataset.loaded = '1';
       nexusEnviarContexto();
+      nexusEnviarPregunta();
       break;
     }
     case 'NX_OPEN_ITEM':
@@ -4709,13 +4852,13 @@ function triggerAutoplay(currentItem) {
   panel.id = 'autoplay-panel';
   panel.innerHTML = `
     <div class="autoplay-label">A CONTINUACIÓN</div>
-    <div class="autoplay-next-title">${nextItem.title}</div>
+    <div class="autoplay-next-title">${escH(nextItem.title)}</div>
     <div class="autoplay-related">
       ${related.map((v,i) => {
         const thumb = v.image || 'https://via.placeholder.com/88x50/07070f/00f2ff?text=▶';
         return `<div class="autoplay-rel-thumb" data-id="${v._id}">
-          <img src="${thumb}" alt="${v.title}" onerror="this.src='https://via.placeholder.com/88x50/07070f/00f2ff?text=▶'">
-          <span>${v.title}</span>
+          <img src="${escH(thumb)}" alt="${escH(v.title)}" onerror="this.src='https://via.placeholder.com/88x50/07070f/00f2ff?text=▶'">
+          <span>${escH(v.title)}</span>
         </div>`;
       }).join('')}
     </div>
@@ -4826,8 +4969,8 @@ function openTheater(item) {
 
   titleEl.textContent = item.title;
   metaEl.innerHTML = `
-    <span>@${item.usuario||'Cloud'}</span>
-    ${item.videoType ? `<span>· ${item.videoType}</span>` : ''}
+    <span>@${escH(item.usuario||'Cloud')}</span>
+    ${item.videoType ? `<span>· ${escH(item.videoType)}</span>` : ''}
     <span>· ${fmt(item.descargasEfectivas||0)} vistas</span>
     <span>· ${fmt(item.likesCount||0)} likes</span>
   `;

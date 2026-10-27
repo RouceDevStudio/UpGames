@@ -28,6 +28,7 @@ const casos = [
     ['PUT', '/auth/admin/verificacion/pepe', ['usuarios']], ['DELETE', '/comentarios/1', ['comentarios']],
     ['DELETE', '/items/1', ['contenido']], ['PUT', '/admin/items/1', ['revision', 'contenido']], ['GET', '/admin/items', ['revision', 'contenido']],
     ['GET', '/admin/ruta-desconocida', ['sistema']],
+    ['GET', '/admin/nexus/briefing', null], ['POST', '/admin/nexus/chat', null], ['POST', '/admin/nexus/fraud-analyze', ['usuarios']],
 ];
 for (const [m, p, e] of casos) test(`${m} ${p}`, () => assert.deepStrictEqual(permisoRequerido(m, p), e));
 

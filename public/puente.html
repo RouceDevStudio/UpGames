@@ -36,6 +36,13 @@
         }
         .error-box { background: rgba(255, 67, 67, 0.1); border: 1px solid #ff4343; padding: 15px; border-radius: 10px; color: #ff4343; margin: 15px 0; }
         .success-box { background: rgba(57, 255, 20, 0.1); border: 1px solid var(--neon-green); padding: 15px; border-radius: 10px; color: var(--neon-green); margin: 15px 0; }
+.serie-box { margin: 18px 0 6px; padding: 14px; border-radius: 14px; background: linear-gradient(135deg, rgba(90,200,250,.12), rgba(57,255,20,.06)); border: 1px solid rgba(90,200,250,.35); text-align: left; }
+        .serie-h { font-size: .95rem; color: #fff; } .serie-sub { font-size: .78rem; color: #8fdcff; margin-top: 3px; }
+        .serie-bar { height: 6px; border-radius: 6px; background: rgba(255,255,255,.08); margin: 10px 0; overflow: hidden; }
+        .serie-bar i { display: block; height: 100%; background: linear-gradient(90deg, #39FF14, #5AC8FA); }
+        .serie-next { display: block; text-align: center; background: #5AC8FA; color: #001018; font-weight: 800; padding: 12px; border-radius: 12px; text-decoration: none; }
+        .serie-hint { font-size: .72rem; color: #777; margin-top: 8px; text-align: center; }
+        .serie-done { font-size: .85rem; color: #39FF14; text-align: center; }
         .debug-info { background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 5px; font-size: 0.7rem; color: #666; margin-top: 15px; text-align: left; max-height: 200px; overflow-y: auto; }
     </style>
 </head>
@@ -371,6 +378,7 @@
                     
                     // ⭐ SIEMPRE HABILITAR EL BOTÓN si tenemos enlace
                     habilitarBoton();
+                    mostrarSiguienteParte(juegoId);
                     
                 } else {
                     const errorMsg = data.error || data.mensaje || "Error desconocido al validar descarga";
@@ -435,6 +443,40 @@
                     log("Intento de click sin enlace", 'error');
                 }
             };
+        }
+
+        // ⭐ SERIES POR PARTES: marca esta parte como descargada y ofrece la siguiente.
+        // Cada parte es su propia publicación, así que cada una suma descargas al autor.
+        async function mostrarSiguienteParte(id) {
+            try {
+                const lista = JSON.parse(localStorage.getItem('ug_descargadas') || '[]');
+                if (!lista.includes(id)) { lista.push(id); localStorage.setItem('ug_descargadas', JSON.stringify(lista.slice(-3000))); }
+            } catch (_) {}
+            try {
+                const r = await fetch(`${API_URL}/items/${encodeURIComponent(id)}/serie`);
+                const d = r.ok ? await r.json() : null;
+                const serie = d && d.serie; if (!serie) return;
+                const i = serie.partes.findIndex(p => p._id === id);
+                if (i < 0) return;
+                const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+                const actual = serie.partes[i], sig = serie.partes[i + 1];
+                const nAct = (actual.serie && actual.serie.parte) || i + 1;
+                const box = document.createElement('div');
+                box.className = 'serie-box';
+                let html = `<div class="serie-h">📁 <b>${esc(serie.base)}</b></div><div class="serie-sub">Parte ${nAct} de ${serie.partes.length}</div>`
+                    + `<div class="serie-bar"><i style="width:${Math.round((i + 1) / serie.partes.length * 100)}%"></i></div>`;
+                if (sig) {
+                    const nSig = (sig.serie && sig.serie.parte) || i + 2;
+                    const media = encodeURIComponent((sig.image || '').trim());
+                    html += `<a class="serie-next" href="puente.html?id=${encodeURIComponent(sig._id)}&media=${media}&title=${encodeURIComponent(sig.title || '')}">Siguiente: Parte ${nSig} →</a>`
+                        + `<div class="serie-hint">Abre primero el enlace de esta parte; luego continúa con la siguiente.</div>`;
+                } else {
+                    html += `<div class="serie-done">✅ ¡Era la última parte! Ya tienes las ${serie.partes.length}.</div>`;
+                }
+                box.innerHTML = html;
+                const ref = document.querySelector('.footer-note');
+                ref.parentNode.insertBefore(box, ref);
+            } catch (_) {}
         }
 
         // ⭐ FUNCIONES DE UI

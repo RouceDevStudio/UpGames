@@ -55,6 +55,7 @@ const recommendations = require('./modulos/recommendations');
 const twoFactor       = require('./modulos/twoFactor');
 const nexusClient     = require('./modulos/nexusClient');
 const gameDetector    = require('./modulos/gameDetector');
+const series          = require('./modulos/series');
 const autoInfo        = require('./modulos/autoInfo');
 const memCache        = require('./modulos/cache');
 const searchModule    = require('./modulos/search');
@@ -201,6 +202,39 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: '25mb' }));
+
+// ========== ENLACES DE DESCARGA PROTEGIDOS ==========
+// El enlace real solo se entrega por POST /economia/validar-descarga (página
+// puente: anuncio + contador de descargas = ingresos del creador). Antes /items,
+// /items/:id, la búsqueda y el feed lo devolvían en claro y se podía saltar el
+// puente. Excepciones: videos (el enlace ES el video) y el propio autor.
+// También oculta campos internos (análisis de Nexus, motivo de rechazo).
+const CAMPOS_INTERNOS = ['analisisIA', 'nexusMentor', 'motivoRechazo'];
+function limpiarPublico(v, yo, prof) {
+    if (prof > 6 || !v || typeof v !== 'object' || v instanceof Date) return v;
+    if (typeof v.toJSON === 'function' && !Array.isArray(v) && v.constructor?.name !== 'Object') v = v.toJSON();
+    if (!v || typeof v !== 'object') return v;
+    if (Array.isArray(v)) return v.map(x => limpiarPublico(x, yo, prof + 1));
+    const esItem = 'title' in v && 'usuario' in v;
+    const out = {};
+    for (const [k, val] of Object.entries(v)) {
+        if (esItem && v.usuario !== yo) {
+            if (k === 'link' && v.category !== 'Video') continue;
+            if (CAMPOS_INTERNOS.includes(k)) continue;
+        }
+        out[k] = limpiarPublico(val, yo, prof + 1);
+    }
+    return out;
+}
+app.use((req, res, next) => {
+    if (req.method !== 'GET' || /^\/(admin|auth|economia|nexus)\b/.test(req.path)) return next();
+    let yo = null;
+    const t = req.headers.authorization?.split(' ')[1];
+    if (t && t.length > 20) { try { yo = jwt.verify(t, JWT_SECRET).usuario; } catch (_) {} }
+    const json = res.json.bind(res);
+    res.json = body => json(limpiarPublico(body, yo, 0));
+    next();
+});
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
 // ========== RATE LIMITING ==========
@@ -420,8 +454,11 @@ const JuegoSchema = new mongoose.Schema({
     videoType:          { type: String, default: '' },
     featuredItemId:     { type: String, default: '' },
     extraData:          { type: mongoose.Schema.Types.Mixed, default: {} },
-    nexusMentor:        { type: mongoose.Schema.Types.Mixed, default: null }
+    nexusMentor:        { type: mongoose.Schema.Types.Mixed, default: null },
+    // Publicaciones divididas en partes (modulos/series.js)
+    serie: { clave: { type: String }, base: String, parte: Number, total: Number }
 }, { timestamps: true, strict: false });
+JuegoSchema.index({ 'serie.clave': 1, 'serie.parte': 1 });
 
 JuegoSchema.index({ usuario: 1, status: 1 });
 JuegoSchema.index({ createdAt: -1 });
@@ -726,6 +763,8 @@ const adminPanel = require('./rutas/adminPanel').registrar(app, {
     NEXUS_API: nexusClient.NEXUS_API,
 });
 const verificarAdmin = adminPanel.verificarAdmin;
+// Nexus como asistente del panel: briefing priorizado + chat con los datos del admin
+require('./rutas/adminNexus').registrar(app, { verificarAdmin, Juego, Usuario, Comentario, Pago, logger, NEXUS_API: nexusClient.NEXUS_API });
 
 // ==========================================
 // ⭐ RUTAS DE ECONOMÍA
@@ -1552,7 +1591,8 @@ app.put("/admin/items/:id", verificarAdmin, [
         const updates = {};
         ['title', 'description', 'link', 'image', 'images', 'category', 'status', 'linkStatus', 'reportes'].forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
         if (updates.status === 'rechazado') updates.motivoRechazo = String(req.body.motivo || '').trim().slice(0, 300);
-        const antes = await Juego.findById(req.params.id).select('status').lean();
+        const antes = await Juego.findById(req.params.id).select('status usuario').lean();
+        if (updates.title !== undefined && antes) updates.serie = series.serieDe(updates.title, antes.usuario);
         const item = await Juego.findByIdAndUpdate(req.params.id, { $set: updates }, { new: true, runValidators: true });
         if (!item) return res.status(404).json({ success: false, error: "Item no encontrado" });
         // Avisar al autor cuando su publicación se rechaza (antes desaparecía sin explicación)
@@ -1686,8 +1726,9 @@ app.get("/items", async (req, res) => {
         const { categoria } = req.query;
         const filtro = { status: 'aprobado', linkStatus: { $in: ['online', 'revision'] } };
         if (categoria && categoria !== 'Todo') filtro.category = categoria;
-        const items = await Juego.find(filtro).select('_id title description image images link category usuario reportes linkStatus descargasEfectivas likesCount extraData videoType featuredItemId scoreRecomendacion').sort({ scoreRecomendacion: -1, createdAt: -1 }).limit(100).lean();
-        res.json(items);
+        const items = await Juego.find(filtro).select('_id title description image images link category usuario reportes linkStatus descargasEfectivas likesCount extraData videoType featuredItemId scoreRecomendacion serie createdAt').sort({ scoreRecomendacion: -1, createdAt: -1 }).limit(100).lean();
+        // Series por partes: solo la primera parte aparece en el catálogo
+        res.json(await series.colapsar(items, Juego, { status: 'aprobado', linkStatus: { $in: ['online', 'revision'] } }));
     } catch (error) {
         res.status(500).json([]);
     }
@@ -1696,8 +1737,15 @@ app.get("/items", async (req, res) => {
 app.get("/items/user/:usuario", async (req, res) => {
     try {
         // Los proyectos privados (status 'privado') no se listan en el perfil público: solo accesibles por link directo.
-        const aportes = await Juego.find({ usuario: req.params.usuario, status: { $ne: 'privado' } }).select('_id title description image images link category usuario reportes reportesDesglose linkStatus descargasEfectivas likesCount status createdAt scoreRecomendacion extraData videoType featuredItemId').sort({ scoreRecomendacion: -1, createdAt: -1 }).lean();
-        res.json(aportes);
+        // El autor ve todo lo suyo (pendiente/rechazado incluidos y cada parte por separado);
+        // los demás solo lo aprobado, con las series agrupadas como en el catálogo.
+        let yo = null;
+        const t = req.headers.authorization?.split(' ')[1];
+        if (t && t.length > 20) { try { yo = jwt.verify(t, JWT_SECRET).usuario; } catch (_) {} }
+        const propio = yo && yo === String(req.params.usuario).toLowerCase();
+        const filtro = propio ? { usuario: req.params.usuario, status: { $ne: 'privado' } } : { usuario: req.params.usuario, status: 'aprobado' };
+        const aportes = await Juego.find(filtro).select('_id title description image images link category usuario reportes reportesDesglose linkStatus descargasEfectivas likesCount status createdAt scoreRecomendacion extraData videoType featuredItemId serie motivoRechazo nexusMentor').sort({ scoreRecomendacion: -1, createdAt: -1 }).lean();
+        res.json(propio ? aportes : await series.colapsar(aportes, Juego, { usuario: req.params.usuario, status: 'aprobado' }));
     } catch (error) {
         res.status(500).json([]);
     }
@@ -1724,6 +1772,54 @@ function errorLinkPublicacion(link, category) {
 
 const CAMPOS_PUBLICACION = ['title', 'description', 'link', 'image', 'images', 'category', 'videoType', 'extraData', 'featuredItemId', 'tags'];
 
+// POST /items/precheck — Nexus revisa la publicación ANTES de publicarla:
+// enlace (si el archivo existe), portada, texto, derechos, duplicados y si es
+// una parte de una serie. ia:false = solo comprobaciones rápidas (al pulsar Publicar).
+const precheckUso = new Map();   // usuario → [timestamps] (máx. 12/min)
+app.post('/items/precheck', verificarToken, async (req, res) => {
+    try {
+        const ahora = Date.now();
+        const usos = (precheckUso.get(req.usuario) || []).filter(t => ahora - t < 60000);
+        if (usos.length >= 12) return res.status(429).json({ success: false, error: 'Espera un momento antes de volver a revisar' });
+        usos.push(ahora); precheckUso.set(req.usuario, usos);
+        if (precheckUso.size > 20000) precheckUso.clear();
+
+        const b = req.body || {};
+        const item = {
+            _id: new mongoose.Types.ObjectId(), usuario: req.usuario, createdAt: new Date(),
+            title: String(b.title || '').trim().slice(0, 200), description: String(b.description || '').slice(0, 1000),
+            link: String(b.link || '').trim(), image: String(b.image || '').trim(),
+            images: Array.isArray(b.images) ? b.images.filter(x => typeof x === 'string').slice(0, 4) : [],
+            category: String(b.category || 'General').slice(0, 40), extraData: {},
+        };
+        if (!item.title || !item.link) return res.status(400).json({ success: false, error: 'Escribe al menos el título y el enlace' });
+        const a = await revisionIA.analizar(item, { Juego, Usuario, errorLinkPublicacion, gameDetector, nexusClient, logger, sinIA: b.ia === false });
+        // Al creador solo le sirve lo que puede corregir (no su propio historial)
+        const hechos = a.hechos.filter(h => ['enlace', 'medios', 'texto', 'derechos', 'duplicado'].includes(h.area));
+
+        // ¿Es una parte de una serie?
+        const s = series.serieDe(item.title, req.usuario);
+        if (s) {
+            const otras = await Juego.find({ 'serie.clave': s.clave }).select('serie.parte').lean();
+            const nums = [...new Set(otras.map(o => o.serie?.parte).filter(Boolean))].sort((x, y) => x - y);
+            if (nums.includes(s.parte)) hechos.push({ tipo: 'warn', area: 'serie', texto: `Ya publicaste la Parte ${s.parte} de "${s.base}": ¿no será la siguiente?`, peso: 0 });
+            else if (nums.length) hechos.push({ tipo: 'ok', area: 'serie', texto: `Es la Parte ${s.parte} de "${s.base}": se agrupará en una carpeta con tus partes ${nums.join(', ')}. Cada parte suma sus propias descargas.`, peso: 0 });
+            else if (s.parte > 1) hechos.push({ tipo: 'warn', area: 'serie', texto: `Detecté la Parte ${s.parte} de "${s.base}", pero aún no has publicado la Parte 1. Publícalas con el mismo título base para que se agrupen.`, peso: 0 });
+            else hechos.push({ tipo: 'info', area: 'serie', texto: `Detecté la Parte ${s.parte} de "${s.base}". Publica las siguientes como "${s.base} parte 2", "parte 3"… y se agruparán en una carpeta.`, peso: 0 });
+        }
+        const problemas = hechos.filter(h => h.tipo === 'bad').length;
+        res.json({
+            success: true, listo: problemas === 0, problemas, avisos: hechos.filter(h => h.tipo === 'warn').length,
+            puntos: a.puntos, resumen: problemas ? 'Nexus encontró problemas que harían que rechacen tu publicación.' : (a.ia?.resumen || 'Tu publicación se ve bien.'),
+            hechos, sugerencias: a.ia?.sugerencias || [], razones: a.ia?.razones || [], fuente: a.ia?.fuente || null,
+            enlace: a.enlace?.estado || null, serie: s ? { base: s.base, parte: s.parte } : null,
+        });
+    } catch (e) {
+        logger.error(`[precheck] ${e.message}`);
+        res.status(500).json({ success: false, error: 'Nexus no pudo revisar la publicación ahora' });
+    }
+});
+
 app.post("/items/add", [verificarToken, body('title').notEmpty().trim().isLength({ max: 200 }), body('link').notEmpty().trim()], async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -1738,6 +1834,7 @@ app.post("/items/add", [verificarToken, body('title').notEmpty().trim().isLength
         CAMPOS_PUBLICACION.forEach(f => { if (req.body[f] !== undefined) datos[f] = req.body[f]; });
         if (datos.extraData && (typeof datos.extraData !== 'object' || Array.isArray(datos.extraData))) datos.extraData = {};
         if (datos.tags !== undefined && !Array.isArray(datos.tags)) delete datos.tags;
+        datos.serie = series.serieDe(datos.title, req.usuario);
         const nuevoJuego = new Juego({ ...datos, usuario: req.usuario, status: "aprobado", linkStatus: "revision" });
 
         // ── Detección automática de juego conocido ──────────────────
@@ -1792,7 +1889,7 @@ app.post("/items/add", [verificarToken, body('title').notEmpty().trim().isLength
             tags:        nuevoJuego.tags,
             categoria:   nuevoJuego.category,
             precio:      nuevoJuego.precio,
-            imagenes:    nuevoJuego.images?.length || 0,
+            imagenes:    [nuevoJuego.image, ...(nuevoJuego.images || [])].filter(Boolean),   // Nexus espera la lista (antes recibía un número → "0 imágenes")
         }, req.headers.authorization?.split(' ')[1])
         .then(m => {
             if (m?.ok && m.mentor) {
@@ -1821,6 +1918,7 @@ app.put("/items/:id", verificarToken, [
         const updates = {};
         ['title', 'description', 'link', 'image', 'images', 'category', 'videoType', 'extraData', 'featuredItemId'].forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
         if (Object.keys(updates).length === 0) return res.status(400).json({ success: false, error: "No se enviaron campos para actualizar" });
+        if (updates.title !== undefined) updates.serie = series.serieDe(updates.title, item.usuario);
         if (updates.link !== undefined) {
             const errLink = errorLinkPublicacion(updates.link, updates.category || item.category);
             if (errLink) return res.status(400).json({ success: false, error: errLink });
@@ -1967,6 +2065,24 @@ app.get('/items/autoinfo', async (req, res) => {
     } catch (err) {
         logger.error(`[autoinfo] ${err.message}`);
         res.status(500).json({ found: false });
+    }
+});
+
+// GET /items/:id/serie — todas las partes de la serie de esta publicación, en orden
+app.get('/items/:id/serie', async (req, res) => {
+    try {
+        if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ success: false, error: 'ID inválido' });
+        const item = await Juego.findById(req.params.id).select('serie usuario').lean();
+        if (!item) return res.status(404).json({ success: false, error: 'Publicación no encontrada' });
+        if (!item.serie?.clave) return res.json({ success: true, serie: null });
+        const partes = await Juego.find({ 'serie.clave': item.serie.clave, status: 'aprobado', linkStatus: { $in: ['online', 'revision', 'caido'] } })
+            .select('_id title image images description category usuario linkStatus descargasEfectivas likesCount reportes serie createdAt')
+            .sort({ 'serie.parte': 1, createdAt: 1 }).lean();
+        if (partes.length < 2) return res.json({ success: true, serie: null });
+        res.json({ success: true, serie: { clave: item.serie.clave, base: item.serie.base, total: partes.length, totalDeclarado: item.serie.total || null,
+            descargas: partes.reduce((a, p) => a + (p.descargasEfectivas || 0), 0), partes } });
+    } catch (e) {
+        res.status(500).json({ success: false, error: 'Error al cargar la serie' });
     }
 });
 
@@ -3128,6 +3244,18 @@ function iniciarJobsAutomaticos() {
     }
     setInterval(autoMarcarCaidos, 6 * 60 * 60 * 1000);
     logger.info('JOB 5: Auto-marcado de links caídos activo (cada 6h)');
+
+    // JOB: agrupar en series las publicaciones existentes ("… parte 1", "… parte 2")
+    async function backfillSeries() {
+        try {
+            const pendientes = await Juego.find({ serie: { $exists: false } }).select('_id title usuario').lean();
+            if (!pendientes.length) return;
+            const ops = pendientes.map(j => ({ updateOne: { filter: { _id: j._id }, update: { $set: { serie: series.serieDe(j.title, j.usuario) } }, timestamps: false } }));
+            for (let i = 0; i < ops.length; i += 500) await Juego.bulkWrite(ops.slice(i, i + 500), { ordered: false });
+            logger.info(`Series: ${pendientes.length} publicaciones revisadas, ${ops.filter(o => o.updateOne.update.$set.serie).length} son partes de una serie`);
+        } catch (err) { logger.error(`Series backfill: ${err.message}`); }
+    }
+    backfillSeries();
 
     // JOB 6: Auto-verificación por seguidores (cada 6h)
     async function autoVerificarUsuarios() {

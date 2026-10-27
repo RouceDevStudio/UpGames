@@ -5003,3 +5003,67 @@ button.pf2-stat { cursor: pointer; }
 #pf-chat-btn { position: relative; }
 .pf2-chat-n { position: absolute; top: -6px; right: -6px; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 99px; background: var(--g); color: #06210f; font-size: .62rem; font-weight: 800; display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg); }
 .pf2-chat-n[hidden] { display: none; }
+
+/* ── Series por partes ── */
+.tile-serie-badge{background:rgba(90,200,250,.14)!important;color:#8fdcff!important;border-color:rgba(90,200,250,.35)!important}
+.ds-serie{margin:14px 0 4px;padding:14px;border-radius:16px;background:linear-gradient(135deg,rgba(90,200,250,.10),rgba(50,213,131,.06));border:1px solid rgba(90,200,250,.28)}
+.ds-serie-h{display:flex;gap:10px;align-items:center}
+.ds-serie-h>ion-icon{font-size:1.5rem;color:#5AC8FA;flex-shrink:0}
+.ds-serie-h b{display:block;font-size:.95rem;color:#f2f4f8}.ds-serie-h small{display:block;font-size:.74rem;color:rgba(242,244,248,.55);margin-top:2px}
+.ds-serie-bar{height:6px;border-radius:6px;background:rgba(255,255,255,.08);margin:12px 0 5px;overflow:hidden}
+.ds-serie-bar i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,#32D583,#5AC8FA);transition:width .4s}
+.ds-serie-prog{font-size:.72rem;color:rgba(242,244,248,.55);margin-bottom:10px}
+.ds-serie-list{display:flex;flex-direction:column;gap:6px}
+.ds-serie-row{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.22);color:#f2f4f8;font:inherit;font-size:.86rem;text-align:left;cursor:pointer;transition:background .2s,border-color .2s}
+.ds-serie-row:hover:not([disabled]){background:rgba(255,255,255,.06)}
+.ds-serie-row[disabled]{cursor:default;opacity:1}
+.ds-serie-row.cur{border-color:rgba(90,200,250,.5);background:rgba(90,200,250,.10)}
+.ds-serie-row.next{border-color:rgba(50,213,131,.55);background:rgba(50,213,131,.12);box-shadow:0 0 0 1px rgba(50,213,131,.2)}
+.ds-serie-row>ion-icon{margin-left:6px;color:rgba(242,244,248,.45)}
+.ds-serie-n{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.08);font-weight:800;font-size:.78rem;flex-shrink:0}
+.ds-serie-row.next .ds-serie-n{background:#32D583;color:#06140c}
+.ds-serie-t{flex:1;min-width:0}
+.ds-serie-tag{font-size:.66rem;font-weight:800;padding:2px 8px;border-radius:999px;white-space:nowrap;margin-left:auto}
+.ds-serie-tag.cur{background:rgba(90,200,250,.18);color:#8fdcff}.ds-serie-tag.ok{background:rgba(50,213,131,.16);color:#6ff0ae}.ds-serie-tag.next{background:#32D583;color:#06140c}
+.ds-serie-lock{margin-top:10px;font-size:.76rem;color:rgba(242,244,248,.55);display:flex;gap:6px;align-items:center}
+.ds-serie-lock.ok{color:#6ff0ae}
+
+/* ── Nexus presente en la app (✦) ── */
+.pf-nexus-ic,.ds-ask-ic{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:10px;flex-shrink:0;font-size:1rem;color:#fff;
+  background:linear-gradient(135deg,#a78bfa,#5AC8FA);box-shadow:0 4px 14px rgba(167,139,250,.35)}
+.ds-ask-nexus{display:flex;align-items:center;gap:12px;width:100%;margin:12px 0 4px;padding:12px 14px;border-radius:16px;cursor:pointer;text-align:left;font:inherit;color:#f2f4f8;
+  background:linear-gradient(135deg,rgba(167,139,250,.14),rgba(90,200,250,.08));border:1px solid rgba(167,139,250,.35);transition:transform .15s,border-color .2s}
+.ds-ask-nexus:hover{border-color:rgba(167,139,250,.6)}.ds-ask-nexus:active{transform:scale(.99)}
+.ds-ask-nexus b{display:block;font-size:.92rem}.ds-ask-nexus small{display:block;font-size:.74rem;color:rgba(242,244,248,.6);margin-top:1px}
+.ds-ask-nexus>ion-icon{margin-left:auto;color:#c4b5fd}
+.pf-nexus-check{margin:14px 0}
+.pf-nexus-btn{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border-radius:14px;cursor:pointer;text-align:left;font:inherit;color:#f2f4f8;
+  background:linear-gradient(135deg,rgba(167,139,250,.16),rgba(90,200,250,.08));border:1px dashed rgba(167,139,250,.5)}
+.pf-nexus-btn:disabled{opacity:.6;cursor:wait}
+.pf-nexus-btn b{display:block;font-size:.9rem}.pf-nexus-btn small{display:block;font-size:.72rem;color:rgba(242,244,248,.6)}
+.pf-nx-load{display:flex;gap:12px;align-items:center;margin-top:10px;padding:12px;border-radius:14px;background:rgba(167,139,250,.08);font-size:.85rem}
+.pf-nx-load small{display:block;color:rgba(242,244,248,.55);font-size:.74rem}
+.pf-nx-orb{width:28px;height:28px;border-radius:50%;flex-shrink:0;background:conic-gradient(#a78bfa,#5AC8FA,#32D583,#a78bfa);animation:spinAnim 1s linear infinite;
+  -webkit-mask:radial-gradient(farthest-side,transparent 62%,#000 64%);mask:radial-gradient(farthest-side,transparent 62%,#000 64%)}
+.pf-nx-res{margin-top:10px;padding:12px 14px;border-radius:14px;font-size:.84rem;border:1px solid;background:rgba(0,0,0,.2)}
+.pf-nx-res.ok{border-color:rgba(50,213,131,.45)}.pf-nx-res.warn{border-color:rgba(255,176,32,.45)}.pf-nx-res.bad{border-color:rgba(255,90,95,.5)}
+.pf-nx-h{display:flex;gap:10px;align-items:center;font-size:.95rem}
+.pf-nx-res p{margin:8px 0;color:rgba(242,244,248,.75)}
+.pf-nx-res ul{list-style:none;margin:6px 0 0;padding:0}
+.pf-nx-res li{display:flex;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,.06);line-height:1.4}
+.pf-nx-res li.bad{color:#ff9a9d}.pf-nx-res li.warn{color:#ffd27a}
+.pf-nx-sug{margin-top:10px;padding:10px;border-radius:10px;background:rgba(167,139,250,.08);display:flex;flex-direction:column;gap:5px}
+.pf-nx-src{display:block;margin-top:8px;font-size:.7rem;color:rgba(242,244,248,.45)}
+.pf2-nexus{margin:12px 0;padding:12px;border-radius:14px;background:linear-gradient(135deg,rgba(167,139,250,.12),rgba(90,200,250,.06));border:1px solid rgba(167,139,250,.3);font-size:.84rem}
+.pf2-nexus-h{display:flex;align-items:center;gap:10px}.pf2-nexus-h .pf-nexus-ic{width:26px;height:26px;font-size:.85rem}
+.pf2-nexus-score{margin-left:auto;font-weight:800;color:#c4b5fd}
+.pf2-nexus p{margin:8px 0;color:rgba(242,244,248,.78);line-height:1.45}
+.pf2-nexus ul{margin:4px 0 0;padding-left:18px;color:rgba(242,244,248,.78)}.pf2-nexus li{margin:3px 0}
+.pf2-nexus-alert{margin-top:8px;color:#ffd27a;font-size:.78rem}
+.pf2-rechazo{margin:12px 0;padding:10px 12px;border-radius:12px;background:rgba(255,90,95,.1);border:1px solid rgba(255,90,95,.35);color:#ffb3b5;font-size:.84rem;line-height:1.45}
+.pf2-rechazo small{color:rgba(255,179,181,.7)}
+.pf2-sheet-cat .bad{color:#ff8a8d}
+.pf2-btn-nexus{width:100%;justify-content:center;margin:4px 0 10px;background:linear-gradient(135deg,rgba(167,139,250,.18),rgba(90,200,250,.1))!important;border-color:rgba(167,139,250,.4)!important}
+.pf2-btn-nexus .pf-nexus-ic{width:22px;height:22px;font-size:.75rem;border-radius:7px}
+.empty-action{cursor:pointer;font:inherit}
+.empty-action--nexus{background:linear-gradient(135deg,#a78bfa,#5AC8FA)!important;color:#fff!important;border:none!important;margin-bottom:8px}
