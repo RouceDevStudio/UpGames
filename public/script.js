@@ -1578,7 +1578,6 @@ function pfSwitchTab(tabName, el) {
   if(tabName === 'historial') pfLoadHistorial();
   if(tabName === 'boveda') pfLoadBoveda();
   if(tabName === 'reportes') pfLoadReportes();
-  if(tabName === 'analytics') pfLoadAnalytics();
   if(tabName === 'pagos') pfLoadHistorialPagos();
   if(tabName === 'logros') pfLoadLogros();
   if(tabName === 'economia') pfStartEcoPolling();
@@ -4067,7 +4066,7 @@ const TUT_STEPS = [
   {
     sel: '#pf-tabs',
     title: '📑 Las Pestañas de Tu Perfil',
-    body: 'Al entrar ves tus <strong>Publicaciones</strong>, como en Instagram o TikTok:<br>• ▦ <strong>Publicaciones</strong> y ▶ <strong>Videos</strong> — toca una para ver, editar o borrar<br>• 📈 <strong>Analytics</strong> · 💵 <strong>Pagos</strong> · 🏆 <strong>Logros</strong> · 🚩 <strong>Reportes</strong>'
+    body: 'Al entrar ves tus <strong>Publicaciones</strong>, como en Instagram o TikTok:<br>• ▦ <strong>Publicaciones</strong> y ▶ <strong>Videos</strong> — toca una para ver, editar o borrar<br>• 💵 <strong>Pagos</strong> · 🏆 <strong>Logros</strong> · 🚩 <strong>Reportes</strong>'
   },
 
   // ── TAB: PUBLICAR ────────────────────────────────────────
@@ -5278,63 +5277,6 @@ function showBuyModal(itemId, gameName, purchaseLink) {
 
   document.body.appendChild(overlay);
   overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
-}
-
-// ═══════════════════════════════════════════════════════════
-// ANALYTICS TAB — Nexus creator insights
-// ═══════════════════════════════════════════════════════════
-let _analyticsLoaded = false;
-async function pfLoadAnalytics() {
-  if(_analyticsLoaded) return;
-  _analyticsLoaded = true;
-  const el = document.getElementById('pf-analytics-content');
-  if(!el) return;
-  const token = LS.get('token');
-  if(!token) { el.innerHTML = '<div class="pf-empty"><ion-icon name="lock-closed"></ion-icon><p>Inicia sesión para ver tus analytics</p></div>'; return; }
-  try {
-    const r = await fetch(`${PF_API}/nexus/mis-analytics`, { headers: { Authorization: `Bearer ${token}` } });
-    const d = await r.json();
-    if(!r.ok || d.error) { el.innerHTML = '<div class="pf-empty"><ion-icon name="cloud-offline"></ion-icon><p>Nexus no disponible ahora. Intenta más tarde.</p></div>'; return; }
-    // Respuesta real de NEXUS: { statsReales, actividad, insights:{ resumen_ejecutivo, acciones_prioritarias, ... } }
-    const ins = d.insights || {};
-    const st  = d.statsReales || null;
-    const act = d.actividad || {};
-    const e   = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    const box = (icon, color, title, body) => `
-      <div class="pf-info-box" style="border-color:${color}40">
-        <ion-icon name="${icon}" style="color:${color};font-size:24px"></ion-icon>
-        <div>${title ? `<h4 style="color:${color}">${title}</h4>` : ''}<p>${body}</p></div>
-      </div>`;
-    const list = (title, icon, arr) => (Array.isArray(arr) && arr.length) ? `
-      <div class="pf-section-title" style="margin-top:8px"><ion-icon name="${icon}"></ion-icon> ${title}</div>
-      ${arr.map(x => box('arrow-forward-circle', '#5AC8FA', '', e(x))).join('')}` : '';
-    const mp = ins.mejor_momento_publicar;
-    el.innerHTML = `
-      <div style="display:grid;gap:12px;padding:4px 0">
-        ${st ? `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center">
-          ${[['Descargas', st.totalDescargas], ['Aprobadas', st.publicacionesAprobadas], ['Seguidores', st.seguidores]].map(([k, v]) =>
-            `<div class="pf-info-box" style="flex-direction:column;gap:2px;padding:10px"><b style="font-size:20px;color:#32D583">${Number(v || 0).toLocaleString('es-CO')}</b><span style="font-size:11px;opacity:.7">${k}</span></div>`).join('')}
-        </div>` : ''}
-        ${ins.resumen_ejecutivo ? box('sparkles', '#32D583', 'Resumen de NEXUS', e(ins.resumen_ejecutivo)) : ''}
-        ${ins.punto_fuerte ? box('trophy', '#32D583', 'Tu punto fuerte', e(ins.punto_fuerte)) : ''}
-        ${ins.punto_a_mejorar ? box('construct', '#ffcc00', 'Qué mejorar', e(ins.punto_a_mejorar)) : ''}
-        ${mp && (mp.dia || mp.hora) ? box('time', '#5AC8FA', 'Mejor momento para publicar', `${e(mp.dia)} ${e(mp.hora)}${mp.razon ? ' — ' + e(mp.razon) : ''}`) : ''}
-        ${list('ACCIONES PRIORITARIAS', 'bulb', ins.acciones_prioritarias)}
-        ${(ins.categorias_recomendadas || []).length ? `
-        <div class="pf-section-title" style="margin-top:8px"><ion-icon name="pie-chart"></ion-icon> CATEGORÍAS RECOMENDADAS</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          ${ins.categorias_recomendadas.map(c => `<span style="background:rgba(50,213,131,.1);border:1px solid rgba(50,213,131,.3);padding:4px 12px;border-radius:20px;font-size:12px;color:#32D583">${e(c)}</span>`).join('')}
-        </div>` : ''}
-        ${!ins.resumen_ejecutivo && !st ? box('information-circle', '#A6ADBB', '', 'Aún no hay suficientes datos. Publica contenido y vuelve en unos días.') : ''}
-        <div class="pf-info-box" style="opacity:.6;margin-top:4px">
-          <ion-icon name="information-circle"></ion-icon>
-          <div><p style="font-size:11px">Estadísticas reales de UpGames${act.totalEventos60dias ? ` y ${act.totalEventos60dias} eventos de los últimos 60 días` : ''}. Las sugerencias las redacta NEXUS con IA y pueden equivocarse.</p></div>
-        </div>
-      </div>`;
-  } catch(e) {
-    el.innerHTML = '<div class="pf-empty"><ion-icon name="cloud-offline"></ion-icon><p>No se pudo conectar con Nexus.</p></div>';
-    _analyticsLoaded = false;
-  }
 }
 
 // ═══════════════════════════════════════════════════════════

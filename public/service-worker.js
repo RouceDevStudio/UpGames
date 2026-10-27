@@ -11,7 +11,7 @@
 // IMPORTANTE: bump CACHE_VERSION cuando cambies archivos estáticos.
 // ========================================
 
-const CACHE_VERSION = 'upgames-v6.3.0';
+const CACHE_VERSION = 'upgames-v6.4.0';
 const CACHE_STATIC  = `${CACHE_VERSION}-static`;
 const CACHE_RUNTIME = `${CACHE_VERSION}-runtime`;
 const CACHE_API     = `${CACHE_VERSION}-api`;
@@ -32,6 +32,8 @@ const PRECACHE_URLS = [
     './upgames-motion.js',
     './og-cover.png',
     './manifest.json',
+    './icons/icon-192.png?v=2',
+    './icons/icon-512.png?v=2',
     './offline.html'
 ];
 
@@ -270,8 +272,8 @@ self.addEventListener('push', (event) => {
     const data = event.data.json();
     const options = {
         body: data.body || 'Nueva actividad en UpGames',
-        icon: './og-cover.png',
-        badge: './og-cover.png',
+        icon: './icons/icon-192.png?v=2',
+        badge: './icons/icon-96.png?v=2',
         data: { url: data.url || './biblioteca.html' },
         tag: data.tag || 'upgames-notif',
         requireInteraction: false
