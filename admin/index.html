@@ -340,7 +340,8 @@ select.in{appearance:none;background-image:linear-gradient(45deg,transparent 50%
     <label class="row small muted" style="margin:-2px 0 14px;cursor:pointer"><input type="checkbox" id="lgRec" style="accent-color:#32D583"> Mantener la sesión en este dispositivo</label>
     <button class="btn pri" id="lgBtn" style="width:100%;padding:13px">Entrar</button>
     <div class="lg-err" id="lgErr"></div>
-    <button type="button" class="lg-alt" id="lgAlt" onclick="togglePin()">Usar llave maestra de emergencia</button>
+    <button type="button" class="lg-alt" id="lgForgot" onclick="olvide()">¿Olvidaste tu contraseña?</button>
+    <button type="button" class="lg-alt" id="lgAlt" style="margin-top:6px" onclick="togglePin()">Usar llave maestra de emergencia</button>
   </form>
 </div>
 
@@ -671,8 +672,16 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') { document.q
 // ─────────── Login ───────────
 let usePin = false;
 function togglePw() { const i = $('lgPass'); i.type = i.type === 'password' ? 'text' : 'password'; $('pwIco').setAttribute('name', i.type === 'password' ? 'eye-outline' : 'eye-off-outline'); }
-function togglePin() { usePin = !usePin; $('lgCuenta').style.display = usePin ? 'none' : ''; $('lgPinBox').style.display = usePin ? '' : 'none'; $('lgAlt').textContent = usePin ? 'Entrar con mi cuenta' : 'Usar llave maestra de emergencia'; $('lgErr').textContent = ''; }
+function togglePin() { usePin = !usePin; $('lgCuenta').style.display = usePin ? 'none' : ''; $('lgForgot').style.display = usePin ? 'none' : ''; $('lgPinBox').style.display = usePin ? '' : 'none'; $('lgAlt').textContent = usePin ? 'Entrar con mi cuenta' : 'Usar llave maestra de emergencia'; $('lgErr').textContent = ''; }
 
+async function olvide() {
+  const email = $('lgEmail').value.trim();
+  if (!/^\S+@\S+\.\S+$/.test(email)) { $('lgErr').textContent = 'Escribe arriba el email de tu cuenta y vuelve a pulsar'; $('lgEmail').focus(); return; }
+  try { const { d } = await api('/auth/forgot-password', { method: 'POST', body: { email }, auth: false });
+    $('lgErr').style.color = '#7ff5b8'; $('lgErr').textContent = d.mensaje || 'Si el email existe, recibirás un enlace para crear una contraseña nueva.';
+    setTimeout(() => { $('lgErr').style.color = ''; }, 8000);
+  } catch (_) { $('lgErr').textContent = 'No hay conexión con el servidor'; }
+}
 $('lgForm').addEventListener('submit', async e => {
   e.preventDefault();
   const btn = $('lgBtn'), err = $('lgErr');
