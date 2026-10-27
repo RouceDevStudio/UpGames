@@ -11,7 +11,7 @@
 // IMPORTANTE: bump CACHE_VERSION cuando cambies archivos estáticos.
 // ========================================
 
-const CACHE_VERSION = 'upgames-v6.5.0';
+const CACHE_VERSION = 'upgames-v6.6.0';
 const CACHE_STATIC  = `${CACHE_VERSION}-static`;
 const CACHE_RUNTIME = `${CACHE_VERSION}-runtime`;
 const CACHE_API     = `${CACHE_VERSION}-api`;
@@ -265,35 +265,43 @@ self.addEventListener('message', (event) => {
 });
 
 // ======================================================================
-// PUSH NOTIFICATIONS (para futuro)
+// PUSH NOTIFICATIONS — avisos reales aunque UpGames esté cerrado
 // ======================================================================
 self.addEventListener('push', (event) => {
-    if (!event.data) return;
-    const data = event.data.json();
-    const options = {
-        body: data.body || 'Nueva actividad en UpGames',
-        icon: './icons/icon-192.png?v=2',
-        badge: './icons/icon-96.png?v=2',
-        data: { url: data.url || './biblioteca.html' },
-        tag: data.tag || 'upgames-notif',
-        requireInteraction: false
-    };
-
-    event.waitUntil(
-        self.registration.showNotification(data.title || 'UpGames', options)
-    );
+    let data = {};
+    try { data = event.data ? event.data.json() : {}; } catch (_) { data = { body: event.data && event.data.text() }; }
+    event.waitUntil((async () => {
+        const ventanas = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+        // UpGames abierto y a la vista → la isla flotante dentro de la app (sin duplicar)
+        const abierta = ventanas.find(c => c.visibilityState === 'visible' && /biblioteca\.html/.test(c.url));
+        if (abierta) { abierta.postMessage({ type: 'UG_PUSH', data }); return; }
+        const opciones = {
+            body: data.body || 'Nueva actividad en UpGames',
+            icon: data.icon || './icons/icon-192.png?v=2',
+            badge: data.badge || './icons/icon-96.png?v=2',
+            tag: data.tag || 'upgames',
+            renotify: true,
+            timestamp: Date.now(),
+            vibrate: [80, 40, 80],
+            data: { url: data.url || './biblioteca.html', id: data.id || '' },
+        };
+        if (data.image) opciones.image = data.image;
+        await self.registration.showNotification(data.title || 'UpGames', opciones);
+        if (self.navigator && 'setAppBadge' in self.navigator) self.navigator.setAppBadge().catch(() => {});
+    })());
 });
 
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
-    const url = event.notification.data?.url || './biblioteca.html';
-
-    event.waitUntil(
-        clients.matchAll({ type: 'window' }).then((clientList) => {
-            for (const client of clientList) {
-                if (client.url.includes(url) && 'focus' in client) return client.focus();
-            }
-            if (clients.openWindow) return clients.openWindow(url);
-        })
-    );
+    const url = new URL(event.notification.data?.url || './biblioteca.html', self.location.href).href;
+    event.waitUntil((async () => {
+        const ventanas = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+        // Reutilizar una pestaña de UpGames si hay alguna abierta
+        const propia = ventanas.find(c => c.url.startsWith(self.registration.scope));
+        if (propia) {
+            await propia.focus();
+            if ('navigate' in propia) return propia.navigate(url).catch(() => clients.openWindow(url));
+        }
+        return clients.openWindow(url);
+    })());
 });

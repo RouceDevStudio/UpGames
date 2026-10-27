@@ -56,6 +56,7 @@ const twoFactor       = require('./modulos/twoFactor');
 const nexusClient     = require('./modulos/nexusClient');
 const gameDetector    = require('./modulos/gameDetector');
 const series          = require('./modulos/series');
+const push            = require('./modulos/push');
 const autoInfo        = require('./modulos/autoInfo');
 const memCache        = require('./modulos/cache');
 const searchModule    = require('./modulos/search');
@@ -512,6 +513,13 @@ const UsuarioSchema = new mongoose.Schema({
     adminPausado:  { type: Boolean, default: false },
     adminHasta:    { type: Date, default: null },   // acceso temporal
     adminSesionVer:{ type: Number, default: 0 },    // +1 = cierra todas sus sesiones del panel
+    // Qué avisos push quiere recibir en el móvil (Revisión/Equipo se envían siempre)
+    notifPrefs: {
+        publicaciones: { type: Boolean, default: true },   // creadores que sigo publican algo
+        mensajes:      { type: Boolean, default: true },
+        social:        { type: Boolean, default: true },   // seguidores, likes, comentarios, logros
+        anuncios:      { type: Boolean, default: true },
+    },
     suspendido:       { type: Boolean, default: false, index: true },   // no puede iniciar sesión ni usar su token
     motivoSuspension: { type: String, default: '', maxlength: 300 },
     fechaSuspension:  { type: Date, default: null },
@@ -575,6 +583,10 @@ const NotificacionSchema = new mongoose.Schema({
     fecha:    { type: Date, default: Date.now, index: true, expires: 30 * 24 * 60 * 60 }
 }, { collection: 'notificaciones', timestamps: false });
 NotificacionSchema.index({ destinatario: 1, leida: 1, fecha: -1 });
+// Push real al móvil: cada notificación NUEVA dispara su push (modulos/push.js)
+NotificacionSchema.pre('save', function (next) { this.$locals.nueva = this.isNew; next(); });
+NotificacionSchema.post('save', function (doc) { if (doc.$locals?.nueva) push.alCrear([doc]); });
+NotificacionSchema.post('insertMany', function (docs) { push.alCrear(Array.isArray(docs) ? docs : [docs]); });
 const Notificacion = mongoose.model('Notificacion', NotificacionSchema);
 
 /**
@@ -2661,6 +2673,12 @@ app.get('/notificaciones/:usuario', verificarToken, async (req, res) => {
     }
 });
 
+app.put('/notificaciones/leida/:id', verificarToken, async (req, res) => {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ success: false });
+    await Notificacion.updateOne({ _id: req.params.id, destinatario: req.usuario }, { $set: { leida: true } }).catch(() => {});
+    res.json({ success: true });
+});
+
 app.put('/notificaciones/marcar-leidas/:usuario', verificarToken, async (req, res) => {
     try {
         const { usuario } = req.params;
@@ -2682,16 +2700,58 @@ app.get('/notificaciones/count/:usuario', verificarToken, async (req, res) => {
     } catch (err) { res.status(500).json({ success: false, error: 'Error' }); }
 });
 
+// POST /notificaciones — solo "alguien descargó tu publicación" (lo llama la página puente).
+// Antes aceptaba cualquier tipo, título e imagen para cualquier destinatario: con push real
+// serviría para mandar spam o anuncios falsos al móvil de otros. Ahora todo sale de la BD.
 app.post('/notificaciones', verificarToken, async (req, res) => {
     try {
-        const { usuario, tipo, emisor, itemId, itemTitle, itemImage } = req.body;
-        if (!usuario || !tipo) return res.status(400).json({ success: false, error: 'usuario y tipo requeridos' });
-        await new Notificacion({ destinatario: usuario, tipo: tipo || 'sistema', emisor: emisor || '', itemId: itemId || '', itemTitle: itemTitle || '', itemImage: itemImage || '', leida: false, fecha: new Date() }).save();
+        const { itemId } = req.body || {};
+        if (!mongoose.isValidObjectId(itemId)) return res.status(400).json({ success: false, error: 'itemId inválido' });
+        const item = await Juego.findById(itemId).select('usuario title image').lean();
+        if (!item || item.usuario === req.usuario) return res.json({ success: true });
+        const hoy = new Date(Date.now() - 24 * 3600e3);
+        const ya = await Notificacion.exists({ destinatario: item.usuario, emisor: req.usuario, tipo: 'descarga', itemId, fecha: { $gte: hoy } });
+        if (!ya) await new Notificacion({ destinatario: item.usuario, tipo: 'descarga', emisor: req.usuario, itemId, itemTitle: item.title, itemImage: item.image || '', leida: false, fecha: new Date() }).save();
         res.json({ success: true });
     } catch (err) {
         logger.error(`Error creando notificación: ${err.message}`);
         res.status(500).json({ success: false, error: 'Error interno' });
     }
+});
+
+// ── PUSH: suscripción del dispositivo y preferencias ──
+app.get('/push/clave', async (req, res) => {
+    const ok = await push.iniciar({ logger });
+    res.json({ success: ok, publicKey: push.clave() });
+});
+app.post('/push/suscribir', verificarToken, async (req, res) => {
+    try {
+        const sub = req.body?.subscription || {};
+        if (!/^https:\/\//.test(sub.endpoint || '') || !sub.keys?.p256dh || !sub.keys?.auth) return res.status(400).json({ success: false, error: 'Suscripción inválida' });
+        await push.PushSub.updateOne({ endpoint: sub.endpoint },
+            { $set: { usuario: req.usuario, keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth }, ua: String(req.headers['user-agent'] || '').slice(0, 200) }, $setOnInsert: { creado: new Date() } },
+            { upsert: true });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ success: false, error: 'No se pudo activar' }); }
+});
+app.post('/push/desuscribir', verificarToken, async (req, res) => {
+    await push.PushSub.deleteOne({ endpoint: String(req.body?.endpoint || ''), usuario: req.usuario }).catch(() => {});
+    res.json({ success: true });
+});
+app.get('/push/prefs', verificarToken, async (req, res) => {
+    const u = await Usuario.findOne({ usuario: req.usuario }).select('notifPrefs').lean();
+    const dispositivos = await push.PushSub.countDocuments({ usuario: req.usuario });
+    res.json({ success: true, prefs: { publicaciones: true, mensajes: true, social: true, anuncios: true, ...(u?.notifPrefs || {}) }, dispositivos });
+});
+app.put('/push/prefs', verificarToken, async (req, res) => {
+    const set = {};
+    ['publicaciones', 'mensajes', 'social', 'anuncios'].forEach(k => { if (typeof req.body?.[k] === 'boolean') set[`notifPrefs.${k}`] = req.body[k]; });
+    if (Object.keys(set).length) await Usuario.updateOne({ usuario: req.usuario }, { $set: set });
+    res.json({ success: true });
+});
+app.post('/push/prueba', verificarToken, async (req, res) => {
+    const n = await push.enviarA([req.usuario], () => ({ title: '🔔 ¡Listo!', body: 'Así te llegarán los avisos de UpGames aunque no estés en la app.', url: (process.env.APP_URL || 'https://roucedevstudio.github.io/UpGames') + '/public/biblioteca.html', tag: 'prueba', icon: './icons/icon-192.png?v=2', badge: './icons/icon-96.png?v=2' }));
+    res.json({ success: true, enviados: n });
 });
 
 app.delete('/notificaciones/:id', verificarToken, async (req, res) => {
@@ -2809,6 +2869,9 @@ app.post('/chat/enviar', verificarToken, async (req, res) => {
             { $set: { fecha: ahora, itemId: msg._id.toString(), itemImage: imagen || '', mensaje: '' } },
             { upsert: true }
         ).catch(() => {});
+        // Push al móvil con el texto (el sistema operativo lo muestra como texto plano, sin riesgo de HTML)
+        if (!(await Usuario.exists({ usuario: para, bloqueados: de })))
+            push.alCrear([{ destinatario: para, emisor: de, tipo: 'sistema', itemTitle: `Mensaje de @${de}`, mensaje: texto || (imagen ? '📷 Foto' : '') }]);
 
         res.json({ success: true, mensaje: chatSerializar(msg.toObject()), cursor: Date.now() });
     } catch (err) {
@@ -3529,6 +3592,7 @@ app.listen(PORT, () => {
         auditarIdentidades().catch(err => logger.warn(`auditarIdentidades: ${err.message}`));
         // Iniciar jobs automáticos
         iniciarJobsAutomaticos();
+        push.iniciar({ logger });   // claves VAPID (generadas y guardadas en Mongo si no hay variables)
     };
     // Si Mongo conectó ANTES de que el servidor escuchara, 'open' ya ocurrió y
     // nunca se dispararía: índices y jobs (verificación, links caídos…) no correrían.

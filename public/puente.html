@@ -136,16 +136,9 @@
                 if (usuario && autorItem && autorItem !== usuario) {
                     fetch(`${API_URL}/notificaciones`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            usuario:   autorItem,
-                            tipo:      'descarga',
-                            emisor:    usuario,
-                            itemId:    itemId,
-                            itemTitle: itemData?.title    || '',
-                            itemImage: itemData?.image    || '',
-                            mensaje:   `@${usuario} descargó tu contenido: "${itemData?.title || ''}"`
-                        })
+                        // Requiere sesión: antes se enviaba sin token y el servidor lo rechazaba siempre
+                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token') || ''}` },
+                        body: JSON.stringify({ itemId })
                     }).catch(() => {});
                 }
             } catch(_) {}
