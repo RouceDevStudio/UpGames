@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0A0B0F">
-<title>Política de Privacidad v3.0 | UpGames</title>
+<title>Política de Privacidad v3.1 | UpGames</title>
 <meta name="description" content="Cómo UpGames recopila, usa y protege tus datos. Cumple Ley 1581 de 2012 (Colombia), GDPR y CCPA. Incluye NEXUS IA y reconocimiento automático de títulos.">
 <link rel="icon" type="image/png" sizes="96x96" href="./icons/icon-96.png?v=2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -31,14 +31,15 @@
     <p>Recopilamos solo los datos necesarios para operar UpGames. <strong>Nunca vendemos tus datos personales.</strong>
       Esta política cumple la Ley 1581 de 2012 (Colombia), el GDPR (Unión Europea) y la CCPA (California).</p>
     <div class="lg-meta">
-      <span>Versión 3.0</span><span>Vigente desde octubre de 2026</span><span>Ley 1581 de 2012</span><span>GDPR · CCPA</span>
+      <span>Versión 3.1</span><span>Vigente desde octubre de 2026</span><span>Ley 1581 de 2012</span><span>GDPR · CCPA</span>
     </div>
   </section>
 
   <div class="lg-note g"><span class="ic">🛡️</span><div><strong>Resumen.</strong> Usamos tu usuario, email y contraseña (cifrada con
     bcrypt) para autenticarte; opcionalmente tu email de PayPal para pagarte. Registramos tu IP de forma temporal contra el
     fraude. Si usas NEXUS IA, guardamos un registro mínimo de tus preguntas (30 días) para mejorarla. Cuando escribes un título al
-    publicar, solo enviamos ese texto para reconocerlo. Nada más, y nunca lo vendemos.</div></div>
+    publicar, solo enviamos ese texto para reconocerlo. Si pagas con tarjeta, <strong>los datos de la tarjeta los procesa
+    PayPal, no nosotros</strong>: solo guardamos qué compraste y el estado del pago. Tus lives no se graban. Nada más, y nunca lo vendemos.</div></div>
 
   <nav class="lg-card lg-toc" aria-label="Índice">
     <h2>ÍNDICE</h2>
@@ -81,8 +82,26 @@
     <ul>
       <li><strong>Email de PayPal</strong> — solo si quieres recibir pagos; se comparte únicamente con PayPal.</li>
       <li><strong>Nivel de verificación</strong> — se asigna automáticamente según tus seguidores (100 / 500 / 1.000).</li>
-      <li><strong>Tarjetas registradas</strong> — titular, alias, últimos 4 dígitos, mes/año de vencimiento y marca.
-        <strong>El número completo nunca se envía ni se guarda</strong>: tu navegador lo valida y solo transmite los últimos 4 dígitos. No se recogen códigos CVV.</li>
+      <li><strong>Tarjetas registradas antes de octubre de 2026</strong> — titular, alias, últimos 4 dígitos, vencimiento y marca. Ya no se registran
+        tarjetas nuevas; puedes pedir el borrado de las existentes.</li>
+    </ul>
+    <h3>2.2.1 Pagos con tarjeta o PayPal (monedas y acceso directo)</h3>
+    <ul>
+      <li><strong>Los datos de tu tarjeta los recibe y procesa exclusivamente PayPal</strong> en su formulario seguro (PCI DSS).
+        UpGames <strong>nunca</strong> ve, transmite ni guarda el número, la fecha de vencimiento ni el CVV.</li>
+      <li>De cada pago guardamos: identificador de la orden y del cobro, monto, moneda, fecha, estado, qué compraste
+        (paquete de monedas o enlace desbloqueado) y tu usuario.</li>
+      <li>PayPal nos notifica reembolsos y contracargos para anular lo comprado y prevenir fraude.</li>
+    </ul>
+    <h3>2.2.2 Transmisiones en vivo</h3>
+    <ul>
+      <li><strong>Datos del live</strong> — título, categoría, horario, espectadores máximos, likes y regalos recibidos.</li>
+      <li><strong>Video y audio</strong> — UpGames <strong>no graba ni guarda</strong> tus transmisiones. En el modo directo (P2P) el video va
+        de tu navegador al de cada espectador; por cómo funciona WebRTC, <strong>tu dirección IP y la de los espectadores pueden ser visibles
+        entre ellos</strong>. Si usas OBS, el video pasa por nuestro servidor de medios solo para retransmitirlo.</li>
+      <li><strong>Chat del live</strong> — los últimos mensajes se mantienen solo en memoria mientras dura el directo; no se guardan en la base de datos.</li>
+      <li><strong>Clave de transmisión</strong> — privada, solo visible para ti; puedes regenerarla cuando quieras.</li>
+      <li><strong>Regalos y monedas</strong> — saldo de monedas, regalos enviados y recibidos, y ganancias en retención.</li>
     </ul>
     <h3>2.3 Datos técnicos automáticos</h3>
     <ul>
@@ -147,7 +166,8 @@
   <section class="lg-sec lg-card" id="terceros">
     <h2><span class="n">05</span>Terceros que pueden recibir datos</h2>
     <div class="lg-grid">
-      <div class="lg-tile"><b>💳 PayPal</b>Email de PayPal y monto, solo para pagarte.</div>
+      <div class="lg-tile"><b>💳 PayPal</b>Procesa los pagos con tarjeta o PayPal (recibe los datos de la tarjeta directamente; nosotros no) y los retiros a tu email de PayPal.</div>
+      <div class="lg-tile"><b>📡 Servidores STUN/TURN</b>Google y Cloudflare ayudan a conectar el video en vivo; ven direcciones IP, no contenido.</div>
       <div class="lg-tile"><b>🗄️ MongoDB Atlas</b>Base de datos principal, cifrada en reposo.</div>
       <div class="lg-tile"><b>🚂 Railway</b>Hosting del backend y de NEXUS.</div>
       <div class="lg-tile"><b>🖼️ Cloudinary</b>Avatares, imágenes y videos (URLs públicas).</div>
@@ -170,7 +190,9 @@
       <tr><td>Notificaciones</td><td>30 días</td><td>TTL automático</td></tr>
       <tr><td>Mensajes de chat</td><td>90 días</td><td>TTL automático</td></tr>
       <tr><td>Registros de actividad sospechosa</td><td>Mientras sean necesarios para la investigación</td><td>Módulo anti-fraude</td></tr>
-      <tr><td>Historial de pagos</td><td>7 años</td><td>Obligación fiscal</td></tr>
+      <tr><td>Historial de pagos, compras de monedas, regalos y accesos directos</td><td>7 años</td><td>Obligación fiscal y prevención de fraude</td></tr>
+      <tr><td>Datos de cada live (sin video)</td><td>Mientras exista la cuenta</td><td>Eliminación a petición</td></tr>
+      <tr><td>Chat de un live</td><td>Solo durante el directo</td><td>En memoria, nunca en la base de datos</td></tr>
       <tr><td>Registro de NEXUS</td><td>30 días (eventos de uso: 90 días)</td><td>Borrado a petición</td></tr>
       <tr><td>Caché de reconocimiento de títulos</td><td>24 horas</td><td>Caché en memoria, sin datos personales</td></tr>
       <tr><td>Tokens de verificación / reseteo</td><td>24 h / 1 h</td><td>Expiración automática</td></tr>
@@ -208,10 +230,12 @@
     <ul>
       <li><strong>token</strong> y <strong>user_admin</strong> — mantener tu sesión.</li>
       <li><strong>Caché de catálogo</strong> — carga instantánea (minutos).</li>
+      <li><strong>Preferencias del estudio en vivo</strong> — título, categoría, calidad y fuente de tu último directo.</li>
       <li><strong>Preferencias</strong> — onboarding visto, favoritos locales y ajustes de vista.</li>
       <li><strong>Service Worker</strong> — guarda archivos de la app para que funcione más rápido y sin conexión.</li>
     </ul>
     <h3>De terceros</h3>
+    <p>Al pagar, PayPal carga su propio script y puede usar cookies para prevenir fraude.</p>
     <p>Las redes publicitarias de la página puente (highperformanceformat.com, effectivegatecpm.com y
       profitablecpmratenetwork.com) pueden instalar cookies propias. Puedes bloquearlas con extensiones como
       uBlock Origin o Privacy Badger sin afectar la funcionalidad principal.</p>
@@ -235,13 +259,13 @@
     <h2><span class="n">12</span>Cambios y contacto</h2>
     <ul>
       <li>Los cambios sustanciales se notificarán por email y con un aviso en la plataforma con al menos 15 días de antelación.</li>
-      <li>La versión y fecha de vigencia se actualizan en cada revisión (actualmente v3.0).</li>
+      <li>La versión y fecha de vigencia se actualizan en cada revisión (actualmente v3.1).</li>
       <li>Responsable de protección de datos: Jhonatan David Castro Galviz — <a href="mailto:mr.m0onster@protonmail.com">mr.m0onster@protonmail.com</a> — respuesta en 5–10 días hábiles.</li>
     </ul>
   </section>
 
   <footer class="lg-foot">
-    © 2026 UpGames · Política de Privacidad v3.0 · Vigente desde octubre de 2026<br><br>
+    © 2026 UpGames · Política de Privacidad v3.1 · Vigente desde octubre de 2026<br><br>
     <a href="./terminos_condiciones.html">Términos</a>·<a href="./politica-privacidad.html">Privacidad</a>·<a href="./biblioteca.html">Volver a UpGames</a>
   </footer>
 </main>

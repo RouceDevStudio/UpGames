@@ -25,9 +25,10 @@
 <link rel="dns-prefetch" href="https://upgames-production.up.railway.app">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="biblioteca.css?v=20261027n">
-<link rel="stylesheet" href="upgames-glass.css?v=20261027n">
-<script src="https://upload-widget.cloudinary.com/global/all.js" type="text/javascript"></script>
+<link rel="stylesheet" href="biblioteca.css?v=20261027p">
+<link rel="stylesheet" href="upgames-glass.css?v=20261027p">
+<!-- Widget de subida: solo se usa al publicar → diferido (antes bloqueaba el primer render) -->
+<script src="https://upload-widget.cloudinary.com/global/all.js" defer></script>
 
 <link rel="manifest" href="./manifest.json?v=3">
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=2">
@@ -593,7 +594,11 @@
     <div class="eco-hero-left">
       <div class="eco-hero-eyebrow"><ion-icon name="wallet-outline"></ion-icon> SALDO DISPONIBLE</div>
       <div class="eco-hero-saldo" id="pf-saldo-display" data-val="0">$0.0000</div>
-      <div class="eco-hero-currency">USD &nbsp;·&nbsp; En tiempo real</div>
+      <div class="eco-hero-currency">USD &nbsp;·&nbsp; Descargas, lives y accesos directos</div>
+      <div class="eco-hero-extra" id="eco-hero-extra" hidden>
+        <span title="Ganancias de regalos y accesos directos: pasan al saldo tras el período de seguridad"><ion-icon name="lock-closed-outline"></ion-icon> <b id="eco-retenido">$0.00</b> en retención</span>
+        <span title="Monedas para regalos y acceso directo"><ion-icon name="ellipse"></ion-icon> <b id="eco-monedas">0</b> monedas</span>
+      </div>
       <div id="eco-trend-badge" class="eco-trend-chip eco-trend-up">
         <ion-icon name="trending-up"></ion-icon>
         <span id="eco-trend-txt">Actualizando…</span>
@@ -784,77 +789,36 @@
 
     <!-- PayPal -->
     <label class="pf-label" style="margin-bottom:8px">
-      <ion-icon name="logo-paypal" style="color:var(--cy)"></ion-icon> EMAIL DE PAYPAL
+      <ion-icon name="logo-paypal" style="color:var(--cy)"></ion-icon> EMAIL DE PAYPAL <span style="font-weight:500;opacity:.7;text-transform:none;letter-spacing:0">· donde recibes tus retiros</span>
     </label>
     <div class="pf-paypal-row">
       <input type="email" id="pf-paypal-email-input" class="pf-paypal-input" placeholder="tucorreo@paypal.com">
       <button class="pf-paypal-save" id="pf-btn-guardar-paypal">GUARDAR</button>
     </div>
 
-    <!-- Cards -->
+    <!-- Pagos con tarjeta: comprar monedas (regalos en lives y acceso directo a enlaces).
+         El formulario de la tarjeta lo dibuja PayPal: UpGames nunca recibe esos datos. -->
     <div class="pf-eco-divider">
-      <ion-icon name="card-outline"></ion-icon>
-      <span>TARJETAS REGISTRADAS</span>
+      <ion-icon name="card"></ion-icon>
+      <span>PAGOS CON TARJETA</span>
     </div>
-    <div class="pf-tarjetas-header">
-      <span class="pf-tarjetas-hint">Para cobrar y pagar juegos</span>
-      <button class="pf-add-tarjeta-btn" id="pf-btn-add-tarjeta" onclick="pfMostrarFormTarjeta()">
-        <ion-icon name="add-circle-outline"></ion-icon> AGREGAR
-      </button>
-    </div>
-    <div id="pf-tarjetas-list">
-      <div class="pf-tarjetas-empty">
-        <ion-icon name="card-outline"></ion-icon>
-        <p>No tienes tarjetas registradas</p>
-      </div>
-    </div>
-
-    <!-- Card form -->
-    <div class="pf-tarjeta-form" id="pf-form-tarjeta" style="display:none">
-      <div class="pf-tarjeta-form-title">
-        <ion-icon name="card-outline"></ion-icon> NUEVA TARJETA
-      </div>
-      <div class="pf-form-group">
-        <label class="pf-label">Número de Tarjeta</label>
-        <div class="pf-card-num-wrap">
-          <input type="text" id="pf-input-card-num" class="pf-input pf-card-num-input"
-                 placeholder="0000 0000 0000 0000" maxlength="19" inputmode="numeric"
-                 oninput="_onCardNumInput(this)">
-          <span id="pf-tarjeta-tipo-detected" class="pf-tipo-badge"></span>
-        </div>
-        <small class="pf-card-hint">Solo guardamos los últimos 4 dígitos</small>
-      </div>
-      <div class="pf-form-group">
-        <label class="pf-label">Nombre del Titular</label>
-        <input type="text" id="pf-input-card-tit" class="pf-input"
-               placeholder="Como aparece en la tarjeta" maxlength="100" autocomplete="cc-name">
-      </div>
-      <div class="pf-card-row2">
-        <div class="pf-form-group">
-          <label class="pf-label">Mes (MM)</label>
-          <input type="text" id="pf-input-card-mes" class="pf-input" placeholder="12" maxlength="2" inputmode="numeric">
-        </div>
-        <div class="pf-form-group">
-          <label class="pf-label">Año (AA)</label>
-          <input type="text" id="pf-input-card-anio" class="pf-input" placeholder="28" maxlength="2" inputmode="numeric">
+    <div class="eco-pay-hero">
+      <span class="eco-pay-badge">NUEVO</span>
+      <div class="eco-pay-head">
+        <div class="eco-pay-ic">💳</div>
+        <div>
+          <b>Paga con tarjeta de crédito o débito</b>
+          <small>Visa, Mastercard, Amex o débito · sin cuenta de PayPal</small>
         </div>
       </div>
-      <div class="pf-form-group">
-        <label class="pf-label">Propósito</label>
-        <select id="pf-input-card-prop" class="pf-input pf-select">
-          <option value="ambos">↕ Para cobros y pagos</option>
-          <option value="cobros">↓ Solo cobros (recibir)</option>
-          <option value="pagos">↑ Solo pagos (comprar)</option>
-        </select>
+      <ul class="eco-pay-uses">
+        <li>🪙 <b>Monedas</b> para enviar regalos en los <a href="./live.html">lives</a></li>
+        <li>⚡ <b>Acceso directo</b> a enlaces por US$1: sin esperas ni anuncios</li>
+      </ul>
+      <div id="eco-tienda">
+        <button type="button" class="eco-pay-open" onclick="ecoAbrirTienda()"><ion-icon name="card-outline"></ion-icon> Comprar monedas con tarjeta</button>
       </div>
-      <div class="pf-form-group">
-        <label class="pf-label">Alias (opcional)</label>
-        <input type="text" id="pf-input-card-alias" class="pf-input" placeholder="Ej: Mi Visa personal" maxlength="40">
-      </div>
-      <button class="pf-paypal-save" style="width:100%;margin-top:4px;padding:14px;font-size:.85rem"
-              id="pf-btn-guardar-tarjeta" onclick="pfGuardarTarjeta()">
-        <ion-icon name="save-outline"></ion-icon> GUARDAR TARJETA
-      </button>
+      <p class="eco-pay-safe">🔒 Pago cifrado procesado por PayPal. Nunca guardamos los datos de tu tarjeta.</p>
     </div>
 
     <!-- Request payment -->
@@ -869,8 +833,13 @@
       <strong style="color:var(--g)">💡 Requisitos para cobrar:</strong><br>
       • Saldo mínimo: $10 USD<br>
       • Verificación nivel 1+<br>
-      • Al menos 1 descarga en tus aportes<br>
-      • Email de PayPal configurado
+      • Al menos 1 descarga en tus aportes, o ingresos de lives / accesos directos ya liberados<br>
+      • Email de PayPal configurado (ahí recibes el dinero)<br>
+      <strong style="color:var(--g)">💰 Tus fuentes de ingreso:</strong><br>
+      • Descargas por la página puente (CPM)<br>
+      • 70% de cada regalo en tus <a href="./live.html?estudio=1" style="color:var(--cy)">lives</a><br>
+      • 30% de cada acceso directo (US$1) a tus enlaces<br>
+      • Regalos y accesos quedan 7 días en retención antes de ser retirables
     </div>
   </div><!-- /.eco-payout-panel -->
 
@@ -1511,7 +1480,7 @@
         </h2>
         <div class="ob-cats">
           <span>🎮 Juegos</span><span>💾 ROMs</span><span>🧩 Mods</span><span>📱 Apps</span>
-          <span>🛠 Herramientas</span><span>💻 Software</span><span>▶ Videos</span><span>👥 Comunidad</span>
+          <span>🛠 Herramientas</span><span>💻 Software</span><span>▶ Videos</span><span>🔴 En vivo</span><span>👥 Comunidad</span>
         </div>
 
         <!-- Ciclo visual: 6 nodos conectados en círculo -->
@@ -1555,7 +1524,7 @@
         </div>
 
         <p class="ob-eco-caption">
-          Biblioteca indexada por la comunidad · Videos de creadores · Red social · Monetización real · NEXUS IA.<br>
+          Biblioteca indexada por la comunidad · Videos de creadores · Lives con regalos · Red social · Monetización real · NEXUS IA.<br>
           <strong style="color:var(--g)">Los juegos son la prioridad, pero aquí cabe todo lo que creas y compartes.</strong>
         </p>
 
@@ -1610,7 +1579,7 @@
             </defs>
           </svg>
         </div>
-        <div class="ob-kicker ob-kicker-cy">Monetización CPM real</div>
+        <div class="ob-kicker ob-kicker-cy">Monetización real · 3 fuentes de ingreso</div>
         <h2 class="ob-title-sm">Publica una vez.<br><span class="ob-accent-g">Gana para siempre.</span></h2>
         <p class="ob-desc">
           Ganas dinero por cada descarga efectiva <strong style="color:var(--g)">independientemente del tipo de contenido</strong> publicado. El sistema usa un acortador de publicidad propio integrado — los anuncios se muestran automáticamente, tú solo publicas.
@@ -1625,11 +1594,19 @@
             <span class="ob-cpm-val-sm">$10 USD</span>
           </div>
           <div class="ob-cpm-row ob-cpm-row-sub">
+            <span class="ob-cpm-label">Regalos en tus lives 🔴</span>
+            <span class="ob-cpm-val-sm">70% para ti</span>
+          </div>
+          <div class="ob-cpm-row ob-cpm-row-sub">
+            <span class="ob-cpm-label">Acceso directo a tus enlaces (US$1) ⚡</span>
+            <span class="ob-cpm-val-sm">30% para ti</span>
+          </div>
+          <div class="ob-cpm-row ob-cpm-row-sub">
             <span class="ob-cpm-label">Empiezas a ganar desde</span>
             <span class="ob-cpm-val-sm">La primera descarga</span>
           </div>
         </div>
-        <p class="ob-note">Acortador propio integrado · Sin intermediarios · Para retirar necesitas nivel Bronce (100 seguidores)</p>
+        <p class="ob-note">Acortador propio integrado · Pagos con tarjeta de crédito o débito 💳 · Para retirar necesitas nivel Bronce (100 seguidores)</p>
       </div>
     </div>
 
@@ -1722,6 +1699,7 @@
           <div class="ob-nfeat"><ion-icon name="notifications-outline"></ion-icon> Tus seguidores reciben una notificación en la app cada vez que publicas</div>
           <div class="ob-nfeat"><ion-icon name="person-outline"></ion-icon> Perfil público con feed propio, estadísticas y seguidores</div>
           <div class="ob-nfeat"><ion-icon name="chatbubble-ellipses-outline"></ion-icon> Chat privado entre usuarios, con imágenes y emojis</div>
+          <div class="ob-nfeat"><ion-icon name="radio-outline"></ion-icon> Lives de gameplay: comparte tu pantalla, chatea en tiempo real y recibe regalos</div>
           <div class="ob-nfeat"><ion-icon name="shield-checkmark-outline"></ion-icon> Verificación por niveles: Bronce (100 seg.) · Oro (500) · Elite (1,000)</div>
         </div>
       </div>
@@ -1781,8 +1759,9 @@
             <a href="https://apps.derechodeautor.gov.co/Certificados-API/api/v1/dnda/certificates/registrations/filing/QzY3NDJGQkVFQThCRUY3QkQ3MTVGMTA0QUIzN0NGMkU" target="_blank" rel="noopener">Ver certificado</a></div>
         </div>
         <div class="ob-legal-link" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-          <a href="./terminos_condiciones.html" target="_blank" style="color:inherit">Términos v5.0</a> ·
-          <a href="./politica-privacidad.html" target="_blank" style="color:inherit">Privacidad v3.0</a> ·
+          <a href="./terminos_condiciones.html" target="_blank" style="color:inherit">Términos v5.1</a> ·
+          <a href="./politica-privacidad.html" target="_blank" style="color:inherit">Privacidad v3.1</a> ·
+          <a href="./terminos_condiciones.html#pagos" target="_blank" style="color:inherit">Pagos</a> ·
           <a href="./terminos_condiciones.html#ia" target="_blank" style="color:inherit">IA</a> ·
           <a href="./terminos_condiciones.html#derechos-autor" target="_blank" style="color:inherit">Derechos de autor</a>
         </div>
@@ -1969,9 +1948,9 @@
 <!-- ION ICONS -->
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
-<script src="script.js?v=20261027n"></script>
-<script src="upgames-autoinfo.js?v=20261027n"></script>
-<script src="upgames-motion.js?v=20261027n"></script>
+<script src="script.js?v=20261027p"></script>
+<script src="upgames-autoinfo.js?v=20261027p"></script>
+<script src="upgames-motion.js?v=20261027p"></script>
 
 <!-- ══════════════════════════════════════
   EXTENSIÓN DE PERFIL: Nombre / Email / Contraseña / Links

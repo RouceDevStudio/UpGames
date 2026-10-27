@@ -634,15 +634,14 @@ async function loadContent() {
 
   // ── PASO 3: Actualizar desde la red en background ──
   try {
-    try {
-      const ru = await fetchTimeout(`${API_URL}/auth/users/public`, 8000);
-      const users = await ru.json();
+    // Catálogo y usuarios EN PARALELO (antes uno esperaba al otro: ~1 RTT + consulta de más)
+    const pUsers = fetchTimeout(`${API_URL}/auth/users/public`, 8000).then(ru => ru.json()).then(users => {
       cacheSet(CACHE_KEY_USERS, users);
       users.forEach(u=>{ mapaUsuarios[u.usuario]=u.verificadoNivel||0; });
-    } catch(_){}
-
+    }).catch(()=>{});
     const r = await fetchTimeout(`${API_URL}/items`, 12000);
     const data = await r.json();
+    await pUsers;   // las insignias de verificado necesitan el mapa antes de pintar
     cacheSet(CACHE_KEY_ITEMS, data);
 
     const changed = data.length !== todosLosItems.length ||
@@ -2920,6 +2919,13 @@ async function pfLoadEconomia() {
         btnP.disabled=true; btnP.classList.remove('enabled');
       } else if(d.puedeRetirar) {
         btnP.disabled=false; btnP.classList.add('enabled');
+      }
+      // Banner: lo retenido (regalos/accesos directos) y las monedas
+      const extra = document.getElementById('eco-hero-extra');
+      if (extra && (d.saldoRetenido > 0 || d.monedas > 0)) {
+        extra.hidden = false;
+        document.getElementById('eco-retenido').textContent = '$' + (d.saldoRetenido || 0).toFixed(2);
+        document.getElementById('eco-monedas').textContent = d.monedas || 0;
       }
       // ── Dashboard update ──
       ecoUpdateDashboard(d);
@@ -5554,3 +5560,21 @@ async function pfLoadLogros() {
   setTimeout(revisar, 2500);
   setInterval(revisar, 90000);
 })();
+
+
+// ── Economía: tienda de monedas con tarjeta (carga el procesador solo al abrirla) ──
+let _ugPagosJs = null;
+function ecoAbrirTienda() {
+  const box = document.getElementById('eco-tienda');
+  if (!box) return;
+  if (!LS.get('token')) { toast('Inicia sesión para comprar'); return; }
+  box.innerHTML = '<div class="eco-spin"><ion-icon name="sync-outline"></ion-icon></div>';
+  _ugPagosJs = _ugPagosJs || new Promise((ok, ko) => {
+    const s = document.createElement('script');
+    s.src = './upgames-pagos.js?v=20261027p'; s.onload = ok; s.onerror = () => { _ugPagosJs = null; ko(); };
+    document.head.appendChild(s);
+  });
+  _ugPagosJs.then(() => window.UGPagos.tienda(box, {
+    alComprar: d => { toast(`✅ +${d.acreditadas} monedas`); pfLoadEconomia(); },
+  })).catch(() => { box.innerHTML = '<button type="button" class="eco-pay-open" onclick="ecoAbrirTienda()">Reintentar</button>'; });
+}

@@ -233,16 +233,7 @@ main { position: relative; z-index: 1; max-width: 1440px; margin: 0 auto; paddin
 .modal h2 { font-size: 1.2rem; font-weight: 800; display: flex; align-items: center; gap: 8px; }
 .modal .close { position: absolute; }
 .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
-.bal { display: flex; align-items: center; justify-content: space-between; padding: 14px; border-radius: 14px; background: rgba(255,204,77,.08); border: 1px solid rgba(255,204,77,.22); margin-bottom: 14px; }
-.bal b { font-size: 1.5rem; color: var(--gold); }
-.packs { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin-bottom: 14px; }
-.pack { padding: 14px 10px; border-radius: 14px; border: 1px solid var(--bd); background: rgba(255,255,255,.03); text-align: center; position: relative; transition: border-color .15s, background .15s; }
-.pack.on { border-color: var(--gold); background: rgba(255,204,77,.08); }
-.pack .pm { font-size: 1.15rem; font-weight: 800; color: var(--gold); }
-.pack .pu { font-size: .85rem; color: var(--txt2); font-weight: 700; margin-top: 2px; }
-.pack .px { position: absolute; top: -8px; right: 8px; padding: 2px 6px; border-radius: 6px; background: var(--g); color: #06210f; font-size: .65rem; font-weight: 800; }
 .fine { font-size: .74rem; color: var(--txt3); line-height: 1.5; margin-top: 10px; }
-#pp-buttons { min-height: 50px; }
 
 .toast { position: fixed; left: 50%; bottom: calc(24px + var(--safe-b)); transform: translateX(-50%); z-index: 200; padding: 12px 18px; border-radius: 14px; background: var(--glass-2); border: 1px solid var(--bd-2); backdrop-filter: blur(20px); font-weight: 600; font-size: .9rem; box-shadow: 0 10px 30px rgba(0,0,0,.4); animation: pop .3s var(--ease); max-width: calc(100% - 32px); text-align: center; }
 
@@ -281,6 +272,7 @@ main { position: relative; z-index: 1; max-width: 1440px; margin: 0 auto; paddin
 <script src="./upgames-pwa.js" defer></script>
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+<script src="./upgames-pagos.js"></script>
 <script src="./upgames-live.js"></script>
 </body>
 </html>

@@ -11,11 +11,11 @@
  */
 'use strict';
 
-const https = require('https');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const { Server } = require('socket.io');
 const L = require('../modulos/live');
+const PayPal = require('../modulos/paypal');
 
 // ── Modelos ──────────────────────────────────────────────────────────────────
 const LiveSchema = new mongoose.Schema({
@@ -37,7 +37,7 @@ const LiveSchema = new mongoose.Schema({
 LiveSchema.index({ creador: 1 }, { unique: true, partialFilterExpression: { estado: 'en_vivo' }, name: 'un_live_activo' });
 
 const TxSchema = new mongoose.Schema({
-    tipo:         { type: String, enum: ['compra', 'regalo'], required: true },
+    tipo:         { type: String, enum: ['compra', 'regalo', 'acceso'], required: true },   // acceso = saltar la página puente
     usuario:      { type: String, required: true, index: true },   // quien paga
     destinatario: { type: String, default: '', index: true },      // creador (regalos)
     monedas:      { type: Number, required: true },
@@ -47,6 +47,7 @@ const TxSchema = new mongoose.Schema({
     regaloId:     { type: String, default: '' },
     cantidad:     { type: Number, default: 1 },
     liveId:       { type: String, default: '', index: true },
+    juegoId:      { type: String, default: '' },                   // acceso directo
     ref:          { type: String, required: true, unique: true },  // idempotencia (orden PayPal / clave del regalo)
     captureId:    { type: String, default: '', index: true },
     estado:       { type: String, enum: ['completada', 'retenida', 'liberada', 'revertida'], default: 'completada' },
@@ -58,38 +59,11 @@ TxSchema.index({ estado: 1, liberarEn: 1 });
 const Live = mongoose.models.Live || mongoose.model('Live', LiveSchema);
 const LiveTx = mongoose.models.LiveTx || mongoose.model('LiveTx', TxSchema);
 
-// ── PayPal (Orders v2) ───────────────────────────────────────────────────────
-function paypal(config, getToken) {
-    const host = config.PAYPAL_MODE === 'live' ? 'api-m.paypal.com' : 'api-m.sandbox.paypal.com';
-    return async (method, path, body, extraHeaders = {}) => {
-        const token = await getToken();
-        const payload = body ? JSON.stringify(body) : '';
-        return new Promise((resolve, reject) => {
-            const req = https.request({
-                hostname: host, path, method,
-                headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), ...extraHeaders },
-                timeout: 20000,
-            }, res => {
-                let data = '';
-                res.on('data', c => data += c);
-                res.on('end', () => {
-                    let json = {};
-                    try { json = data ? JSON.parse(data) : {}; } catch (_) {}
-                    resolve({ status: res.statusCode, data: json });
-                });
-            });
-            req.on('timeout', () => req.destroy(new Error('PayPal no respondió a tiempo')));
-            req.on('error', reject);
-            if (payload) req.write(payload);
-            req.end();
-        });
-    };
-}
-
 function registrar(app, server, deps) {
     const { verificarToken, verificarAdmin, Usuario, Notificacion, logger, config, JWT_SECRET, estaSuspendido, getPayPalAccessToken } = deps;
-    const pp = paypal(config, getPayPalAccessToken);
-    const ppActivo = () => !!(config.PAYPAL_CLIENT_ID && config.PAYPAL_CLIENT_SECRET);
+    const paypal = PayPal.crear(config, getPayPalAccessToken);
+    const pp = paypal.req;
+    const ppActivo = paypal.activo;
     const mtxSecreto = process.env.MEDIAMTX_AUTH_SECRET || '';
     const mtxApi = (process.env.MEDIAMTX_API_URL || '').replace(/\/+$/, '');
 
@@ -484,31 +458,18 @@ function registrar(app, server, deps) {
 
     app.post('/monedas/orden', verificarToken, async (req, res) => {
         try {
-            if (!ppActivo()) return err(res, 503, 'Las compras aún no están disponibles');
+            if (!ppActivo()) return err(res, 503, 'Los pagos aún no están disponibles');
             const p = L.paquete(req.body?.paquete);
             if (!p) return err(res, 400, 'Paquete no válido');
-            const r = await pp('POST', '/v2/checkout/orders', {
-                intent: 'CAPTURE',
-                purchase_units: [{
-                    reference_id: p.id, custom_id: req.usuario,
-                    description: `${p.monedas} monedas UpGames`,
-                    amount: { currency_code: 'USD', value: p.usd.toFixed(2) },
-                }],
-                application_context: { brand_name: 'UpGames', shipping_preference: 'NO_SHIPPING', user_action: 'PAY_NOW' },
-            }, { 'PayPal-Request-Id': `ug-${req.usuario}-${p.id}-${Date.now()}` });
-            if (r.status !== 201 || !r.data.id) {
-                logger.error(`[live] PayPal crear orden [${r.status}]: ${JSON.stringify(r.data).slice(0, 300)}`);
-                return err(res, 502, 'PayPal no pudo crear la orden');
-            }
-            ok(res, { orderID: r.data.id });
-        } catch (e) { logger.error(`[live] orden: ${e.message}`); err(res, 500, 'No se pudo crear la orden'); }
+            const orderID = await paypal.crearOrden({ usuario: req.usuario, referencia: p.id, usd: p.usd, descripcion: `${p.monedas} monedas UpGames` });
+            ok(res, { orderID });
+        } catch (e) { logger.error(`[live] orden: ${e.message} ${e.detalle || ''}`); err(res, e.status || 500, e.status ? e.message : 'No se pudo crear la orden'); }
     });
 
     app.post('/monedas/capturar', verificarToken, async (req, res) => {
         try {
-            if (!ppActivo()) return err(res, 503, 'Las compras aún no están disponibles');
+            if (!ppActivo()) return err(res, 503, 'Los pagos aún no están disponibles');
             const orderID = String(req.body?.orderID || '');
-            if (!/^[A-Z0-9]{10,30}$/.test(orderID)) return err(res, 400, 'Orden no válida');
             const ref = `paypal:${orderID}`;
             const previa = await LiveTx.findOne({ ref }).lean();
             if (previa) {
@@ -516,28 +477,8 @@ function registrar(app, server, deps) {
                 const u = await Usuario.findOne({ usuario: req.usuario }).select('monedas').lean();
                 return ok(res, { monedas: u?.monedas || 0, acreditadas: previa.monedas, repetida: true });
             }
-            // Verificar ANTES de cobrar: dueño y monto de la orden
-            const o = await pp('GET', `/v2/checkout/orders/${orderID}`);
-            if (o.status !== 200) return err(res, 404, 'PayPal no encontró la orden');
-            const pu = o.data.purchase_units?.[0] || {};
-            const p = L.paquete(pu.reference_id);
-            if (!p || pu.custom_id !== req.usuario) return err(res, 403, 'Esta orden no es tuya');
-            if (pu.amount?.currency_code !== 'USD' || Math.abs(parseFloat(pu.amount?.value) - p.usd) > 0.001) return err(res, 400, 'El monto de la orden no coincide');
-
-            let captura = pu.payments?.captures?.[0];
-            if (o.data.status !== 'COMPLETED') {
-                const c = await pp('POST', `/v2/checkout/orders/${orderID}/capture`, {}, { 'PayPal-Request-Id': `ug-cap-${orderID}` });
-                if (c.status !== 201 && c.status !== 200) {
-                    logger.warn(`[live] PayPal captura [${c.status}] ${orderID}: ${JSON.stringify(c.data).slice(0, 300)}`);
-                    const rechazo = c.data?.details?.[0]?.issue === 'INSTRUMENT_DECLINED';
-                    return err(res, 402, rechazo ? 'PayPal rechazó el método de pago. Prueba con otro.' : 'No se pudo completar el pago', { reintentar: rechazo });
-                }
-                captura = c.data.purchase_units?.[0]?.payments?.captures?.[0];
-            }
-            if (!captura || captura.status !== 'COMPLETED' || Math.abs(parseFloat(captura.amount?.value) - p.usd) > 0.001) {
-                logger.warn(`[live] Captura no completada ${orderID}: ${captura?.status}`);
-                return err(res, 402, 'El pago quedó pendiente en PayPal. Las monedas llegarán cuando se confirme.');
-            }
+            const { captura, referencia } = await paypal.capturar(orderID, { usuario: req.usuario, validarRef: r => !!L.paquete(r), usd: r => L.paquete(r).usd });
+            const p = L.paquete(referencia);
             try {
                 await LiveTx.create({ tipo: 'compra', usuario: req.usuario, monedas: p.monedas, usd: p.usd, ref, captureId: captura.id || '', estado: 'completada' });
             } catch (e) {
@@ -548,7 +489,10 @@ function registrar(app, server, deps) {
             const u = await Usuario.findOneAndUpdate({ usuario: req.usuario }, { $inc: { monedas: p.monedas } }, { new: true }).select('monedas').lean();
             logger.info(`[live] Compra @${req.usuario}: ${p.monedas} monedas por $${p.usd} (orden ${orderID})`);
             ok(res, { monedas: u?.monedas || 0, acreditadas: p.monedas });
-        } catch (e) { logger.error(`[live] capturar: ${e.message}`); err(res, 500, 'Error al confirmar el pago'); }
+        } catch (e) {
+            if (e.status) { if (e.detalle) logger.warn(`[live] captura ${req.body?.orderID}: ${e.detalle}`); return err(res, e.status, e.message, e.reintentar ? { reintentar: true } : undefined); }
+            logger.error(`[live] capturar: ${e.message}`); err(res, 500, 'Error al confirmar el pago');
+        }
     });
 
     // Contracargos / reembolsos: se descuentan las monedas y se revierten los
@@ -571,10 +515,20 @@ function registrar(app, server, deps) {
             const captureId = ev.event_type === 'CUSTOMER.DISPUTE.CREATED'
                 ? r.disputed_transactions?.[0]?.seller_transaction_id
                 : (r.links || []).find(l => l.rel === 'up')?.href?.split('/').pop() || r.id;
+            // Acceso directo pagado con PayPal: anular la parte del creador y el desbloqueo
+            const acceso = captureId && await LiveTx.findOneAndUpdate({ tipo: 'acceso', captureId, estado: { $in: ['retenida', 'liberada'] } }, { $set: { estado: 'revertida' } }).lean();
+            if (acceso) {
+                if (acceso.estado === 'retenida') await Usuario.updateOne({ usuario: acceso.destinatario }, [{ $set: { saldoRetenido: { $max: [0, { $subtract: [{ $ifNull: ['$saldoRetenido', 0] }, acceso.creadorUsd] }] } } }]);
+                await mongoose.connection.collection('accesos_directos').deleteOne({ usuario: acceso.usuario, juegoId: acceso.juegoId }).catch(() => {});
+                await Usuario.updateOne({ usuario: acceso.usuario }, { $set: { listaNegraAdmin: true, notasAdmin: `Contracargo/reembolso PayPal (${ev.event_type}) de un acceso directo`, fechaListaNegra: new Date() } });
+                logger.warn(`[live] ${ev.event_type}: acceso directo de @${acceso.usuario} revertido`);
+                return res.sendStatus(200);
+            }
             const compra = captureId && await LiveTx.findOneAndUpdate({ tipo: 'compra', captureId, estado: 'completada' }, { $set: { estado: 'revertida' } }, { new: true }).lean();
             if (!compra) return res.sendStatus(200);
             await Usuario.updateOne({ usuario: compra.usuario }, [{ $set: { monedas: { $max: [0, { $subtract: [{ $ifNull: ['$monedas', 0] }, compra.monedas] }] } } }]);
-            const regalos = await LiveTx.find({ tipo: 'regalo', usuario: compra.usuario, estado: 'retenida' }).lean();
+            // Todo lo que pagó con monedas y sigue retenido (regalos y accesos directos)
+            const regalos = await LiveTx.find({ tipo: { $in: ['regalo', 'acceso'] }, usuario: compra.usuario, estado: 'retenida', captureId: '' }).lean();
             let revertidos = 0;
             for (const g of regalos) {
                 const m = await LiveTx.updateOne({ _id: g._id, estado: 'retenida' }, { $set: { estado: 'revertida' } });
@@ -676,7 +630,7 @@ function registrar(app, server, deps) {
     // 2) Liberar el dinero retenido de los regalos cuando vence la retención
     async function liberar() {
         try {
-            const pendientes = await LiveTx.find({ tipo: 'regalo', estado: 'retenida', liberarEn: { $lte: new Date() } }).limit(500).lean();
+            const pendientes = await LiveTx.find({ tipo: { $in: ['regalo', 'acceso'] }, estado: 'retenida', liberarEn: { $lte: new Date() } }).limit(500).lean();
             for (const g of pendientes) {
                 const m = await LiveTx.updateOne({ _id: g._id, estado: 'retenida' }, { $set: { estado: 'liberada' } });
                 if (!m.modifiedCount) continue;
@@ -685,7 +639,7 @@ function registrar(app, server, deps) {
                     saldo: { $add: [{ $ifNull: ['$saldo', 0] }, g.creadorUsd] },
                 } }]);
             }
-            if (pendientes.length) logger.info(`[live] ${pendientes.length} regalo(s) liberado(s) al saldo retirable`);
+            if (pendientes.length) logger.info(`[live] ${pendientes.length} ingreso(s) de regalos/accesos liberado(s) al saldo retirable`);
         } catch (e) { logger.warn(`[live] liberar: ${e.message}`); }
     }
     setInterval(liberar, 10 * 60000).unref();
@@ -705,9 +659,9 @@ function registrar(app, server, deps) {
 
     logger.info(`[live] Módulo activo · video: ${L.proveedor().tipo} · comisión ${Math.round(L.COMISION * 100)}% · retención ${L.RETENCION_DIAS} días`);
 
-    // ¿Tiene ingresos de lives ya liberados? (habilita el retiro sin descargas)
-    const tieneIngresosLive = usuario => LiveTx.exists({ tipo: 'regalo', destinatario: usuario, estado: 'liberada' }).then(Boolean).catch(() => false);
-    return { io, Live, LiveTx, finalizar, tieneIngresosLive };
+    // ¿Tiene ingresos de regalos o accesos directos ya liberados? (habilita el retiro sin descargas)
+    const tieneIngresosLive = usuario => LiveTx.exists({ tipo: { $in: ['regalo', 'acceso'] }, destinatario: usuario, estado: 'liberada' }).then(Boolean).catch(() => false);
+    return { io, Live, LiveTx, finalizar, tieneIngresosLive, paypal };
 }
 
 module.exports = { registrar, LiveSchema, TxSchema };

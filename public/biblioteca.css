@@ -5233,3 +5233,20 @@ button.pf2-stat { cursor: pointer; }
 @keyframes hdrLivePulse { 0% { box-shadow: 0 0 0 0 rgba(255,77,109,.7); } 70% { box-shadow: 0 0 0 7px rgba(255,77,109,0); } 100% { box-shadow: 0 0 0 0 rgba(255,77,109,0); } }
 .pf2-btn-live ion-icon { color: #ff4d6d; }
 @media (prefers-reduced-motion: reduce) { .hdr-live-dot { animation: none; } }
+
+/* ── Economía: pagos con tarjeta (protagonista) y banner de saldo ── */
+.eco-hero-extra { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 8px; font-size: .78rem; color: var(--txt2, #A3A8B6); }
+.eco-hero-extra span { display: inline-flex; align-items: center; gap: 5px; }
+.eco-hero-extra ion-icon { font-size: .9rem; }
+.eco-hero-extra b { color: #ffcc4d; }
+.eco-pay-hero { position: relative; margin: 6px 0 18px; padding: 18px 16px 14px; border-radius: 18px; background: linear-gradient(135deg, rgba(50,213,131,.16), rgba(90,200,250,.09)); border: 1.5px solid rgba(50,213,131,.55); box-shadow: 0 14px 34px -18px rgba(50,213,131,.7); }
+.eco-pay-badge { position: absolute; top: -10px; right: 14px; padding: 3px 9px; border-radius: 7px; background: #32D583; color: #06210f; font-size: .65rem; font-weight: 800; letter-spacing: .06em; }
+.eco-pay-head { display: flex; align-items: center; gap: 12px; }
+.eco-pay-head b { display: block; font-size: 1.02rem; color: #fff; line-height: 1.25; }
+.eco-pay-head small { display: block; font-size: .76rem; color: #A3A8B6; margin-top: 3px; }
+.eco-pay-ic { width: 46px; height: 46px; border-radius: 14px; background: #32D583; display: flex; align-items: center; justify-content: center; font-size: 1.45rem; flex-shrink: 0; }
+.eco-pay-uses { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 6px; font-size: .84rem; color: #d6d9e0; }
+.eco-pay-uses a { color: #5AC8FA; }
+.eco-pay-open { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 15px; border-radius: 14px; border: 0; background: #32D583; color: #06210f; font-weight: 800; font-size: .95rem; cursor: pointer; font-family: inherit; box-shadow: 0 10px 24px -10px rgba(50,213,131,.8); transition: transform .12s; }
+.eco-pay-open:active { transform: scale(.98); }
+.eco-pay-safe { font-size: .72rem; color: #8a90a0; text-align: center; margin: 10px 0 0; }

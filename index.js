@@ -476,7 +476,33 @@ JuegoSchema.pre('save', function(next) {
     if (this.reportes >= 3) this.linkStatus = 'revision';
     next();
 });
+// Cambios en publicaciones invalidan el catálogo cacheado (ver cacheado()). Los que
+// solo suben contadores (cada descarga, like o vista) no: vaciarían la caché a cada
+// descarga y el TTL de 30 s ya los refresca.
+const CONTADORES_JUEGO = new Set(['descargasEfectivas', 'likesCount', 'vistas', 'scoreRecomendacion', 'reportes']);
+const soloContadores = u => !!u && !Array.isArray(u) && Object.keys(u).length > 0 &&
+    Object.entries(u).every(([op, campos]) => (op === '$inc' || op === '$set') && campos && Object.keys(campos).every(f => CONTADORES_JUEGO.has(f)));
+JuegoSchema.post(['save', 'insertMany', 'updateOne', 'updateMany', 'findOneAndUpdate', 'deleteOne', 'deleteMany', 'findOneAndDelete', 'findOneAndReplace', 'replaceOne'], function () {
+    if (typeof this?.getUpdate === 'function' && soloContadores(this.getUpdate())) return;
+    memCache.invalidate('items:*');
+});
 const Juego = mongoose.model('Juego', JuegoSchema);
+
+// ── Caché de lecturas públicas calientes ──
+// TTL corto + invalidación por hooks del modelo. Las peticiones simultáneas con
+// la misma clave comparten UNA consulta (sin estampida al expirar). El resultado
+// se sirve igual que antes: limpiarPublico() sigue filtrando enlaces por usuario.
+const enVuelo = new Map();
+function cacheado(clave, ttlSeg, cargar) {
+    const hit = memCache.get(clave);
+    if (hit !== null) return Promise.resolve(hit);
+    if (enVuelo.has(clave)) return enVuelo.get(clave);
+    const p = Promise.resolve().then(cargar)
+        .then(v => { if (v !== null && v !== undefined) memCache.set(clave, v, ttlSeg); return v; })
+        .finally(() => enVuelo.delete(clave));
+    enVuelo.set(clave, p);
+    return p;
+}
 
 const UsuarioSchema = new mongoose.Schema({
     usuario:    { type: String, required: true, unique: true, index: true, minlength: 3, maxlength: 20, trim: true, lowercase: true },
@@ -1744,12 +1770,15 @@ app.put('/items/vistas/:id', [param('id').isMongoId()], async (req, res) => {
 
 app.get("/items", async (req, res) => {
     try {
-        const { categoria } = req.query;
-        const filtro = { status: 'aprobado', linkStatus: { $in: ['online', 'revision'] } };
-        if (categoria && categoria !== 'Todo') filtro.category = categoria;
-        const items = await Juego.find(filtro).select('_id title description image images link category usuario reportes linkStatus descargasEfectivas likesCount extraData videoType featuredItemId scoreRecomendacion serie createdAt').sort({ scoreRecomendacion: -1, createdAt: -1 }).limit(100).lean();
-        // Series por partes: solo la primera parte aparece en el catálogo
-        res.json(await series.colapsar(items, Juego, { status: 'aprobado', linkStatus: { $in: ['online', 'revision'] } }));
+        const categoria = typeof req.query.categoria === 'string' ? req.query.categoria.slice(0, 40) : '';
+        const catalogo = await cacheado(`items:lista:${categoria}`, 30, async () => {
+            const filtro = { status: 'aprobado', linkStatus: { $in: ['online', 'revision'] } };
+            if (categoria && categoria !== 'Todo') filtro.category = categoria;
+            const items = await Juego.find(filtro).select('_id title description image images link category usuario reportes linkStatus descargasEfectivas likesCount extraData videoType featuredItemId scoreRecomendacion serie createdAt').sort({ scoreRecomendacion: -1, createdAt: -1 }).limit(100).lean();
+            // Series por partes: solo la primera parte aparece en el catálogo
+            return series.colapsar(items, Juego, { status: 'aprobado', linkStatus: { $in: ['online', 'revision'] } });
+        });
+        res.json(catalogo);
     } catch (error) {
         res.status(500).json([]);
     }
@@ -2084,13 +2113,13 @@ app.get('/items/:id', async (req, res) => {
 // ⭐ OPTIMIZADO: paginación para evitar traer todos los usuarios
 app.get('/auth/users/public', async (req, res) => {
     try {
-        const { page = 1, limit = 200 } = req.query;
-        const skip = (parseInt(page) - 1) * parseInt(limit);
-        const users = await Usuario.find()
+        const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const limit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 200));
+        const users = await cacheado(`usuarios:publicos:${page}:${limit}`, 60, () => Usuario.find()
             .select('usuario verificadoNivel avatar bio listaSeguidores siguiendo')
-            .skip(skip)
-            .limit(parseInt(limit))
-            .lean();
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .lean());
         res.json(users);
     } catch (error) {
         res.status(500).json([]);
@@ -3494,6 +3523,8 @@ const live = require('./rutas/live').registrar(app, server, {
     verificarToken, verificarAdmin, Usuario, Notificacion, logger, config, JWT_SECRET,
     estaSuspendido: u => adminPanel.estaSuspendido(u), getPayPalAccessToken,
 });
+// Acceso directo: US$1 o 100 monedas para saltarse la página puente
+require('./rutas/accesoDirecto').registrar(app, { verificarToken, Juego, Usuario, LiveTx: live.LiveTx, paypal: live.paypal, logger });
 // =================================================================================
 
 // ========== MANEJO DE ERRORES ==========

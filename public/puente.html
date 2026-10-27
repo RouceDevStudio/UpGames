@@ -43,6 +43,22 @@
         .serie-next { display: block; text-align: center; background: #5AC8FA; color: #001018; font-weight: 800; padding: 12px; border-radius: 12px; text-decoration: none; }
         .serie-hint { font-size: .72rem; color: #777; margin-top: 8px; text-align: center; }
         .serie-done { font-size: .85rem; color: #39FF14; text-align: center; }
+        /* ── ACCESO DIRECTO (US$1 / 100 monedas) ── */
+        .ad-pass { margin: 16px 0 6px; padding: 16px; border-radius: 16px; text-align: left; background: linear-gradient(135deg, rgba(255,204,77,.14), rgba(57,255,20,.07)); border: 1.5px solid rgba(255,204,77,.55); box-shadow: 0 10px 30px -14px rgba(255,204,77,.55); }
+        .ad-pass-h { display: flex; align-items: center; gap: 12px; }
+        .ad-pass-ic { width: 44px; height: 44px; border-radius: 12px; background: #ffcc4d; color: #241a00; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; }
+        .ad-pass-h b { display: block; font-size: 1rem; color: #fff; }
+        .ad-pass-h small { display: block; font-size: .78rem; color: #c9c9c9; margin-top: 2px; line-height: 1.35; }
+        .ad-pass-price { margin-left: auto; font-size: 1.35rem; font-weight: 800; color: #ffcc4d; white-space: nowrap; }
+        .ad-pass-btns { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+        .ad-pass-btn { width: 100%; padding: 13px; border-radius: 12px; border: 0; font-weight: 800; font-size: .92rem; cursor: pointer; font-family: inherit; transition: transform .12s, filter .15s; }
+        .ad-pass-btn:active { transform: scale(.98); }
+        .ad-pass-btn.card { background: #ffcc4d; color: #241a00; }
+        .ad-pass-btn.coins { background: rgba(255,255,255,.07); color: #fff; border: 1px solid rgba(255,255,255,.18); }
+        .ad-pass-btn:disabled { opacity: .55; cursor: wait; }
+        .ad-pass-note { font-size: .7rem; color: #8a8a8a; margin-top: 8px; text-align: center; }
+        .ad-pass-note a { color: #39FF14; }
+        .ad-pass.done { border-color: var(--neon-green); background: rgba(57,255,20,.08); box-shadow: none; }
         .debug-info { background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 5px; font-size: 0.7rem; color: #666; margin-top: 15px; text-align: left; max-height: 200px; overflow-y: auto; }
     </style>
 </head>
@@ -59,6 +75,9 @@
             <!-- Se rellena con JS -->
         </div>
         
+        <!-- ⚡ ACCESO DIRECTO: pagar para saltarse la espera y los anuncios -->
+        <div id="ad-pass" class="ad-pass" style="display:none"></div>
+
         <!-- ⭐ PUBLICIDAD 1 -->
         <script>
             atOptions = {
@@ -99,6 +118,7 @@
         <div id="debug-info" class="debug-info" style="display:none;"></div>
     </div>
 
+    <script src="./upgames-pagos.js" defer></script>
     <script>
         // ⭐ CONFIGURACIÓN
         const API_URL   = "https://upgames-production.up.railway.app";
@@ -253,6 +273,9 @@
                 clearInterval(interval);
                 timerEl.style.display = 'none';
                 btnEl.style.display = 'block';
+                // Ya esperó: el acceso directo deja de tener sentido para esta visita
+                const pase = document.getElementById('ad-pass');
+                if (pase && !pase.classList.contains('done')) pase.style.display = 'none';
                 
                 log("Timer completado, iniciando validación");
                 
@@ -469,6 +492,72 @@
             timerEl.style.display = 'block';
         }
         
+        // ⚡ ACCESO DIRECTO — US$1 (tarjeta/PayPal) o 100 monedas: sin espera ni anuncios.
+        // Se paga una vez por publicación; el creador recibe una parte.
+        (function accesoDirecto() {
+            const box = document.getElementById('ad-pass');
+            if (!juegoId || !box) return;
+            const token = localStorage.getItem('token') || '';
+            const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            const cabecera = (extra = '') => `<div class="ad-pass-h"><div class="ad-pass-ic">⚡</div><div><b>Acceso directo</b><small>Sin esperar ${countdown > 0 ? countdown + ' s' : ''} ni anuncios: el enlace se abre al instante.${extra}</small></div><div class="ad-pass-price">US$1</div></div>`;
+            const nota = `<div class="ad-pass-note">Pago único por esta publicación: queda desbloqueada en tu cuenta. El creador recibe una parte. <a href="./terminos_condiciones.html#pagos" target="_blank">Términos</a></div>`;
+            box.style.display = 'block';
+
+            function listo(link, msg) {
+                clearInterval(interval);
+                validacionRealizada = true;
+                enlaceFinal = link;
+                timerEl.style.display = 'none';
+                errorEl.style.display = 'none';
+                showSuccess(msg);
+                habilitarBoton();
+                btnEl.innerText = '🚀 Abrir enlace ahora';
+                box.className = 'ad-pass done';
+                box.innerHTML = `<div class="ad-pass-h"><div class="ad-pass-ic" style="background:var(--neon-green)">✓</div><div><b>Acceso directo activo</b><small>Toca “Abrir enlace ahora”. Podrás volver a esta publicación sin esperas.</small></div></div>`;
+                mostrarSiguienteParte(juegoId);
+            }
+
+            if (!token) {
+                box.innerHTML = cabecera() + `<div class="ad-pass-btns"><button class="ad-pass-btn card" onclick="location.href='../index.html'">Inicia sesión para usar el acceso directo</button></div>`;
+                return;
+            }
+            box.innerHTML = cabecera() + '<div class="ad-pass-btns"><button class="ad-pass-btn card" disabled>Cargando…</button></div>';
+            const api = async (path, opts = {}) => {
+                const r = await fetch(API_URL + path, { ...opts, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: opts.body ? JSON.stringify(opts.body) : undefined });
+                const d = await r.json().catch(() => ({}));
+                if (!r.ok || d.success === false) { const e = new Error(d.error || 'Error de conexión'); e.status = r.status; e.data = d; throw e; }
+                return d;
+            };
+            api(`/acceso-directo/${encodeURIComponent(juegoId)}`).then(est => {
+                if (est.desbloqueado && est.link) return listo(est.link, '✅ Ya tienes acceso directo a esta publicación');
+                const conMonedas = est.monedas >= est.precioMonedas;
+                box.innerHTML = cabecera() + `<div class="ad-pass-btns">
+                    <button class="ad-pass-btn card" id="ad-pay-card">💳 Pagar US$1 con tarjeta</button>
+                    ${conMonedas ? `<button class="ad-pass-btn coins" id="ad-pay-coins">🪙 Usar ${est.precioMonedas} monedas (tienes ${est.monedas})</button>` : ''}
+                    <div id="ad-pay-area"></div></div>` + nota;
+                document.getElementById('ad-pay-card').onclick = () => {
+                    document.getElementById('ad-pay-card').style.display = 'none';
+                    const area = document.getElementById('ad-pay-area');
+                    const montar = () => window.UGPagos.botones(area, {
+                        crearOrden: async () => (await api(`/acceso-directo/${encodeURIComponent(juegoId)}/orden`, { method: 'POST' })).orderID,
+                        capturar: orderID => api(`/acceso-directo/${encodeURIComponent(juegoId)}/capturar`, { method: 'POST', body: { orderID } }),
+                        alExito: d => listo(d.link, '✅ ¡Pago confirmado! Enlace desbloqueado'),
+                        alError: msg => showError('❌ ' + msg),
+                    });
+                    window.UGPagos ? montar() : window.addEventListener('load', montar, { once: true });
+                };
+                const bc = document.getElementById('ad-pay-coins');
+                if (bc) bc.onclick = async () => {
+                    bc.disabled = true; bc.innerText = 'Procesando…';
+                    try { const d = await api(`/acceso-directo/${encodeURIComponent(juegoId)}/monedas`, { method: 'POST' }); listo(d.link, '✅ Enlace desbloqueado con monedas'); }
+                    catch (e) { showError('❌ ' + e.message); bc.disabled = false; bc.innerText = `🪙 Usar ${est.precioMonedas} monedas`; }
+                };
+            }).catch(e => {
+                if (e.status === 404) { box.style.display = 'none'; return; }   // publicación no disponible: el flujo normal informa
+                box.innerHTML = cabecera() + `<div class="ad-pass-note">No se pudo cargar el acceso directo (${esc(e.message)}). Puedes esperar el contador.</div>`;
+            });
+        })();
+
         // ⭐ LOG FINAL DE INICIALIZACIÓN
         log("Puente.html inicializado completamente");
     </script>
@@ -632,7 +721,7 @@ const STEPS = [
     },
     {
         ttl: "⏱️ El Contador de 30 Segundos",
-        bod: "El contador es <strong>obligatorio</strong> — no se puede saltar. Durante ese tiempo el sistema consulta el servidor y valida el enlace. Cuando llegue a 0, aparecerá el botón de descarga automáticamente."
+        bod: "Espera a que el contador llegue a 0: el sistema valida el enlace y aparece el botón de descarga. <strong>¿Prisa?</strong> Con el <strong>acceso directo</strong> (US$1 con tarjeta o 100 monedas) te saltas la espera y los anuncios, y la publicación queda desbloqueada en tu cuenta."
     },
     {
         ttl: "🚀 El Botón \"Obtener Enlace\"",

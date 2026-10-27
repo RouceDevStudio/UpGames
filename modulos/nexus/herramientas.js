@@ -14,6 +14,7 @@
  */
 'use strict';
 
+const mongoose = require('mongoose');
 const CATEGORIAS = ['Juego', 'ROM', 'Mod', 'Apps', 'Software', 'Ajustes', 'Optimizacion', 'Video'];
 const PESTANAS = { inicio: 'main', favoritos: 'favs', economia: 'economia', perfil: 'profile' };
 const VISIBLE = { status: 'aprobado', linkStatus: { $in: ['online', 'revision'] } };
@@ -38,13 +39,15 @@ function lite(j) {
 // ── Base de conocimiento de UpGames (reglas reales de la plataforma) ──
 function conocimiento({ config, LINKS_PERMITIDOS }) {
     return {
-        economia: `Cada descarga válida de tu contenido suma dinero a tu saldo: ${config.CPM_VALUE} USD por cada 1.000 descargas (CPM) y el ${Math.round(config.AUTHOR_PERCENTAGE * 100)}% es para el creador. Una misma IP cuenta como máximo ${config.MAX_DOWNLOADS_PER_IP_PER_DAY} descargas al día por publicación; con bloqueador de anuncios la descarga no cuenta. Hay un detector de fraude: descargas infladas se revierten y la cuenta puede quedar en revisión.`,
-        retiros: `Para retirar necesitas: saldo mínimo de ${config.MIN_WITHDRAWAL} USD, estar verificado (nivel 1 o más, lo concede el equipo de UpGames), un correo de PayPal guardado en la pestaña Economía, al menos una publicación con descargas y no tener otra solicitud pendiente. El pago se envía por PayPal tras revisarlo el equipo.`,
+        economia: `Hay tres fuentes de ingreso: descargas (CPM), el 70% de los regalos en tus lives y el 30% de cada acceso directo (US$1) a tus enlaces; lo de regalos y accesos queda 7 días en retención antes de ser retirable. Cada descarga válida de tu contenido suma dinero a tu saldo: ${config.CPM_VALUE} USD por cada 1.000 descargas (CPM) y el ${Math.round(config.AUTHOR_PERCENTAGE * 100)}% es para el creador. Una misma IP cuenta como máximo ${config.MAX_DOWNLOADS_PER_IP_PER_DAY} descargas al día por publicación; con bloqueador de anuncios la descarga no cuenta. Hay un detector de fraude: descargas infladas se revierten y la cuenta puede quedar en revisión.`,
+        retiros: `Para retirar necesitas: saldo mínimo de ${config.MIN_WITHDRAWAL} USD, estar verificado (nivel 1 o más, lo concede el equipo de UpGames), un correo de PayPal guardado en la pestaña Economía, al menos una publicación con descargas (o ingresos de lives/accesos directos ya liberados) y no tener otra solicitud pendiente. El pago se envía por PayPal tras revisarlo el equipo.`,
         publicar: `Para publicar ve a Perfil → Publicar. Necesitas título, categoría (${CATEGORIAS.join(', ')}), portada y un enlace de descarga de una plataforma permitida: ${LINKS_PERMITIDOS.join(', ')}. Sin acortadores ni enlaces directos a .exe/.msi (usa .zip o .rar). Todo pasa por revisión del equipo antes de salir en el inicio. Antes de enviarla, Nexus revisa la publicación (enlace vivo, portada, descripción, duplicados). Si subes un mod por partes (Parte 1, Parte 2…), UpGames las agrupa en una sola tarjeta y se desbloquean en orden.`,
         normas: 'No se permite piratería de juegos comerciales (cracks, keygens, repacks de juegos de pago), malware, enlaces rotos, spam, ni contenido engañoso. Las publicaciones rechazadas muestran el motivo en tu perfil para que las corrijas.',
         verificacion: 'La verificación (insignia) la otorga el equipo de UpGames a creadores activos y confiables. Niveles 1 a 3. Nivel 1 es necesario para retirar ganancias.',
         cuenta: 'Puedes cambiar avatar, portada, bio y redes desde tu perfil. El nombre de usuario se puede cambiar con un tiempo de espera entre cambios. Las notificaciones push al móvil se activan desde la campana de notificaciones → Ajustes.',
-        descargar: 'Toca una tarjeta para ver el detalle y pulsa Descargar: pasarás por la página puente, que valida la descarga y abre el enlace. Si un enlace no funciona, usa Reportar en el detalle.',
+        descargar: 'Toca una tarjeta para ver el detalle y pulsa Descargar: pasarás por la página puente, que valida la descarga y abre el enlace tras unos 30 segundos con anuncios. Si no quieres esperar, el acceso directo cuesta US$1 (o 100 monedas): abre el enlace al instante, sin anuncios, y queda desbloqueado para siempre en tu cuenta. Si un enlace no funciona, usa Reportar en el detalle.',
+        live: 'En vivo (botón de radio arriba en la biblioteca o live.html): cualquiera puede transmitir gameplay compartiendo la pantalla desde el PC (con audio del juego y micrófono) o con la cámara desde el móvil; los móviles no permiten compartir pantalla. Los espectadores chatean, dan likes y envían regalos comprados con monedas. El creador recibe el 70% del valor de cada regalo; queda 7 días en retención y luego pasa a su saldo retirable. Los seguidores reciben un aviso cuando empiezas un live.',
+        pagos: 'Se puede pagar con tarjeta de crédito o débito (Visa, Mastercard, Amex, débito) sin cuenta de PayPal, o con PayPal. El pago lo procesa PayPal en su formulario seguro: UpGames nunca ve ni guarda los datos de la tarjeta. Con dinero se compran monedas (1 moneda = 1 centavo de dólar; paquetes desde US$1,29) para regalos en lives, o el acceso directo a un enlace por US$1. Las monedas no son reembolsables. Los retiros de los creadores se reciben por PayPal.',
     };
 }
 
@@ -62,7 +65,7 @@ const DEFINICIONES = [
     { type: 'function', function: { name: 'mi_cuenta', description: 'Saldo, descargas, verificación, si puede retirar y qué le falta, seguidores y estado de sus publicaciones. Solo para el usuario que pregunta.', parameters: { type: 'object', properties: {} } } },
     { type: 'function', function: { name: 'mis_publicaciones', description: 'Lista las publicaciones del usuario con su estado (aprobada, pendiente, rechazada y motivo), descargas y likes.', parameters: { type: 'object', properties: { estado: { type: 'string', enum: ['todas', 'aprobado', 'pendiente', 'rechazado'] } } } } },
     { type: 'function', function: { name: 'perfil_creador', description: 'Perfil público de un creador de UpGames: bio, seguidores, verificación y sus publicaciones más descargadas.', parameters: { type: 'object', properties: { usuario: { type: 'string' } }, required: ['usuario'] } } },
-    { type: 'function', function: { name: 'reglas_upgames', description: 'Reglas oficiales de UpGames. Úsala antes de responder sobre dinero, retiros, cómo publicar, normas, verificación, cuenta o cómo descargar.', parameters: { type: 'object', properties: { tema: { type: 'string', enum: ['economia', 'retiros', 'publicar', 'normas', 'verificacion', 'cuenta', 'descargar'] } }, required: ['tema'] } } },
+    { type: 'function', function: { name: 'reglas_upgames', description: 'Reglas oficiales de UpGames. Úsala antes de responder sobre dinero, retiros, cómo publicar, normas, verificación, cuenta, cómo descargar, lives (transmisiones, regalos) o pagos con tarjeta, monedas y acceso directo.', parameters: { type: 'object', properties: { tema: { type: 'string', enum: ['economia', 'retiros', 'publicar', 'normas', 'verificacion', 'cuenta', 'descargar', 'live', 'pagos'] } }, required: ['tema'] } } },
     { type: 'function', function: { name: 'mostrar_contenido', description: 'Muestra al usuario tarjetas tocables de los contenidos que recomiendas (ids obtenidos de otras herramientas). Llámala cuando recomiendes o menciones contenidos concretos.', parameters: { type: 'object', properties: { ids: { type: 'array', items: { type: 'string' }, maxItems: 6 } }, required: ['ids'] } } },
     { type: 'function', function: { name: 'proponer_accion', description: 'Propone un botón de acción en la app: filtrar el inicio por categoría, ir a una pestaña, o buscar un texto en el inicio.', parameters: { type: 'object', properties: {
         tipo: { type: 'string', enum: ['filtrar_categoria', 'ir_a', 'buscar'] },
@@ -129,7 +132,7 @@ function crear(deps, ctx) {
         },
         async mi_cuenta() {
             if (!ctx.usuario) return sinSesion;
-            const u = await Usuario.findOne({ usuario: ctx.usuario }).select('usuario saldo descargasTotales isVerificado verificadoNivel paypalEmail solicitudPagoPendiente listaSeguidores siguiendo fecha listaNegraAdmin').lean();
+            const u = await Usuario.findOne({ usuario: ctx.usuario }).select('usuario saldo saldoRetenido monedas descargasTotales isVerificado verificadoNivel paypalEmail solicitudPagoPendiente listaSeguidores siguiendo fecha listaNegraAdmin').lean();
             if (!u) return { error: 'Cuenta no encontrada' };
             const [porEstado, conDescargas] = await Promise.all([
                 Juego.aggregate([{ $match: { usuario: ctx.usuario } }, { $group: { _id: '$status', n: { $sum: 1 }, d: { $sum: '$descargasEfectivas' } } }]),
@@ -140,11 +143,14 @@ function crear(deps, ctx) {
             if ((u.saldo || 0) < min) falta.push(`llegar a ${min} USD (faltan ${(min - (u.saldo || 0)).toFixed(2)} USD, unas ${Math.ceil((min - (u.saldo || 0)) / (deps.config.CPM_VALUE * deps.config.AUTHOR_PERCENTAGE / 1000)).toLocaleString('es')} descargas)`);
             if (!u.isVerificado || (u.verificadoNivel || 0) < 1) falta.push('estar verificado (nivel 1)');
             if (!u.paypalEmail) falta.push('guardar tu correo de PayPal en Economía');
-            if (!conDescargas) falta.push('tener al menos una publicación con descargas');
+            const LiveTx = mongoose.models.LiveTx;
+            const ingresosLive = LiveTx ? await LiveTx.exists({ tipo: { $in: ['regalo', 'acceso'] }, destinatario: ctx.usuario, estado: 'liberada' }) : null;
+            if (!conDescargas && !ingresosLive) falta.push('tener al menos una publicación con descargas (o ingresos de lives/accesos directos liberados)');
             if (u.solicitudPagoPendiente) falta.push('esperar a que se procese la solicitud pendiente');
             const est = Object.fromEntries(porEstado.map(e => [e._id, { publicaciones: e.n, descargas: e.d }]));
             return {
                 usuario: u.usuario, saldo_usd: +(u.saldo || 0).toFixed(4), descargas_totales: u.descargasTotales || 0,
+                en_retencion_usd: +(u.saldoRetenido || 0).toFixed(2), monedas: u.monedas || 0,
                 verificado: !!u.isVerificado, nivel_verificacion: u.verificadoNivel || 0, paypal_configurado: !!u.paypalEmail,
                 puede_retirar: !falta.length, le_falta: falta, seguidores: (u.listaSeguidores || []).length, siguiendo: (u.siguiendo || []).length,
                 miembro_desde: u.fecha ? new Date(u.fecha).toISOString().slice(0, 10) : null,

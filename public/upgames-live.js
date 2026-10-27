@@ -742,58 +742,26 @@ async function vistaEstudio() {
   } catch (_) {}
 }
 
-/* ══════════════ Monedas (PayPal) ══════════════ */
-let ppCargado = null;
-function cargarPayPal() {
-  if (ppCargado) return ppCargado;
-  ppCargado = new Promise((ok, ko) => {
-    const s = document.createElement('script');
-    s.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(CFG.paypal.clientId)}&currency=USD&intent=capture&components=buttons`;
-    s.onload = ok; s.onerror = () => { ppCargado = null; ko(new Error('No se pudo cargar PayPal')); };
-    document.head.appendChild(s);
-  });
-  return ppCargado;
-}
+/* ══════════════ Monedas (tarjeta o PayPal, ver upgames-pagos.js) ══════════════ */
 async function abrirMonedas() {
   if (!TOKEN) return irLogin();
   await cargarConfig().catch(() => {});
   const saldo = await refrescarMonedas() || {};
   document.querySelector('.modal-bg')?.remove();
   const bg = document.createElement('div'); bg.className = 'modal-bg';
-  bg.innerHTML = `<div class="modal glass" role="dialog" aria-modal="true" aria-label="Monedas">
-    <div class="modal-head"><h2>🪙 Monedas</h2><button class="ico-btn" id="m-x" aria-label="Cerrar"><ion-icon name="close"></ion-icon></button></div>
-    <div class="bal"><div><small style="color:var(--txt2)">Tu saldo</small><br><b>${fmt(monedas)}</b></div><div style="text-align:right;font-size:.8rem;color:var(--txt2)">${saldo.saldoRetenido ? `Ganancias en retención:<br><b style="font-size:1rem;color:var(--txt)">${usd(saldo.saldoRetenido)}</b>` : 'Úsalas para enviar<br>regalos en los lives'}</div></div>
-    ${CFG?.paypal ? `<div class="packs">${CFG.paquetes.map(p => `<button class="pack" data-p="${p.id}">${p.extra ? `<span class="px">${esc(p.extra)}</span>` : ''}<div class="pm">🪙 ${fmt(p.monedas)}</div><div class="pu">US$${p.usd.toFixed(2)}</div></button>`).join('')}</div>
-      <div id="pp-buttons"><p class="fine" style="text-align:center">Elige un paquete para pagar con PayPal o tarjeta.</p></div>` : '<div class="note warn">Las compras de monedas aún no están activadas. Vuelve pronto.</div>'}
-    <p class="fine">Las monedas no son reembolsables ni canjeables por dinero. Al comprar aceptas los <a href="./terminos_condiciones.html" target="_blank" style="color:var(--g)">términos</a>. El creador recibe el ${Math.round((1 - (CFG?.comision ?? 0.3)) * 100)}% del valor de cada regalo.</p>
+  bg.innerHTML = `<div class="modal glass" role="dialog" aria-modal="true" aria-label="Comprar monedas">
+    <div class="modal-head"><h2>🪙 Comprar monedas</h2><button class="ico-btn" id="m-x" aria-label="Cerrar"><ion-icon name="close"></ion-icon></button></div>
+    <div id="m-tienda"></div>
+    <p class="fine">El creador recibe el ${Math.round((1 - (CFG?.comision ?? 0.3)) * 100)}% del valor de cada regalo.${saldo.saldoRetenido ? ` Tus ganancias en retención: <b>${usd(saldo.saldoRetenido)}</b>.` : ''}</p>
   </div>`;
   document.body.appendChild(bg);
-  const cerrar = () => bg.remove();
+  const cerrar = () => { bg.remove(); document.removeEventListener('keydown', esc_); };
+  const esc_ = e => { if (e.key === 'Escape') cerrar(); };
+  document.addEventListener('keydown', esc_);
   bg.onclick = e => { if (e.target === bg) cerrar(); };
   bg.querySelector('#m-x').onclick = cerrar;
-  bg.querySelectorAll('.pack').forEach(b => b.onclick = async () => {
-    bg.querySelectorAll('.pack').forEach(x => x.classList.toggle('on', x === b));
-    const box = bg.querySelector('#pp-buttons');
-    box.innerHTML = '<p class="fine" style="text-align:center">Cargando PayPal…</p>';
-    try {
-      await cargarPayPal();
-      box.innerHTML = '';
-      await window.paypal.Buttons({
-        style: { layout: 'vertical', color: 'gold', shape: 'pill', label: 'pay', height: 45 },
-        createOrder: async () => (await api('/monedas/orden', { method: 'POST', body: { paquete: b.dataset.p } })).orderID,
-        onApprove: async (data, actions) => {
-          try {
-            const d = await api('/monedas/capturar', { method: 'POST', body: { orderID: data.orderID } });
-            monedas = d.monedas; $('coins-n').textContent = fmt(monedas);
-            toast(`✅ +${fmt(d.acreditadas)} monedas`); cerrar();
-          } catch (e) {
-            if (e.data?.reintentar) return actions.restart();
-            toast(e.message, 5000);
-          }
-        },
-        onError: () => toast('PayPal tuvo un problema. Intenta de nuevo.'),
-      }).render(box);
-    } catch (e) { box.innerHTML = `<div class="note warn">${esc(e.message)}</div>`; }
+  window.UGPagos.tienda(bg.querySelector('#m-tienda'), {
+    alComprar: d => { monedas = d.monedas; $('coins-n').textContent = fmt(monedas); toast(`✅ +${fmt(d.acreditadas)} monedas`); setTimeout(cerrar, 900); },
   });
 }
 
