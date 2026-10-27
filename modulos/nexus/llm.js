@@ -20,7 +20,13 @@ const MODELOS = ['llama-3.3-70b-versatile', 'openai/gpt-oss-20b', 'llama-3.1-8b-
 const MODELOS_RAPIDOS = ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile'];
 
 const url = () => (process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1').replace(/\/+$/, '') + '/chat/completions';
-const clave = () => (process.env.GROQ_API_KEY || '').trim();
+// GROQ_API_KEY; si en Railway quedó con otro nombre (GROQ_KEY, espacios…), se busca cualquier variable GROQ* con una clave gsk_
+const clave = () => {
+    const v = (process.env.GROQ_API_KEY || '').trim();
+    if (v) return v;
+    const k = Object.keys(process.env).find(n => /groq/i.test(n) && /^\s*gsk_/.test(process.env[n] || ''));
+    return k ? process.env[k].trim() : '';
+};
 const disponible = () => !!clave();
 
 // Salud reciente (se muestra en el panel admin)
@@ -112,6 +118,6 @@ async function pingReal() {
     finally { clearTimeout(to); }
 }
 
-const estado = () => ({ configurado: disponible(), modelos: MODELOS, ...salud });
+const estado = () => ({ configurado: disponible(), variable: process.env.GROQ_API_KEY?.trim() ? 'GROQ_API_KEY' : (Object.keys(process.env).find(n => /groq/i.test(n) && /^\s*gsk_/.test(process.env[n] || '')) || null), modelos: MODELOS, ...salud });
 
 module.exports = { completar, texto, json, parsearJSON, disponible, estado, ping, MODELOS };
