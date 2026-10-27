@@ -237,9 +237,67 @@ main { position: relative; z-index: 1; max-width: 1440px; margin: 0 auto; paddin
 
 .toast { position: fixed; left: 50%; bottom: calc(24px + var(--safe-b)); transform: translateX(-50%); z-index: 200; padding: 12px 18px; border-radius: 14px; background: var(--glass-2); border: 1px solid var(--bd-2); backdrop-filter: blur(20px); font-weight: 600; font-size: .9rem; box-shadow: 0 10px 30px rgba(0,0,0,.4); animation: pop .3s var(--ease); max-width: calc(100% - 32px); text-align: center; }
 
+/* ── Burbujas de chat sobre el video (estilo TikTok) ── */
+.ov-chat { position: absolute; left: 10px; bottom: 56px; width: min(74%, 420px); max-height: 46%; display: flex; flex-direction: column; justify-content: flex-end; gap: 5px; pointer-events: none; z-index: 3;
+  -webkit-mask-image: linear-gradient(to top, #000 72%, transparent); mask-image: linear-gradient(to top, #000 72%, transparent); overflow: hidden; }
+.player-wrap.sin-ov .ov-chat { display: none; }
+.ovb { align-self: flex-start; max-width: 100%; display: flex; gap: 7px; align-items: flex-start; padding: 5px 11px 6px 5px; border-radius: 16px; background: rgba(0,0,0,.38); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  font-size: .84rem; line-height: 1.35; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.6); animation: ovIn .3s var(--ease); transition: opacity .6s, transform .6s; overflow-wrap: anywhere; }
+.ovb.fuera { opacity: 0; transform: translateY(-8px); }
+.ovb .mav { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; object-fit: cover; display: flex; align-items: center; justify-content: center; font-size: .66rem; font-weight: 800; }
+.ovb b { font-weight: 800; margin-right: 5px; }
+.ovb.host { background: rgba(255,77,109,.45); }
+.ovb.regalo { background: linear-gradient(90deg, rgba(255,204,77,.55), rgba(255,122,89,.35)); }
+.ovb.sys { background: rgba(50,213,131,.28); }
+@keyframes ovIn { from { opacity: 0; transform: translateY(10px) scale(.96); } }
+
+/* ── Modo inmersivo (pantalla completa tipo TikTok; por defecto en móvil) ── */
+.ov-head, .ov-rail, .ov-bar, .ov-x { display: none; }
+body.inm-on { overflow: hidden; }
+/* main crea un contexto de apilamiento (z-index:1): sin esto el header tapaba el modo inmersivo */
+body.inm-on main { z-index: auto; }
+body.inm-on .top { visibility: hidden; }
+.player-wrap.inm, .stage .player-wrap.inm { position: fixed; inset: 0; z-index: 60; border-radius: 0; aspect-ratio: auto; width: 100%; height: 100dvh; box-shadow: none; }
+.player-wrap.inm video { object-fit: contain; }
+.player-wrap.inm.vertical video { object-fit: cover; }
+.player-wrap.inm .p-ctrls { display: none; }
+.player-wrap.inm .ov-head { display: flex; position: absolute; top: 0; left: 0; right: 0; z-index: 4; align-items: center; gap: 10px; padding: calc(10px + env(safe-area-inset-top)) 12px 26px; background: linear-gradient(rgba(0,0,0,.6), transparent); }
+.ov-head .av, .ov-head .mav { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 2px solid var(--live); display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0; }
+.ov-head .t { flex: 1; min-width: 0; }
+.ov-head .t b { display: block; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov-head .t small { display: block; font-size: .74rem; color: rgba(255,255,255,.8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.player-wrap.inm .ov-x { display: inline-flex; color: #fff; background: rgba(0,0,0,.35); }
+.player-wrap.inm .p-top { top: calc(64px + env(safe-area-inset-top)); left: 12px; right: auto; }
+.player-wrap.inm .gift-banner { top: calc(100px + env(safe-area-inset-top)); }
+.player-wrap.inm .ov-chat { bottom: calc(70px + env(safe-area-inset-bottom)); left: 10px; width: calc(100% - 84px); max-height: 38vh; }
+.player-wrap.inm .ov-rail { display: flex; position: absolute; right: 8px; bottom: calc(78px + env(safe-area-inset-bottom)); z-index: 4; flex-direction: column; gap: 14px; align-items: center; }
+.ov-rail button { display: flex; flex-direction: column; align-items: center; gap: 2px; color: #fff; font-size: .68rem; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
+.ov-rail button .i { width: 46px; height: 46px; border-radius: 50%; background: rgba(0,0,0,.38); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; font-size: 1.35rem; transition: transform .12s; }
+.ov-rail button:active .i { transform: scale(.88); }
+.ov-rail button.danger .i { background: rgba(255,77,109,.85); }
+.ov-rail button.apagado .i, .ico-btn.apagado { opacity: .45; }
+.ov-rail button[hidden] { display: none; }
+.player-wrap.inm .ov-bar { display: flex; position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; gap: 8px; align-items: center; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: linear-gradient(transparent, rgba(0,0,0,.65)); }
+.ov-bar input { flex: 1; min-width: 0; padding: 11px 16px; border-radius: 99px; border: 1px solid rgba(255,255,255,.22); background: rgba(0,0,0,.4); color: #fff; outline: none; font-size: 16px; backdrop-filter: blur(6px); }
+.ov-bar input::placeholder { color: rgba(255,255,255,.7); }
+.ov-bar .send { width: 42px; height: 42px; border-radius: 50%; background: var(--g); color: #06210f; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0; }
+.ov-bar a { flex: 1; text-align: center; padding: 11px; border-radius: 99px; background: rgba(0,0,0,.45); color: #fff; font-weight: 700; font-size: .88rem; }
+.player-wrap.inm .unmute { bottom: auto; top: 46%; }
+.player-wrap.inm .heart { bottom: calc(150px + env(safe-area-inset-bottom)); right: 22px; }
+
+/* Hoja de regalos (modo inmersivo) */
+.sheet-bg { position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,.45); opacity: 0; pointer-events: none; transition: opacity .25s; }
+.sheet-bg.on { opacity: 1; pointer-events: auto; }
+.gift-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 81; padding: 14px 14px calc(14px + env(safe-area-inset-bottom)); border-radius: 22px 22px 0 0; background: rgba(23,26,33,.97); border-top: 1px solid var(--bd-2); transform: translateY(105%); transition: transform .3s var(--ease); max-height: 70dvh; overflow-y: auto; }
+.gift-sheet.on { transform: none; }
+.gift-sheet .grab { width: 40px; height: 4px; border-radius: 2px; background: rgba(255,255,255,.2); margin: 0 auto 12px; }
+.gift-sheet .gifts-row { grid-template-columns: repeat(4, 1fr); }
+
 /* ── Responsive ── */
 @media (max-width: 1020px) {
-  .stage, .studio-grid { grid-template-columns: 1fr; }
+  /* minmax(0,…) y no 1fr: 1fr no encoge por debajo del contenido y desbordaba en móvil */
+  .stage, .studio-grid { grid-template-columns: minmax(0, 1fr); }
+  .stage > *, .studio-grid > * { min-width: 0; }
   .side { position: relative; top: 0; height: 62dvh; min-height: 360px; }
 }
 @media (max-width: 640px) {
@@ -252,6 +310,26 @@ main { position: relative; z-index: 1; max-width: 1440px; margin: 0 auto; paddin
   .dir-hero { margin-top: 16px; }
   .p-ctrls { opacity: 1; }
   .coins-chip span.lbl { display: none; }
+  .top { gap: 6px; padding-left: 10px; padding-right: 10px; }
+  .top .btn-live { padding: 9px 12px; }
+  .top .btn-live .txt { display: none; }
+  .brand { font-size: .95rem; }
+  /* El video queda fijo arriba al bajar por el chat (antes se perdía de vista) */
+  /* sticky no sale de su contenedor: sin esto la <section> (que termina antes del chat) arrastraba el video bajo el header */
+  .stage > section { display: contents; }
+  .stage { gap: 12px; }
+  .stage .player-wrap { position: sticky; top: var(--top-h, 60px); z-index: 20; }
+  /* Fuera del inmersivo el aviso de sonido va arriba a la derecha: no tapa las burbujas */
+  .player-wrap:not(.inm) .unmute { left: auto; right: 10px; bottom: auto; top: 10px; transform: none; padding: 7px 12px; font-size: .8rem; }
+  .studio-grid .side.vacio { display: none; }
+  .info { margin-top: 10px; }
+  .info .acts .btn { padding: 9px 14px; }
+  .studio-actions .btn { min-width: 0; }
+  .src { padding: 12px 4px; }
+  .row2 { grid-template-columns: 1fr; gap: 0; }
+  .kpi b { font-size: 1.1rem; }
+  .ov-chat { width: 82%; bottom: 50px; max-height: 50%; }
+  .ovb { font-size: .8rem; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
   </style>
@@ -263,7 +341,7 @@ main { position: relative; z-index: 1; max-width: 1440px; margin: 0 auto; paddin
   <a class="brand" href="./live.html"><span><span class="up">UP</span><span class="gm">GAMES</span></span><span class="pill-live">LIVE</span></a>
   <div class="spacer"></div>
   <button class="coins-chip" id="btn-coins" hidden aria-label="Mis monedas">🪙 <span id="coins-n">0</span> <span class="lbl">monedas</span></button>
-  <button class="btn btn-live" id="btn-golive" hidden><ion-icon name="radio"></ion-icon> Ir en vivo</button>
+  <button class="btn btn-live" id="btn-golive" hidden aria-label="Ir en vivo"><ion-icon name="radio"></ion-icon><span class="txt"> Ir en vivo</span></button>
 </header>
 
 <main id="app"></main>
@@ -272,7 +350,7 @@ main { position: relative; z-index: 1; max-width: 1440px; margin: 0 auto; paddin
 <script src="./upgames-pwa.js" defer></script>
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
-<script src="./upgames-pagos.js"></script>
-<script src="./upgames-live.js"></script>
+<script src="./upgames-pagos.js?v=20261027q"></script>
+<script src="./upgames-live.js?v=20261027q"></script>
 </body>
 </html>

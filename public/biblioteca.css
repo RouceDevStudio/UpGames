@@ -5250,3 +5250,30 @@ button.pf2-stat { cursor: pointer; }
 .eco-pay-open { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 15px; border-radius: 14px; border: 0; background: #32D583; color: #06210f; font-weight: 800; font-size: .95rem; cursor: pointer; font-family: inherit; box-shadow: 0 10px 24px -10px rgba(50,213,131,.8); transition: transform .12s; }
 .eco-pay-open:active { transform: scale(.98); }
 .eco-pay-safe { font-size: .72rem; color: #8a90a0; text-align: center; margin: 10px 0 0; }
+
+/* ── Móviles angostos (≤380px, p. ej. iPhone SE): nada se sale de la pantalla ── */
+@media (max-width: 380px) {
+  #app-header { padding: 0 10px; gap: 8px; }
+  .hdr-logo { font-size: 1.2rem; letter-spacing: 1.5px; }
+  .search-bar { min-width: 0; }
+  #buscador { padding-right: 8px; font-size: .82rem; }
+  .hdr-actions { gap: 5px; }
+  .hdr-btn { width: 34px; height: 34px; font-size: 1rem; }
+  .pf2-actions { gap: 6px; padding-left: 12px; padding-right: 12px; }
+  .pf2-btn { min-width: 0; padding: 0 8px; font-size: .74rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pf2-btn-icon { flex: 0 0 36px; }
+  .eco-hero-card { padding: 18px 14px; }
+  .eco-hero-right { margin-left: 6px; }
+  .eco-ring-svg { width: 74px; height: 74px; }
+  .eco-panel-hdr { gap: 8px; padding-left: 12px; padding-right: 12px; }
+  .eco-panel-title { min-width: 0; letter-spacing: .8px; flex-wrap: wrap; }
+}
+/* Email de PayPal + Guardar: el campo encoge en vez de empujar el botón fuera */
+.pf-paypal-row { display: flex; min-width: 0; }
+.pf-paypal-row .pf-paypal-input { flex: 1; min-width: 0; }
+.pf-paypal-row .pf-paypal-save { flex-shrink: 0; }
+@media (max-width: 380px) { .pf-paypal-row .pf-paypal-save { padding-left: 12px; padding-right: 12px; } }
+@media (max-width: 380px) {
+  .eco-kpi-strip { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .eco-kpi-lbl { letter-spacing: .5px; }
+}

@@ -67,6 +67,9 @@ async function refrescarMonedas() {
   try { const d = await api('/monedas/saldo'); monedas = d.monedas; $('coins-n').textContent = fmt(monedas); return d; } catch (_) {}
 }
 
+/* Cabecera: su altura real alimenta el video fijo del móvil (--top-h) */
+const medirTop = () => document.documentElement.style.setProperty('--top-h', document.querySelector('.top').offsetHeight + 'px');
+medirTop(); window.addEventListener('resize', medirTop);
 /* Cabecera */
 $('btn-back').onclick = () => { if (Q.has('u') || Q.has('estudio')) location.href = './live.html'; else location.href = './biblioteca.html'; };
 $('btn-golive').onclick = () => { TOKEN ? (location.href = './live.html?estudio=1') : irLogin(); };
@@ -194,6 +197,71 @@ function capaRegalos(capa) {
   };
 }
 
+/* ══════════════ Burbujas de chat sobre el video (estilo TikTok) ══════════════ */
+const esMovil = () => matchMedia('(max-width: 760px)').matches;
+const prefBurbujas = () => { try { const v = localStorage.getItem('ug_live_ov'); return v === null ? null : v === '1'; } catch (_) { return null; } };
+function burbujas(el, max = 6) {
+  function poner(html, cls, attrs = {}) {
+    const b = document.createElement('div');
+    b.className = 'ovb ' + (cls || '');
+    for (const [k, v] of Object.entries(attrs)) b.dataset[k] = v;
+    b.innerHTML = html;
+    el.appendChild(b);
+    while (el.children.length > max) el.firstChild.remove();
+    // Se desvanecen solas: el video nunca queda tapado por comentarios viejos
+    setTimeout(() => { b.classList.add('fuera'); setTimeout(() => b.remove(), 650); }, 20000);
+  }
+  const mini = (u, av) => av && /^https:\/\//.test(av)
+    ? `<img class="mav" src="${esc(cld(av, 'c_fill,w_48,h_48,q_auto,f_auto'))}" alt="">`
+    : `<span class="mav" style="background:hsl(${hue(u)} 60% 45%)">${esc((u || '?')[0].toUpperCase())}</span>`;
+  return {
+    add: m => poner(`${mini(m.u, m.av)}<div><b style="color:hsl(${hue(m.u)} 85% 76%)">${esc(m.u)}</b>${esc(m.t)}</div>`, m.host ? 'host' : '', { id: m.id, u: m.u }),
+    regalo: g => poner(`<span style="font-size:1.15rem;line-height:1">${esc(g.regalo.emoji)}</span><div><b>${esc(g.de)}</b>envió ${esc(g.regalo.nombre)}${g.cantidad > 1 ? ` ×${g.cantidad}` : ''}</div>`, 'regalo'),
+    sys: t => poner(`<div>${esc(t)}</div>`, 'sys'),
+    borrar: id => el.querySelector(`[data-id="${CSS.escape(id)}"]`)?.remove(),
+    silenciar: u => el.querySelectorAll(`[data-u="${CSS.escape(u)}"]`).forEach(x => x.remove()),
+  };
+}
+// Mostrar/ocultar las burbujas (preferencia guardada; por defecto sí en pantallas sin chat lateral)
+function interruptorBurbujas(pw, botones) {
+  const pintar = () => { const on = !pw.classList.contains('sin-ov'); botones.forEach(b => b && b.classList.toggle('apagado', !on)); };
+  pw.classList.toggle('sin-ov', !(prefBurbujas() ?? innerWidth <= 1020));
+  pintar();
+  botones.forEach(b => b && (b.onclick = e => {
+    e.stopPropagation();
+    pw.classList.toggle('sin-ov');
+    try { localStorage.setItem('ug_live_ov', pw.classList.contains('sin-ov') ? '0' : '1'); } catch (_) {}
+    pintar();
+  }));
+  // Sin preferencia del usuario: en pantalla completa se ven (el chat lateral queda oculto)
+  return { segunPantalla(inm) { if (prefBurbujas() === null) { pw.classList.toggle('sin-ov', !(inm || innerWidth <= 1020)); pintar(); } } };
+}
+
+/* ══════════════ Modo inmersivo (video a pantalla completa con todo encima) ══════════════ */
+// En móvil es el modo por defecto. "Atrás" del teléfono sale del modo, no de la página.
+function modoInmersivo(pw, alCambiar) {
+  let on = false;
+  const aplicar = v => {
+    on = v; pw.classList.toggle('inm', v); document.body.classList.toggle('inm-on', v);
+    if (!v && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    alCambiar?.(v);
+  };
+  const entrar = () => {
+    if (on) return;
+    aplicar(true);
+    history.pushState({ ugInm: 1 }, '');
+    // En PC además pantalla completa real; en móvil basta el modo fijo (iOS no deja hacer fullscreen de un div)
+    if (!esMovil() && pw.requestFullscreen) pw.requestFullscreen().catch(() => {});
+  };
+  const salir = () => { if (!on) return; if (history.state?.ugInm) history.back(); else aplicar(false); };
+  const alVolver = () => { if (on) aplicar(false); };
+  const alSalirFS = () => { if (!document.fullscreenElement && on && !esMovil()) salir(); };
+  window.addEventListener('popstate', alVolver);
+  document.addEventListener('fullscreenchange', alSalirFS);
+  cleanup.push(() => { window.removeEventListener('popstate', alVolver); document.removeEventListener('fullscreenchange', alSalirFS); document.body.classList.remove('inm-on'); });
+  return { entrar, salir, alternar: () => (on ? salir() : entrar()), get activo() { return on; } };
+}
+
 /* ══════════════ Reproductores ══════════════ */
 // WebRTC directo: el creador nos envía una oferta por Socket.IO
 function reproductorP2P(video, liveId, estado) {
@@ -280,13 +348,29 @@ async function vistaEspectador(usuario) {
         <div class="gift-layer" id="gl"></div>
         <div class="p-top"><span class="pill-live">EN VIVO</span><span class="chip-dark"><ion-icon name="eye"></ion-icon> <span id="v-n">${fmt(L0.espectadores)}</span></span><span class="chip-dark timer" id="v-t">0:00</span></div>
         <div class="p-overlay" id="pov"><div class="spin"></div><p id="pov-t">Conectando con el directo…</p></div>
+        <div class="ov-chat" id="ov-chat" aria-hidden="true"></div>
+        <div class="ov-head">
+          ${avatar(c.usuario, c.avatar)}
+          <div class="t"><b>@${esc(c.usuario)}${c.verificado ? ' <ion-icon class="verif" name="checkmark-circle"></ion-icon>' : ''}</b><small id="ov-title">${esc(L0.titulo)}</small></div>
+          <button class="ico-btn ov-x" id="ov-x" aria-label="Salir de pantalla completa"><ion-icon name="close"></ion-icon></button>
+        </div>
+        <div class="ov-rail">
+          <button id="ov-like" aria-label="Me gusta"><span class="i">❤️</span><span id="ov-likes">${fmt(L0.likes)}</span></button>
+          ${usuario === ME ? '' : '<button id="ov-gift" aria-label="Enviar regalo"><span class="i">🎁</span>Regalo</button>'}
+          <button id="ov-share" aria-label="Compartir"><span class="i"><ion-icon name="share-social"></ion-icon></span>Compartir</button>
+          <button id="ov-sound" aria-label="Sonido"><span class="i" id="ov-sound-i">🔇</span>Sonido</button>
+          <button id="ov-toggle" aria-label="Mostrar u ocultar comentarios"><span class="i">💬</span>Chat</button>
+        </div>
+        ${TOKEN ? `<form class="ov-bar" id="ov-form" autocomplete="off"><input id="ov-in" maxlength="200" placeholder="Agrega un comentario…" enterkeyhint="send" aria-label="Comentario"><button class="send" aria-label="Enviar"><ion-icon name="send"></ion-icon></button></form>`
+                : `<div class="ov-bar"><a href="../index.html">Inicia sesión para comentar y enviar regalos</a></div>`}
         <button class="unmute" id="unmute" hidden><ion-icon name="volume-high"></ion-icon> Activar sonido</button>
         <div class="p-ctrls">
           <button class="ico-btn" id="b-mute" aria-label="Silenciar"><ion-icon name="volume-mute"></ion-icon></button>
           <input type="range" class="vol" id="vol" min="0" max="1" step="0.05" value="1" aria-label="Volumen">
           <div class="spacer"></div>
+          <button class="ico-btn" id="b-ov" aria-label="Comentarios sobre el video" title="Comentarios sobre el video"><ion-icon name="chatbubbles"></ion-icon></button>
           <button class="ico-btn" id="b-pip" aria-label="Imagen en imagen"><ion-icon name="albums-outline"></ion-icon></button>
-          <button class="ico-btn" id="b-fs" aria-label="Pantalla completa"><ion-icon name="expand"></ion-icon></button>
+          <button class="ico-btn" id="b-inmersivo" aria-label="Pantalla completa" title="Pantalla completa"><ion-icon name="expand"></ion-icon></button>
         </div>
       </div>
       <div class="info">
@@ -304,19 +388,39 @@ async function vistaEspectador(usuario) {
       </div>`}
     </section>
     <aside class="side glass" id="side"></aside>
-  </div>`;
+  </div>
+  ${usuario === ME ? '' : `<div class="sheet-bg" id="sheet-bg"></div>
+  <div class="gift-sheet" id="gift-sheet" role="dialog" aria-label="Enviar regalo">
+    <div class="grab"></div>
+    <div class="gifts-head"><span>🎁 Regalo para @${esc(c.usuario)}</span>${TOKEN ? '<button class="coins-chip" id="sheet-recargar">🪙 <span id="sheet-coins">0</span> · Recargar</button>' : ''}</div>
+    <div class="gifts-row">${CFG.regalos.map(g => `<button class="gift" data-g="${g.id}" title="${esc(g.nombre)} · ${g.monedas} monedas"><span class="e">${g.emoji}</span><span class="n">${esc(g.nombre)}</span><span class="c">🪙 ${fmt(g.monedas)}</span></button>`).join('')}</div>
+  </div>`}`;
 
-  const video = $('vid'), pov = $('pov'), capa = capaRegalos($('gl'));
+  const video = $('vid'), pov = $('pov'), capa = capaRegalos($('gl')), pw = $('pw'), ov = burbujas($('ov-chat'));
   const estado = (e, txt) => { pov.hidden = e === 'ok'; if (txt) $('pov-t').textContent = txt; if (e === 'ok' && video.muted) $('unmute').hidden = false; };
   // Controles
-  const sincMute = () => { $('b-mute').innerHTML = `<ion-icon name="${video.muted || !video.volume ? 'volume-mute' : 'volume-high'}"></ion-icon>`; $('unmute').hidden = !video.muted || !pov.hidden; };
+  const sincMute = () => {
+    const mudo = video.muted || !video.volume;
+    $('b-mute').innerHTML = `<ion-icon name="${mudo ? 'volume-mute' : 'volume-high'}"></ion-icon>`;
+    $('ov-sound-i').textContent = mudo ? '🔇' : '🔊';
+    $('unmute').hidden = !video.muted || !pov.hidden;
+  };
   $('unmute').onclick = () => { video.muted = false; video.play().catch(() => {}); sincMute(); };
   $('b-mute').onclick = () => { video.muted = !video.muted; sincMute(); };
   $('vol').oninput = e => { video.volume = +e.target.value; video.muted = !video.volume; sincMute(); };
-  $('b-fs').onclick = () => { const pw = $('pw'); document.fullscreenElement ? document.exitFullscreen() : (pw.requestFullscreen?.() || video.webkitEnterFullscreen?.()); };
+  let burb = null;
+  const inm = modoInmersivo(pw, on => { $('b-inmersivo').innerHTML = `<ion-icon name="${on ? 'contract' : 'expand'}"></ion-icon>`; burb?.segunPantalla(on); });
+  $('b-inmersivo').onclick = e => { e.stopPropagation(); inm.alternar(); };
+  $('ov-x').onclick = () => inm.salir();
+  $('ov-sound').onclick = () => { video.muted = !video.muted; if (!video.muted && !video.volume) video.volume = 1; video.play().catch(() => {}); sincMute(); };
+  $('ov-share').onclick = () => $('b-share').click();
+  burb = interruptorBurbujas(pw, [$('b-ov'), $('ov-toggle')]);
+  // Video vertical (cámara del móvil) llena la pantalla; el de PC se ve completo
+  video.addEventListener('resize', () => pw.classList.toggle('vertical', video.videoHeight > video.videoWidth));
+  if (esMovil()) inm.entrar();
   $('b-pip').hidden = !document.pictureInPictureEnabled;
   $('b-pip').onclick = () => (document.pictureInPictureElement ? document.exitPictureInPicture() : video.requestPictureInPicture()).catch(() => {});
-  $('pw').onclick = e => { if (e.target === video) $('pw').classList.toggle('show-ctrls'); };
+  pw.onclick = e => { if (e.target === video && !inm.activo) pw.classList.toggle('show-ctrls'); };
   $('b-share').onclick = async () => {
     const url = location.href.split('#')[0];
     try { if (navigator.share) await navigator.share({ title: `@${c.usuario} está en vivo en UpGames`, text: L0.titulo, url }); else { await navigator.clipboard.writeText(url); toast('Enlace copiado'); } } catch (_) {}
@@ -332,7 +436,7 @@ async function vistaEspectador(usuario) {
     if (!r?.ok) { finDelLive(r?.error || 'Este live terminó'); return; }
     $('v-n').textContent = fmt(r.espectadores); likes = r.likes; $('v-likes').textContent = fmt(likes);
     chat.pintarTop(r.top);
-    if (!unirse.hecho) { r.chat.forEach(chat.add); chat.sys('Bienvenido al chat. Sé respetuoso 💚'); unirse.hecho = true; }
+    if (!unirse.hecho) { r.chat.forEach(chat.add); r.chat.slice(-4).forEach(ov.add); chat.sys('Bienvenido al chat. Sé respetuoso 💚'); unirse.hecho = true; }
     if (!reproductor) {
       if (r.live.modo === 'mediamtx' && CFG.proveedor.hls) reproductor = await reproductorHLS(video, CFG.proveedor.hls.replace('{u}', encodeURIComponent(c.usuario)), estado);
       else reproductor = reproductorP2P(video, liveId, estado);
@@ -343,11 +447,13 @@ async function vistaEspectador(usuario) {
   if (socket.connected) unirse();
   socket.on('connect_error', () => estado('cargando', 'Sin conexión con el servidor. Reintentando…'));
   socket.on('espectadores', ({ n }) => { $('v-n').textContent = fmt(n); });
-  socket.on('likes', ({ total }) => { if (total > likes) for (let i = 0; i < Math.min(5, total - likes); i++) setTimeout(capa.corazon, i * 120); likes = total; $('v-likes').textContent = fmt(total); });
-  socket.on('chat', chat.add);
+  socket.on('likes', ({ total }) => { if (total > likes) for (let i = 0; i < Math.min(5, total - likes); i++) setTimeout(capa.corazon, i * 120); likes = total; $('v-likes').textContent = fmt(total); $('ov-likes').textContent = fmt(total); });
+  socket.on('chat', m => { chat.add(m); ov.add(m); });
+  socket.on('chat:borrado', ({ id }) => ov.borrar(id));
+  socket.on('chat:silenciado', ({ u }) => ov.silenciar(u));
   socket.on('top', ({ top }) => chat.pintarTop(top));
-  socket.on('regalo', g => { capa.regalo(g); chat.regalo(g); const el = $('v-gifts'); el.textContent = fmt((parseInt(el.dataset.n || L0.regalos, 10) || 0) + g.cantidad); el.dataset.n = (parseInt(el.dataset.n || L0.regalos, 10) || 0) + g.cantidad; });
-  socket.on('titulo', ({ titulo }) => { $('v-title').textContent = titulo; });
+  socket.on('regalo', g => { capa.regalo(g); chat.regalo(g); ov.regalo(g); const el = $('v-gifts'); el.textContent = fmt((parseInt(el.dataset.n || L0.regalos, 10) || 0) + g.cantidad); el.dataset.n = (parseInt(el.dataset.n || L0.regalos, 10) || 0) + g.cantidad; });
+  socket.on('titulo', ({ titulo }) => { $('v-title').textContent = titulo; $('ov-title').textContent = titulo; });
   socket.on('host:desconectado', () => estado('cargando', 'El creador se desconectó un momento. Esperando que vuelva…'));
   socket.on('host:conectado', () => estado('cargando', 'El creador volvió. Reconectando video…'));
   socket.on('p2p:lleno', ({ max }) => { lleno = true; estado('cargando', `El directo está lleno (${max} espectadores en modo directo). Te conectaremos en cuanto se libere un lugar; mientras, puedes usar el chat.`); });
@@ -359,20 +465,40 @@ async function vistaEspectador(usuario) {
     pov.innerHTML = `<div style="font-size:2.6rem">📴</div><h2>El live terminó</h2><p>${esc(motivo || '')}</p><div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center"><a class="btn btn-ghost" href="./perfil-publico.html?u=${encodeURIComponent(c.usuario)}">Ver perfil</a><a class="btn btn-live" href="./live.html">Más lives</a></div>`;
   }
 
-  // Likes
-  if (chat.likeBtn) chat.likeBtn.onclick = () => { capa.corazon(); socket.emit('like', { liveId }); };
-  // Regalos
-  $('b-recargar') && ($('b-recargar').onclick = () => abrirMonedas());
+  // Likes (botón del chat, botón lateral y doble toque sobre el video, como en TikTok)
+  const darLike = () => { capa.corazon(); socket.emit('like', { liveId }); };
+  if (chat.likeBtn) chat.likeBtn.onclick = darLike;
+  $('ov-like').onclick = e => { e.stopPropagation(); darLike(); };
+  video.addEventListener('dblclick', darLike);
+  // Comentar sin salir de la pantalla completa
+  const ovForm = $('ov-form');
+  if (ovForm) ovForm.onsubmit = e => {
+    e.preventDefault();
+    const inp = $('ov-in'), t = inp.value.trim();
+    if (!t) return;
+    socket.emit('chat', { liveId, texto: t }, r => { if (r && !r.ok && r.error) toast(r.error); });
+    inp.value = '';
+  };
+  // Hoja de regalos (modo inmersivo)
+  const hoja = $('gift-sheet'), fondo = $('sheet-bg');
+  const abrirHoja = abrir => { if (!hoja) return; hoja.classList.toggle('on', abrir); fondo.classList.toggle('on', abrir); if (abrir && $('sheet-coins')) $('sheet-coins').textContent = fmt(monedas); };
+  if ($('ov-gift')) $('ov-gift').onclick = e => { e.stopPropagation(); if (!TOKEN) return irLogin(); abrirHoja(true); };
+  if (fondo) fondo.onclick = () => abrirHoja(false);
+  const recargar = () => { abrirHoja(false); abrirMonedas(); };
+  $('b-recargar') && ($('b-recargar').onclick = recargar);
+  $('sheet-recargar') && ($('sheet-recargar').onclick = recargar);
+  // Regalos: el mismo envío para el panel y para la hoja
   document.querySelectorAll('.gift').forEach(b => b.onclick = async () => {
     if (!TOKEN) return irLogin();
     const g = CFG.regalos.find(x => x.id === b.dataset.g);
-    if (monedas < g.monedas) { toast(`Necesitas ${g.monedas} monedas para ${g.nombre}`); abrirMonedas(); return; }
+    if (monedas < g.monedas) { toast(`Necesitas ${g.monedas} monedas para ${g.nombre}`); recargar(); return; }
     b.classList.add('sending');
     try {
       const d = await api(`/live/${liveId}/regalo`, { method: 'POST', body: { regaloId: g.id, cantidad: 1, clave: uid() } });
-      if (typeof d.monedas === 'number') { monedas = d.monedas; $('coins-n').textContent = fmt(monedas); }
+      if (typeof d.monedas === 'number') { monedas = d.monedas; $('coins-n').textContent = fmt(monedas); if ($('sheet-coins')) $('sheet-coins').textContent = fmt(monedas); }
+      if (hoja?.contains(b)) abrirHoja(false);
     } catch (e) {
-      if (e.status === 402) { toast('No tienes monedas suficientes'); abrirMonedas(); }
+      if (e.status === 402) { toast('No tienes monedas suficientes'); recargar(); }
       else toast(e.message);
     } finally { b.classList.remove('sending'); }
   });
@@ -408,6 +534,20 @@ async function vistaEstudio() {
         <div class="gift-layer" id="gl"></div>
         <div class="p-top" id="s-top" hidden><span class="pill-live">EN VIVO</span><span class="chip-dark"><ion-icon name="eye"></ion-icon> <span id="s-n">0</span></span><span class="chip-dark timer" id="s-t">0:00</span><span class="chip-dark" id="s-net" title="Conexiones de video">📶 <span id="s-peers">0</span></span></div>
         <div class="p-overlay" id="pov"><div style="font-size:2.6rem">🎮</div><h2>Vista previa</h2><p id="pov-t">Elige qué vas a transmitir y pulsa <b>Vista previa</b>. Nadie te ve hasta que inicies el live.</p></div>
+        <div class="ov-chat" id="ov-chat" aria-hidden="true"></div>
+        <div class="ov-head">
+          ${avatar(ME, '')}
+          <div class="t"><b>🔴 Estás en vivo</b><small id="ov-title"></small></div>
+          <button class="ico-btn ov-x" id="ov-x" aria-label="Ver controles del estudio"><ion-icon name="close"></ion-icon></button>
+        </div>
+        <div class="ov-rail">
+          <button id="ov-mic" aria-label="Micrófono"><span class="i" id="ov-mic-i">🎙️</span>Micro</button>
+          <button id="ov-flip" aria-label="Voltear cámara" hidden><span class="i">🔄</span>Voltear</button>
+          <button id="ov-toggle" aria-label="Mostrar u ocultar comentarios"><span class="i">💬</span>Chat</button>
+          <button id="ov-share" aria-label="Compartir"><span class="i"><ion-icon name="share-social"></ion-icon></span>Compartir</button>
+          <button id="ov-end" class="danger" aria-label="Terminar live"><span class="i">⏹</span>Terminar</button>
+        </div>
+        <form class="ov-bar" id="ov-form" autocomplete="off"><input id="ov-in" maxlength="200" placeholder="Habla con tu comunidad…" enterkeyhint="send" aria-label="Mensaje"><button class="send" aria-label="Enviar"><ion-icon name="send"></ion-icon></button></form>
       </div>
       <div class="kpis" id="kpis" hidden>
         <div class="kpi glass"><b id="k-v">0</b><small>Espectadores</small></div>
@@ -448,6 +588,8 @@ async function vistaEstudio() {
       <div class="panel glass" style="margin-top:16px" id="live-ctrl" hidden>
         <div class="field"><label>Título del directo</label><div class="keybox"><input id="l-tit" maxlength="100"><button class="btn btn-ghost" id="b-tit">Guardar</button></div></div>
         <div class="studio-actions">
+          <button class="btn btn-ghost" id="b-inm-s"><ion-icon name="expand"></ion-icon> Pantalla completa</button>
+          <button class="btn btn-ghost" id="b-flip" hidden><ion-icon name="camera-reverse"></ion-icon> Voltear cámara</button>
           <button class="btn btn-ghost" id="b-mic-t"><ion-icon name="mic"></ion-icon> Silenciar micro</button>
           <button class="btn btn-ghost" id="b-share-l"><ion-icon name="share-social"></ion-icon> Compartir enlace</button>
           <button class="btn btn-danger" id="b-end"><ion-icon name="stop-circle"></ion-icon> Terminar live</button>
@@ -455,10 +597,13 @@ async function vistaEstudio() {
         <p class="fine" id="earn-note"></p>
       </div>
     </section>
-    <aside class="side glass" id="side"><div class="empty" style="margin:auto"><div class="big">💬</div><p>El chat de tu directo aparecerá aquí cuando inicies.</p></div></aside>
+    <aside class="side glass vacio" id="side"><div class="empty" style="margin:auto"><div class="big">💬</div><p>El chat de tu directo aparecerá aquí cuando inicies.</p></div></aside>
   </div>`;
 
-  const video = $('prev'), pov = $('pov');
+  const video = $('prev'), pov = $('pov'), pw = $('pw'), ov = burbujas($('ov-chat'));
+  const inm = modoInmersivo(pw);
+  let camara = 'user';   // cámara frontal o trasera
+  const espejo = () => { video.style.transform = fuente === 'camara' && camara === 'user' ? 'scaleX(-1)' : ''; };
   let stream = null, mezcla = null, liveId = null, enVivo = false, inicio = 0, ganado = 0, pico = 0, whip = null;
   const peers = new Map();   // espectador → { pc, cadena }
   const timers = [];
@@ -534,7 +679,7 @@ async function vistaEstudio() {
         });
         if (conMic) mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }).catch(() => { toast('No se pudo usar el micrófono'); return null; });
       } else {
-        vid = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: q.w }, height: { ideal: q.h }, frameRate: { ideal: q.fps }, facingMode: 'user' }, audio: conMic ? { echoCancellation: true, noiseSuppression: true } : false });
+        vid = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: q.w }, height: { ideal: q.h }, frameRate: { ideal: q.fps }, facingMode: camara }, audio: conMic ? { echoCancellation: true, noiseSuppression: true } : false });
       }
     } catch (e) {
       toast(e.name === 'NotAllowedError' ? 'Permiso denegado. Necesitamos acceso para transmitir.' : 'No se pudo iniciar la captura: ' + e.message, 4000);
@@ -554,7 +699,7 @@ async function vistaEstudio() {
     if (fuente === 'pantalla' && !juegoAudio) toast('No se compartió el audio del juego. Si quieres que se escuche, vuelve a compartir y activa “Compartir audio”.', 5000);
     stream = new MediaStream([vt, ...(mezcla?.pista ? [mezcla.pista] : [])]);
     stream._fuentes = [vid, mic].filter(Boolean);   // capturas originales: se detienen al terminar
-    video.srcObject = stream; pov.hidden = true;
+    video.srcObject = stream; pov.hidden = true; espejo();
     vt.addEventListener('ended', () => {
       if (enVivo) { toast('Dejaste de compartir. Elige de nuevo qué transmitir o termina el live.', 5000); reemplazarVideo(); }
       else detenerCaptura();
@@ -562,19 +707,40 @@ async function vistaEstudio() {
     $('b-go').disabled = false;
     return true;
   }
-  // Cambiar de ventana/pantalla en pleno directo sin cortar a los espectadores
+  // Cambiar la pista de video en pleno directo sin cortar a los espectadores
+  function cambiarVideo(vt, origen) {
+    const viejo = stream.getVideoTracks()[0];
+    stream.removeTrack(viejo); stream.addTrack(vt); stream._fuentes.push(origen);
+    viejo.stop();
+    for (const { pc } of peers.values()) pc.getSenders().find(s => s.track === viejo || s.track?.kind === 'video')?.replaceTrack(vt);
+    whip?.pc.getSenders().find(s => s.track === viejo || s.track?.kind === 'video')?.replaceTrack(vt);
+    video.srcObject = stream; espejo();
+  }
   async function reemplazarVideo() {
     const q = CALIDADES[$('f-q').value] || CALIDADES['720p30'];
     try {
       const nuevo = await navigator.mediaDevices.getDisplayMedia({ video: { width: { ideal: q.w }, height: { ideal: q.h }, frameRate: { ideal: q.fps, max: q.fps } }, audio: false });
       const vt = nuevo.getVideoTracks()[0]; vt.contentHint = 'motion';
-      const viejo = stream.getVideoTracks()[0];
-      stream.removeTrack(viejo); stream.addTrack(vt); stream._fuentes.push(nuevo);
-      for (const { pc } of peers.values()) pc.getSenders().find(s => s.track?.kind === 'video' || s.track === viejo)?.replaceTrack(vt);
-      whip?.pc.getSenders().find(s => s.track?.kind === 'video' || s.track === viejo)?.replaceTrack(vt);
-      video.srcObject = stream;
+      cambiarVideo(vt, nuevo);
       vt.addEventListener('ended', () => { if (enVivo) { toast('Dejaste de compartir.'); reemplazarVideo(); } });
     } catch (_) { toast('Sin video: tus espectadores ven la última imagen. Puedes terminar el live.'); }
+  }
+  // Frontal ↔ trasera (móvil), en vivo y sin cortar
+  async function voltearCamara() {
+    if (fuente !== 'camara' || !stream) return;
+    const q = CALIDADES[$('f-q').value] || CALIDADES['720p30'];
+    const siguiente = camara === 'user' ? 'environment' : 'user';
+    const abrir = modo => navigator.mediaDevices.getUserMedia({ video: { width: { ideal: q.w }, height: { ideal: q.h }, frameRate: { ideal: q.fps }, facingMode: modo }, audio: false });
+    // Muchos Android no abren dos cámaras a la vez: soltar la actual antes de pedir la otra
+    stream.getVideoTracks()[0]?.stop();
+    let nuevo;
+    try { nuevo = await abrir({ exact: siguiente }); camara = siguiente; }
+    catch (_) {
+      toast('Este dispositivo no tiene otra cámara disponible');
+      try { nuevo = await abrir(camara); } catch (e) { toast('No se pudo recuperar la cámara: ' + e.message, 4000); return; }
+    }
+    const vt = nuevo.getVideoTracks()[0]; vt.contentHint = 'motion';
+    cambiarVideo(vt, nuevo);
   }
   async function aplicarCalidad(pc) {
     const q = CALIDADES[$('f-q').value] || CALIDADES['720p30'];
@@ -657,15 +823,24 @@ async function vistaEstudio() {
     $('l-tit').value = live.titulo;
     if (fuente === 'obs') { pov.hidden = false; pov.innerHTML = '<div style="font-size:2.4rem">🎛️</div><h2>Transmitiendo desde OBS</h2><p>Tu señal llega a los espectadores desde el servidor de video. Aquí ves el chat y los regalos en tiempo real.</p>'; }
     $('b-mic-t').hidden = !mezcla?.nodos.mic;
+    $('ov-mic').hidden = !mezcla?.nodos.mic;
+    const puedeVoltear = fuente === 'camara';
+    $('b-flip').hidden = $('ov-flip').hidden = !puedeVoltear;
+    $('ov-title').textContent = live.titulo;
+    const burb = interruptorBurbujas(pw, [$('ov-toggle')]);
+    burb.segunPantalla(true);   // el creador siempre ve los comentarios sobre su video al empezar
+    // En el móvil el creador ve su cámara a pantalla completa con los comentarios encima
+    if (esMovil()) inm.entrar();
     window.onbeforeunload = e => { if (enVivo) { e.preventDefault(); e.returnValue = ''; } };
 
     conectar();
+    $('side').classList.remove('vacio');
     const chat = crearChat($('side'), { liveId, esHost: true });
     const capa = capaRegalos($('gl'));
     const unirse = () => socket.emit('unirse', { liveId, rol: 'host' }, r => {
       if (!r?.ok) { toast(r?.error || 'No se pudo conectar el live'); return; }
       $('k-v').textContent = fmt(r.espectadores); $('k-l').textContent = fmt(r.likes); chat.pintarTop(r.top);
-      if (!unirse.hecho) { r.chat.forEach(chat.add); chat.sys(`🔴 Estás en vivo. Comparte tu enlace para que te encuentren.`); unirse.hecho = true; }
+      if (!unirse.hecho) { r.chat.forEach(chat.add); chat.sys(`🔴 Estás en vivo. Comparte tu enlace para que te encuentren.`); ov.sys('🔴 Estás en vivo. Los comentarios aparecerán aquí.'); unirse.hecho = true; }
     });
     socket.on('connect', unirse);
     if (socket.connected) unirse();
@@ -680,10 +855,12 @@ async function vistaEstudio() {
     });
     socket.on('espectadores', ({ n }) => { $('k-v').textContent = fmt(n); $('s-n').textContent = fmt(n); pico = Math.max(pico, n); $('k-pico').textContent = fmt(pico); });
     socket.on('likes', ({ total }) => { $('k-l').textContent = fmt(total); capa.corazon(); });
-    socket.on('chat', chat.add);
+    socket.on('chat', m => { chat.add(m); ov.add(m); });
+    socket.on('chat:borrado', ({ id }) => ov.borrar(id));
+    socket.on('chat:silenciado', ({ u }) => ov.silenciar(u));
     socket.on('top', ({ top }) => chat.pintarTop(top));
     socket.on('regalo', g => {
-      capa.regalo(g); chat.regalo(g);
+      capa.regalo(g); chat.regalo(g); ov.regalo(g);
       ganado += g.total * CFG.monedaUsd * (1 - CFG.comision);
       $('k-g').textContent = usd(ganado);
     });
@@ -694,12 +871,29 @@ async function vistaEstudio() {
     $('earn-note').innerHTML = `Recibes el <b>${Math.round((1 - CFG.comision) * 100)}%</b> del valor de cada regalo. ${CFG.retencionDias ? `Las ganancias quedan retenidas ${CFG.retencionDias} días (protección contra fraudes y contracargos) y luego pasan a tu saldo retirable.` : ''}`;
   }
 
-  $('b-tit').onclick = async () => { try { await api('/live/titulo', { method: 'PUT', body: { titulo: $('l-tit').value } }); toast('Título actualizado'); } catch (e) { toast(e.message); } };
-  $('b-mic-t').onclick = () => {
+  $('b-tit').onclick = async () => { try { await api('/live/titulo', { method: 'PUT', body: { titulo: $('l-tit').value } }); $('ov-title').textContent = $('l-tit').value; toast('Título actualizado'); } catch (e) { toast(e.message); } };
+  const alternarMic = () => {
     const n = mezcla?.nodos.mic; if (!n) return;
     const off = n.g.gain.value > 0;
     n.prev = off ? n.g.gain.value : n.prev; n.g.gain.value = off ? 0 : (n.prev || 1);
     $('b-mic-t').innerHTML = off ? '<ion-icon name="mic-off"></ion-icon> Activar micro' : '<ion-icon name="mic"></ion-icon> Silenciar micro';
+    $('ov-mic-i').textContent = off ? '🔇' : '🎙️';
+    toast(off ? 'Micrófono silenciado' : 'Micrófono activado', 1500);
+  };
+  $('b-mic-t').onclick = alternarMic;
+  $('ov-mic').onclick = e => { e.stopPropagation(); alternarMic(); };
+  $('b-flip').onclick = voltearCamara;
+  $('ov-flip').onclick = e => { e.stopPropagation(); voltearCamara(); };
+  $('b-inm-s').onclick = () => inm.entrar();
+  $('ov-x').onclick = () => inm.salir();
+  $('ov-share').onclick = e => { e.stopPropagation(); $('b-share-l').click(); };
+  $('ov-end').onclick = e => { e.stopPropagation(); $('b-end').click(); };
+  $('ov-form').onsubmit = e => {
+    e.preventDefault();
+    const inp = $('ov-in'), t = inp.value.trim();
+    if (!t || !liveId) return;
+    socket?.emit('chat', { liveId, texto: t }, r => { if (r && !r.ok && r.error) toast(r.error); });
+    inp.value = '';
   };
   $('b-share-l').onclick = async () => {
     const url = new URL(`./live.html?u=${encodeURIComponent(ME)}`, location.href).href;
@@ -711,6 +905,7 @@ async function vistaEstudio() {
     if (!enVivo) return;
     enVivo = false; window.onbeforeunload = null;
     timers.forEach(clearInterval); timers.length = 0;
+    inm.salir(); document.body.classList.remove('inm-on');
     let resumen = null;
     if (!remoto) { try { resumen = (await api('/live/finalizar', { method: 'POST' })).resumen; } catch (_) {} }
     peers.forEach((_, p) => cerrarPeer(p)); whip?.cerrar(); whip = null;

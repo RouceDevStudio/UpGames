@@ -8,7 +8,9 @@
     <style>
         :root { --neon-green: #39FF14; --dark-bg: #0a0a0a; --card-bg: #1a1a1a; }
         body { background-color: var(--dark-bg); color: #fff; font-family: 'Segoe UI', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; overflow-x: hidden; }
-        .container { background: var(--card-bg); padding: 30px; border-radius: 20px; border: 1px solid rgba(57, 255, 20, 0.2); box-shadow: 0 0 20px rgba(0,0,0,0.5); max-width: 90%; width: 450px; text-align: center; }
+        .container { box-sizing: border-box; background: var(--card-bg); padding: 30px; border-radius: 20px; border: 1px solid rgba(57, 255, 20, 0.2); box-shadow: 0 0 20px rgba(0,0,0,0.5); width: min(450px, calc(100% - 24px)); text-align: center; margin: 12px 0; }
+        .container iframe, .container img, .container video { max-width: 100%; }
+        @media (max-width: 420px) { .container { padding: 22px 14px; } h1 { font-size: 1.2rem; } .ad-pass { padding: 13px; } .ad-pass-price { font-size: 1.15rem; } }
         h1 { color: var(--neon-green); font-size: 1.5rem; text-transform: uppercase; letter-spacing: 2px; }
         p { color: #aaa; font-size: 0.9rem; line-height: 1.5; margin-bottom: 20px; }
         .ad-space { background: #000; border: 1px dashed var(--neon-green); padding: 40px 10px; margin: 20px 0; border-radius: 10px; color: #555; }

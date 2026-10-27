@@ -5571,7 +5571,7 @@ function ecoAbrirTienda() {
   box.innerHTML = '<div class="eco-spin"><ion-icon name="sync-outline"></ion-icon></div>';
   _ugPagosJs = _ugPagosJs || new Promise((ok, ko) => {
     const s = document.createElement('script');
-    s.src = './upgames-pagos.js?v=20261027p'; s.onload = ok; s.onerror = () => { _ugPagosJs = null; ko(); };
+    s.src = './upgames-pagos.js?v=20261027q'; s.onload = ok; s.onerror = () => { _ugPagosJs = null; ko(); };
     document.head.appendChild(s);
   });
   _ugPagosJs.then(() => window.UGPagos.tienda(box, {
