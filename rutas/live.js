@@ -102,6 +102,8 @@ function registrar(app, server, deps) {
 
     const io = new Server(server, {
         cors: { origin: config.ALLOWED_ORIGINS, credentials: true },
+        // cors solo cubre HTTP: el WebSocket se valida aquí (sin Origin = app nativa / servidor)
+        allowRequest: (req, cb) => { const o = req.headers.origin; cb(null, !o || config.ALLOWED_ORIGINS.includes(o)); },
         pingInterval: 20000, pingTimeout: 25000,
         maxHttpBufferSize: 64 * 1024,     // SDP/ICE caben de sobra; nada de archivos
     });
