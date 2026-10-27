@@ -242,7 +242,7 @@ async function analizar(item, deps) {
     const resumenes = { aprobar: 'Todo indica que es una publicación legítima y funcional.', revisar: 'Hay señales mixtas: revisa los puntos marcados antes de decidir.', rechazar: 'Hay problemas serios que justifican rechazarla.' };
     return {
         decision, confianza: +confianza.toFixed(2), puntos,
-        resumen: duros.length ? `Rechazar: ${duros.join(' · ')}.` : (ia?.resumen || resumenes[decision]),
+        resumen: duros.length ? `Motivos: ${duros.join(' · ')}.` : (ia?.resumen || resumenes[decision]),
         motivosDuros: duros, reglas, hechos,
         ia: ia ? { fuente: ia.fuente, decision: ia.decision, confianza: ia.confianza, razones: (ia.razones || []).slice(0, 6), sugerencias: (ia.sugerencias || []).slice(0, 5), riesgo_spam: ia.riesgo_spam, riesgo_malware: ia.riesgo_malware, calidad_estimada: ia.calidad_estimada } : null,
         enlace, portada, autor,
