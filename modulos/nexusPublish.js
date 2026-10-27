@@ -221,6 +221,8 @@ function registrar(app, deps) {
     }
     app.get('/u/:usuario/:proj', serve);
     app.get('/u/:usuario/:proj/*', serve);
+    // soloHosting: la Nexus externa ya no existe; los proyectos publicados siguen accesibles
+    if (deps.soloHosting) return;
 
     // ══════════════════════════════════════════════════════════════
     //  POST /api/nexus/publish-project

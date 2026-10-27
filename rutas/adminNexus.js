@@ -14,13 +14,13 @@
 'use strict';
 
 const mongoose = require('mongoose');
-const { chatIA } = require('../modulos/nexusIA');
+const llm = require('../modulos/nexus/llm');
 
 const H = 3600e3, D = 24 * H;
 const SECCIONES = 'Inicio, Revisión, Entradas, Videos, Reportes, Comentarios, Usuarios, Anuncios, Pagos, Tarjetas, API Test, Equipo y Auditoría';
 const escRegex = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-function registrar(app, { verificarAdmin, Juego, Usuario, Comentario, Pago, logger, NEXUS_API }) {
+function registrar(app, { verificarAdmin, Juego, Usuario, Comentario, Pago, logger }) {
     const puede = (adm, p) => adm.rol === 'owner' || (adm.permisos || []).includes(p);
     const algun = (adm, ps) => ps.some(p => puede(adm, p));
 
@@ -95,12 +95,9 @@ function registrar(app, { verificarAdmin, Juego, Usuario, Comentario, Pago, logg
             datos.equipo = { accionesUltimas24h: acciones, intentosBloqueados24h: bloqueos.map(b => ({ admin: b._id, intentos: b.n })), miembrosPausados: pausados };
         })());
         if (puede(adm, 'sistema')) tareas.push((async () => {
-            datos.sistema = { iaNexusConfigurada: !!process.env.NEXUS_INTERNAL_SECRET, groqEnUpGames: !!process.env.GROQ_API_KEY, emailConfigurado: !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) };
-            try {
-                const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 5000);
-                const r = await fetch(`${NEXUS_API}/health`, { signal: ctl.signal }).finally(() => clearTimeout(t));
-                const j = await r.json(); datos.sistema.nexusEnLinea = r.ok; datos.sistema.baseDatosNexus = !!j.db;
-            } catch (_) { datos.sistema.nexusEnLinea = false; }
+            const p = await llm.ping();
+            const e = llm.estado();
+            datos.sistema = { iaNexus: p.ok ? 'en línea' : `sin conexión (${p.error})`, modelosIA: p.modelosDisponibles || [], respuestasIAOk: e.ok, fallosIA: e.fallos, ultimoErrorIA: e.ultimoError, emailConfigurado: !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) };
         })());
         await Promise.all(tareas.map(t => t.catch(e => logger.warn(`[adminNexus] ${e.message}`))));
         return datos;
@@ -122,8 +119,7 @@ function registrar(app, { verificarAdmin, Juego, Usuario, Comentario, Pago, logg
         if (rp?.publicacionesReportadas) add('media', '🚩', `${rp.publicacionesReportadas} publicación(es) con reportes de usuarios`, 'reportes');
         if (u?.ipsConVariasCuentasNuevas?.length) add('media', '🕵️', `${u.ipsConVariasCuentasNuevas.length} IP(s) crearon 3 o más cuentas esta semana (posibles multicuentas)`, 'usrs');
         if (c?.conEnlaces24h) add('baja', '💬', `${c.conEnlaces24h} comentario(s) con enlaces en las últimas 24 h (posible spam)`, 'comt');
-        if (s && !s.iaNexusConfigurada && !s.groqEnUpGames) add('baja', '⚙️', 'La IA de Nexus no está conectada en UpGames (falta NEXUS_INTERNAL_SECRET o GROQ_API_KEY)', 'api');
-        if (s && s.nexusEnLinea && s.baseDatosNexus === false) add('baja', '⚙️', 'Nexus funciona, pero su base de datos no está conectada', 'api');
+        if (s && s.iaNexus !== 'en línea') add('media', '⚙️', `La IA de Nexus está ${s.iaNexus}: revisa GROQ_API_KEY en Railway`, 'api');
         const orden = { alta: 0, media: 1, baja: 2 };
         return a.sort((x, y) => orden[x.prioridad] - orden[y.prioridad]);
     }
@@ -147,7 +143,7 @@ Las decisiones finales son del administrador: recomienda, no ordenes.`;
             const datos = await recopilar(adm);
             const lista = acciones(datos);
             let resumen = null, fuente = null;
-            const ia = await chatIA(sistemaBase(adm) + '\n\nRedacta un BRIEFING de 3 o 4 frases para empezar el turno: estado general, lo más urgente y por dónde empezar. Sin saludos largos ni listas.',
+            const ia = await llm.texto(sistemaBase(adm) + '\n\nRedacta un BRIEFING de 3 o 4 frases para empezar el turno: estado general, lo más urgente y por dónde empezar. Sin saludos largos ni listas.',
                 [{ role: 'user', content: `DATOS DEL PANEL (JSON):\n${JSON.stringify(datos)}\n\nACCIONES DETECTADAS:\n${lista.map(x => `- [${x.prioridad}] ${x.texto}`).join('\n') || '- Nada urgente'}` }],
                 { maxTokens: 350, temperatura: 0.3 }).catch(() => null);
             if (ia) { resumen = ia.texto; fuente = ia.fuente; }
@@ -196,7 +192,7 @@ Las decisiones finales son del administrador: recomienda, no ordenes.`;
             }
 
             const contexto = `DATOS ACTUALES DEL PANEL (JSON, ${new Date().toLocaleString('es')}):\n${JSON.stringify(datos)}\n\nACCIONES DETECTADAS:\n${acciones(datos).map(x => `- [${x.prioridad}] ${x.texto}`).join('\n') || '- Nada urgente'}${Object.keys(extra).length ? `\n\nDATOS DE LO QUE PREGUNTA:\n${JSON.stringify(extra)}` : ''}`;
-            const ia = await chatIA(sistemaBase(adm) + '\n\n' + contexto, [...historial, { role: 'user', content: mensaje }], { maxTokens: 800, temperatura: 0.35 });
+            const ia = await llm.texto(sistemaBase(adm) + '\n\n' + contexto, [...historial, { role: 'user', content: mensaje }], { maxTokens: 800, temperatura: 0.35 });
             if (ia) return res.json({ success: true, respuesta: ia.texto, fuente: ia.fuente });
             const l = acciones(datos);
             res.json({ success: true, fuente: null, respuesta: `La IA de Nexus no está disponible ahora mismo, pero esto es lo que veo en tus áreas:\n\n${l.length ? l.map(x => `${x.icono} ${x.texto}`).join('\n') : '✅ No hay nada pendiente.'}` });

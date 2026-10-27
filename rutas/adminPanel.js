@@ -31,6 +31,7 @@ const os       = require('os');
 const mongoose = require('mongoose');
 const jwt      = require('jsonwebtoken');
 const bcrypt   = require('bcryptjs');
+const nexusLLM = require('../modulos/nexus/llm');
 
 const PERMISOS = {
     revision:     { nombre: 'Revisión',      desc: 'Aprobar o rechazar entradas, marcar enlaces online/caídos y limpiar reportes' },
@@ -130,7 +131,7 @@ function normalizarPermisos(u) {
     return [...new Set(lista)].filter(p => CLAVES.includes(p));
 }
 
-function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SECRET, logger, twoFactor, authLimiter, NEXUS_API }) {
+function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SECRET, logger, twoFactor, authLimiter }) {
     const ADMIN_SECRET = JWT_SECRET + '_ADMIN';
 
     const AdminLog = mongoose.models.AdminLog || mongoose.model('AdminLog', new mongoose.Schema({
@@ -514,12 +515,9 @@ function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SE
                 return { usuarios, items, comentarios, pagosPend, suspendidos: suspendidosN, subAdmins: equipo };
             }),
             medir(async () => {
-                const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 8000);
-                try {
-                    const r = await fetch(`${NEXUS_API}/health`, { signal: ctl.signal });
-                    const j = await r.json().catch(() => ({}));
-                    return { status: r.status, url: NEXUS_API, detalle: j };
-                } finally { clearTimeout(to); }
+                const p = await nexusLLM.ping();
+                if (!p.ok) throw new Error(p.error || 'Groq no responde');
+                return { status: p.status, motor: 'Groq (nativo en UpGames)', modelos: p.modelosDisponibles, uso: nexusLLM.estado() };
             }),
         ]);
         const mem = process.memoryUsage();
@@ -532,7 +530,7 @@ function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SE
             },
             db, conteos, nexus,
             config: {   // solo si existen, nunca los valores
-                groq: !!process.env.GROQ_API_KEY, nexusSecret: !!process.env.NEXUS_INTERNAL_SECRET,
+                groq: !!process.env.GROQ_API_KEY,
                 email: !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD),
                 cloudinary: !!(process.env.CLOUDINARY_URL || process.env.CLOUDINARY_API_KEY),
                 adminPin: !!process.env.ADMIN_PIN, ownerEmails: ownerEmails().length,

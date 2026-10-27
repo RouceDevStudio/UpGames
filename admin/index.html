@@ -711,7 +711,6 @@ body:not(.is-owner) .owner-only{display:none!important}
 <script>
 'use strict';
 const API = (() => { try { const o = new URLSearchParams(location.search).get('api'); if (o && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(o)) return o; } catch (_) {} return 'https://upgames-production.up.railway.app'; })();
-const NEXUS = 'https://nexus-production-781b.up.railway.app';
 
 // ─────────── Estado ───────────
 const S = { token: null, admin: null, exp: 0 };
@@ -1399,22 +1398,24 @@ async function runDiag() {
       c(true, 'Backend UpGames', `${rt} ms`, `Node ${esc(s.node)} · activo ${fmtUp(s.uptimeSeg)}`) +
       c(d.db.ok, 'MongoDB', d.db.ok ? `${d.db.ms} ms` : 'Error', esc(d.db.estado || d.db.error)) +
       c(s.memoriaMB < 450, 'Memoria', `${s.memoriaMB} MB`, `Heap ${s.heapMB} MB · ${s.cpus} CPU · carga ${s.carga.join(' / ')}`) +
-      c(n.ok && n.status === 200, 'Nexus IA', n.ok ? `${n.ms} ms` : 'Sin respuesta', n.ok ? `cerebro ${n.detalle?.brainReady ? 'listo' : 'no listo'} · BD Nexus ${n.detalle?.db ? 'conectada' : 'NO conectada'}` : esc(n.error)) +
+      c(n.ok, 'Nexus IA (nativa)', n.ok ? `${n.ms} ms` : 'Sin conexión', n.ok ? `Groq · ${esc((n.modelos || []).length)} modelos · ${esc(n.uso?.ok || 0)} respuestas · ${esc(n.uso?.fallos || 0)} fallos${n.uso?.ultimoError ? ' · último error: ' + esc(n.uso.ultimoError) : ''}` : esc(n.error)) +
       c(k.ok, 'Datos', `${num(k.usuarios)} usuarios`, `${num(k.items)} items · ${num(k.comentarios)} comentarios · ${k.pagosPend} pagos pend. · ${k.subAdmins} sub-admins · ${k.suspendidos} suspendidos`) +
-      c(cf.groq && cf.nexusSecret ? true : null, 'Configuración', Object.values(cf).filter(Boolean).length + '/' + Object.keys(cf).length + ' variables',
-        [['Groq', cf.groq], ['Nexus secret', cf.nexusSecret], ['Email', cf.email], ['Cloudinary', cf.cloudinary], ['Llave maestra', cf.adminPin]].map(([a, b]) => `${b ? '✅' : '⚪'} ${a}`).join(' · '));
+      c(cf.groq ? true : null, 'Configuración', Object.values(cf).filter(Boolean).length + '/' + Object.keys(cf).length + ' variables',
+        [['Groq (Nexus)', cf.groq], ['Email', cf.email], ['Cloudinary', cf.cloudinary], ['Llave maestra', cf.adminPin]].map(([a, b]) => `${b ? '✅' : '⚪'} ${a}`).join(' · '));
   } catch (_) {}
 }
 const EPS = [
   ['GET', '/', 'Salud del backend', false], ['GET', '/items?limit=1', 'Catálogo público', false], ['GET', '/auth/disponibilidad?usuario=prueba_api', 'Disponibilidad de nombre', false],
   ['GET', '/comentarios', 'Comentarios', false], ['GET', '/admin/auth/me', 'Sesión admin', true], ['GET', '/admin/stats/dashboard', 'Estadísticas', true],
-  ['GET', '/analytics/admin/users-timeseries?dias=7', 'Analítica', true], ['GET', NEXUS + '/health', 'Nexus IA', false], ['GET', NEXUS + '/upgames', 'Widget de Nexus', false],
+  ['GET', '/analytics/admin/users-timeseries?dias=7', 'Analítica', true], ['GET', '/nexus/status', 'Nexus IA', false], ['POST', '/nexus/chat', 'Chat de Nexus', false, { mensaje: 'hola' }],
 ];
 async function runEndpoints() {
-  $('eps').innerHTML = EPS.map((e, i) => `<div class="ep" id="ep${i}"><span class="dot warn"></span><div style="min-width:0"><div class="small">${e[2]}</div><code class="small mono">${esc(e[1].replace(NEXUS, 'nexus'))}</code></div><span class="small muted ep-m">${e[0]}</span><span class="small muted">…</span></div>`).join('');
-  await Promise.all(EPS.map(async ([m, p, , auth], i) => {
+  $('eps').innerHTML = EPS.map((e, i) => `<div class="ep" id="ep${i}"><span class="dot warn"></span><div style="min-width:0"><div class="small">${e[2]}</div><code class="small mono">${esc(e[1])}</code></div><span class="small muted ep-m">${e[0]}</span><span class="small muted">…</span></div>`).join('');
+  await Promise.all(EPS.map(async ([m, p, , auth, cuerpo], i) => {
     const t = performance.now(); let code = 0;
-    try { const r = await fetch(p.startsWith('http') ? p : API + p, { method: m, headers: auth ? { 'x-admin-token': S.token } : {} }); code = r.status; } catch (_) { code = 0; }
+    const headers = auth ? { 'x-admin-token': S.token } : {};
+    if (cuerpo) headers['Content-Type'] = 'application/json';
+    try { const r = await fetch(API + p, { method: m, headers, body: cuerpo ? JSON.stringify(cuerpo) : undefined }); code = r.status; } catch (_) { code = 0; }
     const ms = Math.round(performance.now() - t), el = $('ep' + i); if (!el) return;
     el.querySelector('.dot').className = 'dot ' + (code >= 200 && code < 400 ? 'ok' : 'bad');
     el.lastElementChild.innerHTML = `<span class="tag ${code >= 200 && code < 400 ? 't-ok' : 't-bad'}">${code || 'ERR'}</span> <span class="muted">${ms} ms</span>`;

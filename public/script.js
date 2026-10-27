@@ -3930,83 +3930,214 @@ document.addEventListener('keydown', e => {
   });
 })();
 
-// ── NEXUS AI WIDGET ──────────────────────────────────────
-// URL del servicio NEXUS (se puede sobreescribir con window.NEXUS_URL antes de cargar este script)
-const NEXUS_URL    = (window.NEXUS_URL || 'https://nexus-production-781b.up.railway.app').replace(/\/+$/, '');
-const NEXUS_ORIGIN = new URL(NEXUS_URL).origin;
+// ── NEXUS IA (nativa) ────────────────────────────────────
+// Nexus vive en el backend de UpGames (/nexus/*): misma base de datos y
+// servidor. Aquí solo está el chat: mensajes, tarjetas tocables y botones.
 let nxOpen=false, nxExpanded=false;
+const NX = { cargado:false, enviando:false, msgs:[] };   // msgs: [{rol, texto, items, acciones}]
+const NX_SUGERENCIAS_INV = ['¿Qué me recomiendas descargar hoy?', '¿Cómo gano dinero publicando?', 'Mods populares para Minecraft', '¿Cómo publico mi contenido?'];
+const NX_SUGERENCIAS_USR = ['Recomiéndame algo según mis gustos', '¿Cuánto llevo ganado y qué me falta para retirar?', '¿Cómo van mis publicaciones?', '¿Qué está en tendencia ahora?'];
+const nxToken = () => { const t = LS.get('token'); return t && t !== 'null' && t.length > 20 ? t : ''; };
+const nxHeaders = () => { const h = { 'Content-Type':'application/json' }; const t = nxToken(); if (t) h.Authorization = `Bearer ${t}`; return h; };
+
 function nxToggle() {
   nxOpen=!nxOpen;
   document.getElementById('nxPanel').classList.toggle('open',nxOpen);
-  // Bloquear scroll del body y marcar estado para el CSS
-  document.body.style.overflow = nxOpen ? 'hidden' : '';
+  document.body.style.overflow = nxOpen && innerWidth < 900 ? 'hidden' : '';   // en escritorio es una ventana flotante
   document.body.classList.toggle('nx-open', nxOpen);
-  if(nxOpen) { nxClockStart(); nxCheckStatus(); } else nxClockStop();
-}
-// Si el servicio NEXUS no responde, mostrar un aviso claro en vez del error crudo del iframe
-let _nxStatusAt = 0;
-async function nxCheckStatus() {
-  if(Date.now() - _nxStatusAt < 60000) return;
-  _nxStatusAt = Date.now();
-  let online = true;
-  try {
-    const r = await fetchTimeout(`${API_URL}/nexus/status`, 6000);
-    if(r.ok) online = (await r.json()).online !== false;
-  } catch(_) { /* sin dato: no bloquear el panel */ }
-  const body = document.querySelector('#nxPanel .nx-body');
-  const foot = document.querySelector('#nxPanel .nx-fl');
-  let aviso = document.getElementById('nxOffline');
-  if(!online && body && !aviso) {
-    aviso = document.createElement('div');
-    aviso.id = 'nxOffline';
-    aviso.style.cssText = 'position:absolute;inset:0;z-index:2;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:24px;text-align:center;background:var(--bg1);color:var(--txt2);font-size:.86rem;line-height:1.5';
-    aviso.innerHTML = '<ion-icon name="cloud-offline-outline" style="font-size:2.4rem;color:var(--txt3)"></ion-icon>'
-      + '<strong style="color:var(--txt);font-size:1rem">NEXUS no está disponible ahora</strong>'
-      + '<span>Estamos trabajando para restablecerlo. El resto de UpGames funciona con normalidad.</span>';
-    body.appendChild(aviso);
-  }
-  if(aviso) aviso.style.display = online ? 'none' : 'flex';
-  if(foot) foot.innerHTML = online ? '<i class="nx-fdot"></i>EN LÍNEA' : '<i class="nx-fdot" style="background:var(--txt3);box-shadow:none"></i>FUERA DE LÍNEA';
+  if (nxOpen) { _clearNxFabBadge(); nxCargar(); setTimeout(() => { if (!matchMedia('(pointer:coarse)').matches) document.getElementById('nxInput')?.focus(); }, 300); }
 }
 function nxClose() {
   nxOpen=false;
   document.getElementById('nxPanel').classList.remove('open');
   document.body.style.overflow = '';
   document.body.classList.remove('nx-open');
-  nxClockStop();
 }
 function nxExpand() {
   nxExpanded=!nxExpanded;
   document.getElementById('nxPanel').classList.toggle('expanded',nxExpanded);
   const ico=document.getElementById('nxExpBtn');
-  if(nxExpanded) {
-    ico.innerHTML='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 2H2v4M14 6V2h-4M10 14h4v-4M2 10v4h4"/></svg>';
-  } else {
-    ico.innerHTML='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
+  ico.innerHTML = nxExpanded
+    ? '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M6 2v4H2M10 2v4h4M10 14v-4h4M6 14v-4H2"/></svg>'
+    : '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
+}
+
+// Historial: con sesión vive en el servidor (cualquier dispositivo); invitado, en este navegador
+async function nxCargar() {
+  if (NX.cargado) return;
+  NX.cargado = true;
+  if (nxToken()) {
+    try {
+      const r = await fetchTimeout(`${API_URL}/nexus/historial`, 8000, { headers: nxHeaders() });
+      if (r.ok) NX.msgs = ((await r.json()).historial || []).slice(-24);
+    } catch (_) {}
+  } else NX.msgs = LS.getJSON('nx_hist_inv', []).slice(-20);
+  nxPintar();
+}
+function nxGuardarLocal() { if (!nxToken()) LS.setJSON('nx_hist_inv', NX.msgs.slice(-20).map(m => ({ rol:m.rol, texto:m.texto, items:m.items||[], acciones:m.acciones||[] }))); }
+
+async function nxNuevaConversacion() {
+  if (NX.enviando) return;
+  NX.msgs = []; nxGuardarLocal();
+  if (nxToken()) fetch(`${API_URL}/nexus/historial`, { method:'DELETE', headers:nxHeaders() }).catch(()=>{});
+  nxPintar();
+}
+
+// Texto de Nexus → HTML seguro (negritas, listas y saltos de línea)
+function nxFormato(t) {
+  const lineas = escH(t).split('\n');
+  let html = '', enLista = false;
+  for (const l of lineas) {
+    const m = l.match(/^\s*(?:[-•*]|\d+[.)])\s+(.*)$/);
+    if (m) { if (!enLista) { html += '<ul>'; enLista = true; } html += `<li>${m[1]}</li>`; continue; }
+    if (enLista) { html += '</ul>'; enLista = false; }
+    html += l.trim() ? `<p>${l}</p>` : '';
+  }
+  if (enLista) html += '</ul>';
+  return html.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<i>$2</i>');
+}
+function nxTarjetas(items) {
+  if (!items?.length) return '';
+  return `<div class="nx-cards">${items.map(it => {
+    const img = it.imagen && !UG_VIDEO_RE.test(it.imagen) ? cldOpt(it.imagen, 'c_fill,g_auto,w_320,h_180,q_auto,f_auto') : '';
+    return `<button type="button" class="nx-card" data-nx-item="${escH(it.id)}">
+      <span class="nx-card-img">${img ? `<img src="${escH(img)}" alt="" loading="lazy" onerror="this.remove()">` : '<ion-icon name="cube-outline"></ion-icon>'}${it.partes > 1 ? `<span class="nx-card-pts">${escH(it.partes)} partes</span>` : ''}</span>
+      <span class="nx-card-t">${escH(it.titulo)}</span>
+      <span class="nx-card-m">${escH(catLabel(it.categoria))} · ${escH(it.descargas || 0)} ↓${it.autor ? ` · @${escH(it.autor)}` : ''}</span>
+    </button>`; }).join('')}</div>`;
+}
+function nxBotones(acciones) {
+  if (!acciones?.length) return '';
+  return `<div class="nx-acts">${acciones.map((a, i) => `<button type="button" class="nx-act" data-nx-act="${i}">${escH(a.etiqueta || a.valor)} <ion-icon name="arrow-forward"></ion-icon></button>`).join('')}</div>`;
+}
+function nxPintar(pensando = false) {
+  const box = document.getElementById('nxMsgs');
+  if (!box) return;
+  const usuario = LS.get('user_admin');
+  let html = '';
+  if (!NX.msgs.length) {
+    const sug = nxToken() ? NX_SUGERENCIAS_USR : NX_SUGERENCIAS_INV;
+    html = `<div class="nx-hola">
+      <div class="nx-hola-orb"><span></span></div>
+      <h3>${usuario ? `Hola, @${escH(usuario)}` : 'Hola, soy Nexus'}</h3>
+      <p>Conozco todo el catálogo de UpGames${usuario ? ', tu cuenta y tus publicaciones' : ''}. Pregúntame lo que quieras.</p>
+      <div class="nx-sugs">${sug.map(s => `<button type="button" class="nx-sug" data-nx-sug="${escH(s)}">${escH(s)}</button>`).join('')}</div>
+    </div>`;
+  }
+  html += NX.msgs.map((m, i) => m.rol === 'user'
+    ? `<div class="nx-msg nx-yo"><div class="nx-bub">${escH(m.texto).replace(/\n/g, '<br>')}</div></div>`
+    : `<div class="nx-msg nx-ia${m.error ? ' nx-err' : ''}" data-nx-i="${i}"><div class="nx-bub">${nxFormato(m.texto)}</div>${nxTarjetas(m.items)}${nxBotones(m.acciones)}</div>`).join('');
+  if (pensando) html += '<div class="nx-msg nx-ia"><div class="nx-bub nx-typing"><i></i><i></i><i></i></div></div>';
+  box.innerHTML = html;
+  box.scrollTop = box.scrollHeight;
+}
+
+function nxContexto() {
+  return {
+    pestana: currentTab || 'main',
+    categoria: activeCategory || null,
+    busqueda: document.getElementById('buscador')?.value?.trim() || null,
+    itemId: document.getElementById('detail-sheet')?.classList.contains('open') ? (_viewItemId || null) : null,
+  };
+}
+
+async function nxEnviar(texto, extra) {
+  texto = String(texto || '').trim().slice(0, 1500);
+  if (!texto || NX.enviando) return;
+  NX.enviando = true;
+  const historialInv = nxToken() ? undefined : NX.msgs.filter(m => !m.error).slice(-10).map(m => ({ rol:m.rol, texto:m.texto }));
+  NX.msgs.push({ rol:'user', texto });
+  nxPintar(true);
+  const input = document.getElementById('nxInput'), send = document.getElementById('nxSend');
+  if (send) send.disabled = true;
+  try {
+    const r = await fetchTimeout(`${API_URL}/nexus/chat`, 60000, { method:'POST', headers:nxHeaders(), body: JSON.stringify({ mensaje:texto, historial:historialInv, contexto:{ ...nxContexto(), ...(extra || {}) } }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) throw new Error(d.error || 'Nexus no pudo responder ahora.');
+    NX.msgs.push({ rol:'assistant', texto:d.texto, items:d.items || [], acciones:d.acciones || [] });
+  } catch (e) {
+    NX.msgs.push({ rol:'assistant', error:true, texto: e.name === 'AbortError' ? 'Tardé demasiado en responder. Inténtalo otra vez.' : (e.message || 'Sin conexión. Inténtalo otra vez.') });
+  } finally {
+    NX.enviando = false;
+    if (send) send.disabled = false;
+    nxGuardarLocal();
+    nxPintar();
+    if (!nxOpen) _showNxFabBadge();
   }
 }
-// Carga diferida del widget: el iframe solo se pide la primera vez que se
-// abre el panel (antes cargaba la app completa de NEXUS en cada visita).
-function nxEnsureFrame() {
-  const frame = document.getElementById('nxFrame');
-  if (!frame || frame.getAttribute('src')) return;
-  frame.setAttribute('src', `${NEXUS_URL}/upgames`);
+
+async function nexusAbrirItem(itemId) {
+  let item = todosLosItems.find(i => i._id === itemId);
+  if (!item) {
+    try {
+      const r = await fetchTimeout(`${API_URL}/items/${encodeURIComponent(itemId)}`, 8000);
+      if (r.ok) item = await r.json();
+    } catch(_) {}
+  }
+  if (!item || !item._id) { toast('No pude abrir ese contenido'); return; }
+  nxClose();
+  window.openDetail(item);
 }
-// Clock — solo activo cuando el panel NEXUS está abierto
-let _clockInterval = null;
-function nxClockStart() {
-  if(_clockInterval) return;
-  const el=document.getElementById('nxClk');
-  const tick=()=>{
-    const n=new Date();
-    if(el) el.textContent=n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0');
-  };
-  tick();
-  _clockInterval=setInterval(tick,10000); // cada 10s es suficiente para un reloj
+function nxEjecutar(a) {
+  if (!a) return;
+  nxClose();
+  if (a.tipo === 'filtrar_categoria') {
+    if (currentTab !== 'main') switchTab('main');
+    document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.cat === a.valor));
+    activeCategory = a.valor;
+    const b = document.getElementById('buscador'); if (b) b.value = '';
+    filteredItems = todosLosItems.filter(i => i.category === a.valor);
+    render(filteredItems);
+    nexusTrack('category', { categoria: a.valor });
+  } else if (a.tipo === 'ir_a') {
+    if (['main', 'favs', 'economia', 'profile'].includes(a.valor)) switchTab(a.valor);
+  } else if (a.tipo === 'buscar') {
+    if (currentTab !== 'main') switchTab('main');
+    const b = document.getElementById('buscador');
+    if (b) { b.value = a.valor; b.dispatchEvent(new Event('input', { bubbles:true })); }
+  }
 }
-function nxClockStop() {
-  if(_clockInterval){ clearInterval(_clockInterval); _clockInterval=null; }
+
+(function nxInitUI() {
+  const panel = document.getElementById('nxPanel'), box = document.getElementById('nxMsgs');
+  const form = document.getElementById('nxForm'), input = document.getElementById('nxInput');
+  if (!panel || !box || !form || !input) return;
+  form.addEventListener('submit', e => { e.preventDefault(); const t = input.value; input.value = ''; input.style.height = ''; nxEnviar(t); });
+  input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); } });
+  input.addEventListener('input', () => { input.style.height = ''; input.style.height = Math.min(input.scrollHeight, 120) + 'px'; });
+  box.addEventListener('click', e => {
+    const sug = e.target.closest('[data-nx-sug]'); if (sug) return nxEnviar(sug.dataset.nxSug);
+    const card = e.target.closest('[data-nx-item]'); if (card) return nexusAbrirItem(card.dataset.nxItem);
+    const act = e.target.closest('[data-nx-act]');
+    if (act) { const m = NX.msgs[+act.closest('[data-nx-i]')?.dataset.nxI]; return nxEjecutar(m?.acciones?.[+act.dataset.nxAct]); }
+  });
+  // Tocar fuera de la hoja (zona oscurecida) la cierra
+  panel.addEventListener('click', e => { if (e.target === panel && !nxExpanded && e.clientY < panel.getBoundingClientRect().top) nxClose(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && nxOpen) nxClose(); });
+})();
+
+// Abre Nexus y le hace una pregunta en nombre del usuario (botones "Pregúntale a Nexus")
+async function nexusPreguntar(texto) {
+  const itemId = document.getElementById('detail-sheet')?.classList.contains('open') ? _viewItemId : null;
+  if (typeof closeDetail === 'function' && document.getElementById('detail-sheet')?.classList.contains('open')) { try { closeDetail(); } catch (_) {} }
+  if (!nxOpen) nxToggle();
+  await nxCargar();
+  nxEnviar(texto, itemId ? { itemId } : null);
 }
+window.nexusPreguntar = nexusPreguntar;
+
+// Punto verde en el botón de Nexus cuando responde con el panel cerrado
+let _nxFabBadgeEl = null;
+function _showNxFabBadge() {
+  const fab = document.querySelector('.nav-nexus') || document.getElementById('nxFab');
+  if (!fab || _nxFabBadgeEl) return;
+  _nxFabBadgeEl = document.createElement('span');
+  _nxFabBadgeEl.className = 'nx-fab-badge';
+  fab.style.position = 'relative';
+  fab.appendChild(_nxFabBadgeEl);
+}
+function _clearNxFabBadge() { if (_nxFabBadgeEl) { _nxFabBadgeEl.remove(); _nxFabBadgeEl = null; } }
+document.querySelectorAll('.nav-nexus, #nxFab').forEach(b => b.addEventListener('click', _clearNxFabBadge));
 
 // ── TUTORIAL ─────────────────────────────────────────────
 // Cada paso puede tener:
@@ -4496,317 +4627,74 @@ if(document.readyState==='loading'){
 } else { loadContent(); }
 
 // ══════════════════════════════════════════════════════════════════
-//  NEXUS ↔ UPGAMES — INTEGRACIÓN REAL
-//  NEXUS puede ver lo que el usuario hace y actuar sobre el feed
+//  NEXUS APRENDE TUS GUSTOS
+//  Lo que miras y las categorías que filtras llegan a /nexus/evento (los
+//  favoritos, búsquedas y descargas los registra el servidor). Con eso
+//  Nexus personaliza sus recomendaciones y el orden del inicio.
 // ══════════════════════════════════════════════════════════════════
 
-
-// ── 1. TRACKER DE EVENTOS ────────────────────────────────
-// Envía eventos de comportamiento a NEXUS silenciosamente
 function nexusTrack(tipo, datos = {}) {
-  const usuario = LS.get('user_admin');
-  if (!usuario) return; // sin sesión no hay perfil que construir
-  try {
-    fetch(`${NEXUS_URL}/api/upgames/evento`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ usuario, tipo, datos, ts: new Date().toISOString() })
-    }).catch(() => {}); // nunca bloquear la UI
-  } catch(_) {}
+  const t = nxToken();
+  if (!t) return; // sin sesión no hay perfil que construir
+  fetch(`${API_URL}/nexus/evento`, { method:'POST', headers:nxHeaders(), body: JSON.stringify({ tipo, ...datos }) }).catch(() => {});
 }
 
-// ── 2. INTERCEPTAR BÚSQUEDAS ────────────────────────────
-// El input del buscador ya tiene listener con debounce — lo extendemos
-const _buscadorEl = document.getElementById('buscador');
-if (_buscadorEl) {
-  _buscadorEl.addEventListener('input', function() {
-    const q = this.value.trim();
-    if (q.length > 2) {
-      // Trackear búsqueda con debounce extra para no spamear
-      clearTimeout(window._nxSearchTimer);
-      window._nxSearchTimer = setTimeout(() => nexusTrack('search', { query: q }), 800);
-    }
-  });
-}
-
-// ── 3. INTERCEPTAR APERTURA DE DETALLE (view) ───────────
-// Wrappear openDetail para capturar qué item vio el usuario
+// Apertura de detalle → vista (solo si se queda más de 3 s mirando)
 const _openDetailOriginal = window.openDetail || openDetail;
-let _viewStartTime = null;
-let _viewItemId    = null;
-
+let _viewItemId = null, _viewTimer = null;
 window.openDetail = function(item) {
   _openDetailOriginal(item);
-  _viewStartTime = Date.now();
-  _viewItemId    = item._id;
-  nexusTrack('view', {
-    itemId:   item._id,
-    title:    item.title,
-    category: item.category || '',
-    tags:     item.tags     || []
-  });
+  _viewItemId = item?._id || null;
+  clearTimeout(_viewTimer);
+  if (_viewItemId) { const id = _viewItemId; _viewTimer = setTimeout(() => { if (_viewItemId === id) nexusTrack('view', { itemId:id }); }, 3000); }
 };
-
-// Cuando cierra el detalle, registrar cuántos segundos estuvo
 const _closeDetailOriginal = window.closeDetail || closeDetail;
 window.closeDetail = function() {
   _closeDetailOriginal();
-  if (_viewItemId && _viewStartTime) {
-    const segundos = Math.round((Date.now() - _viewStartTime) / 1000);
-    if (segundos > 2) {
-      // Actualizar el evento view con el tiempo real
-      nexusTrack('view', {
-        itemId:  _viewItemId,
-        segundos
-      });
-    }
-    _viewItemId = null; _viewStartTime = null;
-  }
+  clearTimeout(_viewTimer);
+  _viewItemId = null;
 };
 
-// ── 4. INTERCEPTAR FAVORITOS ─────────────────────────────
-const _favOriginal = window.fav || fav;
-window.fav = async function(id) {
-  await _favOriginal(id);
-  // Detectar si se agregó o se quitó leyendo el estado local actualizado
-  const favIds = LS.getJSON('favoritos', []);
-  const item   = todosLosItems.find(i => i._id === id);
-  if (!item) return;
-  const tipo = favIds.includes(id) ? 'favorite' : 'unfavorite';
-  nexusTrack(tipo, {
-    itemId:   item._id,
-    title:    item.title,
-    category: item.category || '',
-    tags:     item.tags     || []
-  });
-};
-
-// ── 5. INTERCEPTAR CAMBIO DE CATEGORÍA ──────────────────
 document.querySelectorAll('.chip').forEach(chip => {
   chip.addEventListener('click', function() {
     const cat = this.dataset.cat;
-    if (cat) nexusTrack('category', { category: cat });
+    if (cat) nexusTrack('category', { categoria: cat });
   });
 });
 
-// ── 6. CARGAR PERFIL Y REORDENAR FEED ───────────────────
-// Al cargar la página, consultar a NEXUS el perfil del usuario
-// y reordenar el feed manteniendo la jerarquía existente
-let _nexusPerfil = null;
-
+// Reordena el inicio según los gustos aprendidos (los 3 primeros se quedan fijos)
 async function nexusCargarPerfil() {
-  const usuario = LS.get('user_admin');
-  if (!usuario) return;
+  if (!nxToken()) return;
   try {
-    const r = await fetch(`${NEXUS_URL}/api/upgames/perfil/${encodeURIComponent(usuario)}`);
+    const r = await fetchTimeout(`${API_URL}/nexus/perfil`, 8000, { headers: nxHeaders() });
     if (!r.ok) return;
     const perfil = await r.json();
-    if (!perfil || !perfil.categorias?.length) return;
-    _nexusPerfil = perfil;
-    nexusAplicarPerfil(perfil);
+    if (perfil?.categorias?.length) nexusAplicarPerfil(perfil);
   } catch(_) {}
 }
 
 function nexusAplicarPerfil(perfil) {
   if (!perfil?.categorias?.length || !todosLosItems.length) return;
-
-  // Mapa de peso por categoría (normalizado 0–10)
-  const maxPeso = perfil.categorias[0]?.peso || 1;
-  const pesoMap = {};
-  perfil.categorias.forEach(c => {
-    pesoMap[c.nombre] = (c.peso / maxPeso) * 10;
-  });
-
-  // Mapa de peso por tag
-  const maxTagCount = perfil.tags[0]?.count || 1;
-  const tagMap = {};
-  perfil.tags.forEach(t => {
-    tagMap[t.tag] = (t.count / maxTagCount) * 5;
-  });
-
-  // Set de items ya vistos/descargados recientemente (bajarlos en el feed)
-  const recientesSet = new Set((perfil.recientes || []).map(r => r.itemId));
-
-  // Reordenar: los top 3 por scoreRecomendacion se quedan fijos (jerarquía)
-  // El resto se ordena con puntuación NEXUS
+  const maxCat = perfil.categorias[0].peso || 1, maxTag = perfil.tags?.[0]?.peso || 1;
+  const pesoCat = {}, pesoTag = {};
+  perfil.categorias.forEach(c => { pesoCat[c.nombre] = (c.peso / maxCat) * 10; });
+  (perfil.tags || []).forEach(t => { pesoTag[t.tag] = (t.peso / maxTag) * 5; });
+  const recientes = new Set(perfil.recientes || []);
   const TOP_FIJOS = 3;
   const fijos = todosLosItems.slice(0, TOP_FIJOS);
-  const resto  = todosLosItems.slice(TOP_FIJOS);
-
-  const restoOrdenado = resto.map(item => {
-    const puntoCat  = pesoMap[item.category]       || 0;
-    const puntoTags = (item.tags || []).reduce((acc, t) => acc + (tagMap[t] || 0), 0);
-    const penalizar = recientesSet.has(item._id) ? -3 : 0; // bajar ya vistos
-    return {
-      ...item,
-      _nexusScore: (item.scoreRecomendacion || 0) + puntoCat + puntoTags + penalizar
-    };
-  }).sort((a, b) => b._nexusScore - a._nexusScore);
-
-  // Actualizar el array global sin borrar la lista original
-  todosLosItems = [...fijos, ...restoOrdenado];
-
-  // Re-renderizar solo si estamos en el tab principal y sin búsqueda activa
+  const resto = todosLosItems.slice(TOP_FIJOS).map(item => ({
+    item,
+    score: (item.scoreRecomendacion || 0) + (pesoCat[item.category] || 0)
+      + (item.tags || []).reduce((acc, t) => acc + (pesoTag[String(t).toLowerCase()] || 0), 0)
+      - (recientes.has(item._id) ? 3 : 0),
+  })).sort((a, b) => b.score - a.score).map(x => x.item);
+  todosLosItems = [...fijos, ...resto];
   const query = document.getElementById('buscador')?.value?.trim() || '';
   if (currentTab === 'main' && !query) {
-    filteredItems = activeCategory
-      ? todosLosItems.filter(i => i.category === activeCategory)
-      : todosLosItems.filter(i => i.category !== 'Video');
+    filteredItems = activeCategory ? todosLosItems.filter(i => i.category === activeCategory) : todosLosItems.filter(i => i.category !== 'Video');
     render(filteredItems);
   }
 }
-
-// ── 7. PUENTE CON EL WIDGET DE NEXUS (postMessage) ──────
-// El widget (NEXUS_URL/upgames) avisa con NX_WIDGET_READY al cargar; aquí
-// respondemos con el contexto. Antes se intentaba leer contentDocument del
-// iframe (cross-origin → siempre null) y el contexto casi nunca llegaba.
-function nexusContexto() {
-  return {
-    type: 'UPGAMES_CONTEXT',
-    usuario: LS.get('user_admin') || '',
-    // El token permite a NEXUS consultar TU saldo real (/economia/mi-saldo)
-    // en nombre tuyo; viaja solo al origen de NEXUS y no se guarda allí.
-    token: LS.get('token') || '',
-    categoriaActiva: activeCategory || null,
-    busquedaActiva: document.getElementById('buscador')?.value?.trim() || null
-  };
-}
-// Abre Nexus y le hace una pregunta en nombre del usuario (botones "Pregúntale a Nexus")
-let _nxPregunta = null;
-function nexusPreguntar(texto) {
-  _nxPregunta = String(texto || '').slice(0, 600);
-  if (typeof closeDetail === 'function' && document.getElementById('detail-sheet')?.classList.contains('open')) { try { closeDetail(); } catch (_) {} }
-  if (!nxOpen) nxToggle();
-  nxEnsureFrame();
-  const frame = document.getElementById('nxFrame');
-  if (frame?.dataset.loaded) nexusEnviarPregunta();
-}
-function nexusEnviarPregunta() {
-  const frame = document.getElementById('nxFrame');
-  if (!_nxPregunta || !frame?.contentWindow) return;
-  const t = _nxPregunta; _nxPregunta = null;
-  setTimeout(() => { try { frame.contentWindow.postMessage({ type: 'NX_ASK', text: t }, NEXUS_ORIGIN); } catch (_) {} }, 450);
-}
-window.nexusPreguntar = nexusPreguntar;
-
-function nexusEnviarContexto() {
-  const frame = document.getElementById('nxFrame');
-  if (!frame || !frame.contentWindow || !frame.dataset.loaded) return;
-  try { frame.contentWindow.postMessage(nexusContexto(), NEXUS_ORIGIN); } catch(_) {}
-}
-
-async function nexusAbrirItem(itemId, itemLite) {
-  let item = todosLosItems.find(i => i._id === itemId);
-  if (!item) {
-    try {
-      const r = await fetchTimeout(`${API_URL}/items/${encodeURIComponent(itemId)}`, 8000);
-      if (r.ok) item = await r.json();
-    } catch(_) {}
-  }
-  if (!item || !item._id) { toast('No pude abrir ese contenido'); return; }
-  nxClose();
-  window.openDetail(item);
-}
-
-window.addEventListener('message', function(event) {
-  if (event.origin !== NEXUS_ORIGIN) return;
-  const msg = event.data;
-  if (!msg || typeof msg !== 'object') return;
-
-  switch (msg.type) {
-    case 'NX_WIDGET_READY': {
-      const frame = document.getElementById('nxFrame');
-      if (frame) frame.dataset.loaded = '1';
-      nexusEnviarContexto();
-      nexusEnviarPregunta();
-      break;
-    }
-    case 'NX_OPEN_ITEM':
-      if (typeof msg.itemId === 'string' && /^[a-f\d]{24}$/i.test(msg.itemId)) nexusAbrirItem(msg.itemId, msg.item);
-      break;
-
-    case 'NX_FILTER_CATEGORY': {
-      const cat = String(msg.category || '');
-      if (!cat) return;
-      nxClose();
-      if (currentTab !== 'main') switchTab('main');
-      document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.cat === cat));
-      activeCategory = cat;
-      const b = document.getElementById('buscador'); if (b) b.value = '';
-      filteredItems = todosLosItems.filter(i => i.category === cat);
-      render(filteredItems);
-      nexusTrack('category', { category: cat });
-      break;
-    }
-
-    case 'NX_SHOW_ALL': {
-      nxClose();
-      if (currentTab !== 'main') switchTab('main');
-      document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-      activeCategory = '';
-      filteredItems = todosLosItems.filter(i => i.category !== 'Video');
-      render(filteredItems);
-      break;
-    }
-
-    case 'NX_NAVIGATE': {
-      const tabs = ['main', 'favs', 'economia', 'profile'];
-      if (!tabs.includes(msg.tab)) return;
-      nxClose();
-      switchTab(msg.tab);
-      if (msg.tab === 'profile' && msg.pftab) {
-        const el = document.querySelector(`[data-pftab="${String(msg.pftab).replace(/[^a-z]/g, '')}"]`);
-        if (el) setTimeout(() => pfSwitchTab(el.dataset.pftab, el), 120);
-      }
-      break;
-    }
-
-    case 'NX_PROACTIVE_SENT':
-      if (!nxOpen) _showNxFabBadge();
-      break;
-  }
-});
-
-// Al abrir el panel: cargar el widget la primera vez (lazy) y refrescar contexto
-const _nxToggleBase = window.nxToggle || nxToggle;
-window.nxToggle = function() {
-  _nxToggleBase();
-  if (nxOpen) {
-    _clearNxFabBadge();
-    nxEnsureFrame();
-    nexusEnviarContexto();
-  }
-};
-
-// Badge visual en el FAB de NEXUS cuando tiene algo que decir
-let _nxFabBadgeEl = null;
-function _showNxFabBadge() {
-  const fab = document.getElementById('nxFab');
-  if (!fab || _nxFabBadgeEl) return;
-  _nxFabBadgeEl = document.createElement('span');
-  _nxFabBadgeEl.id = 'nx-fab-badge';
-  _nxFabBadgeEl.style.cssText = `
-    position:absolute;top:-3px;right:-3px;
-    width:14px;height:14px;border-radius:50%;
-    background:var(--g,#32D583);border:2px solid var(--bg,#0A0B0F);
-    animation:nx-badge-pulse 1.5s ease-in-out infinite;
-    pointer-events:none;z-index:1;
-  `;
-  if (!document.getElementById('nx-badge-style')) {
-    const st = document.createElement('style');
-    st.id = 'nx-badge-style';
-    st.textContent = `@keyframes nx-badge-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.3);opacity:.7}}`;
-    document.head.appendChild(st);
-  }
-  fab.style.position = 'relative';
-  fab.appendChild(_nxFabBadgeEl);
-}
-function _clearNxFabBadge() {
-  if (_nxFabBadgeEl) { _nxFabBadgeEl.remove(); _nxFabBadgeEl = null; }
-}
-
-// ── 8. INIT: cargar perfil al arrancar (con retraso para no
-//    competir con la carga inicial del feed)
 setTimeout(nexusCargarPerfil, 2000);
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

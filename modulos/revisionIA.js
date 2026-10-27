@@ -83,40 +83,21 @@ async function sondear(url, { leerTexto = false, timeout = 9000 } = {}) {
 const escRegex = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const ytId = u => (String(u || '').match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|v\/))([-\w]{11})/i) || [])[1] || null;
 
-async function opinionIA({ nexusClient, item, hechos, logger }) {
+async function opinionIA({ ia, item, hechos }) {
     const contexto = hechos.map(h => `- [${h.tipo.toUpperCase()}] ${h.texto}`).join('\n').slice(0, 3500);
-    const datos = { titulo: item.title, descripcion: String(item.description || '').slice(0, 1500), categoria: item.category, tags: item.tags || [], link: item.link, imagen: item.image, contexto, modo: 'revision_admin' };
-    try {
-        const r = await nexusClient.moderarItem(datos);
-        const a = r?.analisis;
-        if (a && a.decision && !(a.razones || []).some(x => /IA no disponible/i.test(x))) return { ...a, fuente: 'Nexus IA' };
-    } catch (_) {}
-    // Respaldo: Groq directo desde UpGames
-    const key = (process.env.GROQ_API_KEY || '').trim();
-    if (!key) return null;
-    const sistema = 'Eres Nexus, el moderador de UpGames (plataforma de mods, juegos indie, ROMs homebrew, apps y videos). Recomiendas al administrador si APROBAR, REVISAR o RECHAZAR una publicación. Basa tu juicio en los HECHOS verificados que te doy (son fiables) y en el contenido. Rechaza piratería de juegos comerciales, enlaces rotos, spam o engaños. Responde SOLO JSON: {"decision":"aprobar|revisar|rechazar","confianza":0-1,"razones":["..."],"sugerencias":["..."],"riesgo_spam":0-1,"riesgo_malware":0-1,"calidad_estimada":0-10,"resumen":"una frase"}';
-    const usuario = `PUBLICACIÓN\nTítulo: ${datos.titulo}\nCategoría: ${datos.categoria}\nDescripción: ${datos.descripcion || '(vacía)'}\nEnlace: ${datos.link}\n\nHECHOS VERIFICADOS\n${contexto}`;
-    for (const model of ['llama-3.3-70b-versatile', 'openai/gpt-oss-20b', 'llama-3.1-8b-instant']) {
-        try {
-            const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 20000);
-            const body = { model, temperature: 0.2, max_tokens: 700, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: sistema }, { role: 'user', content: usuario }] };
-            if (/gpt-oss/.test(model)) body.reasoning_effort = 'low';
-            const r = await fetch('https://api.groq.com/openai/v1/chat/completions', { method: 'POST', signal: ctl.signal, headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'User-Agent': UA }, body: JSON.stringify(body) }).finally(() => clearTimeout(to));
-            if (!r.ok) continue;
-            const j = await r.json();
-            const txt = j.choices?.[0]?.message?.content || '';
-            const a = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
-            if (a.decision) return { ...a, fuente: `Groq (${model})` };
-        } catch (e) { logger?.warn?.(`[revisionIA] groq ${model}: ${e.message}`); }
-    }
-    return null;
+    const sistema = 'Eres NEXUS, el moderador de UpGames (plataforma de mods, juegos indie, ROMs homebrew, apps y videos). Recomiendas al administrador si APROBAR, REVISAR o RECHAZAR una publicación. Basa tu juicio en los HECHOS verificados que te doy (son fiables) y en el contenido. Rechaza piratería de juegos comerciales, enlaces rotos, spam o engaños. Responde SOLO JSON: {"decision":"aprobar|revisar|rechazar","confianza":0-1,"razones":["..."],"sugerencias":["..."],"riesgo_spam":0-1,"riesgo_malware":0-1,"calidad_estimada":0-10,"resumen":"una frase"}';
+    const usuario = `PUBLICACIÓN\nTítulo: ${item.title}\nCategoría: ${item.category}\nEtiquetas: ${(item.tags || []).join(', ') || '(ninguna)'}\nDescripción: ${String(item.description || '').slice(0, 1500) || '(vacía)'}\nEnlace: ${item.link}\n\nHECHOS VERIFICADOS\n${contexto}`;
+    const a = await ia.json(sistema, usuario, { maxTokens: 700 });
+    if (!a || !['aprobar', 'revisar', 'rechazar'].includes(a.decision)) return null;
+    const { _fuente, ...resto } = a;
+    return { ...resto, fuente: _fuente || 'Nexus' };
 }
 
 /**
- * Analiza una publicación. deps: { Juego, Usuario, errorLinkPublicacion, gameDetector, nexusClient, logger }
+ * Analiza una publicación. deps: { Juego, Usuario, errorLinkPublicacion, gameDetector, logger, ia? (por defecto modulos/nexus/llm) }
  */
 async function analizar(item, deps) {
-    const { Juego, Usuario, errorLinkPublicacion, gameDetector, nexusClient, logger } = deps;
+    const { Juego, Usuario, errorLinkPublicacion, gameDetector, logger } = deps;
     const hechos = [];       // { tipo: ok|info|warn|bad, area, texto, peso }
     const duros = [];        // motivos de rechazo seguro
     const add = (tipo, area, texto, peso = 0) => hechos.push({ tipo, area, texto, peso });
@@ -230,7 +211,7 @@ async function analizar(item, deps) {
     let reglas = duros.length ? 'rechazar' : puntos >= 70 ? 'aprobar' : puntos < 40 ? 'rechazar' : 'revisar';
 
     // ── 8. IA ───────────────────────────────────────────────────
-    const ia = deps.sinIA ? null : await opinionIA({ nexusClient, item, hechos, logger }).catch(() => null);
+    const ia = deps.sinIA ? null : await opinionIA({ ia: deps.ia || require('./nexus/llm'), item, hechos }).catch(e => { logger?.warn?.(`[revisionIA] ${e.message}`); return null; });
     let decision = reglas, confianza;
     if (duros.length) { decision = 'rechazar'; confianza = 0.95; }
     else if (ia) {

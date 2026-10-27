@@ -102,35 +102,13 @@
     <script>
         // ⭐ CONFIGURACIÓN
         const API_URL   = "https://upgames-production.up.railway.app";
-        const NEXUS_URL = "https://nexus-production-781b.up.railway.app";
         const DEBUG_MODE = false; // Cambiar a true para ver logs detallados
 
-        // ── Notifica la descarga a NEXUS y al backend de UpGames ──────────────
-        function notificarDescargaANexus(itemId, itemData) {
+        // ── Notifica la descarga al backend de UpGames ──────────────
+        function notificarDescarga(itemId, itemData) {
             const usuario = localStorage.getItem('user_admin');
 
-            // 1. Notificar a NEXUS — actualiza el perfil de comportamiento del usuario
-            try {
-                if (usuario) {
-                    fetch(`${NEXUS_URL}/api/upgames/evento`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            usuario,
-                            tipo: 'download',
-                            datos: {
-                                itemId,
-                                title:    itemData?.title    || '',
-                                category: itemData?.category || '',
-                                tags:     itemData?.tags     || [],
-                                autor:    itemData?.usuario  || ''
-                            }
-                        })
-                    }).catch(() => {});
-                }
-            } catch(_) {}
-
-            // 2. Notificar al autor del item — crea notificación en UpGames
+            // Avisa al autor; en el servidor Nexus también aprende tus gustos de esta descarga
             try {
                 const autorItem = itemData?.usuario;
                 if (usuario && autorItem && autorItem !== usuario) {
@@ -337,7 +315,7 @@
                     // ⭐ CRÍTICO: Asignar el enlace primero
                     enlaceFinal = data.link;
 
-                    // Guardar metadata del item para notificar a NEXUS y al autor al hacer clic
+                    // Guardar metadata del item para notificar al autor al hacer clic
                     window._itemData = {
                         title:    data.title    || data.juego?.title    || '',
                         category: data.category || data.juego?.category || '',
@@ -415,8 +393,8 @@
                 if (enlaceFinal) {
                     log(`Abriendo enlace: ${enlaceFinal}`);
 
-                    // Notificar a NEXUS que hubo una descarga real (fire & forget)
-                    notificarDescargaANexus(juegoId, window._itemData || {});
+                    // Registrar la descarga real (fire & forget)
+                    notificarDescarga(juegoId, window._itemData || {});
 
                     // Abrir en nueva pestaña
                     const nuevaVentana = window.open(enlaceFinal, '_blank');

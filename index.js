@@ -53,7 +53,9 @@ const {
 const gamification    = require('./modulos/gamification');
 const recommendations = require('./modulos/recommendations');
 const twoFactor       = require('./modulos/twoFactor');
-const nexusClient     = require('./modulos/nexusClient');
+const nexusLLM        = require('./modulos/nexus/llm');
+const nexusMemoria    = require('./modulos/nexus/memoria');
+const nexusMentor     = require('./modulos/nexus/mentor');
 const gameDetector    = require('./modulos/gameDetector');
 const series          = require('./modulos/series');
 const push            = require('./modulos/push');
@@ -674,6 +676,16 @@ const verificarToken = (req, res, next) => {
     }
 };
 
+// Sesión opcional: devuelve el usuario si el token es válido, o null (invitado)
+function usuarioOpcional(req) {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token || token.length < 20) return null;
+    try {
+        const u = jwt.verify(token, JWT_SECRET).usuario;
+        return u && !adminPanel.estaSuspendido(u) ? u : null;
+    } catch (_) { return null; }
+}
+
 // ========== CONSTANTES DE ECONOMÍA ==========
 const CPM_VALUE                = config.CPM_VALUE;
 const AUTHOR_PERCENTAGE        = config.AUTHOR_PERCENTAGE;
@@ -772,11 +784,10 @@ app.post('/auth/reset-password', [body('token').notEmpty(), body('password').isL
 // anuncios y diagnóstico → rutas/adminPanel.js
 const adminPanel = require('./rutas/adminPanel').registrar(app, {
     Usuario, Juego, Comentario, Notificacion, Pago, JWT_SECRET, logger, twoFactor, authLimiter,
-    NEXUS_API: nexusClient.NEXUS_API,
 });
 const verificarAdmin = adminPanel.verificarAdmin;
 // Nexus como asistente del panel: briefing priorizado + chat con los datos del admin
-require('./rutas/adminNexus').registrar(app, { verificarAdmin, Juego, Usuario, Comentario, Pago, logger, NEXUS_API: nexusClient.NEXUS_API });
+require('./rutas/adminNexus').registrar(app, { verificarAdmin, Juego, Usuario, Comentario, Pago, logger });
 
 // ==========================================
 // ⭐ RUTAS DE ECONOMÍA
@@ -868,11 +879,6 @@ app.post('/economia/validar-descarga', [body('juegoId').isMongoId()], async (req
         // ── Hooks gamificación & recomendaciones (fire & forget) ──
         gamification.onDescarga(juego.usuario).catch(() => {});
         recommendations.invalidateItemCache(juegoId);
-
-        // Nexus — registra el evento de descarga para análisis de gustos
-        nexusClient.sendEvento(juego.usuario, 'descarga_recibida', {
-            itemId: juegoId, categoria: juego.category, tags: juego.tags || [], total: juego.descargasEfectivas
-        });
 
         // Hitos de descargas: avisa al autor (gamificación + notificación)
         if ([10, 50, 100, 500, 1000, 5000].includes(juego.descargasEfectivas)) {
@@ -1340,8 +1346,6 @@ app.post('/auth/register', [
         });
         await nuevoUsuario.save();
         logger.info(`Nuevo usuario registrado: @${usuario} (${email})`);
-        // Nexus — registra el evento de registro (fire & forget)
-        nexusClient.sendEvento(nuevoUsuario.usuario, 'registro', { email: nuevoUsuario.email, ts: new Date().toISOString() });
 
         // ── Hook referral (si viene codigoReferral en el body) ──
         if (req.body.codigoReferral) {
@@ -1579,7 +1583,7 @@ app.get('/admin/items/:id/analisis-ia', verificarAdmin, [param('id').isMongoId()
         if (!item) return res.status(404).json({ success: false, error: 'Publicación no encontrada' });
         const previo = item.analisisIA;
         if (previo && req.query.forzar !== '1' && Date.now() - new Date(previo.fecha) < 6 * 3600e3) return res.json({ success: true, analisis: previo, cache: true });
-        const analisis = await revisionIA.analizar(item, { Juego, Usuario, errorLinkPublicacion, gameDetector, nexusClient, logger });
+        const analisis = await revisionIA.analizar(item, { Juego, Usuario, errorLinkPublicacion, gameDetector, logger });
         // timestamps:false → no reinicia el plazo de revisión (JOB 4 usa updatedAt)
         await Juego.updateOne({ _id: item._id }, { $set: { analisisIA: analisis } }, { timestamps: false });
         logger.info(`[revisionIA] "${item.title}" → ${analisis.decision} (${analisis.puntos} pts, IA: ${analisis.ia?.fuente || 'no'})`);
@@ -1725,8 +1729,6 @@ app.put('/items/vistas/:id', [param('id').isMongoId()], async (req, res) => {
         const updated = await Juego.findByIdAndUpdate(juegoId, { $inc: { descargasEfectivas: 1 } }, { new: true }).select('descargasEfectivas');
         logger.info(`Vista registrada — Video: ${juego.title} | IP: ${ip} | Total: ${updated.descargasEfectivas}`);
         res.json({ success: true, duplicada: false, descargasEfectivas: updated.descargasEfectivas });
-        // Nexus — registra el evento de vista para análisis de gustos (fire & forget)
-        nexusClient.sendEvento('anon', 'vista', { itemId: juegoId, categoria: juego.category, total: updated.descargasEfectivas });
     } catch (error) {
         logger.error(`Error en PUT /items/vistas: ${error.message}`);
         res.status(500).json({ success: false, error: 'Error al registrar vista' });
@@ -1805,7 +1807,7 @@ app.post('/items/precheck', verificarToken, async (req, res) => {
             category: String(b.category || 'General').slice(0, 40), extraData: {},
         };
         if (!item.title || !item.link) return res.status(400).json({ success: false, error: 'Escribe al menos el título y el enlace' });
-        const a = await revisionIA.analizar(item, { Juego, Usuario, errorLinkPublicacion, gameDetector, nexusClient, logger, sinIA: b.ia === false });
+        const a = await revisionIA.analizar(item, { Juego, Usuario, errorLinkPublicacion, gameDetector, logger, sinIA: b.ia === false });
         // Al creador solo le sirve lo que puede corregir (no su propio historial)
         const hechos = a.hechos.filter(h => ['enlace', 'medios', 'texto', 'derechos', 'duplicado'].includes(h.area));
 
@@ -1885,31 +1887,11 @@ app.post("/items/add", [verificarToken, body('title').notEmpty().trim().isLength
         logger.info(`Nuevo item agregado: ${nuevoJuego.title} por @${nuevoJuego.usuario}`);
         res.status(201).json({ success: true, ok: true, item: nuevoJuego, id: nuevoJuego._id });
 
-        // Nexus — registra el evento de publicación para análisis de comportamiento
-        nexusClient.sendEvento(nuevoJuego.usuario, 'publicacion', {
-            itemId:    nuevoJuego._id.toString(),
-            categoria: nuevoJuego.category,
-            tags:      nuevoJuego.tags || [],
-            titulo:    nuevoJuego.title,
-            esVideo:   nuevoJuego.category === 'Video'
-        });
-
-        // Fire & forget — Nexus analiza el juego recién publicado y guarda el feedback
-        nexusClient.mentorGame(nuevoJuego.usuario, {
-            titulo:      nuevoJuego.title,
-            descripcion: nuevoJuego.description,
-            tags:        nuevoJuego.tags,
-            categoria:   nuevoJuego.category,
-            precio:      nuevoJuego.precio,
-            imagenes:    [nuevoJuego.image, ...(nuevoJuego.images || [])].filter(Boolean),   // Nexus espera la lista (antes recibía un número → "0 imágenes")
-        }, req.headers.authorization?.split(' ')[1])
-        .then(m => {
-            if (m?.ok && m.mentor) {
-                Juego.findByIdAndUpdate(nuevoJuego._id, { $set: { nexusMentor: m.mentor } }).catch(() => {});
-                logger.info(`[nexus-mentor] "${nuevoJuego.title}" puntuación=${m.mentor.puntuacion}`);
-            }
-        })
-        .catch(() => {});
+        // Fire & forget — Nexus revisa la publicación y deja consejos al autor
+        nexusMentor.mentor(nuevoJuego.toObject()).then(m => {
+            Juego.updateOne({ _id: nuevoJuego._id }, { $set: { nexusMentor: m } }, { timestamps: false }).catch(() => {});
+            logger.info(`[nexus-mentor] "${nuevoJuego.title}" puntuación=${m.puntuacion} (${m.fuente})`);
+        }).catch(() => {});
     } catch (error) {
         logger.error(`Error: ${error?.message}`);
         res.status(500).json({ success: false, error: "Error al guardar aporte" });
@@ -2041,26 +2023,6 @@ app.get('/items/recomendados/:usuario', async (req, res) => {
         logger.error(`Error: ${error?.message}`);
         res.status(500).json({ success: false, error: 'Error al obtener recomendaciones' });
     }
-});
-
-// GET /nexus/status — indica si el servicio NEXUS IA responde (el panel lo consulta antes de mostrar el iframe)
-app.get('/nexus/status', async (req, res) => {
-    const KEY = 'nexus:status';
-    const hit = memCache.get(KEY);
-    if (hit) return res.json(hit);
-    let online = false;
-    try {
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 5000);
-        // /health es un JSON pequeño (antes se descargaba la página completa de NEXUS)
-        const r = await fetch(`${nexusClient.NEXUS_API}/health`, { signal: ctrl.signal });
-        clearTimeout(t);
-        const d = r.ok ? await r.json().catch(() => null) : null;
-        online = !!d && (d.status === 'ok' || d.status === 'initializing');
-    } catch (_) { online = false; }
-    const data = { online, checkedAt: new Date().toISOString() };
-    memCache.set(KEY, data, 60);
-    res.json(data);
 });
 
 // GET /items/autoinfo?title=&cat= — reconoce el título y devuelve imagen + descripción breve
@@ -2305,7 +2267,6 @@ app.put('/usuarios/toggle-seguir/:actual/:objetivo', verificarToken, async (req,
                 destinatario: objetivo, tipo: 'seguidor', emisor: actual,
                 mensaje: `@${actual} empezó a seguirte`
             });
-            nexusClient.sendEvento(actual, 'seguir', { objetivo });
             return;
         }
     } catch (err) {
@@ -2532,9 +2493,6 @@ app.post('/comentarios', [verificarToken, body('itemId').notEmpty(), body('texto
                     itemId: req.body.itemId, itemTitle: item.title, itemImage: item.image || '',
                     mensaje: `@${req.usuario} comentó en "${item.title}"`
                 });
-                nexusClient.sendEvento(req.usuario, 'comentario', {
-                    itemId: req.body.itemId, categoria: item.category, autor: item.usuario
-                });
             })
             .catch(() => {});
     } catch (error) {
@@ -2576,9 +2534,7 @@ app.post('/favoritos/add', [verificarToken, body('itemId').isMongoId()], async (
                     itemId, itemTitle: item.title, itemImage: item.image || '',
                     mensaje: `@${req.usuario} guardó "${item.title}" en favoritos`
                 });
-                nexusClient.sendEvento(req.usuario, 'favorito', {
-                    itemId, categoria: item.category, tags: item.tags || [], autor: item.usuario
-                });
+                nexusMemoria.aprender(req.usuario, 'favorite', { item }).catch(() => {});
             })
             .catch(() => {});
     } catch (error) {
@@ -2707,7 +2663,8 @@ app.post('/notificaciones', verificarToken, async (req, res) => {
     try {
         const { itemId } = req.body || {};
         if (!mongoose.isValidObjectId(itemId)) return res.status(400).json({ success: false, error: 'itemId inválido' });
-        const item = await Juego.findById(itemId).select('usuario title image').lean();
+        const item = await Juego.findById(itemId).select('usuario title image category tags').lean();
+        if (item) nexusMemoria.aprender(req.usuario, 'download', { item }).catch(() => {});
         if (!item || item.usuario === req.usuario) return res.json({ success: true });
         const hoy = new Date(Date.now() - 24 * 3600e3);
         const ya = await Notificacion.exists({ destinatario: item.usuario, emisor: req.usuario, tipo: 'descarga', itemId, fecha: { $gte: hoy } });
@@ -3389,55 +3346,6 @@ function iniciarJobsAutomaticos() {
     logger.info('TODOS LOS JOBS AUTOMÁTICOS INICIADOS');
 }
 
-// ══════════════════════════════════════════════════════════════════
-//  RUTAS NEXUS ↔ UPGAMES
-// ══════════════════════════════════════════════════════════════════
-
-// GET /nexus/mis-analytics — insights predictivos del creador (usuario autenticado)
-app.get('/nexus/mis-analytics', verificarToken, async (req, res) => {
-    try {
-        const data = await nexusClient.getCreatorAnalytics(
-            req.usuario,
-            req.headers.authorization?.split(' ')[1]
-        );
-        if (!data) return res.json({ ok: false, error: 'Nexus no disponible temporalmente' });
-        res.json(data);
-    } catch (err) {
-        logger.error(`[nexus/mis-analytics] ${err.message}`);
-        res.status(500).json({ ok: false, error: 'Error obteniendo analytics' });
-    }
-});
-
-// GET /nexus/mentor/:id — lee el feedback de Nexus guardado en un item
-app.get('/nexus/mentor/:id', verificarToken, async (req, res) => {
-    try {
-        const item = await Juego.findById(req.params.id).select('nexusMentor usuario title').lean();
-        if (!item) return res.status(404).json({ ok: false, error: 'Item no encontrado' });
-        if (item.usuario !== req.usuario) return res.status(403).json({ ok: false, error: 'Sin permiso' });
-        res.json({ ok: true, mentor: item.nexusMentor || null, title: item.title });
-    } catch (err) {
-        res.status(500).json({ ok: false, error: 'Error obteniendo mentor' });
-    }
-});
-
-// POST /admin/nexus/fraud-analyze — análisis de fraude con IA (solo admin)
-app.post('/admin/nexus/fraud-analyze', verificarAdmin, async (req, res) => {
-    try {
-        const { usuario, patrones } = req.body;
-        if (!usuario) return res.status(400).json({ ok: false, error: 'usuario requerido' });
-        const result = await nexusClient.analyzeFraud(
-            usuario,
-            patrones || {},
-            req.headers['x-admin-token']
-        );
-        if (!result) return res.json({ ok: false, error: 'Nexus no disponible temporalmente' });
-        res.json(result);
-    } catch (err) {
-        logger.error(`[admin/nexus/fraud-analyze] ${err.message}`);
-        res.status(500).json({ ok: false, error: 'Error en análisis de fraude' });
-    }
-});
-
 // ========== 🎮 DETECCIÓN DE JUEGOS ==========
 
 // POST /items/detect-game — detecta juego a partir de título (usado en frontend al escribir)
@@ -3531,8 +3439,8 @@ app.get('/search/query', async (req, res) => {
 
         if (q.length >= 2) {
             searchModule.registrarBusqueda(q);
-            const userId = req.headers.authorization?.split(' ')[1] ? (() => { try { return require('jsonwebtoken').verify(req.headers.authorization.split(' ')[1], JWT_SECRET).usuario; } catch { return 'anon'; } })() : 'anon';
-            nexusClient.sendEvento(userId, 'busqueda', { q, categoria: categoria || 'all', orden, resultados: resultado.total });
+            const userId = usuarioOpcional(req);
+            if (userId && categoria) nexusMemoria.aprender(userId, 'search', { categoria }).catch(() => {});
         }
 
         res.json({ success: true, ...resultado });
@@ -3557,7 +3465,13 @@ app.get('/search/populares', async (req, res) => {
 // ========== NEXUS: publicación de proyectos (zona de Proyectos → categoría software) ==========
 // Debe registrarse ANTES del handler 404 para que sus rutas y el hosting /u sean alcanzables.
 const nexusPublish = require('./modulos/nexusPublish');
-nexusPublish.registrar(app, { Juego, logger });
+nexusPublish.registrar(app, { Juego, logger, soloHosting: true });   // la Nexus externa ya no publica: solo se sirven los proyectos existentes
+
+// ========== NEXUS: la IA nativa de UpGames (Groq, misma BD y servidor) ==========
+require('./rutas/nexus').registrar(app, {
+    verificarToken, usuarioOpcional, logger, config, LINKS_PERMITIDOS,
+    Juego, Usuario, Favorito, series, search: searchModule, recommendations,
+});
 // ================================================================================================
 
 // ========== MEJORAS v2 ==========

@@ -5165,3 +5165,64 @@ button.pf2-stat { cursor: pointer; }
   .ugn-panel{top:calc(8px + env(safe-area-inset-top,0px));left:8px;right:8px;width:auto;max-height:calc(100dvh - 110px);border-radius:28px;transform-origin:top center}
 }
 @media (prefers-reduced-motion:reduce){.ugn-panel,.ugn-island{transition:opacity .2s}.ugn-island.show .ugn-isla-bar{animation:none}}
+
+/* ═══════════════════════════════════════════
+   NEXUS NATIVA — chat (v7)
+═══════════════════════════════════════════ */
+#nxPanel{touch-action:auto;background:rgba(17,19,24,.86);backdrop-filter:blur(28px) saturate(1.5);-webkit-backdrop-filter:blur(28px) saturate(1.5);border-color:rgba(255,255,255,.1)}
+#nxPanel .nx-body{touch-action:auto;overflow:hidden}
+.nx-sub{font-family:var(--ff);font-size:.66rem}
+.nx-msgs{position:absolute;inset:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:16px 14px 10px;display:flex;flex-direction:column;gap:12px;scroll-behavior:smooth}
+.nx-msg{display:flex;flex-direction:column;max-width:88%;animation:nxIn .32s var(--ease) both}
+@keyframes nxIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.nx-yo{align-self:flex-end;align-items:flex-end}
+.nx-ia{align-self:flex-start;max-width:94%}
+.nx-bub{padding:10px 14px;border-radius:20px;font-size:.88rem;line-height:1.5;word-wrap:break-word;overflow-wrap:anywhere}
+.nx-yo .nx-bub{background:linear-gradient(135deg,var(--g),#2BB673);color:#04140B;font-weight:600;border-bottom-right-radius:6px}
+.nx-ia .nx-bub{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);color:var(--txt);border-bottom-left-radius:6px}
+.nx-ia .nx-bub p{margin:0 0 6px}.nx-ia .nx-bub p:last-child{margin:0}
+.nx-ia .nx-bub ul{margin:4px 0 6px;padding-left:18px}.nx-ia .nx-bub li{margin:2px 0}
+.nx-ia .nx-bub b{color:#fff}
+.nx-err .nx-bub{border-color:rgba(255,99,99,.35);color:#FFB4B4}
+.nx-typing{display:flex;gap:5px;padding:14px 16px}
+.nx-typing i{width:7px;height:7px;border-radius:50%;background:var(--txt2);animation:nxDot 1.2s infinite ease-in-out}
+.nx-typing i:nth-child(2){animation-delay:.15s}.nx-typing i:nth-child(3){animation-delay:.3s}
+@keyframes nxDot{0%,80%,100%{opacity:.25;transform:translateY(0)}40%{opacity:1;transform:translateY(-4px)}}
+.nx-cards{display:flex;gap:10px;overflow-x:auto;padding:10px 2px 4px;margin:0 -2px;scroll-snap-type:x mandatory;max-width:100%}
+.nx-card{flex:0 0 150px;scroll-snap-align:start;text-align:left;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:16px;overflow:hidden;display:flex;flex-direction:column;transition:transform .2s var(--ease),border-color .2s}
+.nx-card:active{transform:scale(.97)}
+.nx-card:hover{border-color:var(--bd-g)}
+.nx-card-img{position:relative;aspect-ratio:16/9;background:var(--bg3);display:flex;align-items:center;justify-content:center;color:var(--txt3);font-size:1.4rem}
+.nx-card-img img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.nx-card-pts{position:absolute;right:6px;bottom:6px;font-size:.6rem;font-weight:800;padding:2px 7px;border-radius:999px;background:rgba(0,0,0,.6);color:#fff;backdrop-filter:blur(6px)}
+.nx-card-t{font-size:.76rem;font-weight:700;padding:8px 9px 2px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.nx-card-m{font-size:.62rem;color:var(--txt3);padding:0 9px 9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nx-acts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.nx-act{display:inline-flex;align-items:center;gap:5px;font-size:.74rem;font-weight:700;padding:7px 12px;border-radius:999px;background:var(--g-dim);border:1px solid var(--bd-g);color:var(--g)}
+.nx-act ion-icon{font-size:.8rem}
+.nx-hola{margin:auto 0;text-align:center;padding:12px 6px 4px}
+.nx-hola h3{font-size:1.15rem;font-weight:800;margin:14px 0 4px}
+.nx-hola p{font-size:.82rem;color:var(--txt2);line-height:1.5;margin:0 auto 16px;max-width:300px}
+.nx-hola-orb{width:58px;height:58px;margin:0 auto;border-radius:50%;background:conic-gradient(from 0deg,var(--g),var(--cy),var(--g));padding:2px;animation:plSpin 6s linear infinite;box-shadow:0 0 34px rgba(var(--g-rgb),.35)}
+.nx-hola-orb span{display:block;width:100%;height:100%;border-radius:50%;background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.25),var(--bg1) 60%)}
+.nx-sugs{display:flex;flex-direction:column;gap:8px;max-width:340px;margin:0 auto}
+.nx-sug{font-size:.8rem;text-align:left;padding:11px 14px;border-radius:16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--txt);transition:border-color .2s,background .2s}
+.nx-sug:hover{border-color:var(--bd-g);background:var(--g-dim)}
+.nx-form{display:flex;align-items:flex-end;gap:8px;padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--bd);flex-shrink:0;background:rgba(10,11,15,.4)}
+.nx-form textarea{flex:1;resize:none;min-height:42px;max-height:120px;padding:11px 15px;border-radius:21px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--txt);font-size:.9rem;line-height:1.35;outline:none}
+.nx-form textarea:focus{border-color:var(--bd-g)}
+.nx-form button{width:42px;height:42px;flex-shrink:0;border-radius:50%;background:linear-gradient(135deg,var(--g),var(--cy));color:#04140B;display:flex;align-items:center;justify-content:center;transition:transform .15s,opacity .2s}
+.nx-form button svg{width:20px;height:20px}
+.nx-form button:active{transform:scale(.92)}
+.nx-form button:disabled{opacity:.45}
+.nx-fab-badge{position:absolute;top:2px;right:calc(50% - 18px);width:10px;height:10px;border-radius:50%;background:var(--g);border:2px solid var(--bg);animation:nx-badge-pulse 1.5s ease-in-out infinite;pointer-events:none}
+@keyframes nx-badge-pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.3);opacity:.7}}
+@media (min-width:768px){.nx-msg{max-width:78%}.nx-card{flex-basis:170px}}
+@media (prefers-reduced-motion:reduce){.nx-msg,.nx-hola-orb,.nx-typing i{animation:none}}
+@media (min-width:900px){
+  #nxPanel{left:auto;right:24px;bottom:24px;width:430px;height:min(720px,calc(100dvh - 110px));border-radius:26px;border-bottom:1px solid rgba(255,255,255,.1);box-shadow:0 24px 80px rgba(0,0,0,.6);transform:translateY(24px) scale(.97);transform-origin:bottom right}
+  #nxPanel.open{transform:none}
+  #nxPanel::before{display:none}
+  #nxPanel.expanded{right:24px;left:24px;top:84px;bottom:24px;width:auto;height:auto;border-radius:26px;inset:84px 24px 24px 24px}
+  .nx-form{padding-bottom:12px}
+}

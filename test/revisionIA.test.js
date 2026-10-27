@@ -21,7 +21,7 @@ function deps({ autor = {}, previas = 0, iaRespuesta = null, errLink = null } = 
         Usuario: { findOne: () => q({ usuario: 'ana', fecha: new Date(Date.now() - 400 * 864e5), verificadoNivel: 2, emailVerificado: true, listaSeguidores: [], ...autor }) },
         errorLinkPublicacion: () => errLink,
         gameDetector: { detectGame: () => null },
-        nexusClient: { moderarItem: async () => (iaRespuesta ? { ok: true, analisis: iaRespuesta } : null) },
+        ia: { json: async () => (iaRespuesta ? { ...iaRespuesta, _fuente: 'Nexus · llama-3.3-70b-versatile' } : null) },
         logger: { warn() {} },
     };
 }
@@ -57,15 +57,15 @@ const item = (extra = {}) => ({ _id: 'x', usuario: 'ana', title: 'Pack de textur
         const sin = await analizar(item(), deps());
         const con = await analizar(item(), deps({ iaRespuesta: { decision: sin.reglas, confianza: 0.9, razones: ['ok'] } }));
         assert.strictEqual(con.decision, sin.reglas); assert.ok(con.confianza >= sin.confianza);
-        assert.strictEqual(con.ia.fuente, 'Nexus IA');
+        assert.strictEqual(con.ia.fuente, 'Nexus · llama-3.3-70b-versatile'); assert.ok(!('_fuente' in con.ia));
     });
     await test('IA dice rechazar con mucha confianza → no aprueba', async () => {
         const a = await analizar(item(), deps({ iaRespuesta: { decision: 'rechazar', confianza: 0.9, razones: ['parece spam'] } }));
         assert.notStrictEqual(a.decision, 'aprobar');
     });
-    await test('respuesta "IA no disponible" de Nexus se ignora', async () => {
-        const a = await analizar(item(), deps({ iaRespuesta: { decision: 'revisar', razones: ['IA no disponible: requiere revisión manual'] } }));
-        assert.ok(!a.ia || a.ia.fuente !== 'Nexus IA');
+    await test('decisión de la IA fuera de la lista se ignora', async () => {
+        const a = await analizar(item(), deps({ iaRespuesta: { decision: 'quizás', razones: ['?'] } }));
+        assert.strictEqual(a.ia, null);
     });
     await test('enlace a host inexistente queda como no verificable, no como muerto', async () => {
         const a = await analizar(item(), deps());
