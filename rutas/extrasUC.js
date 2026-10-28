@@ -20,6 +20,7 @@
 
 const X = require('../modulos/extras');
 const L = require('../modulos/live');
+const mongoose = require('mongoose');
 const UC = require('../modulos/upcoins');
 
 const esId = s => /^[a-f\d]{24}$/i.test(String(s || ''));
@@ -153,6 +154,7 @@ function registrar(app, deps) {
             if (code !== 200) return err(res, code, body.error, { monedas: body.monedas, faltan: body.faltan });
             if (!body.repetido) {
                 await Usuario.updateOne({ usuario: j.usuario }, { $inc: retener ? { saldoRetenido: rep.creador } : { saldo: rep.creador } });
+                require('../modulos/statsItems').sumar(String(j._id), j.usuario, { a: 1, auc: monto, g: rep.creador });
                 avisar(j.usuario, j.title, `🪙 @${req.usuario} apoyó "${String(j.title).slice(0, 60)}" con ${monto} UpCoins. ¡Gracias por crear!`, String(j._id));
                 X.evento(req.usuario, 'apoyar', String(j._id));
             }
@@ -226,18 +228,42 @@ function registrar(app, deps) {
         } catch (e) { logger.error(`[extras] reclamar: ${e.message}`); err(res, 500, 'No se pudo reclamar'); }
     });
 
+    // ── Promover mi live con UpCoins: suma un plus al puntaje del directorio mientras dure ──
+    app.get('/live/promo/mio', verificarToken, async (req, res) => {
+        try {
+            const c = await X.config(), Live = mongoose.models.Live;
+            const l = Live && await Live.findOne({ creador: req.usuario, estado: 'en_vivo' }).select('_id titulo promoUC inicio').lean();
+            ok(res, { activo: !!c.activo.promoLive, paquetes: c.precios.promoLive, live: l ? { id: String(l._id), titulo: l.titulo, promoUC: l.promoUC || 0, puntos: Math.round(L.puntosPromo(l.promoUC || 0)) } : null });
+        } catch (e) { err(res, 500, 'No se pudo cargar'); }
+    });
+    app.post('/live/promover', verificarToken, async (req, res) => {
+        try {
+            const c = await X.config();
+            if (!c.activo.promoLive) return err(res, 409, 'La promoción de lives está pausada');
+            const monto = parseInt(req.body?.monto, 10);
+            if (!c.precios.promoLive.includes(monto)) return err(res, 400, 'Paquete no válido');
+            if (!claveOk(req.body?.clave)) return err(res, 400, 'Datos no válidos');
+            const Live = mongoose.models.Live;
+            const l = Live && await Live.findOne({ creador: req.usuario, estado: 'en_vivo' }).select('_id').lean();
+            if (!l) return err(res, 409, 'Inicia tu live para poder promoverlo');
+            const [code, body] = await cobrarConRegistro(req.usuario, monto, `promolive:${req.usuario}:${req.body.clave}`, { tipo: 'compra', planId: `promolive:${l._id}`, liveId: String(l._id) });
+            if (code !== 200) return err(res, code, body.error, { monedas: body.monedas, faltan: body.faltan });
+            const act = body.repetido ? await Live.findById(l._id).select('promoUC').lean() : await Live.findByIdAndUpdate(l._id, { $inc: { promoUC: monto } }, { new: true }).select('promoUC').lean();
+            ok(res, { promoUC: act?.promoUC || 0, puntos: Math.round(L.puntosPromo(act?.promoUC || 0)), upcoins: await totalUC(req.usuario) });
+        } catch (e) { logger.error(`[extras] promover live: ${e.message}`); err(res, 500, 'No se pudo promover tu live'); }
+    });
+
     // ── Guía de inicio: métricas ANÓNIMAS (contadores por día y paso, sin usuario ni IP) ──
     const PASOS_GUIA = new Set(['_inicio', '_fin', 'explorar', 'abrir', 'cuenta', 'email', 'favorito', 'seguir', 'nexus', 'live', 'upcoins', 'publicar']);
     const statsGuia = () => require('mongoose').connection.collection('guia_stats');
     let idxGuia = false;
-    const limGuia = new Map();   // ip → [ts] (máx. 40 eventos por hora; evita inflar los números)
+    const Limites = require('../modulos/limites');   // máx. 40 eventos por IP y hora (contador en Mongo)
     app.post('/guia/evento', async (req, res) => {
         try {
             const { paso, accion, modo } = req.body || {};
             if (!PASOS_GUIA.has(paso) || !['completo', 'llevame'].includes(accion) || !['inv', 'usr'].includes(modo)) return err(res, 400, 'Evento no válido');
-            const ip = req.ip || '', ahora = Date.now(), l = (limGuia.get(ip) || []).filter(t => t > ahora - 3600e3);
-            if (l.length >= 40) return ok(res, { contado: false });
-            l.push(ahora); limGuia.set(ip, l); if (limGuia.size > 20000) limGuia.clear();
+            const ahora = Date.now();
+            if (!(await Limites.permitir(`guia:${req.ip || ''}`, [[Limites.HORA, 40]]))) return ok(res, { contado: false });
             if (!idxGuia) { idxGuia = true; statsGuia().createIndex({ fecha: 1 }, { expireAfterSeconds: 400 * 86400 }).catch(() => {}); }
             const dia = new Date(ahora - 5 * 3600e3).toISOString().slice(0, 10);
             await statsGuia().updateOne({ _id: `${dia}:${modo}:${paso}:${accion}` }, { $inc: { n: 1 }, $setOnInsert: { dia, modo, paso, accion, fecha: new Date() } }, { upsert: true });
@@ -255,13 +281,40 @@ function registrar(app, deps) {
         } catch (e) { err(res, 500, 'No se pudo cargar'); }
     });
 
+    // ── Prueba A/B de la bienvenida: qué versión convierte más (anónimo, 1 por dispositivo) ──
+    const statsAB = () => require('mongoose').connection.collection('ab_stats');
+    const AB = { bienvenida: { variantes: ['A', 'B'], eventos: ['visto', 'cta', 'cuenta', 'saltar'] } };
+    let idxAB = false;
+    app.post('/ab/evento', async (req, res) => {
+        try {
+            const { exp, variante, evento, modo } = req.body || {};
+            const e = AB[exp];
+            if (!e || !e.variantes.includes(variante) || !e.eventos.includes(evento) || !['inv', 'usr'].includes(modo)) return err(res, 400, 'Evento no válido');
+            if (!(await Limites.permitir(`ab:${req.ip || ''}`, [[Limites.HORA, 30]]))) return ok(res, { contado: false });
+            if (!idxAB) { idxAB = true; statsAB().createIndex({ fecha: 1 }, { expireAfterSeconds: 400 * 86400 }).catch(() => {}); }
+            const dia = new Date(Date.now() - 5 * 3600e3).toISOString().slice(0, 10);
+            await statsAB().updateOne({ _id: `${dia}:${exp}:${variante}:${modo}:${evento}` }, { $inc: { n: 1 }, $setOnInsert: { dia, exp, variante, modo, evento, fecha: new Date() } }, { upsert: true });
+            ok(res, { contado: true });
+        } catch (e) { err(res, 500, 'Error'); }
+    });
+    app.get('/admin/stats/ab', verificarAdmin, async (req, res) => {
+        try {
+            const dias = Math.min(365, Math.max(1, parseInt(req.query.dias, 10) || 30));
+            const desde = new Date(Date.now() - 5 * 3600e3 - (dias - 1) * 864e5).toISOString().slice(0, 10);
+            const filas = await statsAB().aggregate([{ $match: { exp: 'bienvenida', dia: { $gte: desde } } }, { $group: { _id: { v: '$variante', e: '$evento', m: '$modo' }, n: { $sum: '$n' } } }]).toArray();
+            const r = {};
+            for (const f of filas) { const v = (r[f._id.v] ||= { visto: 0, cta: 0, cuenta: 0, saltar: 0, inv: { visto: 0, cta: 0, cuenta: 0, saltar: 0 } }); v[f._id.e] += f.n; if (f._id.m === 'inv') v.inv[f._id.e] += f.n; }
+            ok(res, { dias, variantes: r });
+        } catch (e) { err(res, 500, 'No se pudo cargar'); }
+    });
+
     // ── Panel admin ─────────────────────────────────────────────────────────
     app.get('/admin/finanzas/extras', verificarAdmin, async (req, res) => {
         try {
             const c = await X.config();
             const desde = new Date(Date.now() - 30 * 864e5);
             const [ventas, prioridadPend, misionesSem] = await Promise.all([
-                LiveTx.aggregate([{ $match: { fecha: { $gte: desde }, estado: { $ne: 'revertida' }, $or: [{ regaloId: { $in: ['superchat', 'apoyo'] } }, { planId: /^(cosmetico:|prioridad:|nombre$)/ }, { tipo: 'mision' }, { tipo: 'plan', destinatario: { $nin: ['', null] } }] } },
+                LiveTx.aggregate([{ $match: { fecha: { $gte: desde }, estado: { $ne: 'revertida' }, $or: [{ regaloId: { $in: ['superchat', 'apoyo'] } }, { planId: /^(cosmetico:|prioridad:|promolive:|nombre$)/ }, { tipo: 'mision' }, { tipo: 'plan', destinatario: { $nin: ['', null] } }] } },
                     { $group: { _id: { $switch: { branches: [
                         { case: { $in: ['$regaloId', ['superchat', 'apoyo']] }, then: '$regaloId' },
                         { case: { $eq: ['$tipo', 'mision'] }, then: 'mision' },

@@ -73,6 +73,37 @@ const series          = require('./modulos/series');
 const push            = require('./modulos/push');
 const autoInfo        = require('./modulos/autoInfo');
 const memCache        = require('./modulos/cache');
+const Limites         = require('./modulos/limites');
+const StatsItems      = require('./modulos/statsItems');
+const Referidos       = require('./modulos/referidos');
+const Seo             = require('./modulos/seo');
+const Moderacion      = require('./modulos/moderacion');
+
+/**
+ * Moderación de una publicación en segundo plano: texto (IA) + portada (visión).
+ * Contenido sexual, odio o acoso con confianza alta → se rechaza sola y se avisa al autor.
+ */
+async function moderarPublicacion(id) {
+    try {
+        const j = await Juego.findById(id).select('title description image images category usuario status').lean();
+        if (!j || j.status === 'rechazado') return;
+        const textoV = await Moderacion.ia(`${j.title}\n${j.description || ''}`, 'publicacion');
+        let motivo = null, fuente = 'NEXUS', categoria = textoV?.categoria;
+        if (Moderacion.debeQuitar(textoV) && ['sexual', 'odio', 'acoso'].includes(textoV.categoria)) motivo = Moderacion.MENSAJE[textoV.categoria];
+        if (!motivo) {
+            for (const img of [j.image, ...(j.images || [])].filter(u => /^https:\/\//.test(u || '') && !/\.(mp4|webm|mov)(\?|$)/i.test(u)).slice(0, 2)) {
+                const v = await Moderacion.imagen(img.replace('/upload/', '/upload/w_640,q_auto,f_jpg/'));
+                if (v?.sexual && v.confianza >= 0.75) { motivo = 'su imagen tiene contenido sexual'; fuente = 'NEXUS visión'; categoria = 'sexual'; break; }
+            }
+        }
+        if (!motivo) return;
+        await Juego.updateOne({ _id: id }, { $set: { status: 'rechazado', motivoRechazo: `Moderación automática: ${motivo}` } });
+        crearNotif({ destinatario: j.usuario, tipo: 'sistema', emisor: 'UpGames', itemId: String(id), itemTitle: 'Revisión', itemImage: '', mensaje: `🚫 Quitamos "${String(j.title).slice(0, 60)}" porque ${motivo}. Revisa las normas de la comunidad.` });
+        Moderacion.registrar({ tipo: 'publicacion', usuario: j.usuario, categoria, motivo, fuente, texto: j.title, ref: id, accion: 'rechazada' });
+        recommendations.invalidateTrending?.();
+        logger.warn(`[moderacion] publicación ${id} de @${j.usuario} rechazada: ${motivo}`);
+    } catch (e) { logger.warn(`[moderacion] publicación ${id}: ${e.message}`); }
+}
 const Extras          = require('./modulos/extras');     // usos extra de los UpCoins y misiones
 const UCmod           = require('./modulos/upcoins');
 const searchModule    = require('./modulos/search');
@@ -262,6 +293,7 @@ app.use((req, res, next) => {
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
 // ========== RATE LIMITING ==========
+// El general queda en memoria a propósito: es grueso (200/15 min) y en Mongo sumaría una escritura a CADA petición
 const generalLimiter = rateLimit({
     windowMs: config.RATE_LIMIT.GENERAL.windowMs,
     max: config.RATE_LIMIT.GENERAL.max,
@@ -272,6 +304,7 @@ const generalLimiter = rateLimit({
 });
 
 const authLimiter = rateLimit({
+    store: new Limites.MongoStore('rl-authLimiter'),
     windowMs: config.RATE_LIMIT.AUTH.windowMs,
     max: config.RATE_LIMIT.AUTH.max,
     message: { error: "Demasiados intentos de login, espera 15 minutos" },
@@ -280,6 +313,7 @@ const authLimiter = rateLimit({
 });
 
 const createLimiter = rateLimit({
+    store: new Limites.MongoStore('rl-createLimiter'),
     windowMs: config.RATE_LIMIT.CREATE.windowMs,
     max: config.RATE_LIMIT.CREATE.max,
     message: { error: "Has alcanzado el límite de creación por hora" },
@@ -287,6 +321,7 @@ const createLimiter = rateLimit({
 });
 
 const downloadValidationLimiter = rateLimit({
+    store: new Limites.MongoStore('rl-downloadValidationLimiter'),
     windowMs: config.RATE_LIMIT.DOWNLOAD_VALIDATION.windowMs,
     max: config.RATE_LIMIT.DOWNLOAD_VALIDATION.max,
     message: { error: "Demasiadas validaciones de descarga. Espera un minuto." },
@@ -345,6 +380,9 @@ correo.verificar().then(e => {
     else logger.error(`📧 EMAIL NO FUNCIONA — ${e.detalle}`);
 }).catch(() => {});
 const sendEmail = correo.enviar;
+// Errores en tiempo real: cada logger.error se agrupa y un error nuevo o un pico avisa por correo (y a Sentry si hay SENTRY_DSN)
+const Alertas = require('./modulos/alertas');
+Alertas.instalar(logger, { sendEmail });
 
 // ── TEMPLATES DE EMAIL ────────────────────────────────────────────────
 function emailVerifTemplate(usuario, link) {
@@ -529,6 +567,13 @@ const UsuarioSchema = new mongoose.Schema({
     monedas:       { type: Number, default: 0, min: 0 },
     ucv:           { type: Number, default: 2 },   // versión de UpCoins de `monedas` (2 = 1 UC vale US$0,02)
     saldoRetenido: { type: Number, default: 0, min: 0 },
+    // Referidos (modulos/referidos.js): quién lo invitó y si ya se pagó la invitación
+    referidoPor:     { type: String, default: '', index: true },
+    referidoEstado:  { type: String, default: '' },   // pendiente · procesando · pagado · tope · misma_red · bloqueado
+    referidoEn:      { type: Date, default: null },
+    referidoPagadoEn:{ type: Date, default: null },
+    strikesModeracion: { type: Number, default: 0 },   // veces que la moderación automática quitó algo suyo
+    ultimoStrike:    { type: Date, default: null },
     liveKey:       { type: String, default: null, select: false },   // clave de transmisión (OBS)
     sesionVer:     { type: Number, default: 0 },
     avisoVerifEnviado: { type: Boolean, default: false },   // notificación "verifica tu email" ya enviada
@@ -800,6 +845,7 @@ app.get('/auth/verify-email/:token', async (req, res) => {
         // updateOne: save() revalida toda la cuenta y una cuenta antigua podía fallar al verificar
         await Usuario.updateOne({ _id: usuario._id }, { $set: { emailVerificado: true, emailVerifToken: null, emailVerifExpires: null } });
         logger.info(`Email verificado: @${usuario.usuario}`);
+        Referidos.alVerificar(Usuario, usuario.usuario, { crearNotif, logger }).catch(() => {});
         res.redirect(`${APP_URL}?verif=ok&u=${encodeURIComponent(usuario.usuario)}`);
     } catch (err) {
         logger.error(`Error verificando email: ${err.message}`);
@@ -809,21 +855,14 @@ app.get('/auth/verify-email/:token', async (req, res) => {
 
 // Correos que cualquiera puede pedir escribiendo un email: máx. 1 cada 2 min y 5 al día por dirección
 // (sin esto se podía bombardear una bandeja ajena y agotar el cupo diario de Resend). Respuesta idéntica.
-const correosPorEmail = new Map();   // tipo:email → [timestamps]
-function correoPermitido(tipo, email) {
-    const k = `${tipo}:${String(email).toLowerCase()}`, ahora = Date.now();
-    const h = (correosPorEmail.get(k) || []).filter(t => ahora - t < 864e5);
-    if ((h.length && ahora - h[h.length - 1] < 120000) || h.length >= 5) return false;
-    h.push(ahora); correosPorEmail.set(k, h);
-    if (correosPorEmail.size > 20000) correosPorEmail.clear();
-    return true;
-}
+// Contadores en Mongo (modulos/limites.js): sobreviven despliegues y se comparten entre copias.
+const correoPermitido = (tipo, email) => Limites.permitir(`correo:${tipo}:${String(email).toLowerCase()}`, [[2 * Limites.MIN, 1], [Limites.DIA, 5]]);
 
 app.post('/auth/resend-verification', [body('email').isEmail().normalizeEmail(EMAIL_NORMALIZE_OPTS)], async (req, res) => {
     try {
         const { email } = req.body;
         const usuario = await Usuario.findOne({ email: email.toLowerCase() });
-        if (!usuario || usuario.emailVerificado || !correoPermitido('verif', email))
+        if (!usuario || usuario.emailVerificado || !(await correoPermitido('verif', email)))
             return res.json({ success: true, mensaje: 'Si el email existe y no está verificado, recibirás el link.' });
         const verifToken = crypto.randomBytes(32).toString('hex');
         await Usuario.updateOne({ _id: usuario._id }, { $set: { emailVerifToken: verifToken, emailVerifExpires: new Date(Date.now() + 24 * 60 * 60 * 1000) } });
@@ -837,7 +876,6 @@ app.post('/auth/resend-verification', [body('email').isEmail().normalizeEmail(EM
 });
 
 // Estado y reenvío para la sesión iniciada (el aviso de la biblioteca y la notificación)
-const enviosVerif = new Map();   // usuario → [timestamps]
 const enmascarar = e => String(e || '').replace(/^(.{1,2})[^@]*(@.*)$/, (_, a, b) => a + '•••' + b);
 app.get('/auth/email-estado', verificarToken, async (req, res) => {
     const u = await Usuario.findOne({ usuario: req.usuario }).select('email emailVerificado').lean().catch(() => null);
@@ -846,10 +884,9 @@ app.get('/auth/email-estado', verificarToken, async (req, res) => {
 });
 app.post('/auth/email-reenviar', verificarToken, async (req, res) => {
     try {
-        const ahora = Date.now();
-        const h = (enviosVerif.get(req.usuario) || []).filter(t => ahora - t < 864e5);
-        if (h.length && ahora - h[h.length - 1] < 120000) return res.status(429).json({ success: false, error: 'Ya te enviamos el correo. Espera 2 minutos para pedir otro.' });
-        if (h.length >= 5) return res.status(429).json({ success: false, error: 'Llegaste al límite de reenvíos de hoy. Revisa tu carpeta de spam.' });
+        const ahora = Date.now(), kR = `reenvio:${req.usuario}`;
+        if (await Limites.lleno(kR, 2 * Limites.MIN, 1)) return res.status(429).json({ success: false, error: 'Ya te enviamos el correo. Espera 2 minutos para pedir otro.' });
+        if (await Limites.lleno(kR, Limites.DIA, 5)) return res.status(429).json({ success: false, error: 'Llegaste al límite de reenvíos de hoy. Revisa tu carpeta de spam.' });
         const usuario = await Usuario.findOne({ usuario: req.usuario });
         if (!usuario) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
         if (usuario.emailVerificado) return res.json({ success: true, yaVerificado: true });
@@ -857,8 +894,7 @@ app.post('/auth/email-reenviar', verificarToken, async (req, res) => {
         await Usuario.updateOne({ _id: usuario._id }, { $set: { emailVerifToken: verifToken, emailVerifExpires: new Date(ahora + 24 * 60 * 60 * 1000) } });
         const enviado = await sendEmail({ to: usuario.email, subject: '✅ Verifica tu email en UpGames', html: emailVerifTemplate(usuario.usuario, `${API_URL_SELF}/auth/verify-email/${verifToken}`) });
         if (!enviado) return res.status(503).json({ success: false, error: 'No pudimos enviar el correo ahora mismo. Inténtalo en unos minutos.' });
-        h.push(ahora); enviosVerif.set(req.usuario, h);
-        if (enviosVerif.size > 20000) enviosVerif.clear();
+        await Promise.all([Limites.sumar(kR, 2 * Limites.MIN), Limites.sumar(kR, Limites.DIA)]);
         res.json({ success: true, email: enmascarar(usuario.email) });
     } catch (err) {
         logger.error(`Error en email-reenviar: ${err.message}`);
@@ -874,7 +910,7 @@ app.post('/auth/forgot-password', [body('email').isEmail().normalizeEmail(EMAIL_
     try {
         const { email } = req.body;
         const usuario = await Usuario.findOne({ email: email.toLowerCase() });
-        if (!usuario || !correoPermitido('reset', email))
+        if (!usuario || !(await correoPermitido('reset', email)))
             return res.json({ success: true, mensaje: 'Si el email está registrado, recibirás un link para restablecer tu contraseña.' });
         const resetToken = crypto.randomBytes(32).toString('hex');
         await Usuario.updateOne({ _id: usuario._id }, { $set: { resetPasswordToken: resetToken, resetPasswordExpires: new Date(Date.now() + 60 * 60 * 1000) } });
@@ -999,6 +1035,7 @@ app.post('/economia/validar-descarga', [body('juegoId').isMongoId()], async (req
         }
 
         await autor.save();
+        StatsItems.sumar(juegoId, juego.usuario, { d: 1, g: gananciaGenerada });   // panel "Rendimiento por publicación"
 
         // ── Hooks gamificación & recomendaciones (fire & forget) ──
         gamification.onDescarga(juego.usuario).catch(() => {});
@@ -1026,6 +1063,61 @@ app.post('/economia/validar-descarga', [body('juegoId').isMongoId()], async (req
     } catch (error) {
         logger.error(`Error en validar-descarga: ${error.message}`);
         res.status(500).json({ success: false, error: "Error al validar descarga" });
+    }
+});
+
+// Moderación automática: lo que NEXUS y las reglas quitaron (panel admin)
+app.get('/admin/moderacion', verificarAdmin, async (req, res) => {
+    try {
+        const filtro = {};
+        if (['comentario', 'chat', 'publicacion', 'live'].includes(req.query.tipo)) filtro.tipo = req.query.tipo;
+        const [lista, resumen7, top] = await Promise.all([
+            Moderacion.recientes(parseInt(req.query.limit, 10) || 150, filtro), Moderacion.resumen(7),
+            Usuario.find({ strikesModeracion: { $gt: 0 } }).sort({ strikesModeracion: -1 }).limit(15).select('usuario strikesModeracion ultimoStrike listaNegraAdmin suspendido').lean(),
+        ]);
+        res.json({ success: true, lista, resumen: resumen7, reincidentes: top, ia: llmEstadoModeracion() });
+    } catch (e) { logger.error(`admin/moderacion: ${e.message}`); res.status(500).json({ success: false, error: 'No se pudo cargar' }); }
+});
+const llmEstadoModeracion = () => ({ disponible: require('./modulos/nexus/llm').disponible() });
+
+// Invita y gana: enlace, recompensas y quiénes se unieron
+app.get('/referidos/mio', verificarToken, async (req, res) => {
+    try { res.json({ success: true, ...(await Referidos.resumen(Usuario, req.usuario)) }); }
+    catch (e) { logger.error(`referidos/mio: ${e.message}`); res.status(500).json({ success: false, error: 'No se pudo cargar' }); }
+});
+
+// Vista de una publicación (1 por persona y día) → estadísticas del creador
+app.post('/items/:id/vista', async (req, res) => {
+    try {
+        const j = await Juego.findById(req.params.id).select('usuario status').lean();
+        if (!j || j.status !== 'aprobado') return res.json({ success: true, contada: false });
+        const yo = usuarioOpcional(req), quien = yo ? 'u:' + yo : 'ip:' + (req.ip || '');
+        if (quien === 'u:' + j.usuario) return res.json({ success: true, contada: false });   // el autor no se cuenta a sí mismo
+        res.json({ success: true, contada: await StatsItems.vista(String(j._id), j.usuario, quien) });
+    } catch (e) { res.json({ success: true, contada: false }); }
+});
+
+// Rendimiento real de MIS publicaciones: vistas, descargas, apoyos y ganancias (últimos N días)
+app.get('/economia/mis-estadisticas', verificarToken, async (req, res) => {
+    try {
+        const dias = [7, 30, 90].includes(parseInt(req.query.dias, 10)) ? parseInt(req.query.dias, 10) : 30;
+        const [st, items] = await Promise.all([
+            StatsItems.delAutor(req.usuario, dias),
+            Juego.find({ usuario: req.usuario }).select('title category image status descargasEfectivas likesCount createdAt').sort({ descargasEfectivas: -1 }).limit(300).lean(),
+        ]);
+        const vacio = { v: 0, d: 0, a: 0, auc: 0, g: 0, serie: {} };
+        const lista = items.map(j => {
+            const x = st.items[String(j._id)] || vacio;
+            return { id: String(j._id), title: j.title || '', category: j.category || '', image: j.image || '', status: j.status, totalDescargas: j.descargasEfectivas || 0, likes: j.likesCount || 0,
+                vistas: x.v, descargas: x.d, apoyos: x.a, apoyosUC: x.auc, gananciaUsd: Math.round(x.g * 10000) / 10000, serie: st.dias.map(d => x.serie[d] || 0) };
+        });
+        const tot = lista.reduce((t, x) => ({ vistas: t.vistas + x.vistas, descargas: t.descargas + x.descargas, apoyos: t.apoyos + x.apoyos, gananciaUsd: t.gananciaUsd + x.gananciaUsd }), { vistas: 0, descargas: 0, apoyos: 0, gananciaUsd: 0 });
+        tot.gananciaUsd = Math.round(tot.gananciaUsd * 10000) / 10000;
+        tot.conversion = tot.vistas ? Math.round(tot.descargas / tot.vistas * 1000) / 10 : null;
+        res.json({ success: true, dias, desde: st.desde, totales: tot, serie: st.serie, publicaciones: lista });
+    } catch (e) {
+        logger.error(`mis-estadisticas: ${e.message}`);
+        res.status(500).json({ success: false, error: 'No se pudieron cargar tus estadísticas' });
     }
 });
 
@@ -1072,7 +1164,12 @@ app.get('/economia/mi-saldo', verificarToken, async (req, res) => {
         ]);
         const puedeRetirar = usuario.saldo >= MIN_WITHDRAWAL && usuario.isVerificado && usuario.verificadoNivel >= 1 && !!cobros.metodoDe(usuario) && !cobros.esperaHasta(usuario) && (juegosElegibles > 0 || ingresosLive) && !usuario.solicitudPagoPendiente && !!usuario.emailVerificado;
 
-        res.json({ success: true, saldo: usuario.saldo, saldoRetenido: usuario.saldoRetenido || 0, monedas: usuario.monedas || 0, emailVerificado: !!usuario.emailVerificado, descargasTotales: usuario.descargasTotales, paypalEmail: usuario.paypalEmail || '', metodoCobro: (m => m ? { tipo: m.tipo, resumen: m.resumen } : null)(cobros.metodoDe(usuario)), upcoins: require('./modulos/upcoins').saldoUC(usuario), minRetiroUC: Math.round(MIN_WITHDRAWAL / require('./modulos/live').MONEDA_USD), esperaCobroHasta: cobros.esperaHasta(usuario), isVerificado: usuario.isVerificado, verificadoNivel: usuario.verificadoNivel, solicitudPagoPendiente: usuario.solicitudPagoPendiente, juegosElegibles, puedeRetirar, minRetiro: MIN_WITHDRAWAL, requisitos: { saldoMinimo: MIN_WITHDRAWAL, verificacionNecesaria: 1 } });
+        // Retención: de dónde viene y cuándo se libera lo próximo (antes solo salía "en retención" sin explicar)
+        const ret = (usuario.saldoRetenido || 0) > 0 ? await mongoose.connection.collection('live_transacciones').find({ destinatario: req.usuario, estado: 'retenida' })
+            .project({ liberarEn: 1, creadorUsd: 1, regaloId: 1, tipo: 1 }).sort({ liberarEn: 1 }).limit(300).toArray().catch(() => []) : [];
+        const origen = {}; for (const t of ret) { const k = t.tipo === 'acceso' ? 'acceso' : t.regaloId === 'apoyo' ? 'apoyo' : t.regaloId === 'superchat' ? 'superchat' : 'regalo'; origen[k] = Math.round(((origen[k] || 0) + (t.creadorUsd || 0) / 0.02) * 100) / 100; }
+        const retencion = { dias: require('./modulos/live').RETENCION_DIAS, proxima: ret[0]?.liberarEn || null, proximaUC: ret[0] ? Math.round(ret[0].creadorUsd / 0.02 * 100) / 100 : 0, origen };
+        res.json({ success: true, retencion, saldo: usuario.saldo, saldoRetenido: usuario.saldoRetenido || 0, monedas: usuario.monedas || 0, emailVerificado: !!usuario.emailVerificado, descargasTotales: usuario.descargasTotales, paypalEmail: usuario.paypalEmail || '', metodoCobro: (m => m ? { tipo: m.tipo, resumen: m.resumen } : null)(cobros.metodoDe(usuario)), upcoins: require('./modulos/upcoins').saldoUC(usuario), minRetiroUC: Math.round(MIN_WITHDRAWAL / require('./modulos/live').MONEDA_USD), esperaCobroHasta: cobros.esperaHasta(usuario), isVerificado: usuario.isVerificado, verificadoNivel: usuario.verificadoNivel, solicitudPagoPendiente: usuario.solicitudPagoPendiente, juegosElegibles, puedeRetirar, minRetiro: MIN_WITHDRAWAL, requisitos: { saldoMinimo: MIN_WITHDRAWAL, verificacionNecesaria: 1 } });
     } catch (error) {
         logger.error(`Error en mi-saldo: ${error.message}`);
         res.status(500).json({ success: false, error: "Error al obtener saldo" });
@@ -1386,15 +1483,9 @@ function mensajeDuplicado(err) {
     const campo = Object.keys(err.keyPattern || err.keyValue || {})[0] || '';
     return campo === 'email' ? 'Ese email ya está registrado en otra cuenta' : 'Ese nombre de usuario ya está en uso';
 }
-const _dispHits = new Map();
 // GET /auth/disponibilidad?usuario=&email= — comprobación en vivo al escribir
 app.get('/auth/disponibilidad', async (req, res) => {
-    const ip = req.ip || '';
-    const now = Date.now(); const h = _dispHits.get(ip) || { t: now, n: 0 };
-    if (now - h.t > 60000) { h.t = now; h.n = 0; }
-    h.n++; _dispHits.set(ip, h);
-    if (_dispHits.size > 5000) _dispHits.clear();
-    if (h.n > 40) return res.status(429).json({ success: false, error: 'Demasiadas consultas, espera un momento' });
+    if (!(await Limites.permitir(`disp:${req.ip || ''}`, [[Limites.MIN, 40]]))) return res.status(429).json({ success: false, error: 'Demasiadas consultas, espera un momento' });
     try {
         const out = { success: true };
         if (typeof req.query.usuario === 'string' && req.query.usuario.trim()) {
@@ -1452,10 +1543,11 @@ app.post('/auth/register', [
         await nuevoUsuario.save();
         logger.info(`Nuevo usuario registrado: @${usuario} (${email})`);
 
-        // ── Hook referral (si viene codigoReferral en el body) ──
-        if (req.body.codigoReferral) {
-            const socialFeed = require('./modulos/socialFeed');
-            socialFeed.registrarReferido(req.body.codigoReferral, nuevoUsuario.usuario).catch(() => {});
+        // ── Referidos: ?ref=<usuario> (o código viejo). Se paga al verificar el email ──
+        const ref = typeof req.body.ref === 'string' ? req.body.ref : (typeof req.body.codigoReferral === 'string' ? req.body.codigoReferral : '');
+        if (ref) {
+            Referidos.alRegistrar(Usuario, nuevoUsuario.usuario, ref, registrationIP).catch(() => {});
+            require('./modulos/socialFeed').registrarReferido(ref, nuevoUsuario.usuario).catch(() => {});
         }
 
         const verifLink = `${API_URL_SELF}/auth/verify-email/${verifToken}`;
@@ -1908,14 +2000,9 @@ const CAMPOS_PUBLICACION = ['title', 'description', 'link', 'image', 'images', '
 // POST /items/precheck — Nexus revisa la publicación ANTES de publicarla:
 // enlace (si el archivo existe), portada, texto, derechos, duplicados y si es
 // una parte de una serie. ia:false = solo comprobaciones rápidas (al pulsar Publicar).
-const precheckUso = new Map();   // usuario → [timestamps] (máx. 12/min)
 app.post('/items/precheck', verificarToken, async (req, res) => {
     try {
-        const ahora = Date.now();
-        const usos = (precheckUso.get(req.usuario) || []).filter(t => ahora - t < 60000);
-        if (usos.length >= 12) return res.status(429).json({ success: false, error: 'Espera un momento antes de volver a revisar' });
-        usos.push(ahora); precheckUso.set(req.usuario, usos);
-        if (precheckUso.size > 20000) precheckUso.clear();
+        if (!(await Limites.permitir(`precheck:${req.usuario}`, [[Limites.MIN, 12]]))) return res.status(429).json({ success: false, error: 'Espera un momento antes de volver a revisar' });
 
         const b = req.body || {};
         const item = {
@@ -1960,6 +2047,11 @@ app.post("/items/add", [verificarToken, body('title').notEmpty().trim().isLength
 
         const errLink = errorLinkPublicacion(req.body.link, req.body.category);
         if (errLink) return res.status(400).json({ success: false, error: errLink });
+        const modP = Moderacion.reglas(`${req.body.title} ${req.body.description || ''}`, 'publicacion');
+        if (modP.bloquear) {
+            Moderacion.registrar({ tipo: 'publicacion', usuario: req.usuario, categoria: modP.categoria, motivo: modP.motivo, fuente: 'reglas', texto: req.body.title, accion: 'bloqueado-antes' });
+            return res.status(400).json({ success: false, error: `No se puede publicar: ${Moderacion.MENSAJE[modP.categoria] || 'incumple las normas'}. Revisa las normas de la comunidad.` });
+        }
 
         // Solo campos editables por el autor: con strict:false, un ...req.body permitía
         // inyectar descargasEfectivas, likesCount, nexusMentor, etc.
@@ -2008,6 +2100,7 @@ app.post("/items/add", [verificarToken, body('title').notEmpty().trim().isLength
 
         logger.info(`Nuevo item agregado: ${nuevoJuego.title} por @${nuevoJuego.usuario}`);
         res.status(201).json({ success: true, ok: true, item: nuevoJuego, id: nuevoJuego._id });
+        moderarPublicacion(nuevoJuego._id);   // NEXUS revisa texto y portada; si es sexual la quita sola
 
         // Fire & forget — Nexus revisa la publicación y deja consejos al autor
         nexusMentor.mentor(nuevoJuego.toObject()).then(m => {
@@ -2035,6 +2128,8 @@ app.put("/items/:id", verificarToken, [
         ['title', 'description', 'link', 'image', 'images', 'category', 'videoType', 'extraData', 'featuredItemId'].forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
         if (Object.keys(updates).length === 0) return res.status(400).json({ success: false, error: "No se enviaron campos para actualizar" });
         if (updates.title !== undefined) updates.serie = series.serieDe(updates.title, item.usuario);
+        const modE = Moderacion.reglas(`${updates.title ?? item.title} ${updates.description ?? item.description ?? ''}`, 'publicacion');
+        if (modE.bloquear) return res.status(400).json({ success: false, error: `No se puede guardar: ${Moderacion.MENSAJE[modE.categoria] || 'incumple las normas'}.` });
         if (updates.link !== undefined) {
             const errLink = errorLinkPublicacion(updates.link, updates.category || item.category);
             if (errLink) return res.status(400).json({ success: false, error: errLink });
@@ -2042,6 +2137,7 @@ app.put("/items/:id", verificarToken, [
         const updated = await Juego.findByIdAndUpdate(req.params.id, { $set: updates }, { new: true, runValidators: true });
         logger.info(`Usuario @${req.usuario} editó su publicación: ${updated.title}`);
         res.json({ success: true, item: updated });
+        if (updates.title !== undefined || updates.description !== undefined || updates.image !== undefined || updates.images !== undefined) moderarPublicacion(updated._id);
     } catch (error) {
         logger.error(`Error: ${error?.message}`);
         res.status(500).json({ success: false, error: "Error al actualizar publicación" });
@@ -2485,6 +2581,8 @@ async function cascadaNombre(oldName, newName) {
         }
     }
     tareas.push(mongoose.connection.collection('misiones_progreso').updateMany({ usuario: oldName }, { $set: { usuario: newName } }));
+    tareas.push(mongoose.connection.collection('stats_items').updateMany({ autor: oldName }, { $set: { autor: newName } }));
+    tareas.push(Usuario.updateMany({ referidoPor: oldName }, { $set: { referidoPor: newName } }));
     tareas.push(Usuario.updateMany({ listaSeguidores: oldName }, { $set: { 'listaSeguidores.$': newName } }));
     tareas.push(Usuario.updateMany({ siguiendo: oldName }, { $set: { 'siguiendo.$': newName } }));
     const r = await Promise.allSettled(tareas);
@@ -2630,20 +2728,32 @@ app.get('/comentarios/:itemId', async (req, res) => {
     } catch (error) { res.status(500).json([]); }
 });
 
-const comentariosRecientes = new Map();   // usuario → [timestamps] (máx. 15 cada 10 min)
 app.post('/comentarios', [verificarToken, body('itemId').notEmpty(), body('texto').notEmpty().isLength({ max: 500 })], async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'Datos inválidos' });
         const textoLimpio = (req.body.texto || '').replace(/<[^>]*>/g, '').trim();
         if (!textoLimpio) return res.status(400).json({ success: false, error: 'El comentario está vacío' });
-        const ahora = Date.now(), h = (comentariosRecientes.get(req.usuario) || []).filter(t => ahora - t < 600000);
-        if (h.length >= 15) return res.status(429).json({ success: false, error: 'Vas muy rápido. Espera unos minutos para comentar de nuevo.' });
-        h.push(ahora); comentariosRecientes.set(req.usuario, h); if (comentariosRecientes.size > 20000) comentariosRecientes.clear();
+        const modC = Moderacion.reglas(textoLimpio, 'comentario');
+        if (modC.bloquear) {
+            Moderacion.registrar({ tipo: 'comentario', usuario: req.usuario, categoria: modC.categoria, motivo: modC.motivo, fuente: 'reglas', texto: textoLimpio, ref: req.body.itemId, accion: 'bloqueado-antes' });
+            return res.status(400).json({ success: false, error: `Tu comentario no se publicó porque ${Moderacion.MENSAJE[modC.categoria] || 'incumple las normas'}. Escríbelo de otra forma.` });
+        }
+        if (!(await Limites.permitir(`coment:${req.usuario}`, [[10 * Limites.MIN, 15]]))) return res.status(429).json({ success: false, error: 'Vas muy rápido. Espera unos minutos para comentar de nuevo.' });
         // Solo los campos permitidos: antes {...req.body} dejaba elegir la fecha (un comentario "del futuro" quedaba siempre primero)
         const nuevo = new Comentario({ itemId: String(req.body.itemId), texto: textoLimpio, usuario: req.usuario });
         await nuevo.save();
         gamification.onComentario(req.usuario).catch(() => {});
+        // NEXUS lo revisa en segundo plano (cupo global para no agotar la IA): si es sexual, odio, acoso,
+        // insulto o spam con confianza alta, se borra solo y se avisa al autor
+        if (textoLimpio.length >= 8 && (modC.dudoso || await Limites.permitir('mod-ia-coment', [[Limites.MIN, 20]]))) {
+            Moderacion.ia(textoLimpio, 'comentario').then(async v => {
+                if (!Moderacion.debeQuitar(v)) return;
+                await Comentario.deleteOne({ _id: nuevo._id });
+                Moderacion.registrar({ tipo: 'comentario', usuario: req.usuario, categoria: v.categoria, motivo: v.motivo, fuente: 'NEXUS', texto: textoLimpio, ref: req.body.itemId, accion: 'borrado' });
+                crearNotif({ destinatario: req.usuario, tipo: 'sistema', emisor: 'UpGames', itemId: String(req.body.itemId), itemTitle: 'Revisión', mensaje: `🚫 Quitamos tu comentario porque ${Moderacion.MENSAJE[v.categoria]}. Mantengamos la comunidad sana.` });
+            }).catch(() => {});
+        }
         res.status(201).json({ success: true, comentario: nuevo });
 
         // Notificar al autor del contenido + registrar evento en Nexus (fire & forget)
@@ -3347,6 +3457,28 @@ app.post('/stories/:id/ver', verificarToken, async (req, res) => {
 });
 
 // ========== HEALTHCHECK ==========
+// Salud para el monitor de caídas (.github/workflows/uptime.yml): 503 si la base no responde
+app.get('/salud', async (req, res) => {
+    const db = mongoose.connection.readyState === 1 && await mongoose.connection.db.admin().ping().then(() => true).catch(() => false);
+    res.status(db ? 200 : 503).set('Cache-Control', 'no-store').json({ ok: db, db, uptime: Math.round(process.uptime()), hora: new Date().toISOString() });
+});
+
+// Errores de JavaScript de los visitantes (public/upgames-errores.js)
+const RUIDO_JS = /ResizeObserver loop|Script error\.?$|chrome-extension:|moz-extension:|safari-extension:|Non-Error promise rejection|Load failed|Failed to fetch|NetworkError|AbortError|cancelad|The operation was aborted/i;
+app.post('/errores/cliente', async (req, res) => {
+    res.status(204).end();
+    try {
+        const b = req.body || {}, mensaje = String(b.mensaje || '').slice(0, 500);
+        if (!mensaje || RUIDO_JS.test(mensaje) || RUIDO_JS.test(String(b.stack || ''))) return;
+        if (!(await Limites.permitir(`err-js:${req.ip || ''}`, [[Limites.HORA, 30]]))) return;
+        Alertas.registrar({ origen: 'navegador', mensaje, stack: String(b.stack || '').slice(0, 4000), pagina: String(b.pagina || '').slice(0, 200), navegador: String(req.headers['user-agent'] || '').slice(0, 200) });
+    } catch (_) {}
+});
+app.get('/admin/sistema/errores', verificarAdmin, async (req, res) => {
+    try { res.json({ success: true, errores: await Alertas.recientes(parseInt(req.query.limit, 10) || 60), sentry: !!process.env.SENTRY_DSN, correo: (process.env.ALERTAS_EMAIL || process.env.OWNER_EMAIL || '').split(',')[0].replace(/^(.{2})[^@]*/, '$1•••') }); }
+    catch (e) { res.status(500).json({ success: false, error: 'No se pudo cargar' }); }
+});
+
 app.get('/', (req, res) => {
     res.json({
         status: 'UP',
@@ -3711,7 +3843,8 @@ app.get('/seo/sitemap.xml', async (req, res) => {
     try {
         const xml = await cacheado('seo:sitemap', 3600, async () => {
             const items = await Juego.find({ status: 'aprobado', linkStatus: { $in: ['online', 'revision'] } })
-                .select('_id usuario updatedAt createdAt').sort({ createdAt: -1 }).limit(40000).lean();
+                .select('_id usuario title updatedAt createdAt').sort({ createdAt: -1 }).limit(40000).lean();
+            const hace36h = new Date(Date.now() - 36 * 3600e3);
             const autores = new Map();
             for (const j of items) { const f = j.updatedAt || j.createdAt; if (!autores.has(j.usuario) || f > autores.get(j.usuario)) autores.set(j.usuario, f); }
             const dia = f => (f ? new Date(f) : new Date()).toISOString().slice(0, 10);
@@ -3719,7 +3852,8 @@ app.get('/seo/sitemap.xml', async (req, res) => {
             return '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + [
                 url(`${SITIO}/biblioteca.html`, dia(items[0]?.createdAt), 'hourly', '1.0'),
                 url(`${SITIO}/live.html`, null, 'hourly', '0.8'),
-                ...items.map(j => url(`${SITIO}/biblioteca.html?id=${j._id}`, dia(j.updatedAt || j.createdAt), 'weekly', '0.7')),
+                // Publicaciones: su página estática (public/p/…), ya generada si tiene más de un día
+                ...items.map(j => url(new Date(j.createdAt || 0) < hace36h ? Seo.urlPagina({ id: String(j._id), title: j.title }) : `${SITIO}/biblioteca.html?id=${j._id}`, dia(j.updatedAt || j.createdAt), 'weekly', '0.7')),
                 ...[...autores].map(([u, f]) => url(`${SITIO}/perfil-publico.html?usuario=${encodeURIComponent(u)}`, dia(f), 'weekly', '0.5')),
                 url(`${SITIO}/terminos_condiciones.html`, null, 'monthly', '0.2'),
                 url(`${SITIO}/politica-privacidad.html`, null, 'monthly', '0.2'),
@@ -3727,6 +3861,19 @@ app.get('/seo/sitemap.xml', async (req, res) => {
         });
         res.type('application/xml').set('Cache-Control', 'public, max-age=3600').send(xml);
     } catch (e) { logger.error(`[seo] sitemap: ${e.message}`); res.status(500).type('text/plain').send('error'); }
+});
+
+// Datos para las páginas estáticas por publicación (scripts/generar-paginas.js las escribe a diario)
+app.get('/seo/paginas.json', async (req, res) => {
+    try {
+        const data = await cacheado('seo:paginas', 3600, async () => {
+            const items = await Juego.find({ status: 'aprobado', linkStatus: { $in: ['online', 'revision'] } })
+                .select('_id title description image category usuario createdAt descargasEfectivas likesCount').sort({ createdAt: -1 }).limit(20000).lean();
+            return items.map(j => ({ id: String(j._id), title: j.title || '', description: String(j.description || '').slice(0, 3000), image: j.image || '', category: j.category || '',
+                usuario: j.usuario, fecha: (j.createdAt || new Date()).toISOString(), descargas: j.descargasEfectivas || 0, likes: j.likesCount || 0 }));
+        });
+        res.set('Cache-Control', 'public, max-age=3600').json({ success: true, total: data.length, items: data });
+    } catch (e) { logger.error(`[seo] paginas: ${e.message}`); res.status(500).json({ success: false }); }
 });
 
 // ========== MANEJO DE ERRORES ==========

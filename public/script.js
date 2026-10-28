@@ -953,7 +953,10 @@ function ugSeo(item) {
       try { const u = new URL(location.href); if (u.searchParams.has('id')) { u.searchParams.delete('id'); history.replaceState(null, '', u.pathname + u.search); } } catch(_) {}
       return;
     }
-    const url = `${UG_SEO_BASE.url}?id=${item._id}`;
+    // Si ya tiene su página estática (public/p/, se genera a diario) esa es la canónica: evita contenido duplicado
+    const slug = String(item.title || 'publicacion').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60).replace(/-+$/, '') || 'publicacion';
+    const estatica = item.status === 'aprobado' && item.createdAt && Date.now() - new Date(item.createdAt) > 36 * 3600e3;
+    const url = estatica ? `https://upgames.games/public/p/${slug}-${item._id}.html` : `${UG_SEO_BASE.url}?id=${item._id}`;
     const desc = String(item.description || `${item.category || 'Contenido'} compartido por @${item.usuario} en UpGames.`).replace(/\s+/g, ' ').slice(0, 160);
     const img = /^https:\/\//.test(item.image || '') ? item.image : 'https://upgames.games/public/og-cover.png';
     document.title = `${item.title} — ${item.category || 'Descargar'} | UpGames`;
@@ -3116,6 +3119,7 @@ async function pfLoadEconomia() {
       fx('eco-retirables-usd', `(≈ US$${(d.saldo || 0).toFixed(2)})`);
       fx('eco-monedas', (uc.compradas || 0).toLocaleString('es-CO'));
       fx('eco-retenido', (uc.retenidas || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 }));
+      ecoPintarRetencion(uc.retenidas || 0, d.retencion);
       window.ugContadorUC?.(uc.total);
 
       // Descargas totales con animacion
@@ -3164,11 +3168,14 @@ function pfStopEcoPolling() {
    CREATOR STUDIO DASHBOARD — RENDERING ENGINE
 ═══════════════════════════════════════════════════════════ */
 let _ecoPeriodDays  = 7;
+// Estadísticas reales de /economia/mis-estadisticas (declaradas aquí: las usa la gráfica)
+let _ecoStats = null, _ecoStatsT = 0, _ecoStatsDias = 0, _ecoStatsCargando = false, _ecoPsOrden = 'descargas';
 let _ecoLastData    = null;
 let _ecoChartTimer  = null;
 
 function ecoSetPeriod(days, btn) {
   _ecoPeriodDays = days;
+  ecoCargarStats(true);
   document.querySelectorAll('.eco-period-btn').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
   if (_ecoLastData) ecoUpdateDashboard(_ecoLastData);
@@ -3179,9 +3186,9 @@ function ecoUpdateDashboard(d) {
   // user_admin es un string plano con el nombre de usuario
   const username = LS.get('user_admin', '');
 
-  // ── Derive user's content from global todosLosItems ──
-  const allMyContent = (typeof todosLosItems !== 'undefined' ? todosLosItems : [])
-    .filter(i => i.usuario === username);
+  // Mis publicaciones: las del servidor (incluye pendientes) o, mientras cargan, las del catálogo
+  const allMyContent = _ecoMias();
+  ecoCargarStats();
 
   const totalDl       = d.descargasTotales || 0;
   const saldo         = d.saldo || 0;
@@ -3222,9 +3229,8 @@ function ecoUpdateDashboard(d) {
   // ── Period delta for KPI ──
   const dlDeltaEl = document.getElementById('eco-kpi-dl-delta');
   if (dlDeltaEl) {
-    const label = _ecoPeriodDays === 0 ? 'total de siempre' : `últimos ${_ecoPeriodDays}d (est.)`;
-    const estPeriod = _ecoPeriodDays === 0 ? totalDl : Math.round(totalDl * (_ecoPeriodDays / 365));
-    dlDeltaEl.textContent = `≈${pfFmt(estPeriod)} ${label}`;
+    // Real (antes: total × días / 365, una estimación)
+    dlDeltaEl.textContent = _ecoStats ? `${pfFmt(_ecoStats.totales.descargas)} en ${_ecoStats.dias} días` : '…';
   }
 
   // ── Chart badge ──
@@ -3251,17 +3257,11 @@ function ecoDrawChart(totalDl, periodDays) {
   canvas.width  = W;
   canvas.height = H;
 
-  const n = periodDays && periodDays > 0 ? Math.min(periodDays, 90) : 30;
-
-  // Distribute downloads across days with recency bias
-  const weights = Array.from({ length: n }, (_, i) => {
-    const t = i / (n - 1 || 1);
-    return 0.3 + 0.7 * Math.pow(t, 1.8) + 0.15 * Math.random();
-  });
-  const wSum = weights.reduce((a, b) => a + b, 0);
-  let counts = weights.map(w => Math.round((w / wSum) * totalDl));
-  const diff = totalDl - counts.reduce((a, b) => a + b, 0);
-  if (counts.length) counts[counts.length - 1] += diff;
+  // Datos REALES por día (/economia/mis-estadisticas). Antes se repartía el total con números
+  // aleatorios: la gráfica cambiaba sola cada 8 s y no reflejaba nada.
+  const serie = _ecoStats?.serie || [];
+  const n = serie.length || 30;
+  const counts = serie.length ? serie.map(x => x.d || 0) : Array(n).fill(0);
 
   const maxVal = Math.max(...counts, 1);
   const padL   = 34;
@@ -3349,12 +3349,12 @@ function ecoRenderLeaderboard(items) {
   el.innerHTML = sorted.map((item, i) => {
     const dl  = item.descargasEfectivas || 0;
     const pct = dl / maxDl * 100;
-    const col = catColor(item.categoria);
-    return `<div class="eco-lb-row">
+    const col = catColor(item.category || item.categoria);
+    return `<div class="eco-lb-row" onclick="ecoAbrir('${ugEsc(String(item._id || ''))}')" style="cursor:pointer">
       <div class="eco-lb-medal">${medals[i]}</div>
       <div class="eco-lb-info">
-        <div class="eco-lb-title">${item.titulo || 'Sin título'}</div>
-        <div class="eco-lb-cat" style="color:${col}">${item.categoria}</div>
+        <div class="eco-lb-title">${ugEsc(item.title || item.titulo || 'Sin título')}</div>
+        <div class="eco-lb-cat" style="color:${col}">${ugEsc(catLabel(item.category || item.categoria || ''))}</div>
         <div class="eco-lb-bar-wrap"><div class="eco-lb-bar" style="width:${pct}%;background:${col}"></div></div>
       </div>
       <div class="eco-lb-stats">
@@ -3407,7 +3407,7 @@ function ecoRenderCategories(items) {
   if (!items.length) { el.innerHTML = `<div class="eco-empty-mini" style="padding:16px"><ion-icon name="albums-outline"></ion-icon></div>`; return; }
 
   const cats = {};
-  items.forEach(i => { const c = i.categoria || 'Otro'; cats[c] = (cats[c] || 0) + 1; });
+  items.forEach(i => { const c = i.category || i.categoria || 'Otro'; cats[c] = (cats[c] || 0) + 1; });
   const total  = items.length;
   const sorted = Object.entries(cats).sort((a, b) => b[1] - a[1]);
   const colors = { Juego:'var(--g)', Mod:'#ff9800', Apps:'var(--cy)', Video:'#ff4c8b', Software:'#a78bfa', Ajustes:'#ffd700', Optimizacion:'#ff6b6b', ROM:'#fd79a8' };
@@ -3425,9 +3425,11 @@ function ecoRenderCategories(items) {
 
 /* ── Conversion Funnel ── */
 function ecoRenderFunnel(totalDl, elegibles, saldo) {
-  const estViews    = Math.round(totalDl * 4.2);
-  const estInteract = Math.round(totalDl * 2.1);
-  const maxV        = Math.max(estViews, 1);
+  // Vistas, descargas y apoyos reales del periodo (antes: vistas = descargas × 4,2 inventado)
+  const t = _ecoStats?.totales || { vistas: 0, descargas: 0, apoyos: 0 };
+  const estViews = t.vistas, estInteract = t.descargas;
+  totalDl = t.apoyos;
+  const maxV = Math.max(estViews, estInteract, 1);
 
   const set = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
   const setW = (id, pct) => { const e = document.getElementById(id); if (e) e.style.width = pct + '%'; };
@@ -3437,13 +3439,15 @@ function ecoRenderFunnel(totalDl, elegibles, saldo) {
   set('eco-rv-dl',       pfFmt(totalDl));
   set('eco-rv-earn',     pfFmt(elegibles));
 
-  setW('eco-rb-views',    100);
+  setW('eco-rb-views',    (estViews / maxV) * 100);
   setW('eco-rb-interact', (estInteract / maxV) * 100);
   setW('eco-rb-dl',       (totalDl / maxV) * 100);
-  setW('eco-rb-earn',     (elegibles / Math.max(totalDl, 1)) * 100);
+  setW('eco-rb-earn',     (elegibles / Math.max(_ecoMias().length, 1)) * 100);
 
   const cvrEl = document.getElementById('eco-cvr');
-  if (cvrEl) cvrEl.textContent = estViews > 0 ? ((totalDl / estViews) * 100).toFixed(1) + '%' : '—%';
+  if (cvrEl) cvrEl.textContent = estViews > 0 ? ((estInteract / estViews) * 100).toFixed(1) + '%' : '—%';
+  const nota = document.getElementById('eco-funnel-nota');
+  if (nota) nota.textContent = _ecoStats ? `Datos reales de los últimos ${_ecoStats.dias} días` : 'Cargando datos…';
 }
 
 /* ── Goals & Milestones ── */
@@ -3494,7 +3498,7 @@ function ecoRenderContentTable(items) {
   const sorted = [...items].sort((a, b) => (b.descargasEfectivas || 0) - (a.descargasEfectivas || 0));
   const maxDl  = sorted[0]?.descargasEfectivas || 1;
   const colors = { Juego:'var(--g)', Mod:'#ff9800', Apps:'var(--cy)', Video:'#ff4c8b', Software:'#a78bfa', Ajustes:'#ffd700', Optimizacion:'#ff6b6b', ROM:'#fd79a8' };
-  const catShort = c => ({ Juego:'JUG', Mod:'MOD', Apps:'APP', Video:'VID', Software:'SW', Ajustes:'HER', Optimizacion:'OPT', ROM:'ROM' }[c] || '???');
+  const catShort = c => ({ Juego:'JUG', Mod:'MOD', Apps:'APP', Video:'VID', Software:'SW', Ajustes:'HER', Optimizacion:'OPT', ROM:'ROM' }[c] || ugEsc(String(catLabel(c)).slice(0, 3).toUpperCase()));
 
   el.innerHTML = `
     <div class="eco-table-header">
@@ -3507,10 +3511,10 @@ function ecoRenderContentTable(items) {
         const col = colors[item.categoria] || '#888';
         return `<div class="eco-table-row">
           <div class="eco-table-title-col">
-            <div class="eco-table-title">${item.titulo || '—'}</div>
+            <div class="eco-table-title">${ugEsc(item.title || item.titulo || '—')}</div>
             <div class="eco-table-bar-wrap"><div class="eco-table-bar" style="width:${(dl/maxDl)*100}%;background:${col}"></div></div>
           </div>
-          <div class="eco-table-cat" style="color:${col}">${catShort(item.categoria)}</div>
+          <div class="eco-table-cat" style="color:${col}">${catShort(item.category || item.categoria)}</div>
           <div class="eco-table-dl">${pfFmt(dl)}</div>
           <div class="eco-table-reps ${rep > 0 ? 'eco-reps-warn' : ''}">${rep}</div>
         </div>`;
@@ -4096,12 +4100,23 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// ── Prueba A/B de la bienvenida: cada dispositivo ve siempre la misma versión ──
+// A = "ecosistema que no existe en otro lugar" · B = "lo que creas te genera dinero real"
+const UG_AB = (() => { try { let v = localStorage.getItem('ug_ab_bienv'); if (v !== 'A' && v !== 'B') { v = Math.random() < 0.5 ? 'A' : 'B'; localStorage.setItem('ug_ab_bienv', v); } return v; } catch (_) { return 'A'; } })();
+function ugAB(evento, modo) {
+  try {
+    const env = JSON.parse(localStorage.getItem('ug_ab_env') || '{}'), k = `${evento}:${modo}`;
+    if (env[k]) return; env[k] = Date.now(); localStorage.setItem('ug_ab_env', JSON.stringify(env));
+    fetch(`${API_URL}/ab/evento`, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ exp: 'bienvenida', variante: UG_AB, evento, modo }) }).catch(() => {});
+  } catch (_) {}
+}
+
 // ── BIENVENIDA — 3 pantallas + términos ───────────────────
 (function initOnboarding() {
-  const TERMINOS_VERSION = '6.1';   // súbela al cambiar los Términos o la Privacidad
+  const TERMINOS_VERSION = '6.2';   // súbela al cambiar los Términos o la Privacidad
   function avisoTerminosNuevos() {
     const a = document.createElement('div'); a.className = 'ug-terminos-aviso'; a.setAttribute('role', 'status');
-    a.innerHTML = `<span>📜 Actualizamos los <a href="./terminos_condiciones.html#usos-uc" target="_blank" rel="noopener">Términos (v${TERMINOS_VERSION})</a> y la <a href="./politica-privacidad.html" target="_blank" rel="noopener">Privacidad</a>: nuevos usos de los UpCoins y misiones.</span><button type="button">Entendido</button>`;
+    a.innerHTML = `<span>📜 Actualizamos los <a href="./terminos_condiciones.html#moderacion" target="_blank" rel="noopener">Términos (v${TERMINOS_VERSION})</a> y la <a href="./politica-privacidad.html" target="_blank" rel="noopener">Privacidad</a>: referidos, promover lives, repeticiones y moderación automática.</span><button type="button">Entendido</button>`;
     a.querySelector('button').onclick = () => { LS.set('upgames_terms_v', TERMINOS_VERSION); a.remove(); };
     setTimeout(() => document.body.appendChild(a), 2500);
   }
@@ -4141,7 +4156,7 @@ document.addEventListener('keydown', e => {
     modal.classList.add('modo-inv');
     btnAccept.innerHTML = '✨ Crear mi cuenta gratis';
     const salir = modal.querySelector('.ob-btn-reject');
-    if (salir) { salir.textContent = 'Seguir explorando sin cuenta'; salir.onclick = () => { modal.classList.remove('show'); document.body.style.overflow = ''; }; }
+    if (salir) { salir.textContent = 'Seguir explorando sin cuenta'; salir.onclick = () => { ugAB('saltar', 'inv'); modal.classList.remove('show'); document.body.style.overflow = ''; }; }
   }
 
   // Fecha real del cierre de la etapa Fundador (y si tu cuenta ya tiene la insignia)
@@ -4154,6 +4169,15 @@ document.addEventListener('keydown', e => {
     if (m?.fundador) txt.textContent = 'Tu cuenta ya la tiene: llegaste en la etapa fundadora. No se vende y no vuelve a salir.';
     else if (f) txt.textContent = `Solo para las cuentas creadas hasta el ${f}. No se vende y no vuelve a salir.`;
   })();
+
+  // Versión B de la prueba A/B (la A es el HTML tal cual)
+  if (UG_AB === 'B') {
+    const t = modal.querySelector('.obh-titulo'), sub = modal.querySelector('.obh-sub');
+    if (t) t.innerHTML = 'Aquí lo que creas, juegas y transmites<br><span>te genera dinero real.</span>';
+    if (sub) sub.innerHTML = 'Descargas, videos, lives, red social e IA en <b>un solo ecosistema</b>. Gratis, sin límites… <b>y cada descarga te paga.</b>';
+  }
+  const modoAB = invitado ? 'inv' : 'usr';
+  ugAB('visto', modoAB);
 
   let current = 0;
 
@@ -4226,6 +4250,7 @@ document.addEventListener('keydown', e => {
 
   // Botón Aceptar (última pantalla)
   btnAccept.addEventListener('click', () => {
+    ugAB('cta', modoAB);
     if (invitado) { location.href = ugUrlLogin(true); return; }
     LS.setJSON('upgames_terms_seen_ts', Date.now());
     LS.set('upgames_terms_v', TERMINOS_VERSION);
@@ -4674,7 +4699,12 @@ window.openDetail = function(item) {
   _openDetailOriginal(item);
   _viewItemId = item?._id || null;
   clearTimeout(_viewTimer);
-  if (_viewItemId) { const id = _viewItemId; _viewTimer = setTimeout(() => { if (_viewItemId === id) nexusTrack('view', { itemId:id }); }, 3000); }
+  if (_viewItemId) { const id = _viewItemId; _viewTimer = setTimeout(() => { if (_viewItemId === id) {
+    nexusTrack('view', { itemId:id });
+    // Vista para las estadísticas del creador (1 por persona y día; el servidor ignora al autor)
+    const tk = LS.get('token');
+    fetch(`${API_URL}/items/${encodeURIComponent(id)}/vista`, { method: 'POST', keepalive: true, headers: tk ? { Authorization: `Bearer ${tk}` } : {} }).catch(() => {});
+  } }, 3000); }
 };
 const _closeDetailOriginal = window.closeDetail || closeDetail;
 window.closeDetail = function() {
@@ -5593,16 +5623,29 @@ async function pfLoadLogros() {
   if (!dot) return;
   const revisar = () => {
     if (document.hidden) return;
-    fetch(`${API_URL}/live/activos`).then(r => r.ok ? r.json() : null).then(d => {
+    const tk = LS.get('token');
+    fetch(`${API_URL}/live/activos`, tk ? { headers: { Authorization: `Bearer ${tk}` } } : {}).then(r => r.ok ? r.json() : null).then(d => {
       const n = d?.lives?.length || 0;
+      ugPintarVivos(d?.lives || []);
       dot.hidden = !n;
       const orbLive = document.getElementById('hdr-orb-live'); if (orbLive) orbLive.hidden = !n;   // punto rojo también en el orbe
       dot.closest('button')?.setAttribute('aria-label', n ? `Transmisiones en vivo · ${n} en vivo ahora` : 'Transmisiones en vivo');
     }).catch(() => {});
   };
   setTimeout(revisar, 2500);
-  setInterval(revisar, 90000);
+  setInterval(revisar, 60000);
 })();
+// Franja "En vivo ahora" en Explorar: los que sigues primero, después por puntaje del servidor
+function ugPintarVivos(lives) {
+  const box = document.getElementById('ug-vivos'); if (!box) return;
+  const l = [...lives].sort((a, b) => (b.sigo - a.sigo) || (b.puntaje - a.puntaje)).slice(0, 12);
+  box.hidden = !l.length; if (!l.length) { box.innerHTML = ''; return; }
+  const av = x => /^https:\/\//.test(x.avatar || '') ? `style="background-image:url('${ugEsc(x.avatar)}')"` : '';
+  box.innerHTML = `<div class="ug-vivos-h"><b>En vivo ahora · ${l.length}</b><a href="./live.html">Ver todos →</a></div>
+    <div class="ug-vivos-l">${l.map(x => `<a class="ug-vivo${x.sigo ? ' sigo' : ''}" href="./live.html?u=${encodeURIComponent(x.creador)}">
+      ${x.promocionado ? '<i>🚀</i>' : ''}<span class="av" ${av(x)}>${x.avatar ? '' : ugEsc(String(x.creador).slice(0, 1).toUpperCase())}</span>
+      <b>@${ugEsc(x.creador)}</b><small>${x.sigo ? '💚 Lo sigues · ' : ''}👁 ${pfFmt(x.espectadores || 0)} · ${ugEsc(x.titulo || '')}</small></a>`).join('')}</div>`;
+}
 
 
 // ── Economía: tienda de UpCoins con tarjeta o PayPal (carga el procesador solo al abrirla) ──
@@ -5614,6 +5657,7 @@ const ugPagosListo = () => (_ugPagosJs = _ugPagosJs || new Promise((ok, ko) => {
   document.head.appendChild(s);
 }));
 function ecoAbrirTienda() {
+  window.ecoSec?.('cobros');   // la tienda vive en la sección Cobros
   const box = document.getElementById('eco-tienda');
   if (!box) return;
   if (!LS.get('token')) { ugPedirSesion('conseguir UpCoins'); return; }
@@ -5698,7 +5742,7 @@ async function ecoCargarPlan(desplazar) {
     });
     document.getElementById('eco-plan-rec').onchange = e => window.UGPagos.api('/tienda/mi-plan/recordatorio', { method: 'PUT', body: { activo: e.target.checked } })
       .then(() => toast(e.target.checked ? 'Te avisaremos antes de que venza' : 'Recordatorio desactivado')).catch(() => toast('No se pudo guardar'));
-    if (desplazar) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (desplazar) { window.ecoSec?.('cobros'); setTimeout(() => box.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60); }   // Mi Premium vive en Cobros
   } catch (e) {
     box.innerHTML = '<p style="font-size:.82rem;color:#A3A8B6;text-align:center">No se pudo cargar tu plan. <a href="#" onclick="ecoCargarPlan();return false" style="color:#5AC8FA">Reintentar</a></p>';
   }
@@ -5714,4 +5758,117 @@ if (new URLSearchParams(location.search).get('plan') === '1') {
   if (!q) return;
   const go = () => { const i = document.getElementById('buscador'); if (!i) return; i.value = q; i.dispatchEvent(new Event('input', { bubbles: true })); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(go, 800)); else setTimeout(go, 800);
+})();
+
+
+/* ═══════════════════════════════════════════════════════════
+   ECONOMÍA — submenú por secciones + estadísticas reales
+═══════════════════════════════════════════════════════════ */
+const _ecoDiasStats = () => (_ecoPeriodDays === 7 ? 7 : _ecoPeriodDays === 30 ? 30 : 90);   // se guardan hasta 90 días por publicación
+
+function _ecoMias() {
+  const yo = LS.get('user_admin', '');
+  const cat = (typeof todosLosItems !== 'undefined' ? todosLosItems : []).filter(i => i.usuario === yo);
+  if (!_ecoStats) return cat;
+  const rep = Object.fromEntries(cat.map(i => [i._id, i.reportes || 0]));
+  return _ecoStats.publicaciones.map(p => ({ _id: p.id, title: p.title, category: p.category, image: p.image, status: p.status, descargasEfectivas: p.totalDescargas, reportes: rep[p.id] || 0 }));
+}
+
+async function ecoCargarStats(forzar) {
+  const dias = _ecoDiasStats(), tok = LS.get('token');
+  if (!tok || _ecoStatsCargando) return;
+  if (!forzar && _ecoStats && _ecoStatsDias === dias && Date.now() - _ecoStatsT < 60000) return;
+  _ecoStatsCargando = true;
+  try {
+    const r = await fetch(`${API_URL}/economia/mis-estadisticas?dias=${dias}`, { headers: { Authorization: `Bearer ${tok}` } });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok && d.success) {
+      _ecoStats = d; _ecoStatsT = Date.now(); _ecoStatsDias = dias;
+      if (_ecoLastData) ecoUpdateDashboard(_ecoLastData);
+      ecoRenderPubStats();
+    }
+  } catch (_) {} finally { _ecoStatsCargando = false; }
+}
+
+function ecoSec(nombre) {
+  const nav = document.getElementById('eco-subnav'); if (!nav) return;
+  if (!nav.querySelector(`[data-sec="${nombre}"]`)) nombre = 'resumen';
+  nav.querySelectorAll('button').forEach(b => { const on = b.dataset.sec === nombre; b.classList.toggle('active', on); b.setAttribute('aria-selected', on); });
+  document.querySelectorAll('#economia-view .eco-sec').forEach(x => x.classList.toggle('active', x.dataset.sec === nombre));
+  try { localStorage.setItem('ug_eco_sec', nombre); } catch (_) {}
+  if (nombre === 'resumen' && _ecoLastData) setTimeout(() => ecoDrawChart(0, _ecoPeriodDays), 30);   // el canvas oculto mide 0 de ancho
+  if (nombre === 'publicaciones') ecoRenderPubStats();
+}
+window.ecoSec = ecoSec;
+document.getElementById('eco-subnav')?.addEventListener('click', e => {
+  const b = e.target.closest('button[data-sec]'); if (!b) return;
+  ecoSec(b.dataset.sec);
+  const nav = document.getElementById('eco-subnav'), top = nav.getBoundingClientRect().top;
+  if (top < 0 || top > innerHeight * .6) nav.scrollIntoView({ block: 'start', behavior: 'smooth' });
+});
+try { const q = new URLSearchParams(location.search).get('eco'), g = q || localStorage.getItem('ug_eco_sec'); if (g) ecoSec(g); } catch (_) {}   // ?eco=cobros abre directo esa sección
+// El anillo "Meta retiro" lleva a Cobros (donde se pide el retiro)
+document.querySelector('#economia-view .eco-hero-right')?.addEventListener('click', () => { ecoSec('cobros'); document.getElementById('pf-btn-solicitar-pago')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+
+function ecoAbrir(id) {
+  const it = (typeof todosLosItems !== 'undefined' ? todosLosItems : []).find(x => x._id === id);
+  if (it && typeof window.openDetail === 'function') window.openDetail(it);
+}
+
+function ecoPintarRetencion(uc, r) {
+  const box = document.getElementById('eco-hero-extra'); if (!box) return;
+  let info = document.getElementById('eco-ret-info');
+  if (!uc) { info?.remove(); return; }
+  if (!info) { info = document.createElement('div'); info.id = 'eco-ret-info'; info.className = 'eco-ret-info'; box.after(info); }
+  const nombres = { regalo: 'regalos en lives', superchat: 'Super Chat', apoyo: 'apoyos', acceso: 'accesos directos y Premium' };
+  const de = Object.entries(r?.origen || {}).filter(([, v]) => v > 0).map(([k, v]) => `${nombres[k] || k} ${v.toLocaleString('es-CO', { maximumFractionDigits: 2 })}`).join(' · ');
+  const cuando = r?.proxima ? new Date(r.proxima).toLocaleString('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+  info.innerHTML = `<details><summary>🔒 Pasan solos a retirables en ${r?.dias || 7} días${cuando ? ` · próxima: <b>${ugEsc(cuando)}</b>` : ''} <span style="opacity:.6">ⓘ</span></summary>
+    <div style="margin-top:4px">Lo que ganas con ${de ? ugEsc(de) : 'regalos, Super Chat, apoyos y accesos'} (UC) espera ${r?.dias || 7} días por seguridad, por si un pago se devuelve. No tienes que hacer nada.${cuando ? ` El próximo ingreso (${(r.proximaUC || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 })} UC) se libera el ${ugEsc(cuando)}.` : ''}</div></details>`;
+}
+
+function ecoRenderPubStats() {
+  const el = document.getElementById('eco-pubstats'); if (!el) return;
+  const badge = document.getElementById('eco-pub-rango');
+  if (!_ecoStats) { if (!LS.get('token')) el.innerHTML = '<div class="eco-ps-vacio">Inicia sesión para ver tus estadísticas</div>'; return; }
+  if (badge) badge.textContent = `${_ecoStats.dias} días`;
+  const reps = Object.fromEntries(_ecoMias().map(i => [i._id, i.reportes || 0]));
+  const ps = _ecoStats.publicaciones.map(p => ({ ...p, reportes: reps[p.id] || 0 }));
+  if (!ps.length) { el.innerHTML = '<div class="eco-ps-vacio">Publica tu primer contenido y aquí verás sus vistas, descargas, apoyos y ganancias día a día.</div>'; return; }
+  const clave = { descargas: 'descargas', vistas: 'vistas', ganancias: 'gananciaUsd', apoyos: 'apoyos' }[_ecoPsOrden];
+  const orden = [...ps].sort((a, b) => (b[clave] - a[clave]) || (b.totalDescargas - a.totalDescargas));
+  const t = _ecoStats.totales, f = n => pfFmt(Math.round(n || 0)), uc = usd => (usd / 0.02).toLocaleString('es-CO', { maximumFractionDigits: usd < 0.2 ? 2 : 0 });
+  const estado = { pendiente: ' · ⏳ en revisión', rechazado: ' · rechazada' };
+  el.innerHTML = `
+    <div class="eco-ps-m" style="padding:0 14px 10px">
+      <div><b>${f(t.vistas)}</b><small>Vistas</small></div><div><b>${f(t.descargas)}</b><small>Descargas</small></div>
+      <div><b>${f(t.apoyos)}</b><small>Apoyos</small></div><div class="gan"><b>${uc(t.gananciaUsd)}</b><small>UC ganados</small></div>
+    </div>
+    <div class="eco-ps-ord">${[['descargas', 'Más descargadas'], ['vistas', 'Más vistas'], ['ganancias', 'Más ganancias'], ['apoyos', 'Más apoyadas']].map(([k, l]) => `<button type="button" data-o="${k}" class="${k === _ecoPsOrden ? 'active' : ''}">${l}</button>`).join('')}</div>
+    <div class="eco-ps-list">${orden.slice(0, 50).map(p => {
+      const mx = Math.max(...p.serie, 1), conv = p.vistas ? Math.round(p.descargas / p.vistas * 100) : null;
+      return `<div class="eco-ps" data-id="${ugEsc(p.id)}">
+        ${p.image ? `<img src="${ugEsc(p.image)}" alt="" loading="lazy" onerror="this.outerHTML='<span class=&quot;eco-ps-ph&quot;>📦</span>'">` : '<span class="eco-ps-ph">📦</span>'}
+        <div style="min-width:0"><div class="eco-ps-t">${ugEsc(p.title || 'Sin título')}</div>
+          <div class="eco-ps-c">${ugEsc(catLabel(p.category))} · ${f(p.totalDescargas)} descargas en total${conv !== null ? ` · ${conv}% de las vistas descargan` : ''}${estado[p.status] || ''}${p.reportes ? ` · <span style="color:#ff6b6b">⚠ ${p.reportes} reporte(s)</span>` : ''}</div></div>
+        <div class="eco-ps-m" style="grid-column:1/-1">
+          <div><b>${f(p.vistas)}</b><small>Vistas</small></div><div><b>${f(p.descargas)}</b><small>Descargas</small></div>
+          <div><b>${f(p.apoyos)}</b><small>Apoyos</small></div><div class="gan"><b>${uc(p.gananciaUsd)}</b><small>UC</small></div>
+        </div>
+        <div class="eco-ps-spark" title="Descargas por día"${p.serie.some(Boolean) ? '' : ' hidden'}>${p.serie.slice(-30).map(n => `<i style="height:${Math.max(6, n / mx * 100)}%;${n ? '' : 'opacity:.18'}"></i>`).join('')}</div>
+      </div>`; }).join('')}</div>
+    <p class="eco-ps-vacio" style="padding-top:0">Las vistas y descargas se cuentan una vez por persona al día. Las ganancias incluyen lo que aún está en retención.</p>`;
+  el.querySelectorAll('[data-o]').forEach(b => b.onclick = () => { _ecoPsOrden = b.dataset.o; ecoRenderPubStats(); });
+  el.querySelectorAll('.eco-ps').forEach(x => x.onclick = () => ecoAbrir(x.dataset.id));
+}
+
+
+// ── Referidos: enlace de invitación ?ref=usuario (se recuerda 30 días para el registro) ──
+(function ugRef() {
+  try {
+    const ref = (new URLSearchParams(location.search).get('ref') || '').replace(/[^\w.-]/g, '').slice(0, 40);
+    if (!ref) return;
+    localStorage.setItem('ug_ref', JSON.stringify({ c: ref, t: Date.now() }));
+    if (window.UG_INVITADO) setTimeout(() => toast(`🎁 @${ref} te invitó: crea tu cuenta gratis y recibe UpCoins de bienvenida`, 5000), 2500);
+  } catch (_) {}
 })();

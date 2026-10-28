@@ -40,10 +40,10 @@ const limpiar = s => String(s || '').replace(/<think>[\s\S]*?<\/think>/g, '').tr
  * Una llamada al modelo. Devuelve { mensaje, modelo } o null si ningún modelo respondió.
  * @param {object} o { mensajes, herramientas, maxTokens, temperatura, json, rapido, timeout }
  */
-async function completar({ mensajes, herramientas, maxTokens = 900, temperatura = 0.4, json = false, rapido = false, timeout = 25000 }) {
+async function completar({ mensajes, herramientas, maxTokens = 900, temperatura = 0.4, json = false, rapido = false, timeout = 25000, modelos }) {
     const key = clave();
     if (!key) return null;
-    const cadena = rapido ? MODELOS_RAPIDOS : MODELOS;
+    const cadena = modelos?.length ? modelos : rapido ? MODELOS_RAPIDOS : MODELOS;   // modelos: cadena propia (p. ej. visión)
     for (const model of cadena) {
         if ((enfriando.get(model) || 0) > Date.now()) continue;
         const body = { model, temperature: temperatura, max_tokens: maxTokens, messages: mensajes };

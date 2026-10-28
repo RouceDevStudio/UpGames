@@ -105,7 +105,7 @@ async function vistaDirectorio() {
           <div class="card-thumb">
             ${l.avatar && /^https:\/\//.test(l.avatar) ? `<div class="bgblur" style="background-image:url('${esc(cld(l.avatar, 'w_400,q_auto,f_auto'))}')"></div>` : ''}
             ${avatar(l.creador, l.avatar)}
-            <span class="pill-live">EN VIVO</span>
+            <span class="pill-live">EN VIVO</span>${l.promocionado ? '<span class="pill-promo">🚀 Promocionado</span>' : ''}
             <span class="viewers"><ion-icon name="eye"></ion-icon> ${fmt(l.espectadores)}</span>
           </div>
           <div class="card-body">
@@ -357,6 +357,7 @@ async function vistaEspectador(usuario) {
     app.innerHTML = `<div class="empty glass" style="margin-top:20px"><div class="off-av">${avatar(c.usuario, c.avatar)}</div>
       <h2>@${esc(c.usuario)} no está en vivo</h2>
       <p>${canal.ultimo ? `Su último directo fue “${esc(canal.ultimo.titulo)}” · ${new Date(canal.ultimo.inicio).toLocaleDateString()}` : 'Aún no ha hecho ningún directo.'}<br>Te avisaremos cuando empiece si lo sigues.</p>
+      ${(canal.repeticiones || []).length ? `<div class="reps"><b>🎬 Repeticiones</b>${canal.repeticiones.map(r => `<a class="btn btn-ghost" href="./biblioteca.html?id=${encodeURIComponent(r.item)}">▶ ${esc(r.titulo)} · ${new Date(r.inicio).toLocaleDateString()}</a>`).join('')}</div>` : ''}
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><a class="btn btn-ghost" href="./perfil-publico.html?u=${encodeURIComponent(c.usuario)}">Ver perfil</a><a class="btn btn-live" href="./live.html">Ver quién está en vivo</a></div></div>`;
     const t = setInterval(async () => {
       if (document.hidden) return;
@@ -609,6 +610,7 @@ async function vistaEstudio() {
           <button id="ov-flip" aria-label="Voltear cámara" hidden><span class="i">🔄</span>Voltear</button>
           <button id="ov-toggle" aria-label="Mostrar u ocultar comentarios"><span class="i">💬</span>Chat</button>
           <button id="ov-share" aria-label="Compartir"><span class="i"><ion-icon name="share-social"></ion-icon></span>Compartir</button>
+          <button id="ov-promo" aria-label="Promover live con UpCoins"><span class="i">🚀</span>Promover</button>
           <button id="ov-end" class="danger" aria-label="Terminar live"><span class="i">⏹</span>Terminar</button>
         </div>
         <form class="ov-bar" id="ov-form" autocomplete="off"><input id="ov-in" maxlength="200" placeholder="Habla con tu comunidad…" enterkeyhint="send" aria-label="Mensaje"><button class="send" aria-label="Enviar"><ion-icon name="send"></ion-icon></button></form>
@@ -637,6 +639,7 @@ async function vistaEstudio() {
         <div id="obs-box" hidden></div>
         <div id="nav-box">
           <div class="toggle"><span>🎙️ Micrófono</span><label class="switch"><input type="checkbox" id="f-mic" ${pref.mic !== false ? 'checked' : ''}><span></span></label></div>
+          <div class="toggle" ${typeof MediaRecorder === 'undefined' ? 'hidden' : ''}><span>💾 Guardar repetición <small style="opacity:.7">(al terminar la publicas como video)</small></span><label class="switch"><input type="checkbox" id="f-rec" ${pref.rec !== false ? 'checked' : ''}><span></span></label></div>
           <div class="mixer" id="mixer" hidden>
             <label>🎮 Juego <input type="range" id="g-juego" min="0" max="1.5" step="0.05" value="1"><span class="meter"><i id="m-juego"></i></span></label>
             <label>🎙️ Voz <input type="range" id="g-mic" min="0" max="2" step="0.05" value="1"><span class="meter"><i id="m-mic"></i></span></label>
@@ -658,6 +661,7 @@ async function vistaEstudio() {
           <button class="btn btn-ghost" id="b-flip" hidden><ion-icon name="camera-reverse"></ion-icon> Voltear cámara</button>
           <button class="btn btn-ghost" id="b-mic-t"><ion-icon name="mic"></ion-icon> Silenciar micro</button>
           <button class="btn btn-ghost" id="b-share-l"><ion-icon name="share-social"></ion-icon> Compartir enlace</button>
+          <button class="btn btn-ghost" id="b-promo"><ion-icon name="rocket"></ion-icon> Promover con UpCoins</button>
           <button class="btn btn-danger" id="b-end"><ion-icon name="stop-circle"></ion-icon> Terminar live</button>
         </div>
         <p class="fine" id="earn-note"></p>
@@ -676,7 +680,7 @@ async function vistaEstudio() {
   let liberarPantalla = null;
   cleanup.push(() => timers.forEach(clearInterval));
 
-  const guardarPref = () => { try { localStorage.setItem('ug_live_pref', JSON.stringify({ fuente, titulo: $('f-tit').value, categoria: $('f-cat').value, calidad: $('f-q').value, mic: $('f-mic').checked })); } catch (_) {} };
+  const guardarPref = () => { try { localStorage.setItem('ug_live_pref', JSON.stringify({ fuente, titulo: $('f-tit').value, categoria: $('f-cat').value, calidad: $('f-q').value, mic: $('f-mic').checked, rec: $('f-rec') ? $('f-rec').checked : true })); } catch (_) {} };
   function marcarFuente() {
     document.querySelectorAll('.src').forEach(b => b.classList.toggle('on', b.dataset.f === fuente));
     $('obs-box').hidden = fuente !== 'obs'; $('nav-box').hidden = fuente === 'obs'; $('b-prev').hidden = fuente === 'obs';
@@ -943,8 +947,72 @@ async function vistaEstudio() {
     }
   };
 
+  // ── Repetición: se graba en el navegador del creador lo mismo que ven los espectadores ──
+  const MAX_REC = 450 * 1024 * 1024;   // ~1 h a 1 Mbps; al pasar el tope se guarda lo grabado hasta ahí
+  let grab = null;
+  function iniciarGrabacion(titulo) {
+    if (grab || !$('f-rec')?.checked || fuente === 'obs' || !stream || typeof MediaRecorder === 'undefined') return;
+    const mime = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'].find(t => { try { return MediaRecorder.isTypeSupported(t); } catch (_) { return false; } }) || '';
+    try {
+      const rec = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), videoBitsPerSecond: 1000000, audioBitsPerSecond: 96000 });
+      grab = { rec, partes: [], bytes: 0, mime: rec.mimeType || mime || 'video/webm', desde: Date.now(), cortado: false, titulo };
+      rec.ondataavailable = e => {
+        if (!e.data?.size || !grab) return;
+        grab.partes.push(e.data); grab.bytes += e.data.size;
+        if (grab.bytes > MAX_REC && !grab.cortado) { grab.cortado = true; try { rec.stop(); } catch (_) {} toast('💾 La repetición llegó a su tamaño máximo: se guarda hasta aquí', 5000); }
+      };
+      rec.onerror = () => { try { rec.stop(); } catch (_) {} };
+      rec.start(5000);
+    } catch (_) { grab = null; }
+  }
+  function cerrarGrabacion() {
+    return new Promise(ok => {
+      if (!grab) return ok(null);
+      const g = grab; grab = null;
+      const fin = () => ok(g.partes.length ? { blob: new Blob(g.partes, { type: g.mime.split(';')[0] }), seg: Math.round((Date.now() - g.desde) / 1000), titulo: g.titulo } : null);
+      if (g.rec.state === 'inactive') return fin();
+      g.rec.onstop = fin; try { g.rec.stop(); } catch (_) { fin(); }
+      setTimeout(fin, 4000);   // por si el navegador no avisa
+    });
+  }
+  /** Sube la repetición a Cloudinary por partes (20 MB) y la publica como video. */
+  async function publicarRepeticion(rep, liveIdRep, alProgreso) {
+    const NUBE = 'dd4w2plxn', PRESET = 'upgames_videos', PARTE = 20 * 1024 * 1024;
+    const id = 'rep-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8), total = rep.blob.size;
+    let r = null;
+    for (let ini = 0; ini < total; ini += PARTE) {
+      const fin = Math.min(total, ini + PARTE), fd = new FormData();
+      fd.append('file', rep.blob.slice(ini, fin), 'repeticion.webm'); fd.append('upload_preset', PRESET); fd.append('folder', 'upgames/repeticiones');
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${NUBE}/video/upload`, { method: 'POST', body: fd, headers: { 'X-Unique-Upload-Id': id, 'Content-Range': `bytes ${ini}-${fin - 1}/${total}` } });
+      r = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(r?.error?.message || 'No se pudo subir el video');
+      alProgreso?.(fin / total);
+    }
+    if (!r?.secure_url) throw new Error('La subida no terminó');
+    const url = r.secure_url.replace(/\.(webm|mkv)$/i, '.mp4');   // Cloudinary lo entrega en MP4 (Safari no reproduce WebM)
+    const min = Math.max(1, Math.round(rep.seg / 60));
+    const it = await api('/items/add', { method: 'POST', body: {
+      title: `🔴 ${String(rep.titulo || 'Mi live').slice(0, 150)} (repetición)`, description: `Repetición del directo de @${ME} del ${new Date().toLocaleDateString('es-CO')}. Duración: ${min} min.`,
+      link: url, image: url.replace(/\.mp4$/i, '.jpg'), images: [], category: 'Video', videoType: 'Gameplay', extraData: { duracion: `${min} min`, repeticionLive: liveIdRep || '' } } });
+    const itemId = it.id || it.item?._id;
+    if (liveIdRep && itemId) await api('/live/repeticion', { method: 'POST', body: { liveId: liveIdRep, itemId } }).catch(() => {});
+    return itemId;
+  }
+
+  // Moderación: cada ~90 s un fotograma pequeño va a NEXUS visión (contenido sexual → el live se cierra)
+  async function enviarMuestra() {
+    try {
+      if (!enVivo || fuente === 'obs' || !video.videoWidth || document.hidden) return;
+      const c = document.createElement('canvas'), w = 320; c.width = w; c.height = Math.round(w * video.videoHeight / video.videoWidth);
+      c.getContext('2d').drawImage(video, 0, 0, c.width, c.height);
+      await api('/live/muestra', { method: 'POST', body: { img: c.toDataURL('image/jpeg', 0.6) } });
+    } catch (_) {}
+  }
+
   function empezarDirecto(live) {
     enVivo = true; inicio = new Date(live.inicio).getTime();
+    iniciarGrabacion(live.titulo);
+    setTimeout(enviarMuestra, 20000); timers.push(setInterval(enviarMuestra, 90000));
     $('setup').hidden = true; $('live-ctrl').hidden = false; $('kpis').hidden = false; $('s-top').hidden = false;
     $('s-net').hidden = live.modo !== 'p2p';
     $('l-tit').value = live.titulo;
@@ -1041,6 +1109,15 @@ async function vistaEstudio() {
     try { if (navigator.share) await navigator.share({ title: '¡Estoy en vivo en UpGames!', url }); else { await navigator.clipboard.writeText(url); toast('Enlace copiado'); } } catch (_) {}
   };
   $('b-end').onclick = () => { if (confirm('¿Terminar el live? Tus espectadores verán que finalizó.')) terminar(); };
+  // Promover el live: sube en el directorio y en "En vivo ahora" de la biblioteca (rutas/extrasUC.js)
+  const abrirPromo = () => {
+    if (!enVivo) return toast('Inicia el live para poder promoverlo');
+    if (!window.UGX?.hoja) return;
+    const b = window.UGX.hoja('🚀 Promover mi live', '<div id="promo-hoja"><div class="skel" style="height:120px"></div></div>');
+    window.UGX.promoLive(b?.querySelector('#promo-hoja'));
+  };
+  $('b-promo').onclick = abrirPromo;
+  if ($('ov-promo')) $('ov-promo').onclick = abrirPromo;
 
   async function terminar(motivo, remoto) {
     if (!enVivo) return;
@@ -1051,6 +1128,8 @@ async function vistaEstudio() {
     let resumen = null;
     if (!remoto) { try { resumen = (await api('/live/finalizar', { method: 'POST' })).resumen; } catch (_) {} }
     peers.forEach((_, p) => cerrarPeer(p)); whip?.cerrar(); whip = null;
+    let repeticion = await cerrarGrabacion(); const liveRep = liveId;
+    if (remoto && /moderaci/i.test(motivo || '')) repeticion = null;   // live cerrado por la moderación: no se ofrece publicarlo
     detenerCaptura();
     socket?.disconnect(); socket = null;   // la vista del estudio ya no existe: nada de eventos huérfanos
     const r = resumen || {};
@@ -1062,7 +1141,31 @@ async function vistaEstudio() {
         <div class="kpi glass"><b>${fmt(r.likes ?? 0)}</b><small>Me gusta</small></div>
         <div class="kpi glass money"><b>🪙 ${(ganado / (CFG?.monedaUsd || 0.02)).toLocaleString('es-CO', { maximumFractionDigits: 1 })}</b><small>UpCoins ganados</small></div>
       </div>
+      <div class="rep-box" id="rep-box" hidden></div>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><a class="btn btn-ghost" href="./biblioteca.html">Volver a UpGames</a><a class="btn btn-live" href="./live.html?estudio=1">Nuevo live</a></div></div>`;
+    if (repeticion) pintarRepeticion(repeticion, liveRep);
+  }
+  function pintarRepeticion(rep, liveRep) {
+    const box = $('rep-box'); if (!box) return;
+    const mb = (rep.blob.size / 1048576).toFixed(0), url = URL.createObjectURL(rep.blob);
+    box.hidden = false;
+    box.innerHTML = `<h3>💾 Tu repetición está lista</h3><p class="sub">${dur(rep.seg * 1000)} · ${mb} MB. Publícala como video para que siga sumando vistas, apoyos y seguidores. <b>No cierres esta pestaña</b> hasta terminar.</p>
+      <video src="${url}" controls playsinline style="width:100%;max-height:240px;border-radius:14px;background:#000"></video>
+      <div class="rep-bar" hidden><i></i></div>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:10px">
+        <button class="btn btn-live" data-r="pub"><ion-icon name="cloud-upload"></ion-icon> Publicar como video</button>
+        <a class="btn btn-ghost" href="${url}" download="repeticion-${ME}.webm"><ion-icon name="download"></ion-icon> Descargar</a>
+        <button class="btn btn-ghost" data-r="no">Descartar</button></div>`;
+    window.onbeforeunload = () => 'Tu repetición aún no se ha publicado';
+    box.querySelector('[data-r="no"]').onclick = () => { if (!confirm('¿Descartar la repetición? No se podrá recuperar.')) return; URL.revokeObjectURL(url); window.onbeforeunload = null; box.remove(); };
+    box.querySelector('[data-r="pub"]').onclick = async e => {
+      const b = e.currentTarget, bar = box.querySelector('.rep-bar'); b.disabled = true; bar.hidden = false; b.innerHTML = 'Subiendo… 0 %';
+      try {
+        const itemId = await publicarRepeticion(rep, liveRep, p => { bar.firstElementChild.style.width = Math.round(p * 100) + '%'; b.innerHTML = `Subiendo… ${Math.round(p * 100)} %`; });
+        window.onbeforeunload = null;
+        box.innerHTML = `<h3>✅ ¡Repetición publicada!</h3><p class="sub">Ya está en tu perfil y en tu canal.</p>${itemId ? `<a class="btn btn-live" href="./biblioteca.html?id=${encodeURIComponent(itemId)}">Verla</a>` : ''}`;
+      } catch (err) { b.disabled = false; b.innerHTML = '<ion-icon name="refresh"></ion-icon> Reintentar'; toast('❌ ' + err.message, 6000); }
+    };
   }
 
   marcarFuente();

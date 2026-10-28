@@ -15,6 +15,8 @@ const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const { Server } = require('socket.io');
 const L = require('../modulos/live');
+const Moderacion = require('../modulos/moderacion');
+const Limites = require('../modulos/limites');
 const UC = require('../modulos/upcoins');
 const PayPal = require('../modulos/paypal');
 const Extras = require('../modulos/extras');
@@ -34,6 +36,8 @@ const LiveSchema = new mongoose.Schema({
     regalos:   { type: Number, default: 0 },
     monedas:   { type: Number, default: 0 },
     motivoFin: { type: String, default: '' },
+    promoUC:   { type: Number, default: 0 },   // UpCoins que el creador invirtió en promover ESTE live
+    repeticion:{ type: String, default: '' },  // id de la publicación de video con la repetición
 }, { collection: 'lives', timestamps: false });
 // Un solo live activo por creador (dos pestañas no crean dos directos)
 LiveSchema.index({ creador: 1 }, { unique: true, partialFilterExpression: { estado: 'en_vivo' }, name: 'un_live_activo' });
@@ -265,11 +269,23 @@ function registrar(app, server, deps) {
             if (!limChat(`${u}`)) return responder({ ok: false, error: 'Vas muy rápido, espera un momento' });
             const t = L.limpiarChat(p.texto);
             if (!t) return responder({ ok: false });
+            const mod = Moderacion.reglas(t, 'chat');
+            if (mod.bloquear) {
+                Moderacion.registrar({ tipo: 'chat', usuario: u, categoria: mod.categoria, motivo: mod.motivo, fuente: 'reglas', texto: t, ref: id, accion: 'bloqueado-antes' });
+                return responder({ ok: false, error: `Tu mensaje no se envió porque ${Moderacion.MENSAJE[mod.categoria] || 'incumple las normas'}` });
+            }
             const pf = await perfil(u);
             const m = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, u, t, ts: Date.now(), av: pf.avatar, v: pf.verificado, pase: pf.pase || undefined, host: u === s.live.creador, c: pf.color || undefined, mk: pf.marco || undefined };
             s.chat.push(m); if (s.chat.length > 80) s.chat.splice(0, s.chat.length - 80);
             io.to(rid(id)).emit('chat', m);
             responder({ ok: true });
+            // Lo dudoso lo revisa NEXUS: si debe quitarse, desaparece del chat de todos
+            if (mod.dudoso && t.length >= 6) Moderacion.ia(t, 'chat').then(v => {
+                if (!Moderacion.debeQuitar(v)) return;
+                const sl = sala(id); if (sl) sl.chat = sl.chat.filter(x => x.id !== m.id);
+                io.to(rid(id)).emit('chat:borrado', { id: m.id });
+                Moderacion.registrar({ tipo: 'chat', usuario: u, categoria: v.categoria, motivo: v.motivo, fuente: 'NEXUS', texto: t, ref: id, accion: 'borrado' });
+            }).catch(() => {});
         });
 
         socket.on('like', p => {
@@ -371,9 +387,17 @@ function registrar(app, server, deps) {
     app.get('/live/activos', async (req, res) => {
         try {
             const lives = await Live.find({ estado: 'en_vivo' }).sort({ inicio: -1 }).limit(100).lean();
-            const perfiles = new Map((await Usuario.find({ usuario: { $in: lives.map(l => l.creador) } }).select('usuario avatar verificadoNivel').lean()).map(u => [u.usuario, u]));
-            const lista = lives.map(l => ({ ...publico(l, sala(l._id)), avatar: perfiles.get(l.creador)?.avatar || '', verificado: perfiles.get(l.creador)?.verificadoNivel || 0 }))
-                .sort((a, b) => b.espectadores - a.espectadores);
+            const perfiles = new Map((await Usuario.find({ usuario: { $in: lives.map(l => l.creador) } }).select('usuario avatar verificadoNivel descargasTotales listaSeguidores').lean()).map(u => [u.usuario, u]));
+            // Posición: lo orgánico pesa más (espectadores, seguidores, descargas, likes) y los
+            // UpCoins de promoción son un plus que crece cada vez menos (no se compra el primer puesto)
+            const yo = (() => { try { const t = String(req.headers.authorization || '').split(' ')[1]; return t && t.length > 20 ? jwt.verify(t, JWT_SECRET).usuario : null; } catch (_) { return null; } })();
+            const lista = lives.map(l => {
+                const p = perfiles.get(l.creador) || {}, x = publico(l, sala(l._id));
+                const seg = (p.listaSeguidores || []).length;
+                const organico = x.espectadores * 3 + Math.log10(1 + seg) * 10 + Math.log10(1 + (p.descargasTotales || 0)) * 4 + Math.min(40, (x.likes || 0) * 0.2);
+                const plus = L.puntosPromo(l.promoUC || 0);
+                return { ...x, avatar: p.avatar || '', verificado: p.verificadoNivel || 0, seguidores: seg, promocionado: (l.promoUC || 0) > 0, sigo: !!yo && (p.listaSeguidores || []).includes(yo), puntaje: Math.round((organico + plus) * 10) / 10 };
+            }).sort((a, b) => b.puntaje - a.puntaje || b.espectadores - a.espectadores);
             ok(res, { lives: lista });
         } catch (e) { logger.error(`[live] activos: ${e.message}`); err(res, 500, 'Error al cargar los lives'); }
     });
@@ -386,14 +410,50 @@ function registrar(app, server, deps) {
                 Live.findOne({ creador: u, estado: 'en_vivo' }).lean(),
             ]);
             if (!creador) return err(res, 404, 'Ese creador no existe');
-            const ultimo = live ? null : await Live.findOne({ creador: u }).sort({ inicio: -1 }).select('titulo inicio fin pico').lean();
+            const ultimo = live ? null : await Live.findOne({ creador: u }).sort({ inicio: -1 }).select('titulo inicio fin pico repeticion').lean();
+            // Repeticiones recientes del canal (publicaciones de video ligadas a sus lives)
+            const reps = await Live.find({ creador: u, repeticion: { $ne: '' } }).sort({ inicio: -1 }).limit(6).select('titulo inicio repeticion').lean();
             ok(res, {
                 creador: { usuario: creador.usuario, avatar: creador.avatar || '', banner: creador.banner || '', bio: creador.bio || '', verificado: creador.verificadoNivel || 0, seguidores: (creador.listaSeguidores || []).length },
                 live: live ? publico(live, sala(live._id)) : null,
                 top: live ? await topDonantes(live._id) : [],
-                ultimo,
+                ultimo, repeticiones: reps.map(r => ({ titulo: r.titulo, inicio: r.inicio, item: r.repeticion })),
             });
         } catch (e) { logger.error(`[live] canal: ${e.message}`); err(res, 500, 'Error al cargar el canal'); }
+    });
+
+    // Fotograma del live (lo manda el estudio del navegador cada ~90 s): NEXUS visión busca
+    // contenido sexual; si lo hay con confianza alta, el live se cierra solo.
+    app.post('/live/muestra', verificarToken, async (req, res) => {
+        try {
+            const img = String(req.body?.img || '');
+            if (!/^data:image\/(jpeg|webp|png);base64,[A-Za-z0-9+/=]+$/.test(img) || img.length > 400000) return err(res, 400, 'Imagen no válida');
+            const l = await Live.findOne({ creador: req.usuario, estado: 'en_vivo' }).select('_id titulo').lean();
+            if (!l) return ok(res, { revisado: false });
+            if (!(await Limites.permitir(`muestra:${l._id}`, [[60000, 1]]))) return ok(res, { revisado: false });
+            const v = await Moderacion.imagen(img);
+            if (v?.sexual && v.confianza >= 0.8) {
+                await finalizar(l._id, 'El live se cerró por contenido sexual (moderación automática)');
+                Moderacion.registrar({ tipo: 'live', usuario: req.usuario, categoria: 'sexual', motivo: v.motivo, fuente: 'NEXUS visión', texto: l.titulo, ref: l._id, accion: 'live cerrado' });
+                Notificacion.create({ destinatario: req.usuario, tipo: 'sistema', emisor: 'UpGames', itemTitle: 'Revisión', mensaje: '🚫 Cerramos tu live porque se detectó contenido sexual. Repetirlo puede suspender tu cuenta.', leida: false, fecha: new Date() }).catch(() => {});
+                logger.warn(`[moderacion] live ${l._id} de @${req.usuario} cerrado: ${v.motivo}`);
+                return ok(res, { revisado: true, cerrado: true });
+            }
+            ok(res, { revisado: !!v });
+        } catch (e) { logger.warn(`[live] muestra: ${e.message}`); ok(res, { revisado: false }); }
+    });
+
+    // La repetición del live ya publicada como video: se liga al live para mostrarla en el canal
+    app.post('/live/repeticion', verificarToken, async (req, res) => {
+        try {
+            const { liveId, itemId } = req.body || {};
+            if (!mongoose.isValidObjectId(liveId) || !mongoose.isValidObjectId(itemId)) return err(res, 400, 'Datos no válidos');
+            const Juego = mongoose.models.Juego;
+            const [l, j] = await Promise.all([Live.findById(liveId).select('creador').lean(), Juego?.findById(itemId).select('usuario category').lean()]);
+            if (!l || l.creador !== req.usuario || !j || j.usuario !== req.usuario) return err(res, 403, 'No es tu live');
+            await Live.updateOne({ _id: liveId }, { $set: { repeticion: String(itemId) } });
+            ok(res, {});
+        } catch (e) { logger.error(`[live] repeticion: ${e.message}`); err(res, 500, 'No se pudo guardar'); }
     });
 
     app.post('/live/iniciar', verificarToken, async (req, res) => {
@@ -403,6 +463,8 @@ function registrar(app, server, deps) {
             if (u.listaNegraAdmin || u.suspendido) return err(res, 403, 'Tu cuenta no puede transmitir en este momento');
             const titulo = L.limpiarChat(req.body?.titulo, 100) || '';
             const categoria = L.limpiarChat(req.body?.categoria, 40) || '';
+            const modT = Moderacion.reglas(titulo, 'live');
+            if (modT.bloquear) { Moderacion.registrar({ tipo: 'live', usuario: req.usuario, categoria: modT.categoria, motivo: modT.motivo, fuente: 'reglas', texto: titulo, accion: 'bloqueado-antes' }); return err(res, 400, `Ese título no se permite: ${Moderacion.MENSAJE[modT.categoria]}`); }
             const prov = L.proveedor();
             const modo = req.body?.modo === 'mediamtx' && prov.tipo === 'mediamtx' ? 'mediamtx' : 'p2p';
             const { live, nuevo } = await crearLive(req.usuario, { titulo, categoria, modo });
@@ -424,6 +486,8 @@ function registrar(app, server, deps) {
     app.put('/live/titulo', verificarToken, async (req, res) => {
         const titulo = L.limpiarChat(req.body?.titulo, 100);
         if (!titulo) return err(res, 400, 'Escribe un título');
+        const modT = Moderacion.reglas(titulo, 'live');
+        if (modT.bloquear) return err(res, 400, `Ese título no se permite: ${Moderacion.MENSAJE[modT.categoria]}`);
         const live = await Live.findOneAndUpdate({ creador: req.usuario, estado: 'en_vivo' }, { $set: { titulo } }, { new: true }).lean().catch(() => null);
         if (!live) return err(res, 404, 'No tienes un live activo');
         const s = sala(live._id); if (s) s.live.titulo = titulo;

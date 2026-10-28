@@ -120,8 +120,11 @@ function iceServers(env = process.env) {
     return s;
 }
 
+/** Puntos extra en el directorio por UpCoins de promoción: 30 UC ≈ 12 · 150 UC ≈ 31 · 300 UC ≈ 41 (rendimiento decreciente). */
+const puntosPromo = uc => uc > 0 ? 12 * Math.log2(1 + uc / 30) : 0;
+
 module.exports = {
     MONEDA_USD, COMISION, RETENCION_DIAS, P2P_MAX, REGALOS, PAQUETES,
     regalo, paquete, reparto, nuevaClave, claveValida, usuarioDeRuta, claveDeAuth,
-    limpiarChat, limitador, proveedor, iceServers,
+    limpiarChat, limitador, proveedor, iceServers, puntosPromo,
 };

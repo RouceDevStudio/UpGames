@@ -28,9 +28,9 @@
 <link rel="dns-prefetch" href="https://upgames-production.up.railway.app">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="biblioteca.css?v=20261028i">
-<link rel="stylesheet" href="upgames-glass.css?v=20261028i">
-<link rel="stylesheet" href="upgames-estilo.css?v=20261028i">
+<link rel="stylesheet" href="biblioteca.css?v=20261028j">
+<link rel="stylesheet" href="upgames-glass.css?v=20261028j">
+<link rel="stylesheet" href="upgames-estilo.css?v=20261028j">
 <!-- Widget de subida: solo se usa al publicar → diferido (antes bloqueaba el primer render) -->
 <script src="https://upload-widget.cloudinary.com/global/all.js" defer></script>
 
@@ -41,6 +41,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="UpGames">
 <script src="./upgames-pwa.js" defer></script>
+<script src="./upgames-errores.js?v=20261028j"></script>
 </head>
 <body>
 
@@ -130,6 +131,8 @@
     <button class="hero-arrow prev" id="hero-prev" aria-label="Anterior"><ion-icon name="chevron-back"></ion-icon></button>
     <button class="hero-arrow next" id="hero-next" aria-label="Siguiente"><ion-icon name="chevron-forward"></ion-icon></button>
   </div>
+  <!-- En vivo ahora: primero a quienes sigues, luego por puntaje (orgánico + promoción con UpCoins) -->
+  <section id="ug-vivos" class="ug-vivos" hidden aria-label="En vivo ahora"></section>
   <div id="output">
     <!-- Skeleton while loading -->
     <div class="skeleton-grid" id="skeleton">
@@ -610,15 +613,6 @@
     </div>
   </div>
 
-  <!-- Period Selector -->
-  <div class="eco-period-strip">
-    <button class="eco-period-btn active" data-period="7"  onclick="ecoSetPeriod(7,this)">7D</button>
-    <button class="eco-period-btn"        data-period="30" onclick="ecoSetPeriod(30,this)">30D</button>
-    <button class="eco-period-btn"        data-period="90" onclick="ecoSetPeriod(90,this)">90D</button>
-    <button class="eco-period-btn"        data-period="365" onclick="ecoSetPeriod(365,this)">1A</button>
-    <button class="eco-period-btn"        data-period="0"  onclick="ecoSetPeriod(0,this)">TODO</button>
-  </div>
-
   <!-- ══ HERO: Saldo + Progress Ring ══ -->
   <div class="eco-hero-card">
     <div class="eco-hero-glow"></div>
@@ -629,7 +623,7 @@
       <div class="eco-hero-extra" id="eco-hero-extra">
         <span title="UpCoins ganados como creador: se pueden retirar como dinero real"><ion-icon name="cash-outline"></ion-icon> <b id="eco-retirables">0</b> retirables <small id="eco-retirables-usd"></small></span>
         <span title="UpCoins comprados o de regalo: se usan dentro de UpGames"><ion-icon name="ellipse"></ion-icon> <b id="eco-monedas">0</b> comprados</span>
-        <span title="Ganancias de regalos, accesos y Premium: se liberan tras 7 días"><ion-icon name="lock-closed-outline"></ion-icon> <b id="eco-retenido">0</b> en retención</span>
+        <span title="Ganancias de regalos, Super Chat, apoyos, accesos y Premium: esperan 7 días y luego pasan solas a retirables"><ion-icon name="lock-closed-outline"></ion-icon> <b id="eco-retenido">0</b> en retención</span>
       </div>
       <div id="eco-trend-badge" class="eco-trend-chip eco-trend-up">
         <ion-icon name="trending-up"></ion-icon>
@@ -656,8 +650,23 @@
     </div>
   </div>
 
-  <!-- Usos de los UpCoins: misiones, estilo, regalar Premium, nombre (upgames-extras.js) -->
-  <div id="ugx-hub"></div>
+  <!-- Submenú: cada parte en su sección (antes todo iba en un solo panel larguísimo) -->
+  <nav class="eco-subnav" id="eco-subnav" role="tablist" aria-label="Secciones de Economía">
+    <button type="button" role="tab" data-sec="resumen" class="active"><ion-icon name="stats-chart-outline"></ion-icon><span>Resumen</span></button>
+    <button type="button" role="tab" data-sec="publicaciones"><ion-icon name="albums-outline"></ion-icon><span>Publicaciones</span></button>
+    <button type="button" role="tab" data-sec="ganar"><ion-icon name="sparkles-outline"></ion-icon><span>Ganar más</span></button>
+    <button type="button" role="tab" data-sec="cobros"><ion-icon name="card-outline"></ion-icon><span>Cobros</span></button>
+  </nav>
+
+  <section class="eco-sec active" data-sec="resumen">
+  <!-- Period Selector -->
+  <div class="eco-period-strip">
+    <button class="eco-period-btn active" data-period="7"  onclick="ecoSetPeriod(7,this)">7D</button>
+    <button class="eco-period-btn"        data-period="30" onclick="ecoSetPeriod(30,this)">30D</button>
+    <button class="eco-period-btn"        data-period="90" onclick="ecoSetPeriod(90,this)">90D</button>
+    <button class="eco-period-btn"        data-period="365" onclick="ecoSetPeriod(365,this)">1A</button>
+    <button class="eco-period-btn"        data-period="0"  onclick="ecoSetPeriod(0,this)">TODO</button>
+  </div>
 
   <!-- ══ KPI STRIP ══ -->
   <div class="eco-kpi-strip">
@@ -745,17 +754,17 @@
       </div>
       <div class="eco-funnel-list">
         <div class="eco-funnel-item">
-          <div class="eco-fi-label">Visitas est.</div>
+          <div class="eco-fi-label">Vistas</div>
           <div class="eco-fi-bar-wrap"><div class="eco-fi-bar eco-fi--a" id="eco-rb-views" style="width:100%"></div></div>
           <div class="eco-fi-val" id="eco-rv-views">—</div>
         </div>
         <div class="eco-funnel-item">
-          <div class="eco-fi-label">Interacciones</div>
+          <div class="eco-fi-label">Descargas</div>
           <div class="eco-fi-bar-wrap"><div class="eco-fi-bar eco-fi--b" id="eco-rb-interact" style="width:75%"></div></div>
           <div class="eco-fi-val" id="eco-rv-interact">—</div>
         </div>
         <div class="eco-funnel-item">
-          <div class="eco-fi-label">Descargas</div>
+          <div class="eco-fi-label">Apoyos</div>
           <div class="eco-fi-bar-wrap"><div class="eco-fi-bar eco-fi--c" id="eco-rb-dl" style="width:50%"></div></div>
           <div class="eco-fi-val" id="eco-rv-dl">—</div>
         </div>
@@ -765,10 +774,10 @@
           <div class="eco-fi-val" id="eco-rv-earn">—</div>
         </div>
         <div class="eco-cvr-row">
-          <span>CVR real</span>
+          <span>De vista a descarga</span>
           <strong id="eco-cvr">—%</strong>
         </div>
-        <div class="eco-funnel-note">*Estimaciones basadas en conversión promedio</div>
+        <div class="eco-funnel-note" id="eco-funnel-nota">Cargando datos…</div>
       </div>
     </div>
 
@@ -795,24 +804,31 @@
     </div>
   </div>
 
-  <!-- ══ ALL CONTENT TABLE ══ -->
+  </section>
+
+  <section class="eco-sec" data-sec="publicaciones">
+  <!-- ══ ESTADÍSTICAS REALES POR PUBLICACIÓN (vistas, descargas, apoyos, ganancias) ══ -->
   <div class="eco-panel">
     <div class="eco-panel-hdr">
-      <div class="eco-panel-title"><ion-icon name="list-outline"></ion-icon> TODAS LAS PUBLICACIONES</div>
-      <div class="eco-panel-badge" id="eco-table-count">— items</div>
+      <div class="eco-panel-title"><ion-icon name="analytics-outline"></ion-icon> RENDIMIENTO POR PUBLICACIÓN</div>
+      <div class="eco-panel-badge" id="eco-pub-rango">30 días</div>
     </div>
-    <div id="eco-content-table">
-      <div class="eco-spin"><ion-icon name="sync-outline"></ion-icon></div>
-    </div>
+    <div id="eco-pubstats"><div class="eco-spin"><ion-icon name="sync-outline"></ion-icon></div></div>
   </div>
 
-  <!-- ══ SECTION DIVIDER ══ -->
-  <div class="eco-divider-section">
-    <div class="eco-div-line"></div>
-    <div class="eco-div-label"><ion-icon name="card-outline"></ion-icon>&nbsp;CENTRO DE PAGOS</div>
-    <div class="eco-div-line"></div>
-  </div>
+  </section>
 
+  <section class="eco-sec" data-sec="ganar">
+  <!-- Usos de los UpCoins: misiones, estilo, regalar Premium, nombre (upgames-extras.js) -->
+  <div id="ugx-hub"></div>
+
+  <!-- Referidos: invita y ganan los dos (upgames-extras.js → UGX.referidos) -->
+  <div id="ugx-referidos"></div>
+  <!-- Promover mis lives con UpCoins (upgames-extras.js → UGX.promoLive) -->
+  <div id="ugx-promo-live"></div>
+  </section>
+
+  <section class="eco-sec" data-sec="cobros">
   <!-- ══ PAYOUT PANEL ══ -->
   <div class="eco-payout-panel">
 
@@ -886,6 +902,8 @@
       <strong style="color:var(--g)">🪙 En qué gastarlos:</strong> regalos en lives, NEXUS IA, Premium, accesos directos y destacar tus publicaciones.
     </div>
   </div><!-- /.eco-payout-panel -->
+
+  </section>
 
 </div><!-- /#economia-view -->
 
@@ -1573,8 +1591,8 @@
           <div>Software registrado ante la <strong>Dirección Nacional de Derecho de Autor</strong> de Colombia · 13-109-81.
             <a href="https://apps.derechodeautor.gov.co/Certificados-API/api/v1/dnda/certificates/registrations/filing/QzY3NDJGQkVFQThCRUY3QkQ3MTVGMTA0QUIzN0NGMkU" target="_blank" rel="noopener">Ver certificado</a></div></div>
         <div class="ob-legal-link" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-          <a href="./terminos_condiciones.html" target="_blank" style="color:inherit">Términos v6.1</a> ·
-          <a href="./politica-privacidad.html" target="_blank" style="color:inherit">Privacidad v3.5</a> ·
+          <a href="./terminos_condiciones.html" target="_blank" style="color:inherit">Términos v6.2</a> ·
+          <a href="./politica-privacidad.html" target="_blank" style="color:inherit">Privacidad v3.6</a> ·
           <a href="./terminos_condiciones.html#pagos" target="_blank" style="color:inherit">Pagos</a> ·
           <a href="./terminos_condiciones.html#derechos-autor" target="_blank" style="color:inherit">Derechos de autor</a>
         </div>
@@ -1753,11 +1771,11 @@
 <!-- ION ICONS -->
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
-<script src="script.js?v=20261028i"></script>
-<script src="upgames-extras.js?v=20261028i"></script>
-<script src="upgames-guia.js?v=20261028i"></script>
-<script src="upgames-autoinfo.js?v=20261028i"></script>
-<script src="upgames-motion.js?v=20261028i"></script>
+<script src="script.js?v=20261028j"></script>
+<script src="upgames-extras.js?v=20261028j"></script>
+<script src="upgames-guia.js?v=20261028j"></script>
+<script src="upgames-autoinfo.js?v=20261028j"></script>
+<script src="upgames-motion.js?v=20261028j"></script>
 
 <!-- ══════════════════════════════════════
   EXTENSIÓN DE PERFIL: Nombre / Email / Contraseña / Links

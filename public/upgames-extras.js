@@ -121,7 +121,44 @@
     caja.innerHTML = `<div class="ugx-hub"><div class="ugx-hub-h"><b>🪙 USA TUS UPCOINS</b><span class="ugx-saldo">🪙 ${fmt(mio?.upcoins?.total)}</span></div>
       <div class="ugx-hub-g">${t.map(([id, ic, ti, sub, dot]) => `<button type="button" class="ugx-tile" data-ugx="${id}"><span>${ic}</span><b>${esc(ti)}</b><small>${esc(sub)}</small>${dot ? `<span class="ugx-dot">${dot}</span>` : ''}</button>`).join('')}</div></div>`;
     caja.querySelectorAll('[data-ugx]').forEach(b => b.onclick = () => ({ misiones, estilo: tienda, regalar, nombre: irANombre }[b.dataset.ugx])());
+    referidos(); promoLive();
   }
+  // ── Referidos: invita y ganan los dos (al verificar el email) ──────────────
+  async function referidos() {
+    const caja = document.getElementById('ugx-referidos'); if (!caja || !tok()) return;
+    const r = await api('/referidos/mio'); if (!r.ok || !r.d.activo) { caja.innerHTML = ''; return; }
+    const d = r.d, link = `https://upgames.games/public/biblioteca.html?ref=${encodeURIComponent(d.codigo)}`;
+    const est = { pendiente: ['⏳', 'Falta que verifique su email'], procesando: ['⏳', 'Procesando'], pagado: ['✅', `+${d.recompensa.invitador} UC`], tope: ['⏸', 'Tope del mes alcanzado'], misma_red: ['⚠️', 'Misma red: no cuenta'], bloqueado: ['⛔', 'No cuenta'] };
+    caja.innerHTML = `<div class="ugx-ref">
+      <div class="ugx-ref-h"><span class="ugx-ref-ic">🤝</span><div><b>Invita y ganen los dos</b><small>Tú recibes <b>${d.recompensa.invitador} UC</b> y tu amigo <b>${d.recompensa.invitado} UC</b> cuando verifique su email.</small></div></div>
+      <div class="ugx-ref-link"><input readonly value="${esc(link)}" aria-label="Tu enlace de invitación"><button type="button" class="ugx-btn" data-a="copiar">Copiar</button></div>
+      <div class="ugx-ref-acc">${navigator.share ? '<button type="button" class="ugx-btn sec" data-a="compartir">📤 Compartir</button>' : ''}<a class="ugx-btn sec" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent('Te invito a UpGames: descargas, videos, lives y una IA que te paga. Crea tu cuenta y recibe UpCoins de regalo 👉 ' + link)}">WhatsApp</a></div>
+      <div class="ugx-ref-st"><div><b>${fmt(d.total)}</b><small>Invitados</small></div><div><b>${fmt(d.pagados)}</b><small>Verificados</small></div><div><b>${fmt(d.ganadoUC)}</b><small>UC ganados</small></div><div><b>${d.pagadosMes}/${d.topeMes}</b><small>Este mes</small></div></div>
+      ${d.recientes.length ? `<details class="ugx-ref-lista"><summary>Ver mis invitados (${d.recientes.length})</summary>${d.recientes.map(x => `<div><span>@${esc(x.usuario)}</span><small>${(est[x.estado] || est.pendiente).join(' ')}</small></div>`).join('')}</details>` : ''}
+      <p class="ugx-sub">Son UpCoins de regalo: se usan en UpGames y no se retiran. Cuentas falsas, la misma red o el abuso anulan las recompensas.</p></div>`;
+    caja.querySelector('[data-a="copiar"]').onclick = async () => { try { await navigator.clipboard.writeText(link); aviso('🔗 Enlace copiado'); } catch (_) { caja.querySelector('input').select(); } };
+    caja.querySelector('[data-a="compartir"]')?.addEventListener('click', () => navigator.share({ title: 'UpGames', text: 'Te invito a UpGames y recibes UpCoins de regalo', url: link }).catch(() => {}));
+  }
+
+  // ── Promover mi live: plus en el directorio y en "En vivo ahora" ───────────
+  async function promoLive(destino) {
+    const caja = destino || document.getElementById('ugx-promo-live'); if (!caja || !tok()) return;
+    const r = await api('/live/promo/mio'); if (!r.ok || !r.d.activo) { caja.innerHTML = ''; return; }
+    const d = r.d;
+    caja.innerHTML = `<div class="ugx-promo">
+      <div class="ugx-ref-h"><span class="ugx-ref-ic">🚀</span><div><b>Promueve tu live</b><small>Tu directo sube en "En vivo ahora" y en el directorio. Cuentan más tus espectadores, seguidores y descargas; los UpCoins son un <b>plus</b> que dura todo el live.</small></div></div>
+      ${d.live ? `<p class="ugx-sub" style="margin:10px 0 8px">🔴 <b>${esc(d.live.titulo || 'Tu live')}</b>${d.live.promoUC ? ` · ya invertiste <b>${fmt(d.live.promoUC)} UC</b> (+${d.live.puntos} puntos)` : ''}</p>
+        <div class="ugx-montos">${d.paquetes.map(m => `<button type="button" class="ugx-monto" data-m="${m}">🪙 ${fmt(m)}<small>+${Math.round(12 * Math.log2(1 + (d.live.promoUC + m) / 30)) - d.live.puntos} pts</small></button>`).join('')}</div>`
+      : `<p class="ugx-sub" style="margin-top:10px">Cuando estés en vivo podrás promoverlo desde aquí o desde tu estudio. Paquetes: ${d.paquetes.map(m => fmt(m) + ' UC').join(' · ')}.</p><a class="ugx-btn" href="./live.html?estudio=1">🔴 Ir en vivo</a>`}
+    </div>`;
+    caja.querySelectorAll('[data-m]').forEach(b => b.onclick = async () => {
+      const m = +b.dataset.m;
+      if (!confirm(`¿Invertir ${m} UpCoins en promover este live? Se descuentan ahora y el plus dura hasta que termine.`)) return;
+      const x = await pagar('/live/promover', { monto: m }, b);
+      if (x) { fiesta('🚀', `¡Live promovido! Plus total: +${x.puntos} puntos`); promoLive(caja); }
+    });
+  }
+
   function irANombre() {
     if (typeof window.pfOpenSettings === 'function') { window.switchTab?.('profile'); setTimeout(() => window.pfOpenSettings('nombre'), 250); }
   }
@@ -291,6 +328,6 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 
-  window.UGX = { precio, activo, cargarCfg, cargarMio, hub, misiones, tienda, regalar, apoyar, alAbrirDetalle, prioridad, faltan, aplicarEstilo, insigniasHTML, clasesMarco,
+  window.UGX = { precio, activo, cargarCfg, cargarMio, hub, referidos, promoLive, misiones, tienda, regalar, apoyar, alAbrirDetalle, prioridad, faltan, aplicarEstilo, insigniasHTML, clasesMarco,
     hoja, cerrarHoja, pagar, fiesta, get cfg() { return cfg; } };
 })();

@@ -56,8 +56,10 @@ const TIPOS_MISION = {
 };
 
 const DEFECTO = {
-    activo: { cosmeticos: true, superchat: true, apoyar: true, prioridad: true, regalarPremium: true, nombre: true, misiones: true },
-    precios: { superchat: [20, 50, 100, 200], apoyo: [10, 50, 100], prioridad: 30, nombre: 100 },
+    activo: { cosmeticos: true, superchat: true, apoyar: true, prioridad: true, regalarPremium: true, nombre: true, misiones: true, referidos: true, promoLive: true },
+    // refInvitador/refInvitado: UC de regalo al verificar el email · refMaxMes: invitaciones pagadas por mes
+    // promoLive: paquetes para promover un live (suman al puntaje del directorio mientras dure el live)
+    precios: { superchat: [20, 50, 100, 200], apoyo: [10, 50, 100], prioridad: 30, nombre: 100, refInvitador: 20, refInvitado: 10, refMaxMes: 20, promoLive: [30, 60, 150, 300] },
     cosmeticos: {},   // { id: { precio, activo } } — cambios del admin sobre el catálogo base
     misiones: [
         { id: 'm_comentar', tipo: 'comentar', titulo: 'Comenta 5 publicaciones', objetivo: 5, uc: 5, insignia: '', activa: true },
@@ -103,12 +105,13 @@ async function guardar(cambios = {}) {
     }
     if (cambios.precios) {
         const p = { ...(actual.precios || {}) }, c = cambios.precios;
-        for (const k of ['superchat', 'apoyo']) if (c[k] != null) {
+        for (const k of ['superchat', 'apoyo', 'promoLive']) if (c[k] != null) {
             const l = [...new Set((Array.isArray(c[k]) ? c[k] : String(c[k]).split(',')).map(x => entero(x, 1, 100000)))];
             if (!l.length || l.some(x => x == null) || l.length > 6) malo(`Montos de ${k} no válidos (1 a 6 números enteros)`);
             p[k] = l.sort((a, b) => a - b);
         }
         for (const k of ['prioridad', 'nombre']) if (c[k] != null) { const n = entero(c[k], 1, 100000); if (n == null) malo(`Precio de ${k} no válido`); p[k] = n; }
+        for (const [k, max] of [['refInvitador', 500], ['refInvitado', 500], ['refMaxMes', 1000]]) if (c[k] != null) { const n = entero(c[k], 0, max); if (n == null) malo(`Valor de ${k} no válido (0 a ${max})`); p[k] = n; }
         set.precios = p;
     }
     if (cambios.cosmeticos) {
