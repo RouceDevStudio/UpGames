@@ -18,6 +18,7 @@
 const mongoose = require('mongoose');
 const L = require('../modulos/live');
 const MP = require('../modulos/mercadopago');
+const REPARTO = require('../modulos/reparto');
 
 const PLANES = [
     { id: 'pase7',   nombre: 'Pase 7 días',  dias: 7,   usd: 1.99,  monedas: 199,  monedasRegalo: 50,   resumen: 'Ideal para probar' },
@@ -80,7 +81,7 @@ function registrar(app, deps) {
         if (p.tipo === 'monedas') {
             // Con un pase vigente cada paquete trae un 10% extra
             const yo = await Usuario.findOne({ usuario }).select('planHasta').lean();
-            const bono = yo?.planHasta && new Date(yo.planHasta) > new Date() ? Math.floor(p.paquete.monedas * BONO_PAQUETE) : 0;
+            const bono = yo?.planHasta && new Date(yo.planHasta) > new Date() ? REPARTO.bonoPaquete(p.paquete.monedas, p.paquete.usd, BONO_PAQUETE) : 0;
             const total = p.paquete.monedas + bono;
             try { await LiveTx.create({ tipo: 'compra', usuario, monedas: total, bonoMonedas: bono, usd, ref, captureId, metodo, estado: 'completada' }); }
             catch (e) { if (e.code !== 11000) throw e; const u = await Usuario.findOne({ usuario }).select('monedas').lean(); return { monedas: u?.monedas || 0, repetida: true }; }
@@ -94,13 +95,16 @@ function registrar(app, deps) {
         }
         // Pase: suma días desde el vencimiento actual (o desde ahora si ya venció)
         const regalo = p.plan.monedasRegalo || 0;
-        try { await LiveTx.create({ tipo: 'plan', usuario, monedas: metodo === 'monedas' ? p.plan.monedas : 0, bonoMonedas: regalo, usd, planId: p.plan.id, ref, captureId, metodo, estado: 'completada' }); }
+        const monedasPagadas = metodo === 'monedas' ? p.plan.monedas : 0;
+        const fondo = REPARTO.fondoPase({ usd, monedas: monedasPagadas, metodo, monedasRegalo: regalo });   // para los creadores que abra con el pase
+        try { await LiveTx.create({ tipo: 'plan', usuario, monedas: monedasPagadas, bonoMonedas: regalo, creadorUsd: fondo, plataformaUsd: Math.max(0, usd - fondo), usd, planId: p.plan.id, ref, captureId, metodo, estado: 'completada' }); }
         catch (e) { if (e.code !== 11000) throw e; const u = await Usuario.findOne({ usuario }).select('planId planHasta monedas').lean(); return { plan: u?.planId, hasta: u?.planHasta, monedas: u?.monedas || 0, repetida: true }; }
         const u = await Usuario.findOneAndUpdate({ usuario }, [{ $set: {
             planId: p.plan.id,
             planHasta: { $add: [{ $max: ['$$NOW', { $ifNull: ['$planHasta', '$$NOW'] }] }, p.plan.dias * 864e5] },
             planAvisadoHasta: null,
             monedas: { $add: [{ $ifNull: ['$monedas', 0] }, regalo] },
+            paseFondoUsd: { $add: [{ $ifNull: ['$paseFondoUsd', 0] }, fondo] },
         } }], { new: true }).select('planId planHasta monedas').lean();
         olvidarPerfil(usuario);   // la insignia ⭐ del chat aparece al instante
         logger.info(`[tienda] @${usuario}: ${p.plan.nombre} (${metodo}) +${regalo} monedas de regalo → vence ${u?.planHasta?.toISOString?.().slice(0, 10)}`);
@@ -108,7 +112,7 @@ function registrar(app, deps) {
     }
 
     /** Anula una compra reembolsada o con contracargo (Mercado Pago o PayPal). */
-    async function revertir(captureId, motivo) {
+    async function revertir(captureId, motivo, sancionar = true) {
         const tx = await LiveTx.findOneAndUpdate({ captureId, tipo: { $in: ['compra', 'acceso', 'plan'] }, estado: { $ne: 'revertida' } }, { $set: { estado: 'revertida' } }).lean();
         if (!tx) return false;
         if (tx.tipo === 'compra') await Usuario.updateOne({ usuario: tx.usuario }, [{ $set: { monedas: { $max: [0, { $subtract: [{ $ifNull: ['$monedas', 0] }, tx.monedas] }] } } }]);
@@ -117,10 +121,12 @@ function registrar(app, deps) {
             await mongoose.connection.collection('accesos_directos').deleteOne({ usuario: tx.usuario, juegoId: tx.juegoId }).catch(() => {});
         }
         if (tx.tipo === 'plan') {
-            await Usuario.updateOne({ usuario: tx.usuario }, [{ $set: { planHasta: '$$NOW', monedas: { $max: [0, { $subtract: [{ $ifNull: ['$monedas', 0] }, tx.bonoMonedas || 0] }] } } }]);
+            await Usuario.updateOne({ usuario: tx.usuario }, [{ $set: { planHasta: '$$NOW',
+                monedas: { $max: [0, { $subtract: [{ $ifNull: ['$monedas', 0] }, tx.bonoMonedas || 0] }] },
+                paseFondoUsd: { $max: [0, { $subtract: [{ $ifNull: ['$paseFondoUsd', 0] }, tx.creadorUsd || 0] }] } } }]);
             olvidarPerfil(tx.usuario);
         }
-        await Usuario.updateOne({ usuario: tx.usuario }, { $set: { listaNegraAdmin: true, notasAdmin: `Reembolso/contracargo (${motivo}) de ${tx.tipo}`, fechaListaNegra: new Date() } });
+        if (sancionar) await Usuario.updateOne({ usuario: tx.usuario }, { $set: { listaNegraAdmin: true, notasAdmin: `Contracargo (${motivo}) de ${tx.tipo}`, fechaListaNegra: new Date() } });
         logger.warn(`[tienda] ${motivo}: ${tx.tipo} de @${tx.usuario} revertido (${captureId})`);
         return true;
     }
@@ -140,7 +146,7 @@ function registrar(app, deps) {
     app.get('/tienda/catalogo', (req, res) => {
         const m = metodos();
         ok(res, {
-            planes: PLANES, beneficios: BENEFICIOS_PASE, bonoPaquete: BONO_PAQUETE, paquetes: L.PAQUETES, acceso: { usd: 1, monedas: 100 }, monedaUsd: L.MONEDA_USD,
+            planes: PLANES, beneficios: BENEFICIOS_PASE, bonoPaquete: BONO_PAQUETE, reparto: REPARTO.publico(), paquetes: L.PAQUETES.map(p => ({ ...p, bonoPase: REPARTO.bonoPaquete(p.monedas, p.usd, BONO_PAQUETE) })), acceso: { usd: 1, monedas: 100 }, monedaUsd: L.MONEDA_USD,
             metodos: m,
             pagos: m.tarjeta ? 'ok' : (paypal.estado().motivo === 'credenciales_invalidas' || mp.estado().motivo === 'credenciales_invalidas' ? 'credenciales_invalidas' : 'sin_configurar'),
             // Precios en moneda local para la tarjeta (Mercado Pago)
@@ -308,7 +314,7 @@ function registrar(app, deps) {
                 if (Math.abs(pago.monto - mp.montoLocal(precioUsd(p, 'tarjeta_mp'))) > 1) return logger.warn(`[tienda] MP ${id}: monto ${pago.monto} no coincide con ${p.id}`);
                 await entregar(usuario, p, { ref: `mp:${pago.id}`, captureId: `mp:${pago.id}`, metodo: 'tarjeta_mp', usd: precioUsd(p, 'tarjeta_mp') });
             } else if (['refunded', 'charged_back', 'cancelled'].includes(pago.status)) {
-                await revertir(`mp:${pago.id}`, `Mercado Pago ${pago.status}`);
+                await revertir(`mp:${pago.id}`, `Mercado Pago ${pago.status}`, pago.status === 'charged_back');   // reembolso propio (retracto) no restringe la cuenta
             }
         } catch (e) { logger.error(`[tienda] webhook MP: ${e.message}`); }
     });

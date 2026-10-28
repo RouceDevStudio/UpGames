@@ -28,8 +28,8 @@
 <link rel="dns-prefetch" href="https://upgames-production.up.railway.app">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="biblioteca.css?v=20261028a">
-<link rel="stylesheet" href="upgames-glass.css?v=20261028a">
+<link rel="stylesheet" href="biblioteca.css?v=20261028b">
+<link rel="stylesheet" href="upgames-glass.css?v=20261028b">
 <!-- Widget de subida: solo se usa al publicar → diferido (antes bloqueaba el primer render) -->
 <script src="https://upload-widget.cloudinary.com/global/all.js" defer></script>
 
@@ -799,14 +799,11 @@
       <span>Necesitas verificación nivel 1+ para monetizar</span>
     </div>
 
-    <!-- PayPal -->
+    <!-- Método de cobro: dónde recibe el creador sus retiros (rutas/cobros.js) -->
     <label class="pf-label" style="margin-bottom:8px">
-      <ion-icon name="logo-paypal" style="color:var(--cy)"></ion-icon> EMAIL DE PAYPAL <span style="font-weight:500;opacity:.7;text-transform:none;letter-spacing:0">· donde recibes tus retiros</span>
+      <ion-icon name="wallet-outline" style="color:var(--cy)"></ion-icon> MÉTODO DE COBRO <span style="font-weight:500;opacity:.7;text-transform:none;letter-spacing:0">· donde recibes tus retiros</span>
     </label>
-    <div class="pf-paypal-row">
-      <input type="email" id="pf-paypal-email-input" class="pf-paypal-input" placeholder="tucorreo@paypal.com">
-      <button class="pf-paypal-save" id="pf-btn-guardar-paypal">GUARDAR</button>
-    </div>
+    <div class="eco-cobro" id="eco-cobro"><div class="eco-spin"><ion-icon name="sync-outline"></ion-icon></div></div>
 
     <!-- Mi plan: pase sin anuncios (estado, renovar, cambiar, recordatorio, historial) -->
     <div class="pf-eco-divider">
@@ -853,12 +850,13 @@
       • Saldo mínimo: $10 USD<br>
       • Verificación nivel 1+<br>
       • Al menos 1 descarga en tus aportes, o ingresos de lives / accesos directos ya liberados<br>
-      • Email de PayPal configurado (ahí recibes el dinero)<br>
+      • Método de cobro configurado: PayPal, Nequi, Daviplata, cuenta bancaria o Mercado Pago<br>
       • Email de tu cuenta verificado<br>
       <strong style="color:var(--g)">💰 Tus fuentes de ingreso:</strong><br>
       • Descargas por la página puente (CPM)<br>
-      • 70% de cada regalo en tus <a href="./live.html?estudio=1" style="color:var(--cy)">lives</a><br>
-      • 30% de cada acceso directo (US$1) a tus enlaces<br>
+      • 25% de cada regalo en tus <a href="./live.html?estudio=1" style="color:var(--cy)">lives</a><br>
+      • 25% de cada acceso directo (US$1) a tus enlaces<br>
+      • US$0,01 la primera vez que alguien con Pase abre tu publicación<br>
       • Regalos y accesos quedan 7 días en retención antes de ser retirables
     </div>
   </div><!-- /.eco-payout-panel -->
@@ -1493,10 +1491,10 @@
           <span class="ob-eco-up">UP</span><span class="ob-eco-gm">GAMES</span>
         </div>
 
-        <div class="ob-kicker">Bienvenido a UpGames</div>
+        <div class="ob-kicker">Bienvenido a UpGames · un ecosistema, no una sola app</div>
         <h2 class="ob-title-sm" style="font-size:1.5rem;line-height:1.2">
-          Todo tu contenido digital,<br>
-          <span class="ob-accent-g">en un solo lugar.</span>
+          Biblioteca, videos, lives, red social,<br>
+          <span class="ob-accent-g">monetización e IA en un solo lugar.</span>
         </h2>
         <div class="ob-cats">
           <span>🎮 Juegos</span><span>💾 ROMs</span><span>🧩 Mods</span><span>📱 Apps</span>
@@ -1527,8 +1525,8 @@
               <span class="ob-node-lbl">Biblioteca</span>
             </div>
             <div class="ob-node ob-node-tl">
-              <span class="ob-node-icon">📥</span>
-              <span class="ob-node-lbl">Descarga</span>
+              <span class="ob-node-icon">🔴</span>
+              <span class="ob-node-lbl">En vivo</span>
             </div>
             <!-- Centro -->
             <div class="ob-cycle-center">
@@ -1544,8 +1542,11 @@
         </div>
 
         <p class="ob-eco-caption">
-          Biblioteca indexada por la comunidad · Videos de creadores · Lives con regalos · Red social · Monetización real · NEXUS IA.<br>
-          <strong style="color:var(--g)">Los juegos son la prioridad, pero aquí cabe todo lo que creas y compartes.</strong>
+          📚 <b>Biblioteca</b> de juegos, ROMs, mods, apps y software indexada por la comunidad ·
+          ▶ <b>Videos</b> de creadores · 🔴 <b>Streaming</b> de gameplay con chat y regalos ·
+          👥 <b>Red social</b> con perfiles, seguidores y chat · 💰 <b>Monetización real</b> por descargas, regalos y accesos ·
+          🧠 <b>NEXUS IA</b>, tu asistente · ⭐ <b>Pases</b> sin anuncios.<br>
+          <strong style="color:var(--g)">Mira y descarga gratis, incluso sin cuenta. Crea una cuenta para publicar, interactuar y ganar.</strong>
         </p>
 
       </div>
@@ -1599,7 +1600,7 @@
             </defs>
           </svg>
         </div>
-        <div class="ob-kicker ob-kicker-cy">Monetización real · 3 fuentes de ingreso</div>
+        <div class="ob-kicker ob-kicker-cy">Monetización real · 4 fuentes de ingreso</div>
         <h2 class="ob-title-sm">Publica una vez.<br><span class="ob-accent-g">Gana para siempre.</span></h2>
         <p class="ob-desc">
           Ganas dinero por cada descarga efectiva <strong style="color:var(--g)">independientemente del tipo de contenido</strong> publicado. El sistema usa un acortador de publicidad propio integrado — los anuncios se muestran automáticamente, tú solo publicas.
@@ -1610,23 +1611,27 @@
             <span class="ob-cpm-val">$1.00 USD</span>
           </div>
           <div class="ob-cpm-row ob-cpm-row-sub">
-            <span class="ob-cpm-label">Retiro mínimo · pago vía PayPal</span>
+            <span class="ob-cpm-label">Retiro mínimo · PayPal, Nequi, Daviplata, banco o Mercado Pago</span>
             <span class="ob-cpm-val-sm">$10 USD</span>
           </div>
           <div class="ob-cpm-row ob-cpm-row-sub">
             <span class="ob-cpm-label">Regalos en tus lives 🔴</span>
-            <span class="ob-cpm-val-sm">70% para ti</span>
+            <span class="ob-cpm-val-sm">25% para ti</span>
           </div>
           <div class="ob-cpm-row ob-cpm-row-sub">
             <span class="ob-cpm-label">Acceso directo a tus enlaces (US$1) ⚡</span>
-            <span class="ob-cpm-val-sm">30% para ti</span>
+            <span class="ob-cpm-val-sm">25% para ti</span>
+          </div>
+          <div class="ob-cpm-row ob-cpm-row-sub">
+            <span class="ob-cpm-label">Cuando alguien con Pase abre tu publicación ⭐</span>
+            <span class="ob-cpm-val-sm">US$0,01</span>
           </div>
           <div class="ob-cpm-row ob-cpm-row-sub">
             <span class="ob-cpm-label">Empiezas a ganar desde</span>
             <span class="ob-cpm-val-sm">La primera descarga</span>
           </div>
         </div>
-        <p class="ob-note">Acortador propio integrado · Pagos con tarjeta de crédito o débito 💳 · Para retirar necesitas nivel Bronce (100 seguidores)</p>
+        <p class="ob-note">UpGames conserva el resto (mínimo 70%) para pagar pasarelas, servidores y operación · Para retirar necesitas nivel Bronce (100 seguidores) y email verificado · Compra monedas o un Pase sin anuncios con tarjeta, PayPal o tu saldo 💳</p>
       </div>
     </div>
 
@@ -1687,7 +1692,7 @@
           <div class="ob-nfeat"><ion-icon name="search-outline"></ion-icon> Busca en todo el catálogo — "¿hay mods de Minecraft?" y te muestra las fichas</div>
           <div class="ob-nfeat"><ion-icon name="cash-outline"></ion-icon> Explica tus ganancias con tus datos reales y los requisitos de retiro</div>
           <div class="ob-nfeat"><ion-icon name="shield-checkmark-outline"></ion-icon> Honesto: si no sabe algo, te lo dice — y nunca inventa títulos</div>
-          <div class="ob-nfeat"><ion-icon name="rocket-outline"></ion-icon> ¿Creas apps? Con coral (de NEXUS) construyes una web hablando y la publicas en UpGames</div>
+          <div class="ob-nfeat"><ion-icon name="rocket-outline"></ion-icon> Te lleva a donde necesitas: abre fichas, filtra categorías, te guía al publicar y revisa tu publicación antes de enviarla</div>
         </div>
       </div>
     </div>
@@ -1779,8 +1784,8 @@
             <a href="https://apps.derechodeautor.gov.co/Certificados-API/api/v1/dnda/certificates/registrations/filing/QzY3NDJGQkVFQThCRUY3QkQ3MTVGMTA0QUIzN0NGMkU" target="_blank" rel="noopener">Ver certificado</a></div>
         </div>
         <div class="ob-legal-link" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-          <a href="./terminos_condiciones.html" target="_blank" style="color:inherit">Términos v5.2</a> ·
-          <a href="./politica-privacidad.html" target="_blank" style="color:inherit">Privacidad v3.2</a> ·
+          <a href="./terminos_condiciones.html" target="_blank" style="color:inherit">Términos v5.3</a> ·
+          <a href="./politica-privacidad.html" target="_blank" style="color:inherit">Privacidad v3.3</a> ·
           <a href="./terminos_condiciones.html#pagos" target="_blank" style="color:inherit">Pagos</a> ·
           <a href="./terminos_condiciones.html#ia" target="_blank" style="color:inherit">IA</a> ·
           <a href="./terminos_condiciones.html#derechos-autor" target="_blank" style="color:inherit">Derechos de autor</a>
@@ -1968,9 +1973,9 @@
 <!-- ION ICONS -->
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
-<script src="script.js?v=20261028a"></script>
-<script src="upgames-autoinfo.js?v=20261028a"></script>
-<script src="upgames-motion.js?v=20261028a"></script>
+<script src="script.js?v=20261028b"></script>
+<script src="upgames-autoinfo.js?v=20261028b"></script>
+<script src="upgames-motion.js?v=20261028b"></script>
 
 <!-- ══════════════════════════════════════
   EXTENSIÓN DE PERFIL: Nombre / Email / Contraseña / Links

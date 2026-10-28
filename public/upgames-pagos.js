@@ -130,7 +130,7 @@
     // Lo que recibe, dicho antes de pagar (Ley 1480: información clara y previa)
     const paq = producto.startsWith('monedas:') ? c.paquetes.find(x => `monedas:${x.id}` === producto) : null;
     const recibes = plan ? `<b>${esc(plan.nombre)}</b>: enlaces directos y sin anuncios durante ${plan.dias} días + 🪙 ${fmt(plan.monedasRegalo || 0)} de regalo, +10% de monedas en cada paquete e insignia ⭐ en los lives. Los días se suman si ya tienes un pase.`
-      : paq ? `<b>🪙 ${fmt(paq.monedas)} monedas</b>${est?.plan ? ` + ${fmt(Math.floor(paq.monedas * (c.bonoPaquete || 0.1)))} extra por tu pase` : ''}, para regalos en los lives, pases o accesos directos. No vencen.`
+      : paq ? `<b>🪙 ${fmt(paq.monedas)} monedas</b>${est?.plan ? ` + ${fmt(paq.bonoPase ?? Math.floor(paq.monedas * (c.bonoPaquete || 0.1)))} extra por tu pase` : ''}, para regalos en los lives, pases o accesos directos. No vencen.`
       : `<b>Acceso directo</b> a esta publicación: se abre al instante, sin espera ni anuncios, y queda desbloqueada en tu cuenta.`;
     const resumen = `<div class="ugp-resumen"><div>${recibes}</div><small>Pago único · <b>sin renovación automática</b> · retracto en 5 días hábiles si no lo has usado · <a href="./terminos_condiciones.html#pagos" target="_blank" rel="noopener">Términos</a></small></div>`;
 

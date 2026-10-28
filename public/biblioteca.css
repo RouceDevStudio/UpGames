@@ -5323,3 +5323,23 @@ button.pf2-stat { cursor: pointer; }
 .eco-plan-hist li span:last-child { white-space: nowrap; color: #fff; font-weight: 700; }
 .eco-plan-hist li.rev span:last-child { color: #ff8a8a; text-decoration: line-through; }
 #eco-plan-pago { margin-top: 12px; }
+
+/* ── Método de cobro ─────────────────────────────── */
+.eco-cobro{margin-bottom:18px}
+.eco-cobro-act,.eco-cobro-vacio,.eco-cobro-form{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px 14px}
+.eco-cobro-act{display:flex;align-items:center;gap:12px}
+.eco-cobro-act b{display:block;font-size:.88rem;color:#eef1f6;word-break:break-word}
+.eco-cobro-act small{display:block;font-size:.74rem;color:#9aa3b5;margin-top:2px}
+.eco-cobro-act>div{flex:1;min-width:0}
+.eco-cobro-ic{font-size:1.5rem}
+.eco-cobro-vacio p{margin:0 0 10px;font-size:.85rem;color:#A3A8B6}
+.eco-cobro-btn{border:1px solid rgba(255,255,255,.14);background:transparent;color:#e9ecf3;border-radius:10px;padding:9px 14px;font-weight:700;font-size:.82rem;cursor:pointer;font-family:inherit}
+.eco-cobro-btn.p{background:#32D583;border-color:#32D583;color:#04110a}
+.eco-cobro-btn:disabled{opacity:.6}
+.eco-cobro-tipos{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.eco-cobro-tipos button{border:1px solid rgba(255,255,255,.12);background:transparent;color:#cfd4de;border-radius:999px;padding:7px 12px;font-size:.78rem;font-weight:700;cursor:pointer;font-family:inherit}
+.eco-cobro-tipos button.on{background:rgba(90,200,250,.15);border-color:#5AC8FA;color:#fff}
+.eco-cobro-form input,.eco-cobro-form select{width:100%;box-sizing:border-box;margin-bottom:8px;padding:11px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:#0e1016;color:#eef1f6;font-size:.88rem;font-family:inherit}
+.eco-cobro-2{display:grid;grid-template-columns:90px 1fr;gap:8px}
+.eco-cobro-nota{font-size:.72rem;color:#9aa3b5;line-height:1.5;margin:4px 0 10px}
+.eco-cobro-acc{display:flex;gap:8px;justify-content:flex-end}

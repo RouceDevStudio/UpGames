@@ -17,9 +17,11 @@ const L = require('../modulos/live');
 const num = (v, d) => { const n = parseFloat(v); return Number.isFinite(n) ? n : d; };
 const PRECIO_USD     = 1.00;
 const PRECIO_MONEDAS = Math.round(PRECIO_USD / L.MONEDA_USD);   // 100
-const PARTE_CREADOR  = Math.min(1, Math.max(0, num(process.env.ACCESO_CREADOR, 0.30)));
-// Con un pase activo, la primera vez que un usuario abre una publicación paga esto a su creador
-const PASE_CREADOR_USD = Math.max(0, num(process.env.PASE_CREADOR_USD, 0.01));
+const REPARTO        = require('../modulos/reparto');
+const PARTE_CREADOR  = REPARTO.ACCESO_CREADOR;   // 25 %
+// Con un pase activo, la primera vez que un usuario abre una publicación paga esto a su
+// creador, descontado del fondo para creadores que generó su pase (nunca más del 25 % del precio)
+const PASE_CREADOR_USD = REPARTO.PASE_POR_APERTURA;
 const PASE_TOPE_DIA    = Math.max(0, num(process.env.PASE_TOPE_DIA, 30));   // descargas con pase que pagan al creador, por usuario y día
 
 const AccesoSchema = new mongoose.Schema({
@@ -194,17 +196,27 @@ function registrar(app, { verificarToken, Juego, Usuario, LiveTx, paypal, mp, lo
             const hoy = new Date(); hoy.setUTCHours(0, 0, 0, 0);
             const pagadasHoy = juego.usuario !== req.usuario && PASE_CREADOR_USD > 0
                 ? await LiveTx.countDocuments({ usuario: req.usuario, metodo: 'pase', fecha: { $gte: hoy } }) : Infinity;
-            if (pagadasHoy < PASE_TOPE_DIA) {
+            // Solo si al pase le queda fondo para creadores (se descuenta de forma atómica)
+            const conFondo = pagadasHoy < PASE_TOPE_DIA && !(await LiveTx.exists({ ref: `pase:${req.usuario}:${juego._id}` }))
+                && await Usuario.findOneAndUpdate({ usuario: req.usuario, paseFondoUsd: { $gte: PASE_CREADOR_USD } }, { $inc: { paseFondoUsd: -PASE_CREADOR_USD } }).select('_id').lean();
+            if (conFondo) {
                 const retener = L.RETENCION_DIAS > 0;
+                let creada = false;
                 try {
                     await LiveTx.create({
                         tipo: 'acceso', usuario: req.usuario, destinatario: juego.usuario, monedas: 0, usd: 0, metodo: 'pase', planId: u.planId,
                         creadorUsd: PASE_CREADOR_USD, plataformaUsd: 0, juegoId: String(juego._id), ref: `pase:${req.usuario}:${juego._id}`,
                         estado: retener ? 'retenida' : 'liberada', liberarEn: retener ? new Date(Date.now() + L.RETENCION_DIAS * 864e5) : null,
                     });
+                    creada = true;
+                } catch (e) {
+                    await Usuario.updateOne({ usuario: req.usuario }, { $inc: { paseFondoUsd: PASE_CREADOR_USD } });   // no se pagó: devolver al fondo
+                    if (e.code !== 11000) throw e;   // ya contó antes (doble clic)
+                }
+                if (creada) {
                     await Usuario.updateOne({ usuario: juego.usuario }, { $inc: retener ? { saldoRetenido: PASE_CREADOR_USD } : { saldo: PASE_CREADOR_USD } });
                     Juego.updateOne({ _id: juego._id }, { $inc: { descargasEfectivas: 1 } }).catch(() => {});
-                } catch (e) { if (e.code !== 11000) throw e; }   // ya contó antes
+                }
             }
             ok(res, { link: juego.link, hasta: u.planHasta });
         } catch (e) { logger.error(`[acceso] pase: ${e.message}`); err(res, 500, 'No se pudo abrir el enlace'); }

@@ -22,7 +22,8 @@ const crypto = require('crypto');
 const num = (v, d) => { const n = parseFloat(v); return Number.isFinite(n) ? n : d; };
 
 const MONEDA_USD     = 0.01;
-const COMISION       = Math.min(0.9, Math.max(0, num(process.env.LIVE_COMISION, 0.30)));
+const REPARTO        = require('./reparto');
+const COMISION       = Math.round((1 - REPARTO.REGALO_CREADOR) * 10000) / 10000;   // parte de UpGames en cada regalo (75 %)
 const RETENCION_DIAS = Math.max(0, num(process.env.LIVE_RETENCION_DIAS, 7));
 const P2P_MAX        = Math.max(1, Math.round(num(process.env.LIVE_P2P_MAX_VIEWERS, 12)));
 

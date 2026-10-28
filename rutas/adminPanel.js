@@ -109,7 +109,7 @@ function limiteRevision(req) {
 const SENSIBLES = [
     [/DELETE \/auth\/users/, 'eliminó una cuenta'], [/DELETE \/admin\/users\/[^/]+\/items/, 'borró todas las publicaciones de un usuario'],
     [/suspender/, 'cambió la suspensión de una cuenta'], [/ajustar-saldo|reset-saldo/, 'ajustó un saldo'],
-    [/procesar-pago/, 'marcó un pago como enviado'], [/rechazar-pago/, 'rechazó un pago'], [/DELETE \/admin\/finanzas\/tarjetas/, 'eliminó una tarjeta'],
+    [/procesar-pago/, 'marcó un pago como enviado'], [/datos-cobro/, 'consultó los datos de cobro (cuenta bancaria/celular) de un usuario'], [/rechazar-pago/, 'rechazó un pago'], [/DELETE \/admin\/finanzas\/tarjetas/, 'eliminó una tarjeta'],
     [/anuncio/, 'envió un anuncio'], [/bulk-action/, 'hizo una acción masiva'],
 ];
 

@@ -14,7 +14,7 @@
      GET /games/_pb2t/pb2-touch.(js|css)  -> capa táctil compartida
      GET /games/pb2                       -> atajo a Plazma Burst 2 (H5)
      GET /games/pb2/asset/*               -> assets de PB2
-     GET /games/emu/u/<host>/<path...>    -> emulador universal (cualquier URL)
+     GET /games/emu/u/<host>/<path...>    -> emulador para los sitios de EMU_HOSTS (lista blanca)
 
    Seguridad: el emulador universal sólo acepta http/https públicos y bloquea
    hosts privados/loopback/metadata (anti-SSRF), con tope de tamaño de respuesta.
@@ -194,6 +194,12 @@ function registrar(app) {
         const rest = req.params[0] || '';                 // host/dir/file
         const q = req.url.indexOf('?') >= 0 ? req.url.slice(req.url.indexOf('?')) : '';
         const target = 'https://' + rest + q;
+        // Solo sitios de juegos autorizados (EMU_HOSTS=dominio1,dominio2). Abierto a cualquier
+        // URL era un proxy público: servía cualquier página (phishing, contenido ilegal) bajo
+        // el dominio de UpGames y gastaba su ancho de banda.
+        const host = rest.split('/')[0].toLowerCase();
+        const permitidos = String(process.env.EMU_HOSTS || '').toLowerCase().split(',').map(x => x.trim()).filter(Boolean);
+        if (!permitidos.some(h => host === h || host.endsWith('.' + h))) return send(res, 403, 'text/plain; charset=utf-8', 'Sitio no autorizado en el emulador de UpGames', 300);
         try {
             const up = await fetchURL(target);
             const type = up.headers['content-type'] || 'application/octet-stream';

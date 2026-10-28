@@ -399,6 +399,17 @@ function emailVerifTemplate(usuario, link) {
     </div>`;
 }
 
+function emailAvisoTemplate(usuario, mensajeHtml) {
+    return `
+    <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#0a0a0f;color:#f0f0f8;border-radius:12px;overflow:hidden">
+      <div style="padding:24px 28px;text-align:center;border-bottom:1px solid rgba(94,255,67,.15)"><span style="color:#5EFF43;font-size:26px;font-weight:900">UP</span><span style="font-size:26px;font-weight:900">GAMES</span></div>
+      <div style="padding:28px">
+        <h2 style="font-size:18px;margin:0 0 12px">Hola, @${usuario}</h2>
+        <p style="color:#c0c0d0;line-height:1.6;margin:0">${mensajeHtml}</p>
+      </div>
+    </div>`;
+}
+
 function emailResetTemplate(usuario, link) {
     return `
     <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#0a0a0f;color:#f0f0f8;border-radius:12px;overflow:hidden">
@@ -545,6 +556,9 @@ const UsuarioSchema = new mongoose.Schema({
     planId:           { type: String, default: '' },
     planHasta:        { type: Date, default: null },
     planRecordatorio: { type: Boolean, default: true },   // avisar 2 días antes de que venza
+    paseFondoUsd:     { type: Number, default: 0 },
+    // Dónde recibe sus retiros (rutas/cobros.js). Los datos van cifrados; resumen = versión enmascarada
+    cobro: { tipo: { type: String, default: '' }, cifrado: { type: String, default: '' }, resumen: { type: String, default: '' }, actualizado: Date, esperaHasta: Date },       // fondo para creadores de sus pases (≤ 25 % de lo pagado)
     planAvisadoHasta: { type: Date, default: null },      // vencimiento ya avisado (un aviso por periodo)   // +1 al cambiar/restablecer la contraseña → cierra las demás sesiones
     descargasTotales:      { type: Number, default: 0, min: 0 },
     isVerificado:          { type: Boolean, default: false, index: true },
@@ -612,7 +626,11 @@ const Usuario = mongoose.model('Usuario', UsuarioSchema);
 const PagoSchema = new mongoose.Schema({
     usuario:    { type: String, required: true, index: true },
     monto:      { type: Number, required: true, min: 0 },
-    paypalEmail:{ type: String, required: true },
+    paypalEmail:{ type: String, default: '' },
+    metodo:     { type: String, default: 'paypal' },   // paypal | nequi | daviplata | banco | mercadopago
+    resumen:    { type: String, default: '' },         // método enmascarado (lo ve el usuario)
+    datosCobro: { type: String, default: '' },         // datos completos cifrados (solo el admin al pagar)
+    referencia: { type: String, default: '' },         // comprobante de la transferencia
     estado:     { type: String, enum: ['pendiente', 'procesado', 'completado', 'rechazado'], default: 'pendiente', index: true },
     fecha:      { type: Date, default: Date.now },
     notas:      { type: String, default: '' }
@@ -1030,7 +1048,10 @@ app.post('/economia/solicitar-pago', verificarToken, async (req, res) => {
         if (!usuario.isVerificado || usuario.verificadoNivel < 1) return res.status(403).json({ success: false, error: "Debes ser verificado (nivel 1+) para solicitar pagos" });
         if (!usuario.emailVerificado) return res.status(403).json({ success: false, error: "Verifica tu email antes de retirar dinero (revisa tu correo o pide uno nuevo desde el aviso de la biblioteca)", code: 'EMAIL_NO_VERIFICADO' });
         if (usuario.saldo < MIN_WITHDRAWAL) return res.status(400).json({ success: false, error: `Saldo mínimo para retiro: $${MIN_WITHDRAWAL} USD. Tu saldo: $${usuario.saldo.toFixed(2)}` });
-        if (!usuario.paypalEmail?.trim()) return res.status(400).json({ success: false, error: "Debes configurar tu email de PayPal primero" });
+        const metodo = cobros.metodoDe(usuario);
+        if (!metodo) return res.status(400).json({ success: false, error: "Configura primero dónde quieres recibir tu dinero (PayPal, Nequi, Daviplata, banco o Mercado Pago)" });
+        const espera = cobros.esperaHasta(usuario);
+        if (espera) return res.status(403).json({ success: false, error: `Cambiaste tu método de cobro hace poco. Por seguridad podrás retirar desde el ${espera.toLocaleString('es-CO')}.` });
         if (usuario.solicitudPagoPendiente) return res.status(400).json({ success: false, error: "Ya tienes una solicitud de pago pendiente" });
 
         const juegoElegible = await Juego.findOne({ usuario: usuario.usuario, descargasEfectivas: { $gt: 0 } }).select('_id').lean();
@@ -1039,11 +1060,12 @@ app.post('/economia/solicitar-pago', verificarToken, async (req, res) => {
         // Reclamo atómico de la marca: un doble clic creaba dos solicitudes por el mismo saldo
         const marcado = await Usuario.updateOne({ _id: usuario._id, solicitudPagoPendiente: { $ne: true } }, { $set: { solicitudPagoPendiente: true } });
         if (!marcado.modifiedCount) return res.status(400).json({ success: false, error: "Ya tienes una solicitud de pago pendiente" });
-        const nuevoPago = new Pago({ usuario: usuario.usuario, monto: usuario.saldo, paypalEmail: usuario.paypalEmail, estado: 'pendiente' });
+        const nuevoPago = new Pago({ usuario: usuario.usuario, monto: usuario.saldo, metodo: metodo.tipo, resumen: metodo.resumen, datosCobro: metodo.cifrado,
+            paypalEmail: metodo.tipo === 'paypal' ? (usuario.paypalEmail || '') : '', estado: 'pendiente' });
         try { await nuevoPago.save(); }
         catch (e) { await Usuario.updateOne({ _id: usuario._id }, { $set: { solicitudPagoPendiente: false } }); throw e; }
         logger.info(`Solicitud de pago creada - @${usuario.usuario}, Monto: $${usuario.saldo.toFixed(2)}`);
-        res.json({ success: true, mensaje: "Solicitud de pago enviada. El administrador la revisará pronto.", solicitud: { monto: usuario.saldo, paypalEmail: usuario.paypalEmail, fecha: nuevoPago.fecha } });
+        res.json({ success: true, mensaje: `Solicitud enviada. Recibirás el dinero en ${metodo.resumen} cuando el administrador la procese (24-72 h hábiles).`, solicitud: { monto: usuario.saldo, metodo: metodo.tipo, resumen: metodo.resumen, fecha: nuevoPago.fecha } });
     } catch (error) {
         logger.error(`Error en solicitar-pago: ${error.message}`);
         res.status(500).json({ success: false, error: "Error al procesar solicitud de pago" });
@@ -1053,16 +1075,16 @@ app.post('/economia/solicitar-pago', verificarToken, async (req, res) => {
 app.get('/economia/mi-saldo', verificarToken, async (req, res) => {
     try {
         const usuario = await Usuario.findOne({ usuario: req.usuario })
-            .select('saldo saldoRetenido monedas descargasTotales paypalEmail isVerificado solicitudPagoPendiente verificadoNivel emailVerificado');
+            .select('saldo saldoRetenido monedas descargasTotales paypalEmail cobro isVerificado solicitudPagoPendiente verificadoNivel emailVerificado');
         if (!usuario) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
 
         const [juegosElegibles, ingresosLive] = await Promise.all([
             Juego.countDocuments({ usuario: req.usuario, descargasEfectivas: { $gt: 0 } }),
             live.tieneIngresosLive(req.usuario),
         ]);
-        const puedeRetirar = usuario.saldo >= MIN_WITHDRAWAL && usuario.isVerificado && usuario.verificadoNivel >= 1 && usuario.paypalEmail && (juegosElegibles > 0 || ingresosLive) && !usuario.solicitudPagoPendiente && !!usuario.emailVerificado;
+        const puedeRetirar = usuario.saldo >= MIN_WITHDRAWAL && usuario.isVerificado && usuario.verificadoNivel >= 1 && !!cobros.metodoDe(usuario) && !cobros.esperaHasta(usuario) && (juegosElegibles > 0 || ingresosLive) && !usuario.solicitudPagoPendiente && !!usuario.emailVerificado;
 
-        res.json({ success: true, saldo: usuario.saldo, saldoRetenido: usuario.saldoRetenido || 0, monedas: usuario.monedas || 0, emailVerificado: !!usuario.emailVerificado, descargasTotales: usuario.descargasTotales, paypalEmail: usuario.paypalEmail || '', isVerificado: usuario.isVerificado, verificadoNivel: usuario.verificadoNivel, solicitudPagoPendiente: usuario.solicitudPagoPendiente, juegosElegibles, puedeRetirar, minRetiro: MIN_WITHDRAWAL, requisitos: { saldoMinimo: MIN_WITHDRAWAL, verificacionNecesaria: 1 } });
+        res.json({ success: true, saldo: usuario.saldo, saldoRetenido: usuario.saldoRetenido || 0, monedas: usuario.monedas || 0, emailVerificado: !!usuario.emailVerificado, descargasTotales: usuario.descargasTotales, paypalEmail: usuario.paypalEmail || '', metodoCobro: (m => m ? { tipo: m.tipo, resumen: m.resumen } : null)(cobros.metodoDe(usuario)), esperaCobroHasta: cobros.esperaHasta(usuario), isVerificado: usuario.isVerificado, verificadoNivel: usuario.verificadoNivel, solicitudPagoPendiente: usuario.solicitudPagoPendiente, juegosElegibles, puedeRetirar, minRetiro: MIN_WITHDRAWAL, requisitos: { saldoMinimo: MIN_WITHDRAWAL, verificacionNecesaria: 1 } });
     } catch (error) {
         logger.error(`Error en mi-saldo: ${error.message}`);
         res.status(500).json({ success: false, error: "Error al obtener saldo" });
@@ -1097,38 +1119,9 @@ app.get('/economia/mis-tarjetas', verificarToken, async (req, res) => {
     }
 });
 
-// POST /economia/agregar-tarjeta — registrar una nueva tarjeta (solo últimos 4 dígitos)
-app.post('/economia/agregar-tarjeta', [
-    verificarToken,
-    body('ultimos4').isLength({ min: 4, max: 4 }).isNumeric(),
-    body('titular').trim().isLength({ min: 2, max: 100 }),
-    body('mesExp').isLength({ min: 1, max: 2 }).isNumeric(),
-    body('anioExp').isLength({ min: 2, max: 2 }).isNumeric(),
-    body('tipo').optional().isIn(['visa','mastercard','amex','otro']),
-    body('proposito').optional().isIn(['cobros','pagos','ambos']),
-    body('alias').optional().trim().isLength({ max: 40 })
-], async (req, res) => {
-    try {
-        const errors = validationResult(req);
-        if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'Datos de tarjeta inválidos', details: errors.array() });
-
-        const { ultimos4, titular, mesExp, anioExp, tipo = 'otro', proposito = 'ambos', alias = '' } = req.body;
-
-        const usuario = await Usuario.findOne({ usuario: req.usuario });
-        if (!usuario) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
-        if ((usuario.tarjetas || []).length >= 5) return res.status(400).json({ success: false, error: 'Máximo 5 tarjetas permitidas' });
-
-        const esPrimera = (usuario.tarjetas || []).length === 0;
-        const nuevaTarjeta = { alias, titular, ultimos4, mesExp: mesExp.padStart(2,'0'), anioExp, tipo, proposito, esPrincipal: esPrimera, fechaAgregada: new Date() };
-
-        await Usuario.updateOne({ usuario: req.usuario }, { $push: { tarjetas: nuevaTarjeta } });
-        logger.info(`Tarjeta agregada - @${req.usuario} | ${tipo} ****${ultimos4}`);
-        res.json({ success: true, mensaje: 'Tarjeta registrada correctamente' });
-    } catch (error) {
-        logger.error(`Error en agregar-tarjeta: ${error.message}`);
-        res.status(500).json({ success: false, error: 'Error al agregar tarjeta' });
-    }
-});
+// POST /economia/agregar-tarjeta — RETIRADO: con los últimos 4 dígitos no se puede pagar a nadie.
+// Los creadores configuran dónde cobrar en /economia/metodo-cobro (rutas/cobros.js).
+app.post('/economia/agregar-tarjeta', verificarToken, (req, res) => res.status(410).json({ success: false, error: 'Ya no se registran tarjetas. Configura tu método de cobro (Nequi, Daviplata, banco, Mercado Pago o PayPal) en Economía.' }));
 
 // DELETE /economia/eliminar-tarjeta/:tarjetaId — eliminar una tarjeta
 app.delete('/economia/eliminar-tarjeta/:tarjetaId', verificarToken, async (req, res) => {
@@ -1245,7 +1238,7 @@ app.get('/admin/finanzas/solicitudes-pendientes', verificarAdmin, async (req, re
     }
 });
 
-app.post('/admin/finanzas/procesar-pago/:id', verificarAdmin, [param('id').isMongoId(), body('notas').optional().trim()], async (req, res) => {
+app.post('/admin/finanzas/procesar-pago/:id', verificarAdmin, [param('id').isMongoId(), body('notas').optional().trim(), body('referencia').optional().trim().isLength({ max: 120 })], async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: "ID inválido" });
@@ -1258,7 +1251,8 @@ app.post('/admin/finanzas/procesar-pago/:id', verificarAdmin, [param('id').isMon
             return res.status(existe ? 409 : 404).json({ success: false, error: existe ? "Este pago ya fue procesado (o se está procesando)" : "Pago no encontrado" });
         }
 
-        const pagoAutomatico = config.FEATURES.ENABLE_AUTO_PAYMENTS;
+        // Payouts automáticos solo existen para PayPal; Nequi, Daviplata, banco y Mercado Pago los transfiere el admin
+        const pagoAutomatico = config.FEATURES.ENABLE_AUTO_PAYMENTS && (pago.metodo || 'paypal') === 'paypal' && !!pago.paypalEmail;
         let paypalBatchId = null;
         let metodoProcesamiento = 'manual';
 
@@ -1276,6 +1270,7 @@ app.post('/admin/finanzas/procesar-pago/:id', verificarAdmin, [param('id').isMon
         }
 
         pago.estado = 'completado';
+        if (req.body.referencia) pago.referencia = String(req.body.referencia).slice(0, 120);
         pago.notas = notas || (pagoAutomatico ? `Pago automático vía PayPal Payouts el ${new Date().toLocaleString('es-ES')}. Batch ID: ${paypalBatchId}` : `Pago procesado manualmente el ${new Date().toLocaleString('es-ES')}`);
         await pago.save();
 
@@ -1328,7 +1323,7 @@ app.get('/economia/historial-pagos', verificarToken, async (req, res) => {
         const historial = await Pago.find({ usuario: req.usuario })
             .sort({ fecha: -1 })
             .limit(50)
-            .select('monto paypalEmail estado fecha notas')
+            .select('monto paypalEmail metodo resumen referencia estado fecha notas')
             .lean();
         res.json({ success: true, historial, total: historial.length });
     } catch (error) {
@@ -3646,7 +3641,9 @@ const tienda = require('./rutas/tienda').registrar(app, {
     verificarToken, Usuario, LiveTx: live.LiveTx, Notificacion, paypal: live.paypal, mp: mercadoPago,
     acceso: accesoDirecto, logger, apiUrlSelf: API_URL_SELF, olvidarPerfil: live.olvidarPerfil,
 });
-live.alRevertir(captureId => tienda.revertir(captureId, 'PayPal'));   // contracargos de pases pagados con PayPal
+live.alRevertir((captureId, sancionar) => tienda.revertir(captureId, 'PayPal', sancionar));
+// Métodos de cobro de los creadores: PayPal, Nequi, Daviplata, banco o Mercado Pago (cifrados)
+const cobros = require('./rutas/cobros').registrar(app, { verificarToken, verificarAdmin, Usuario, logger, sendEmail, plantillaAviso: emailAvisoTemplate });   // contracargos de pases pagados con PayPal
 // =================================================================================
 
 // ========== SEO: SITEMAP ==========

@@ -536,6 +536,9 @@ function registrar(app, server, deps) {
             const ev = req.body || {};
             const tipos = ['PAYMENT.CAPTURE.REFUNDED', 'PAYMENT.CAPTURE.REVERSED', 'CUSTOMER.DISPUTE.CREATED'];
             if (!tipos.includes(ev.event_type)) return res.sendStatus(200);
+            // Un reembolso que hace UpGames (p. ej. por retracto) anula la compra pero no castiga al usuario;
+            // un contracargo o una disputa abierta por el banco sí restringen la cuenta.
+            const sancionar = ev.event_type !== 'PAYMENT.CAPTURE.REFUNDED';
             const r = ev.resource || {};
             const captureId = ev.event_type === 'CUSTOMER.DISPUTE.CREATED'
                 ? r.disputed_transactions?.[0]?.seller_transaction_id
@@ -545,12 +548,12 @@ function registrar(app, server, deps) {
             if (acceso) {
                 if (acceso.estado === 'retenida') await Usuario.updateOne({ usuario: acceso.destinatario }, [{ $set: { saldoRetenido: { $max: [0, { $subtract: [{ $ifNull: ['$saldoRetenido', 0] }, acceso.creadorUsd] }] } } }]);
                 await mongoose.connection.collection('accesos_directos').deleteOne({ usuario: acceso.usuario, juegoId: acceso.juegoId }).catch(() => {});
-                await Usuario.updateOne({ usuario: acceso.usuario }, { $set: { listaNegraAdmin: true, notasAdmin: `Contracargo/reembolso PayPal (${ev.event_type}) de un acceso directo`, fechaListaNegra: new Date() } });
+                if (sancionar) await Usuario.updateOne({ usuario: acceso.usuario }, { $set: { listaNegraAdmin: true, notasAdmin: `Contracargo PayPal (${ev.event_type}) de un acceso directo`, fechaListaNegra: new Date() } });
                 logger.warn(`[live] ${ev.event_type}: acceso directo de @${acceso.usuario} revertido`);
                 return res.sendStatus(200);
             }
             const compra = captureId && await LiveTx.findOneAndUpdate({ tipo: 'compra', captureId, estado: 'completada' }, { $set: { estado: 'revertida' } }, { new: true }).lean();
-            if (!compra) { if (captureId && reversorExtra) await reversorExtra(captureId).catch(() => {}); return res.sendStatus(200); }
+            if (!compra) { if (captureId && reversorExtra) await reversorExtra(captureId, sancionar).catch(() => {}); return res.sendStatus(200); }
             await Usuario.updateOne({ usuario: compra.usuario }, [{ $set: { monedas: { $max: [0, { $subtract: [{ $ifNull: ['$monedas', 0] }, compra.monedas] }] } } }]);
             // Todo lo que pagó con monedas y sigue retenido (regalos y accesos directos)
             const regalos = await LiveTx.find({ tipo: { $in: ['regalo', 'acceso'] }, usuario: compra.usuario, estado: 'retenida', captureId: '' }).lean();
@@ -561,7 +564,7 @@ function registrar(app, server, deps) {
                 await Usuario.updateOne({ usuario: g.destinatario }, [{ $set: { saldoRetenido: { $max: [0, { $subtract: [{ $ifNull: ['$saldoRetenido', 0] }, g.creadorUsd] }] } } }]);
                 revertidos++;
             }
-            await Usuario.updateOne({ usuario: compra.usuario }, { $set: { listaNegraAdmin: true, notasAdmin: `Contracargo/reembolso PayPal (${ev.event_type}) de ${compra.monedas} monedas`, fechaListaNegra: new Date() } });
+            if (sancionar) await Usuario.updateOne({ usuario: compra.usuario }, { $set: { listaNegraAdmin: true, notasAdmin: `Contracargo PayPal (${ev.event_type}) de ${compra.monedas} monedas`, fechaListaNegra: new Date() } });
             logger.warn(`[live] ${ev.event_type}: compra de @${compra.usuario} revertida, ${revertidos} regalo(s) retenido(s) anulados`);
             res.sendStatus(200);
         } catch (e) { logger.error(`[live] webhook: ${e.message}`); res.sendStatus(500); }

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0A0B0F">
-<title>Política de Privacidad v3.2 | UpGames</title>
+<title>Política de Privacidad v3.3 | UpGames</title>
 <meta name="description" content="Cómo UpGames recopila, usa y protege tus datos. Cumple Ley 1581 de 2012 (Colombia), GDPR y CCPA. Incluye NEXUS IA y reconocimiento automático de títulos.">
 <link rel="icon" type="image/png" sizes="96x96" href="./icons/icon-96.png?v=2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -31,12 +31,12 @@
     <p>Recopilamos solo los datos necesarios para operar UpGames. <strong>Nunca vendemos tus datos personales.</strong>
       Esta política cumple la Ley 1581 de 2012 (Colombia), el GDPR (Unión Europea) y la CCPA (California).</p>
     <div class="lg-meta">
-      <span>Versión 3.2</span><span>Vigente desde octubre de 2026</span><span>Ley 1581 de 2012</span><span>GDPR · CCPA</span>
+      <span>Versión 3.3</span><span>Vigente desde octubre de 2026</span><span>Ley 1581 de 2012</span><span>GDPR · CCPA</span>
     </div>
   </section>
 
   <div class="lg-note g"><span class="ic">🛡️</span><div><strong>Resumen.</strong> Usamos tu usuario, email y contraseña (cifrada con
-    bcrypt) para autenticarte; opcionalmente tu email de PayPal para pagarte. Registramos tu IP de forma temporal contra el
+    bcrypt) para autenticarte; opcionalmente tu método de cobro (PayPal, Nequi, Daviplata, banco o Mercado Pago), guardado cifrado, para pagarte. Registramos tu IP de forma temporal contra el
     fraude. Si usas NEXUS IA, guardamos un registro mínimo de tus preguntas (30 días) para mejorarla. Cuando escribes un título al
     publicar, solo enviamos ese texto para reconocerlo. Si pagas con tarjeta, <strong>los datos de la tarjeta los procesan
     Mercado Pago o PayPal, no nosotros</strong>: solo guardamos qué compraste y el estado del pago. Tus lives no se graban. Nada más, y nunca lo vendemos.</div></div>
@@ -80,7 +80,12 @@
     </ul>
     <h3>2.2 Monetización (opcionales)</h3>
     <ul>
-      <li><strong>Email de PayPal</strong> — solo si quieres recibir pagos; se comparte únicamente con PayPal.</li>
+      <li><strong>Método de cobro</strong> — solo si quieres retirar tus ganancias. Según el que elijas: email de PayPal; celular y titular de Nequi
+        o Daviplata; email o celular y titular de Mercado Pago; o banco, tipo y número de cuenta, titular y tipo y número de documento.
+        Se guardan <strong>cifrados (AES-256)</strong>; tú solo ves una versión enmascarada (•••• 1234) y el administrador los ve únicamente
+        al hacer tu transferencia (cada consulta queda registrada). Se comparten solo con la entidad que recibe el dinero (PayPal, Nequi,
+        Daviplata, tu banco o Mercado Pago).</li>
+      <li><strong>Retiros</strong> — monto, fecha, método (enmascarado), estado y número de comprobante de cada pago que te hacemos.</li>
       <li><strong>Nivel de verificación</strong> — se asigna automáticamente según tus seguidores (100 / 500 / 1.000).</li>
       <li><strong>Tarjetas registradas antes de octubre de 2026</strong> — titular, alias, últimos 4 dígitos, vencimiento y marca. Ya no se registran
         tarjetas nuevas; puedes pedir el borrado de las existentes.</li>
@@ -177,6 +182,9 @@
     <div class="lg-grid">
       <div class="lg-tile"><b>💳 Mercado Pago</b>Procesa los pagos con tarjeta (recibe los datos de la tarjeta y de identificación directamente; nosotros no).</div>
       <div class="lg-tile"><b>💳 PayPal</b>Procesa los pagos con tarjeta o PayPal (recibe los datos de la tarjeta directamente; nosotros no) y los retiros a tu email de PayPal.</div>
+      <div class="lg-tile"><b>🏦 Nequi · Daviplata · bancos · Mercado Pago</b>Solo si los eliges para cobrar: reciben los datos necesarios para la transferencia de tus ganancias.</div>
+      <div class="lg-tile"><b>✉️ Gmail (Google)</b>Envía los correos de la cuenta: verificación, recuperación de contraseña y avisos de seguridad (por ejemplo, cambio de método de cobro).</div>
+      <div class="lg-tile"><b>▶️ YouTube</b>Los videos de YouTube incrustados en una publicación se cargan desde YouTube, que puede usar sus propias cookies.</div>
       <div class="lg-tile"><b>📡 Servidores STUN/TURN</b>Google y Cloudflare ayudan a conectar el video en vivo; ven direcciones IP, no contenido.</div>
       <div class="lg-tile"><b>🗄️ MongoDB Atlas</b>Base de datos principal, cifrada en reposo.</div>
       <div class="lg-tile"><b>🚂 Railway</b>Hosting del backend y de NEXUS.</div>
@@ -202,6 +210,8 @@
       <tr><td>Registros de actividad sospechosa</td><td>Mientras sean necesarios para la investigación</td><td>Módulo anti-fraude</td></tr>
       <tr><td>Historial de pagos, compras de monedas, regalos y accesos directos</td><td>7 años</td><td>Obligación fiscal y prevención de fraude</td></tr>
       <tr><td>Pase sin anuncios (plan, vencimiento, preferencias de recordatorio)</td><td>Mientras exista la cuenta</td><td>Eliminación a petición</td></tr>
+      <tr><td>Método de cobro (cifrado)</td><td>Mientras exista la cuenta o hasta que lo cambies</td><td>Se reemplaza al cambiarlo; se borra con la cuenta</td></tr>
+      <tr><td>Datos de cobro usados en cada retiro (cifrados)</td><td>7 años</td><td>Soporte del pago ante reclamos y obligaciones fiscales</td></tr>
       <tr><td>Datos de cada live (sin video)</td><td>Mientras exista la cuenta</td><td>Eliminación a petición</td></tr>
       <tr><td>Chat de un live</td><td>Solo durante el directo</td><td>En memoria, nunca en la base de datos</td></tr>
       <tr><td>Registro de NEXUS</td><td>30 días (eventos de uso: 90 días)</td><td>Borrado a petición</td></tr>
@@ -272,13 +282,13 @@
     <h2><span class="n">12</span>Cambios y contacto</h2>
     <ul>
       <li>Los cambios sustanciales se notificarán por email y con un aviso en la plataforma con al menos 15 días de antelación.</li>
-      <li>La versión y fecha de vigencia se actualizan en cada revisión (actualmente v3.2).</li>
+      <li>La versión y fecha de vigencia se actualizan en cada revisión (actualmente v3.3).</li>
       <li>Responsable de protección de datos: Jhonatan David Castro Galviz — <a href="mailto:mr.m0onster@protonmail.com">mr.m0onster@protonmail.com</a> — respuesta en 5–10 días hábiles.</li>
     </ul>
   </section>
 
   <footer class="lg-foot">
-    © 2026 UpGames · Política de Privacidad v3.2 · Vigente desde octubre de 2026<br><br>
+    © 2026 UpGames · Política de Privacidad v3.3 · Vigente desde octubre de 2026<br><br>
     <a href="./terminos_condiciones.html">Términos</a>·<a href="./politica-privacidad.html">Privacidad</a>·<a href="./biblioteca.html">Volver a UpGames</a>
   </footer>
 </main>

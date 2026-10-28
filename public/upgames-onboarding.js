@@ -44,7 +44,7 @@
                 centrado: true,
                 emoji: '🎮',
                 titulo: '¿Qué es UpGames?',
-                texto: 'Una biblioteca global donde cualquiera puede compartir juegos, mods, APKs y contenido gaming. Los creadores ganan dinero real por cada descarga ($1 por cada 1000 descargas).'
+                texto: 'Un ecosistema gamer en un solo lugar: biblioteca de juegos, mods y apps indexada por la comunidad, videos, lives con chat y regalos, red social, NEXUS IA y monetización real para los creadores.'
             },
             {
                 centrado: true,
@@ -96,7 +96,7 @@
                 centrado: true,
                 emoji: '💰',
                 titulo: 'Monetización CPM',
-                texto: 'Ganas $1 USD por cada 1000 descargas efectivas. 100% va a tu bolsillo. Mínimo de retiro: $10.'
+                texto: 'Ganas $1 USD por cada 1.000 descargas verificadas, el 25% de los regalos de tus lives y de los accesos directos a tus enlaces. Retiras desde $10 por PayPal, Nequi, Daviplata, banco o Mercado Pago.'
             },
             {
                 centrado: true,

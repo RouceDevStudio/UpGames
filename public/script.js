@@ -1607,12 +1607,7 @@ async function renderEconomia() {
   // Setear pfUser si aún no está seteado
   if(!pfUser) pfUser = user;
   // Registrar listeners de botones (por si es la primera vez que se abre esta vista)
-  const btnPaypal = document.getElementById('pf-btn-guardar-paypal');
   const btnPago   = document.getElementById('pf-btn-solicitar-pago');
-  if(btnPaypal && !btnPaypal._listenerAdded) {
-    btnPaypal.addEventListener('click', pfGuardarPaypal);
-    btnPaypal._listenerAdded = true;
-  }
   if(btnPago && !btnPago._listenerAdded) {
     btnPago.addEventListener('click', pfSolicitarPago);
     btnPago._listenerAdded = true;
@@ -1839,7 +1834,6 @@ function pfInitForm() {
     }
   });
   // PayPal
-  document.getElementById('pf-btn-guardar-paypal')?.addEventListener('click', pfGuardarPaypal);
   document.getElementById('pf-btn-solicitar-pago')?.addEventListener('click', pfSolicitarPago);
   // Edit save
   document.getElementById('pf-edit-save-btn')?.addEventListener('click', pfSaveEdit);
@@ -3021,7 +3015,7 @@ async function pfLoadEconomia() {
       jgEl.dataset.val = newJg;
       _animateValue(jgEl, prevJg, newJg, 0, '', 600);
 
-      if(d.paypalEmail) document.getElementById('pf-paypal-email-input').value = d.paypalEmail;
+      ecoCobroPintar(d.metodoCobro, d.esperaCobroHasta);
       if(!d.isVerificado||d.verificadoNivel<1) {
         document.getElementById('pf-estado-verificacion').style.display='flex';
       }
@@ -3426,26 +3420,60 @@ function pfFmt(n) {
   if(n>=1e3) return (n/1e3).toFixed(1)+'K';
   return n.toString();
 }
-async function pfGuardarPaypal() {
-  const email = document.getElementById('pf-paypal-email-input').value.trim();
-  if(!email||!email.includes('@')||!email.includes('.')) { toast('⚠️ Email inválido'); return; }
-  const token = LS.get('token');
-  try {
-    const res = await fetch(`${PF_API}/economia/actualizar-paypal`,{
-      method:'PUT',
-      headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},
-      body: JSON.stringify({ paypalEmail: email })
-    });
-    const d = await res.json();
-    if(d.success) toast('✅ Email de PayPal actualizado');
-    else toast('❌ '+(d.error||'Error'));
-  } catch(e) { toast('❌ Error de conexión'); }
+// ── MÉTODO DE COBRO (PayPal, Nequi, Daviplata, banco, Mercado Pago) ──
+let _ecoCobroCfg = null;
+function ecoCobroPintar(m, espera) {
+  const box = document.getElementById('eco-cobro'); if (!box || box.dataset.editando) return;
+  const ic = { paypal: '🅿️', nequi: '💜', daviplata: '🔴', banco: '🏦', mercadopago: '🤝' };
+  box.innerHTML = m
+    ? `<div class="eco-cobro-act"><span class="eco-cobro-ic">${ic[m.tipo] || '💳'}</span><div><b>${escH(m.resumen)}</b>${espera ? `<small>🔒 Por seguridad podrás retirar desde el ${new Date(espera).toLocaleString('es-CO')}</small>` : '<small>Aquí te enviamos tus retiros</small>'}</div><button type="button" class="eco-cobro-btn" onclick="ecoCobroEditar()">Cambiar</button></div>`
+    : `<div class="eco-cobro-vacio"><p>Aún no has dicho dónde quieres recibir tu dinero.</p><button type="button" class="eco-cobro-btn p" onclick="ecoCobroEditar()">Configurar método de cobro</button></div>`;
+}
+async function ecoCobroEditar() {
+  const box = document.getElementById('eco-cobro'); if (!box) return;
+  try { if (!_ecoCobroCfg) _ecoCobroCfg = await (await fetch(`${PF_API}/economia/metodo-cobro`, { headers: { Authorization: `Bearer ${LS.get('token')}` } })).json(); }
+  catch (_) { toast('❌ Error de conexión'); return; }
+  const c = _ecoCobroCfg; box.dataset.editando = '1';
+  const opt = (arr, sel) => arr.map(x => `<option ${x === sel ? 'selected' : ''}>${escH(x)}</option>`).join('');
+  const campos = {
+    paypal: `<input name="email" type="email" placeholder="Email de tu cuenta PayPal" autocomplete="email">`,
+    nequi: `<input name="celular" inputmode="numeric" placeholder="Celular Nequi (10 dígitos)"><input name="titular" placeholder="Nombre del titular">`,
+    daviplata: `<input name="celular" inputmode="numeric" placeholder="Celular Daviplata (10 dígitos)"><input name="titular" placeholder="Nombre del titular">`,
+    mercadopago: `<input name="cuenta" placeholder="Email o celular de tu cuenta Mercado Pago"><input name="titular" placeholder="Nombre del titular">`,
+    banco: `<select name="banco"><option value="">Banco…</option>${opt(c.bancos)}</select><select name="tipoCuenta"><option value="ahorros">Ahorros</option><option value="corriente">Corriente</option></select>
+      <input name="numero" inputmode="numeric" placeholder="Número de cuenta"><input name="titular" placeholder="Titular (como aparece en el banco)">
+      <div class="eco-cobro-2"><select name="tipoDoc">${opt(c.tiposDoc, 'CC')}</select><input name="documento" placeholder="Número de documento"></div>`,
+  };
+  box.innerHTML = `<div class="eco-cobro-form">
+    <div class="eco-cobro-tipos">${c.tipos.map((t, i) => `<button type="button" data-t="${t.id}" class="${i === 0 ? 'on' : ''}">${escH(t.nombre)}</button>`).join('')}</div>
+    <div class="eco-cobro-campos"></div>
+    <input name="password" type="password" placeholder="Tu contraseña de UpGames (para confirmar)" autocomplete="current-password">
+    <p class="eco-cobro-nota">🔒 Tus datos se guardan cifrados y solo se usan para enviarte tus retiros. Si cambias un método ya configurado, por seguridad los retiros quedan en espera ${c.esperaHoras} h y te avisamos por email.
+      <b>No se puede pagar a un número de tarjeta</b>: si tienes tarjeta débito, usa la cuenta, Nequi o Daviplata asociada.</p>
+    <div class="eco-cobro-acc"><button type="button" class="eco-cobro-btn" data-a="cancelar">Cancelar</button><button type="button" class="eco-cobro-btn p" data-a="guardar">Guardar</button></div></div>`;
+  let tipo = c.tipos[0].id;
+  const pintarCampos = () => { box.querySelector('.eco-cobro-campos').innerHTML = campos[tipo]; };
+  pintarCampos();
+  box.querySelectorAll('.eco-cobro-tipos button').forEach(b => b.onclick = () => { tipo = b.dataset.t; box.querySelectorAll('.eco-cobro-tipos button').forEach(x => x.classList.toggle('on', x === b)); pintarCampos(); });
+  box.querySelector('[data-a="cancelar"]').onclick = () => { delete box.dataset.editando; pfLoadEconomia(); };
+  box.querySelector('[data-a="guardar"]').onclick = async e => {
+    const datos = {}; box.querySelectorAll('.eco-cobro-campos [name]').forEach(x => datos[x.name] = x.value);
+    const password = box.querySelector('[name="password"]').value;
+    if (!password) { toast('⚠️ Escribe tu contraseña para confirmar'); return; }
+    e.target.disabled = true;
+    try {
+      const r = await fetch(`${PF_API}/economia/metodo-cobro`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${LS.get('token')}` }, body: JSON.stringify({ tipo, datos, password }) });
+      const d = await r.json();
+      if (d.success) { toast('✅ ' + d.mensaje); delete box.dataset.editando; ecoCobroPintar(d.metodo, d.esperaHasta); pfLoadEconomia(); }
+      else { toast('❌ ' + (d.error || 'Error')); e.target.disabled = false; }
+    } catch (_) { toast('❌ Error de conexión'); e.target.disabled = false; }
+  };
 }
 async function pfSolicitarPago() {
   const ok = await customConfirm({
     icon: '💸',
     title: 'Solicitar pago',
-    msg: '¿Confirmas que deseas solicitar un pago? El administrador revisará tu solicitud en 24-72h.',
+    msg: '¿Confirmas que deseas retirar tu saldo? Lo enviaremos al método de cobro que configuraste, normalmente en 24-72 h hábiles.',
     okText: 'Solicitar',
     okDanger: false
   });
@@ -5529,8 +5557,9 @@ async function pfLoadHistorialPagos() {
             <div>
               <div style="font-weight:700;font-size:16px;color:#f0f0f8">$${parseFloat(p.monto).toFixed(2)} <span style="font-size:11px;color:#60607a">USD</span></div>
               <div style="font-size:11px;color:#60607a;margin-top:3px">${new Date(p.fecha).toLocaleDateString('es-ES',{year:'numeric',month:'short',day:'numeric'})}</div>
-              ${p.paypalEmail ? `<div style="font-size:11px;color:#60607a">→ ${p.paypalEmail}</div>` : ''}
-              ${p.notas ? `<div style="font-size:11px;color:#a0a0b8;margin-top:4px">${p.notas}</div>` : ''}
+              ${(p.resumen || p.paypalEmail) ? `<div style="font-size:11px;color:#60607a">→ ${escH(p.resumen || p.paypalEmail)}</div>` : ''}
+              ${p.referencia ? `<div style="font-size:11px;color:#32D583">Comprobante: ${escH(p.referencia)}</div>` : ''}
+              ${p.notas ? `<div style="font-size:11px;color:#a0a0b8;margin-top:4px">${escH(p.notas)}</div>` : ''}
             </div>
             <span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;background:rgba(0,0,0,.3);color:${colorEstado[p.estado]||'#aaa'};border:1px solid ${colorEstado[p.estado]||'#aaa'}">${(p.estado||'').toUpperCase()}</span>
           </div>`).join('')}
@@ -5688,7 +5717,7 @@ let _ugPagosJs = null;
 const ugPagosListo = () => (_ugPagosJs = _ugPagosJs || new Promise((ok, ko) => {
   if (window.UGPagos) return ok();
   const s = document.createElement('script');
-  s.src = './upgames-pagos.js?v=20261028a'; s.onload = ok; s.onerror = () => { _ugPagosJs = null; ko(); };
+  s.src = './upgames-pagos.js?v=20261028b'; s.onload = ok; s.onerror = () => { _ugPagosJs = null; ko(); };
   document.head.appendChild(s);
 }));
 function ecoAbrirTienda() {
@@ -5715,7 +5744,7 @@ function ecoAbrirTienda() {
     box.hidden = false;
     if (forzado) box.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
-  window.ugVerifMostrar = () => fetch(`${API_URL}/auth/email-estado`, { headers: H }).then(r => r.json()).then(d => { if (d.success && !d.verificado) mostrar(d.email); else if (d.verificado) toast('✅ Tu email ya está verificado'); }).catch(() => {});
+  window.ugVerifMostrar = () => fetch(`${API_URL}/auth/email-estado`, { headers: H }).then(r => r.json()).then(d => { if (d.success && !d.verificado) mostrar(d.email); else if (d.verificado && forzado) toast('✅ Tu email ya está verificado'); }).catch(() => {});   // el aviso solo si vino a verificar
   if (!oculto || forzado) setTimeout(window.ugVerifMostrar, 1800);
   document.getElementById('ug-verif-x').onclick = () => { box.hidden = true; try { localStorage.setItem('ug_verif_oculto', String(Date.now())); } catch (_) {} };
   document.getElementById('ug-verif-btn').onclick = async e => {

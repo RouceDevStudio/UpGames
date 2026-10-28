@@ -1344,10 +1344,11 @@ async function enviarAnuncio() {
 // ─────────── Pagos ───────────
 function rPays() {
   if (pF === 'hist') return;
-  const q = qv(), l = D.pagos.filter(p => !q || (p.usuario || '').toLowerCase().includes(q) || (p.paypalEmail || '').toLowerCase().includes(q));
+  const q = qv(), l = D.pagos.filter(p => !q || (p.usuario || '').toLowerCase().includes(q) || (p.paypalEmail || '').toLowerCase().includes(q) || (p.resumen || '').toLowerCase().includes(q));
   $('payList').innerHTML = l.length ? l.map(p => { const du = p.datosUsuario || {}, tj = D.tarjetas.filter(t => t.usuario === p.usuario && t.proposito !== 'pagos');
     return `<div class="card"><div class="pay-h"><div><div style="font-weight:800;color:var(--g1)">@${esc(p.usuario)} ${vNiv(du.verificadoNivel)}</div><div class="small muted">${fdate(p.fecha || p.createdAt)}</div></div><div class="pay-m">${money(p.monto)}</div></div>
-      <div class="kv"><div><small>PayPal</small><span onclick="cp(this.textContent)" style="cursor:pointer;color:var(--g1)">${esc(p.paypalEmail || '—')}</span></div><div><small>Email</small><span>${esc(du.email || '—')}</span></div><div><small>Descargas</small><span>${num(du.descargasTotales)}</span></div><div><small>Juegos +2K</small><span>${num(du.juegosElegibles)}</span></div>
+      <div class="kv"><div style="grid-column:1/-1"><small>Pagar por</small><span style="color:var(--g1)">${esc(p.resumen || ('PayPal · ' + (p.paypalEmail || '—')))}</span>${TASA_COP ? `<span class="small muted"> · ≈ COP ${Math.round(p.monto * TASA_COP).toLocaleString('es-CO')}</span>` : ''}</div>
+      <div style="grid-column:1/-1" id="dc-${p._id}"><button class="btn" style="padding:6px 10px;font-size:.78rem" onclick="verDatosCobro('${p._id}')"><ion-icon name="eye-outline"></ion-icon> Ver datos para pagar</button></div><div><small>Email</small><span>${esc(du.email || '—')}</span></div><div><small>Descargas</small><span>${num(du.descargasTotales)}</span></div><div><small>Juegos +2K</small><span>${num(du.juegosElegibles)}</span></div>
       ${tj.slice(0, 2).map(t => `<div><small>Tarjeta ${esc(t.tipo)}</small><span class="mono">•••• ${esc(t.ultimos4)} ${t.esPrincipal ? '⭐' : ''}</span></div>`).join('')}</div>
       ${du.listaNegraAdmin ? '<div class="tag t-org" style="margin-bottom:10px">🚫 Usuario en lista negra — revisa antes de pagar</div>' : ''}
       <div class="row"><button class="btn ok grow" onclick="doPago('${p._id}')"><ion-icon name="checkmark-circle"></ion-icon> Marcar pagado</button><button class="btn bad" onclick="rejPago('${p._id}')"><ion-icon name="close-circle"></ion-icon> Rechazar</button></div></div>`; }).join('')
@@ -1358,11 +1359,22 @@ async function loadHist() {
   try { const { d } = await api('/admin/finanzas/historial-completo?limite=150');
     const h = d.historial || [];
     const tot = h.filter(x => x.estado === 'completado' || x.estado === 'procesado').reduce((a, x) => a + (x.monto || 0), 0);
-    $('payList').innerHTML = h.length ? `<div class="card small">Pagado en total: <b style="color:var(--ok)">${money(tot)}</b> · ${h.length} movimientos</div>` + h.map(p => `<div class="card row" style="padding:12px 14px"><span class="tag ${p.estado === 'rechazado' ? 't-bad' : p.estado === 'pendiente' ? 't-warn' : 't-ok'}">${esc(p.estado)}</span><div class="grow"><b style="color:var(--g1)">@${esc(p.usuario)}</b><div class="small muted">${fdate(p.fecha)} · ${esc(p.paypalEmail || '')}${p.notas ? ' · ' + esc(p.notas) : ''}</div></div><b style="color:var(--warn)">${money(p.monto)}</b></div>`).join('') : '<div class="empty">Sin historial</div>';
+    $('payList').innerHTML = h.length ? `<div class="card small">Pagado en total: <b style="color:var(--ok)">${money(tot)}</b> · ${h.length} movimientos</div>` + h.map(p => `<div class="card row" style="padding:12px 14px"><span class="tag ${p.estado === 'rechazado' ? 't-bad' : p.estado === 'pendiente' ? 't-warn' : 't-ok'}">${esc(p.estado)}</span><div class="grow"><b style="color:var(--g1)">@${esc(p.usuario)}</b><div class="small muted">${fdate(p.fecha)} · ${esc(p.resumen || p.paypalEmail || '')}${p.notas ? ' · ' + esc(p.notas) : ''}</div></div><b style="color:var(--warn)">${money(p.monto)}</b></div>`).join('') : '<div class="empty">Sin historial</div>';
   } catch (_) {}
 }
-async function doPago(id) { const p = D.pagos.find(x => x._id === id); if (!p || !confirm(`¿Confirmas que YA enviaste ${money(p.monto)} a @${p.usuario}?`)) return;
-  try { const { ok, d } = await api(`/admin/finanzas/procesar-pago/${id}`, { method: 'POST', body: { notas: `Pagado el ${new Date().toLocaleDateString('es')} por @${S.admin.usuario}` } }); if (ok) { D.pagos = D.pagos.filter(x => x._id !== id); updBadges(); render(); toast(`✓ Pago a @${p.usuario} registrado`); } else toast(d.error || 'Error', 'err'); } catch (_) {} }
+// Tasa USD→COP de Mercado Pago (solo orientativa para transferencias en pesos)
+let TASA_COP = 0;
+fetch(API + '/tienda/catalogo').then(r => r.json()).then(d => { TASA_COP = d?.metodos?.mercadopago?.moneda === 'COP' ? d.metodos.mercadopago.tasa : 0; }).catch(() => {});
+async function verDatosCobro(id) {
+  const el = $('dc-' + id); if (!el) return;
+  try { const { ok, d } = await api(`/admin/finanzas/datos-cobro/${id}`, { method: 'POST' }); if (!ok) { toast(d.error || 'Error', 'err'); return; }
+    const L = { email: 'Email', celular: 'Celular', cuenta: 'Cuenta', titular: 'Titular', banco: 'Banco', tipoCuenta: 'Tipo de cuenta', numero: 'Número de cuenta', tipoDoc: 'Tipo doc.', documento: 'Documento' };
+    el.innerHTML = `<div class="small" style="padding:8px 10px;border:1px dashed var(--bd);border-radius:10px"><b>${esc(d.nombre || d.metodo)}</b>${Object.entries(d.datos).map(([k, v]) => `<div>${esc(L[k] || k)}: <span class="mono" style="cursor:pointer;color:var(--g1)" onclick="cp(this.textContent)">${esc(v)}</span></div>`).join('')}<div class="muted">Toca un dato para copiarlo. Esta consulta queda registrada.</div></div>`;
+  } catch (_) {}
+}
+async function doPago(id) { const p = D.pagos.find(x => x._id === id); if (!p || !confirm(`¿Confirmas que YA enviaste ${money(p.monto)} a @${p.usuario}${p.resumen ? ' (' + p.resumen + ')' : ''}?`)) return;
+  const referencia = (p.metodo && p.metodo !== 'paypal') ? (prompt('Número de comprobante o referencia de la transferencia (lo verá el creador):') || '').trim().slice(0, 120) : '';
+  try { const { ok, d } = await api(`/admin/finanzas/procesar-pago/${id}`, { method: 'POST', body: { referencia, notas: `Pagado el ${new Date().toLocaleDateString('es')} por @${S.admin.usuario}${referencia ? ' · ref. ' + referencia : ''}` } }); if (ok) { D.pagos = D.pagos.filter(x => x._id !== id); updBadges(); render(); toast(`✓ Pago a @${p.usuario} registrado`); } else toast(d.error || 'Error', 'err'); } catch (_) {} }
 function rejPago(id) { const p = D.pagos.find(x => x._id === id); if (!p) return;
   txtModal({ t: 'Rechazar pago · @' + p.usuario, s: `${money(p.monto)} · el usuario podrá volver a solicitarlo.`, l: 'Motivo (lo verá el usuario)', ok: 'Rechazar', cls: 'btn bad',
     fn: async motivo => { const { d } = await api(`/admin/finanzas/rechazar-pago-admin/${id}`, { method: 'POST', body: { motivo } }); if (d.success) { D.pagos = D.pagos.filter(x => x._id !== id); cm('mTxt'); updBadges(); render(); toast('✗ Pago rechazado', 'warn'); } else toast(d.error || 'Error', 'err'); } }); }

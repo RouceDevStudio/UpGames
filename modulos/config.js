@@ -43,8 +43,11 @@ const config = {
     ],
     
     // ========== ECONOMÍA CPM ==========
-    CPM_VALUE: 1.00,                      // $1.00 por 1,000 descargas
-    AUTHOR_PERCENTAGE: 1.00,              // 100% para el creador
+    // Lo que gana el creador por cada 1.000 descargas verificadas por la página puente.
+    // Debe ser ≤ 30 % de lo que pagan los anuncios por 1.000 visitas a la puente
+    // (ej.: si los anuncios pagan US$4 por 1.000 visitas, CPM_VALUE ≤ 1.20).
+    CPM_VALUE: Math.max(0, Math.min(5, parseFloat(process.env.CPM_VALUE) || 1.00)),
+    AUTHOR_PERCENTAGE: 1.00,              // el CPM de arriba ya es la parte del creador
     MIN_WITHDRAWAL: 10,                   // Mínimo $10 USD para retiro
     MAX_DOWNLOADS_PER_IP_PER_DAY: 2,      // Límite anti-bots
     

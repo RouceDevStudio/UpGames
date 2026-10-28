@@ -39,8 +39,8 @@ function lite(j) {
 // ── Base de conocimiento de UpGames (reglas reales de la plataforma) ──
 function conocimiento({ config, LINKS_PERMITIDOS }) {
     return {
-        economia: `Hay tres fuentes de ingreso: descargas (CPM), el 70% de los regalos en tus lives y el 30% de cada acceso directo (US$1) a tus enlaces; lo de regalos y accesos queda 7 días en retención antes de ser retirable. Cada descarga válida de tu contenido suma dinero a tu saldo: ${config.CPM_VALUE} USD por cada 1.000 descargas (CPM) y el ${Math.round(config.AUTHOR_PERCENTAGE * 100)}% es para el creador. Una misma IP cuenta como máximo ${config.MAX_DOWNLOADS_PER_IP_PER_DAY} descargas al día por publicación; con bloqueador de anuncios la descarga no cuenta. Hay un detector de fraude: descargas infladas se revierten y la cuenta puede quedar en revisión.`,
-        retiros: `Para retirar necesitas: saldo mínimo de ${config.MIN_WITHDRAWAL} USD, estar verificado (nivel 1 o más, lo concede el equipo de UpGames), un correo de PayPal guardado en la pestaña Economía, al menos una publicación con descargas (o ingresos de lives/accesos directos ya liberados) y no tener otra solicitud pendiente. El pago se envía por PayPal tras revisarlo el equipo.`,
+        economia: `Hay cuatro fuentes de ingreso: descargas por la página puente (${config.CPM_VALUE} USD por cada 1.000 descargas verificadas, CPM), el 25% de cada regalo en tus lives, el 25% de cada acceso directo (US$1) a tus enlaces y US$0,01 la primera vez que alguien con Pase abre tu publicación. Lo de regalos, accesos y pases queda 7 días en retención antes de ser retirable. UpGames se queda con el resto (mínimo 70%) para pagar pasarelas de pago, servidores y operación. Una misma IP cuenta como máximo ${config.MAX_DOWNLOADS_PER_IP_PER_DAY} descargas al día por publicación; con bloqueador de anuncios la descarga no cuenta. Hay un detector de fraude: descargas infladas se revierten y la cuenta puede quedar en revisión.`,
+        retiros: `Para retirar necesitas: saldo mínimo de ${config.MIN_WITHDRAWAL} USD, estar verificado (nivel 1 o más, lo concede el equipo de UpGames), un método de cobro configurado en Economía (PayPal, Nequi, Daviplata, cuenta bancaria en Colombia o Mercado Pago; no se puede pagar a un número de tarjeta), al menos una publicación con descargas (o ingresos de lives/accesos directos ya liberados) y no tener otra solicitud pendiente. El equipo revisa la solicitud y envía el dinero a ese método (24-72 h hábiles); en el historial aparece el comprobante. Cambiar el método exige la contraseña y deja los retiros 48 h en espera por seguridad.`,
         publicar: `Para publicar ve a Perfil → Publicar. Necesitas título, categoría (${CATEGORIAS.join(', ')}), portada y un enlace de descarga de una plataforma permitida: ${LINKS_PERMITIDOS.join(', ')}. Sin acortadores ni enlaces directos a .exe/.msi (usa .zip o .rar). Todo pasa por revisión del equipo antes de salir en el inicio. Antes de enviarla, Nexus revisa la publicación (enlace vivo, portada, descripción, duplicados). Si subes un mod por partes (Parte 1, Parte 2…), UpGames las agrupa en una sola tarjeta y se desbloquean en orden.`,
         normas: 'No se permite piratería de juegos comerciales (cracks, keygens, repacks de juegos de pago), malware, enlaces rotos, spam, ni contenido engañoso. Las publicaciones rechazadas muestran el motivo en tu perfil para que las corrijas.',
         verificacion: 'La verificación (insignia) la otorga el equipo de UpGames a creadores activos y confiables. Niveles 1 a 3. Nivel 1 es necesario para retirar ganancias.',
@@ -132,7 +132,7 @@ function crear(deps, ctx) {
         },
         async mi_cuenta() {
             if (!ctx.usuario) return sinSesion;
-            const u = await Usuario.findOne({ usuario: ctx.usuario }).select('usuario saldo saldoRetenido monedas descargasTotales isVerificado verificadoNivel paypalEmail solicitudPagoPendiente listaSeguidores siguiendo fecha listaNegraAdmin').lean();
+            const u = await Usuario.findOne({ usuario: ctx.usuario }).select('usuario saldo saldoRetenido monedas descargasTotales isVerificado verificadoNivel paypalEmail cobro solicitudPagoPendiente listaSeguidores siguiendo fecha listaNegraAdmin').lean();
             if (!u) return { error: 'Cuenta no encontrada' };
             const [porEstado, conDescargas] = await Promise.all([
                 Juego.aggregate([{ $match: { usuario: ctx.usuario } }, { $group: { _id: '$status', n: { $sum: 1 }, d: { $sum: '$descargasEfectivas' } } }]),
@@ -142,7 +142,7 @@ function crear(deps, ctx) {
             const falta = [];
             if ((u.saldo || 0) < min) falta.push(`llegar a ${min} USD (faltan ${(min - (u.saldo || 0)).toFixed(2)} USD, unas ${Math.ceil((min - (u.saldo || 0)) / (deps.config.CPM_VALUE * deps.config.AUTHOR_PERCENTAGE / 1000)).toLocaleString('es')} descargas)`);
             if (!u.isVerificado || (u.verificadoNivel || 0) < 1) falta.push('estar verificado (nivel 1)');
-            if (!u.paypalEmail) falta.push('guardar tu correo de PayPal en Economía');
+            if (!u.paypalEmail && !u.cobro?.tipo) falta.push('configurar tu método de cobro en Economía (PayPal, Nequi, Daviplata, banco o Mercado Pago)');
             const LiveTx = mongoose.models.LiveTx;
             const ingresosLive = LiveTx ? await LiveTx.exists({ tipo: { $in: ['regalo', 'acceso'] }, destinatario: ctx.usuario, estado: 'liberada' }) : null;
             if (!conDescargas && !ingresosLive) falta.push('tener al menos una publicación con descargas (o ingresos de lives/accesos directos liberados)');
