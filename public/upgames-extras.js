@@ -228,7 +228,7 @@
     const prev = c => c.tipo === 'marco' ? `<div class="ugx-prev ugs-marco ugs-m-${esc(c.id)}">${esc(c.emoji)}</div>`
       : c.tipo === 'color' ? `<div class="ugx-prev-color ugs-c-${esc(c.id)}">@${esc(yo())}</div>`
       : c.tipo === 'fondo' ? `<div class="ugx-prev-fondo ugs-f-${esc(c.id)}"></div>`
-      : c.tipo === 'tarjeta' ? `<div class="ugx-prev-tj ugs-t ugs-t-${esc(c.id)}"><i></i><span class="ugx-tj-l"></span><span class="ugx-tj-l c"></span><span class="ugx-tj-u">@${esc(yo())}</span></div>` : `<div class="ugx-prev">${esc(c.emoji)}</div>`;
+      : c.tipo === 'tarjeta' ? `<div class="ugx-prev-tj ugs-t ugs-vivo ugs-t-${esc(c.id)}"><i class="ugs-tj-fx" aria-hidden="true"></i><span class="ugx-tj-img"></span><span class="ugx-tj-tit">Tu mod épico</span><span class="ugx-tj-u">@${esc(yo())}</span></div>` : `<div class="ugx-prev">${esc(c.emoji)}</div>`;
     const accion = c => !mios.has(c.id) && faltaReq(c, mio.nivel)
       ? `<button type="button" class="ugx-btn sec" disabled title="${esc(reqTxt(c.req))}">🔒 ${fmt(c.precio)}</button>`
       : mios.has(c.id)
@@ -239,7 +239,7 @@
       ${destino ? `<div class="pfx-saldo">Tu saldo: <b>🪙 ${fmt(mio.upcoins?.total)}</b> UpCoins <button type="button" class="ugx-btn sec" data-recargar>Recargar</button></div>` : ''}
       <div class="ugx-tabs">${(cfg.packs || []).length ? `<button type="button" class="ugx-tab ${tab === 'pack' ? 'on' : ''}" data-tab="pack">🎁 Packs</button>` : ''}${Object.entries(TIPO_TXT).map(([k, t]) => `<button type="button" class="ugx-tab ${k === tab ? 'on' : ''}" data-tab="${k}">${t}</button>`).join('')}</div>
       ${tab === 'insignia' ? '<p class="ugx-sub">Muestra hasta 3 insignias junto a tu nombre. Algunas solo se ganan con misiones.</p>' : ''}
-      ${tab === 'tarjeta' ? `<p class="ugx-sub">Cambia cómo ven todos las tarjetas de tus publicaciones en Explorar y en tu perfil público. Los diseños top piden verificación o seguidores: hoy tienes ${mio.nivel?.verificado ? 'verificación nivel ' + mio.nivel.verificado : 'cuenta sin verificar'} y ${fmt(mio.nivel?.seguidores || 0)} seguidores.</p>` : ''}
+      ${tab === 'tarjeta' ? `<p class="ugx-sub">Tus publicaciones se ven animadas para todos: en Explorar, en tu perfil público y al abrirlas. Los diseños top piden verificación o seguidores: hoy tienes ${mio.nivel?.verificado ? 'verificación nivel ' + mio.nivel.verificado : 'cuenta sin verificar'} y ${fmt(mio.nivel?.seguidores || 0)} seguidores.</p>` : ''}
       ${tab === 'pack' ? packsHTML(mios, est) : `<div class="ugx-grid">${lista.map(c => `<div class="ugx-card ${equipado(c) ? 'eq' : ''}">${prev(c)}<b>${esc(c.nombre)}</b><small>${mios.has(c.id) ? (equipado(c) ? 'En uso' : 'Tuyo') : c.soloMision ? 'De misión' : `${fmt(c.precio)} UpCoins`}</small>${c.req && !mios.has(c.id) ? `<small class="ugx-req ${faltaReq(c, mio.nivel) ? 'no' : 'si'}">${esc(reqTxt(c.req))}</small>` : ''}${accion(c)}</div>`).join('') || '<p class="ugx-sub">Nada por aquí todavía.</p>'}</div>`}`;
     const enlazar = b => {
       b.querySelectorAll('[data-pack]').forEach(x => x.onclick = async () => {
@@ -337,9 +337,11 @@
     card.dataset.u = u;
     card.className = card.className.replace(/\bugs-f-\S+\b|\bugs-autor-pro\b/g, '').trim();
     card.querySelector('.ugs-ins-autor')?.remove();
+    temaDetalle('');
     await cargarCfg();
     const t = (await tarjetas([u]))[u];
     if (card.dataset.u !== u) return;   // se abrió otra publicación mientras cargaba
+    temaDetalle(t?.estilo?.tarjeta);
     pintarAvatar(document.getElementById('ds-av-letter'), t);
     const nombre = document.getElementById('ds-author-name');
     if (nombre) { let n = nombre.querySelector('.an-n'); if (!n) { nombre.innerHTML = nombre.innerHTML.replace(/^@([^<\s]+)/, '<span class="an-n">@$1</span>'); n = nombre.querySelector('.an-n'); } aplicarEstilo(t?.estilo || {}, { nombre: n }); }
@@ -354,17 +356,33 @@
       card.querySelector('.author-info')?.appendChild(ins);
     }
   }
-  // Tarjetas del feed: cada publicación toma el diseño que compró su autor
+  // Tarjetas del feed: cada publicación toma el diseño que compró su autor.
+  // Se agrega la capa animada (.ugs-tj-fx) y las animaciones solo corren mientras la tarjeta está en pantalla.
+  const DISENO_OK = /^tj_[a-z]+$/;
+  const ioVivo = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => e.target.classList.toggle('ugs-vivo', e.isIntersecting)), { rootMargin: '80px' }) : null;
+  function vestirTarjeta(el, tj) {
+    if (!el || !DISENO_OK.test(tj || '')) return;
+    el.className = el.className.replace(/\bugs-t-\S+/g, '').trim();
+    el.classList.add('ugs-t', 'ugs-t-' + tj); el.dataset.tj = tj;
+    if (!el.querySelector(':scope > .ugs-tj-fx')) el.insertAdjacentHTML('afterbegin', '<i class="ugs-tj-fx" aria-hidden="true"></i>');
+    if (ioVivo) ioVivo.observe(el); else el.classList.add('ugs-vivo');
+  }
   async function estilizarTiles(raiz = document) {
     const tiles = [...raiz.querySelectorAll('.game-tile[data-u]:not([data-tj])')]; if (!tiles.length) return;
     tiles.forEach(t => t.dataset.tj = '');
     for (let i = 0; i < tiles.length; i += 40) {
       const parte = tiles.slice(i, i + 40), ts = await tarjetas(parte.map(t => t.dataset.u));
-      for (const t of parte) {
-        const tj = ts[t.dataset.u]?.estilo?.tarjeta; if (!tj || !/^tj_[a-z]+$/.test(tj)) continue;
-        t.dataset.tj = tj; t.classList.add('ugs-t', 'ugs-t-' + tj);
-      }
+      for (const t of parte) vestirTarjeta(t, ts[t.dataset.u]?.estilo?.tarjeta);
     }
+  }
+  // El detalle de una publicación toma el diseño de su creador
+  function temaDetalle(tj) {
+    const sh = document.getElementById('detail-sheet'); if (!sh) return;
+    sh.className = sh.className.replace(/\bugs-(t-\S+|tema|vivo)\b/g, '').trim();
+    sh.querySelector('.sheet-media > .ugs-tj-fx')?.remove();
+    if (!DISENO_OK.test(tj || '')) return;
+    sh.classList.add('ugs-tema', 'ugs-vivo', 'ugs-t-' + tj);
+    sh.querySelector('.sheet-media')?.insertAdjacentHTML('beforeend', '<i class="ugs-tj-fx" aria-hidden="true"></i>');
   }
   async function estilizarComentarios(lista) {
     const filas = [...(lista?.querySelectorAll('.comment-item[data-u]') || [])]; if (!filas.length) return;
@@ -445,6 +463,6 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 
-  window.UGX = { estilizarTiles, precio, activo, cargarCfg, cargarMio, hub, referidos, promoLive, tarjetas, estilizarComentarios, pintarAvatar, misiones, tienda, regalar, apoyar, alAbrirDetalle, prioridad, faltan, aplicarEstilo, insigniasHTML, clasesMarco,
+  window.UGX = { estilizarTiles, vestirTarjeta, precio, activo, cargarCfg, cargarMio, hub, referidos, promoLive, tarjetas, estilizarComentarios, pintarAvatar, misiones, tienda, regalar, apoyar, alAbrirDetalle, prioridad, faltan, aplicarEstilo, insigniasHTML, clasesMarco,
     hoja, cerrarHoja, pagar, fiesta, get cfg() { return cfg; } };
 })();
