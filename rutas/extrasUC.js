@@ -4,7 +4,7 @@
  *   GET  /extras/catalogo                 precios y catálogo vigentes (público)
  *   GET  /extras/mio                      lo que tengo: cosméticos, estilo equipado, misiones
  *   POST /extras/cosmetico                comprar un cosmético { id, clave }
- *   PUT  /extras/estilo                   equipar { marco, color, fondo, insignias[] }
+ *   PUT  /extras/estilo                   equipar { marco, color, fondo, tarjeta, insignias[] }
  *   POST /items/:id/apoyar                propina a una publicación { monto, clave }
  *   POST /items/:id/prioridad             revisión prioritaria { clave }
  *   GET  /misiones                        misiones de la semana
@@ -51,7 +51,7 @@ function registrar(app, deps) {
     // ── Catálogo ────────────────────────────────────────────────────────────
     const publicoCfg = c => ({
         activo: c.activo, precios: c.precios,
-        cosmeticos: c.cosmeticos.filter(x => x.activo || x.soloMision).map(({ id, tipo, nombre, emoji, precio, soloMision }) => ({ id, tipo, nombre, emoji, precio, soloMision: !!soloMision })),
+        cosmeticos: c.cosmeticos.filter(x => x.activo || x.soloMision).map(({ id, tipo, nombre, emoji, precio, soloMision, req }) => ({ id, tipo, nombre, emoji, precio, soloMision: !!soloMision, ...(req ? { req } : {}) })),
         misiones: c.activo.misiones ? c.misiones.filter(m => m.activa).map(({ id, titulo, objetivo, uc, insignia }) => ({ id, titulo, objetivo, uc, insignia })) : [],
         prioridadHoras: HORAS_PRIORIDAD, fundadorHasta: X.FUNDADOR_HASTA.toISOString(),
         packs: c.activo.cosmeticos && c.activo.packs ? X.PACKS.filter(p => X.precioPack(c, p)) : [],
@@ -63,7 +63,7 @@ function registrar(app, deps) {
     app.get('/extras/mio', verificarToken, async (req, res) => {
         try {
             const [u, c, mis] = await Promise.all([
-                Usuario.findOne({ usuario: req.usuario }).select('cosmeticos estilo lastUsernameChange monedas saldo solicitudPagoPendiente fecha createdAt').lean(),
+                Usuario.findOne({ usuario: req.usuario }).select('cosmeticos estilo lastUsernameChange monedas saldo solicitudPagoPendiente fecha createdAt verificadoNivel listaSeguidores').lean(),
                 X.config(), X.estado(req.usuario)]);
             // Insignia Fundador: se entrega sola (y se muestra si hay espacio) a las cuentas creadas a tiempo
             const alta = u?.fecha || u?.createdAt;
@@ -75,7 +75,7 @@ function registrar(app, deps) {
                 deps.olvidarPerfil?.(req.usuario);
             }
             const espera = u?.lastUsernameChange ? Math.max(0, Math.ceil(30 - (Date.now() - new Date(u.lastUsernameChange)) / 864e5)) : 0;
-            ok(res, { catalogo: publicoCfg(c), cosmeticos: u?.cosmeticos || [], estilo: u?.estilo || {}, misiones: mis, nombreEsperaDias: espera, upcoins: UC.saldoUC(u || {}), fundador: (u?.cosmeticos || []).includes('ins_fundador') });
+            ok(res, { catalogo: publicoCfg(c), cosmeticos: u?.cosmeticos || [], estilo: u?.estilo || {}, misiones: mis, nombreEsperaDias: espera, upcoins: UC.saldoUC(u || {}), fundador: (u?.cosmeticos || []).includes('ins_fundador'), nivel: { verificado: u?.verificadoNivel || 0, seguidores: (u?.listaSeguidores || []).length } });
         } catch (e) { logger.error(`[extras] mio: ${e.message}`); err(res, 500, 'No se pudo cargar'); }
     });
 
@@ -91,8 +91,10 @@ function registrar(app, deps) {
             if (!item || !item.activo || item.soloMision) return err(res, 404, 'Ese artículo no está a la venta');
             if (!claveOk(req.body?.clave)) return err(res, 400, 'Falta la clave del pago');
             const [code, body] = await unaVez(`${req.usuario}:${item.id}`, async () => {
-                const yo = await Usuario.findOne({ usuario: req.usuario }).select('cosmeticos estilo').lean();
+                const yo = await Usuario.findOne({ usuario: req.usuario }).select('cosmeticos estilo verificadoNivel listaSeguidores').lean();
                 if ((yo?.cosmeticos || []).includes(item.id)) return [409, { error: 'Ya tienes este artículo' }];
+                const falta = X.faltaRequisito(item, { verificado: yo?.verificadoNivel || 0, seguidores: (yo?.listaSeguidores || []).length });
+                if (falta) return [403, { error: falta }];
                 // La clave es la de esta compra: "ya lo tienes" (arriba) evita pagar dos veces; con una clave fija por artículo,
                 // quien lo perdiera (p. ej. un ajuste del equipo) recibiría "OK" sin el artículo al volver a comprarlo
                 const [st, b] = await cobrarConRegistro(req.usuario, item.precio, `cosmetico:${req.usuario}:${item.id}:${req.body.clave}`, { tipo: 'compra', planId: `cosmetico:${item.id}` });
@@ -144,7 +146,7 @@ function registrar(app, deps) {
             const yo = await Usuario.findOne({ usuario: req.usuario }).select('cosmeticos').lean();
             const mios = new Set(yo?.cosmeticos || []);
             const estilo = {};
-            for (const tipo of ['marco', 'color', 'fondo']) {
+            for (const tipo of ['marco', 'color', 'fondo', 'tarjeta']) {
                 const v = req.body?.[tipo];
                 if (v === '' || v === null) { estilo[tipo] = ''; continue; }
                 if (v === undefined) continue;

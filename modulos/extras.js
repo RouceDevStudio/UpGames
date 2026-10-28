@@ -1,7 +1,7 @@
 /**
  * Usos extra de los UpCoins: configuración editable desde el panel admin.
  *
- *   Estilo del perfil ... marcos de avatar, color del nombre, fondo e insignias (cosméticos)
+ *   Estilo del perfil ... marcos de avatar, color del nombre, fondo, insignias y diseño de tarjeta (cosméticos)
  *   Super Chat .......... mensaje destacado y fijado en un live (el creador recibe 25 %)
  *   Apoyar .............. propina a una publicación (el creador recibe 25 %)
  *   Revisión prioritaria  la publicación pasa al frente de la cola; si no se revisa en 24 h se devuelve
@@ -64,6 +64,24 @@ const COSMETICOS = [
     { id: 'ins_mecenas', tipo: 'insignia', nombre: 'Mecenas', emoji: '🎁', precio: 0, soloMision: true },
     { id: 'ins_activo', tipo: 'insignia', nombre: 'Siempre activo', emoji: '⚡', precio: 0, soloMision: true },
     { id: 'ins_embajador', tipo: 'insignia', nombre: 'Embajador', emoji: '🤝', precio: 0, soloMision: true },   // 5 invitados verificados
+    // Diseño de tarjeta: así ven los demás las publicaciones de quien lo usa (explorar, favoritos, perfil).
+    // Los más caros piden verificación (verificadoNivel) y/o seguidores para comprarse; lo comprado se conserva.
+    { id: 'tj_carbono', tipo: 'tarjeta', nombre: 'Fibra de carbono', emoji: '🖤', precio: 500 },
+    { id: 'tj_neon', tipo: 'tarjeta', nombre: 'Neón', emoji: '💚', precio: 600 },
+    { id: 'tj_sakura', tipo: 'tarjeta', nombre: 'Sakura', emoji: '🌸', precio: 700 },
+    { id: 'tj_glaciar', tipo: 'tarjeta', nombre: 'Glaciar', emoji: '❄️', precio: 700 },
+    { id: 'tj_toxica', tipo: 'tarjeta', nombre: 'Tóxica', emoji: '☢️', precio: 800 },
+    { id: 'tj_abisal', tipo: 'tarjeta', nombre: 'Abisal', emoji: '🌊', precio: 900, req: { seguidores: 10 } },
+    { id: 'tj_infierno', tipo: 'tarjeta', nombre: 'Infierno', emoji: '🔥', precio: 1000, req: { seguidores: 10 } },
+    { id: 'tj_ciber', tipo: 'tarjeta', nombre: 'Ciberpunk', emoji: '👾', precio: 1200, req: { seguidores: 25 } },
+    { id: 'tj_arcade', tipo: 'tarjeta', nombre: 'Arcade retro', emoji: '🕹️', precio: 1400, req: { verificado: 1 } },
+    { id: 'tj_holo', tipo: 'tarjeta', nombre: 'Holográfica', emoji: '🪩', precio: 1800, req: { verificado: 1, seguidores: 50 } },
+    { id: 'tj_aurora', tipo: 'tarjeta', nombre: 'Aurora boreal', emoji: '🌠', precio: 2200, req: { seguidores: 100 } },
+    { id: 'tj_oro', tipo: 'tarjeta', nombre: 'Oro puro', emoji: '👑', precio: 2800, req: { verificado: 2 } },
+    { id: 'tj_galaxia', tipo: 'tarjeta', nombre: 'Galaxia', emoji: '🌌', precio: 3500, req: { verificado: 1, seguidores: 250 } },
+    { id: 'tj_dragon', tipo: 'tarjeta', nombre: 'Dragón', emoji: '🐉', precio: 4500, req: { verificado: 2, seguidores: 500 } },
+    { id: 'tj_diamante', tipo: 'tarjeta', nombre: 'Diamante', emoji: '💎', precio: 6000, req: { verificado: 3 } },
+    { id: 'tj_leyenda', tipo: 'tarjeta', nombre: 'Leyenda', emoji: '🏆', precio: 8000, req: { verificado: 3, seguidores: 1000 } },
     // Exclusiva: cuentas creadas antes de FUNDADOR_HASTA. No se vende ni se gana después.
     { id: 'ins_fundador', tipo: 'insignia', nombre: 'Fundador', emoji: '🏛️', precio: 0, soloMision: true },
 ];
@@ -274,4 +292,12 @@ function precioPack(c, pack, mios = []) {
     return { faltan: faltan.map(a => a.id), lleno, precio: Math.max(1, Math.round(lleno * (1 - (c.precios.packDescuento || 0) / 100))), completo: !faltan.length };
 }
 
-module.exports = { PACKS, precioPack, COSMETICOS, TIPOS_MISION, DEFECTO, SUPERCHAT_SEG, FUNDADOR_HASTA, config, guardar, semana, finSemana, evento, estado, reclamar };
+/** Qué le falta a alguien para comprar un artículo con requisitos ('' si nada). */
+function faltaRequisito(item, { verificado = 0, seguidores = 0 } = {}) {
+    const r = item?.req || {}, f = [];
+    if (r.verificado && verificado < r.verificado) f.push(`verificación nivel ${r.verificado}`);
+    if (r.seguidores && seguidores < r.seguidores) f.push(`${r.seguidores} seguidores`);
+    return f.length ? `Necesitas ${f.join(' y ')} para este diseño` : '';
+}
+
+module.exports = { faltaRequisito, PACKS, precioPack, COSMETICOS, TIPOS_MISION, DEFECTO, SUPERCHAT_SEG, FUNDADOR_HASTA, config, guardar, semana, finSemana, evento, estado, reclamar };

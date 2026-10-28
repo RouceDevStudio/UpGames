@@ -486,6 +486,7 @@ function createTile(item, isFeatured=false) {
   const catClass = cat.toLowerCase().replace('ó','o').replace('ó','o').replace(/[^a-z]/g,'');
   el.className = 'game-tile game-tile--' + catClass + (isVideo?' game-tile--video':'');
   el.dataset.id=item._id;
+  if(item.usuario) el.dataset.u=String(item.usuario).toLowerCase();
 
   if(isVideo) {
     // Badge de duración — se guarda en extraData.duracion (formato "12:34")
@@ -755,6 +756,7 @@ function render(list, reset=true) {
   });
   out.appendChild(frag);
   initLazyVideos();
+  window.UGX?.estilizarTiles?.(out);
 }
 
 

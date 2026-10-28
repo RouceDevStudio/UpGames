@@ -24,7 +24,7 @@
     <meta name="theme-color" content="#0A0B0F">
     <title>Perfil de Usuario — UpGames</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="stylesheet" href="./upgames-estilo.css?v=20261029c">
+    <link rel="stylesheet" href="./upgames-estilo.css?v=20261029d">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="preconnect" href="https://unpkg.com">
     <style>
@@ -738,8 +738,8 @@ display:block;
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="UpGames">
 <script src="./upgames-pwa.js" defer></script>
-<script src="./upgames-extras.js?v=20261029c"></script>
-<script src="./upgames-errores.js?v=20261029c"></script>
+<script src="./upgames-extras.js?v=20261029d"></script>
+<script src="./upgames-errores.js?v=20261029d"></script>
 </head>
 <body>
 
@@ -873,6 +873,11 @@ display:block;
             if (/\/image\/upload\/(?!v\d+\/)[a-z]{1,3}_[^/]*\//.test(u)) return u.replace(/\.(heic|heif)(\?|$)/i, '.jpg$2');
             return u.replace('/image/upload/', `/image/upload/${t}/`).replace(/\.(heic|heif)(\?|$)/i, '.jpg$2');
         }
+        // Diseño de tarjeta que compró el creador: se aplica a todas sus publicaciones
+        function ppAplicarTarjetas() {
+            const tj = window._ppTarjeta; if (!tj) return;
+            document.querySelectorAll('#user-items .pp-tile, #user-videos .pp-tile').forEach(c => c.classList.add('ugs-t', 'ugs-t-' + tj));
+        }
         function ppTile(item) {
             const isVideo = item.category === 'Video';
             const img = item.image && !/\.(mp4|webm|mov|m4v|avi)(\?.*)?$/i.test(item.image) ? cldOpt(item.image, 'c_fill,g_auto,w_420,h_420,q_auto,f_auto') : '';
@@ -988,6 +993,7 @@ display:block;
                     // Fondo a pantalla completa: el fondo comprado tiñe toda la página (con un degradado para que se lea el contenido)
                     let fp = document.getElementById('pp-fondo');
                     if (est.fondo) { if (!fp) { fp = document.createElement('div'); fp.id = 'pp-fondo'; fp.setAttribute('aria-hidden', 'true'); document.body.prepend(fp); } fp.className = 'pp-fondo ugs-f-' + est.fondo; document.body.classList.add('pp-con-fondo'); }
+                    window._ppTarjeta = /^tj_[a-z]+$/.test(est.tarjeta || '') ? est.tarjeta : ''; ppAplicarTarjetas();
                     document.querySelector('.hero-avatar-wrap')?.classList.toggle('pp-marco-xl', !!est.marco);
                     document.querySelector('.hero-username')?.classList.toggle('pp-nombre-xl', !!est.color);
                     // Vitrina de insignias: todas las que tiene (equipadas primero)
@@ -1118,6 +1124,7 @@ display:block;
                 } else {
                     contVideos.innerHTML = videos.map(ppTile).join('');
                 }
+                ppAplicarTarjetas();
 
             } catch (error) {
                 console.error("❌ Error cargando publicaciones:", error);

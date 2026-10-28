@@ -384,7 +384,7 @@ body:not(.is-owner) .owner-only{display:none!important}
 .dash-nx p{margin:4px 0 8px;font-size:.88rem;line-height:1.5}
 @media (max-width:900px){ .nx-fab{bottom:calc(86px + var(--safe-b));right:14px;padding:10px}.nx-fab .nx-lbl{display:none} .nx-dock{width:100vw;border-left:none} .dash-nx .nx-av{display:none} }
 </style>
-<script src="../public/upgames-errores.js?v=20261029c"></script>
+<script src="../public/upgames-errores.js?v=20261029d"></script>
 </head>
 <body>
 
@@ -1589,7 +1589,7 @@ function rExtras() {
     + pin('refInvitado', '🎁 Referidos · UC de bienvenida al invitado', c.precios.refInvitado)
     + pin('refMaxMes', '📅 Referidos · invitaciones pagadas por mes (por persona)', c.precios.refMaxMes, 'Por encima del tope el invitado igual recibe su regalo, quien invita no');
   const vend = st.vendidosPorCosmetico || {};
-  $('xCosm').innerHTML = `<table class="tbl"><tr><th></th><th>Artículo</th><th>Tipo</th><th class="num">Precio (UC)</th><th class="num">Vendidos</th><th>En tienda</th></tr>${c.cosmeticos.map(x => `<tr><td style="font-size:1.2rem">${esc(x.emoji)}</td><td><b>${esc(x.nombre)}</b><div class="small muted mono">${esc(x.id)}</div></td><td class="muted">${esc({ marco: 'Marco', color: 'Color', fondo: 'Fondo', insignia: 'Insignia' }[x.tipo])}</td>
+  $('xCosm').innerHTML = `<table class="tbl"><tr><th></th><th>Artículo</th><th>Tipo</th><th class="num">Precio (UC)</th><th class="num">Vendidos</th><th>En tienda</th></tr>${c.cosmeticos.map(x => `<tr><td style="font-size:1.2rem">${esc(x.emoji)}</td><td><b>${esc(x.nombre)}</b><div class="small muted mono">${esc(x.id)}</div></td><td class="muted">${esc({ marco: 'Marco', color: 'Color', fondo: 'Fondo', tarjeta: 'Tarjeta', insignia: 'Insignia' }[x.tipo])}${x.req ? `<div class="small muted">${x.req.verificado ? 'Verif. nv.' + x.req.verificado : ''}${x.req.verificado && x.req.seguidores ? ' · ' : ''}${x.req.seguidores ? x.req.seguidores + ' seguidores' : ''}</div>` : ''}</td>
     <td class="num">${x.soloMision ? '<span class="muted small">Solo misión</span>' : `<input class="in" type="number" min="1" data-xcp="${esc(x.id)}" value="${x.precio}" style="width:90px;padding:6px 8px;text-align:right">`}</td><td class="num">${num(vend[x.id] || 0)}</td>
     <td>${x.soloMision ? '—' : `<input type="checkbox" data-xca="${esc(x.id)}" ${x.activo ? 'checked' : ''} style="width:18px;height:18px;accent-color:#32D583">`}</td></tr>`).join('')}</table>`;
   rMisiones();

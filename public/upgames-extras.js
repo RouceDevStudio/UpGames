@@ -12,7 +12,10 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const fmt = n => Math.floor(Number(n) || 0).toLocaleString('es-CO');
   const clave = () => 'k' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
-  const TIPO_TXT = { marco: 'Marcos', color: 'Color del nombre', fondo: 'Fondos', insignia: 'Insignias' };
+  const TIPO_TXT = { tarjeta: '🃏 Tarjetas', marco: 'Marcos', color: 'Color del nombre', fondo: 'Fondos', insignia: 'Insignias' };
+  // Lo que pide un diseño para comprarse (verificación / seguidores) y lo que te falta
+  const reqTxt = r => [r?.verificado ? `✔ Verificado nv.${r.verificado}` : '', r?.seguidores ? `👥 ${fmt(r.seguidores)} seguidores` : ''].filter(Boolean).join(' · ');
+  const faltaReq = (c, n = {}) => !!c.req && ((c.req.verificado || 0) > (n.verificado || 0) || (c.req.seguidores || 0) > (n.seguidores || 0));
   const MIS_IC = { comentar: '💬', favorito: '❤️', seguir: '👥', ver_live: '🔴', apoyar: '🪙', regalo_live: '🎁' };
 
   let cfg = null, mio = null, planes = null;
@@ -224,8 +227,11 @@
     const equipado = c => c.tipo === 'insignia' ? (est.insignias || []).includes(c.id) : est[c.tipo] === c.id;
     const prev = c => c.tipo === 'marco' ? `<div class="ugx-prev ugs-marco ugs-m-${esc(c.id)}">${esc(c.emoji)}</div>`
       : c.tipo === 'color' ? `<div class="ugx-prev-color ugs-c-${esc(c.id)}">@${esc(yo())}</div>`
-      : c.tipo === 'fondo' ? `<div class="ugx-prev-fondo ugs-f-${esc(c.id)}"></div>` : `<div class="ugx-prev">${esc(c.emoji)}</div>`;
-    const accion = c => mios.has(c.id)
+      : c.tipo === 'fondo' ? `<div class="ugx-prev-fondo ugs-f-${esc(c.id)}"></div>`
+      : c.tipo === 'tarjeta' ? `<div class="ugx-prev-tj ugs-t ugs-t-${esc(c.id)}"><i></i><span class="ugx-tj-l"></span><span class="ugx-tj-l c"></span><span class="ugx-tj-u">@${esc(yo())}</span></div>` : `<div class="ugx-prev">${esc(c.emoji)}</div>`;
+    const accion = c => !mios.has(c.id) && faltaReq(c, mio.nivel)
+      ? `<button type="button" class="ugx-btn sec" disabled title="${esc(reqTxt(c.req))}">🔒 ${fmt(c.precio)}</button>`
+      : mios.has(c.id)
       ? (equipado(c) ? `<button type="button" class="ugx-btn sec" data-quitar="${esc(c.id)}">Quitar</button>` : `<button type="button" class="ugx-btn" data-equipar="${esc(c.id)}">Usar</button>`)
       : `<button type="button" class="ugx-btn oro" data-comprar="${esc(c.id)}">🪙 ${fmt(c.precio)}</button>`;
     const html = (destino ? '' : `<div class="ugx-preview ${est.fondo ? 'ugs-f-' + esc(est.fondo) : ''}"><div class="ugx-av ${est.marco ? 'ugs-marco ugs-m-' + esc(est.marco) : ''}" style="${av ? `background-image:url('${esc(av)}')` : ''}">${av ? '' : esc((yo()[0] || '?').toUpperCase())}</div>
@@ -233,7 +239,8 @@
       ${destino ? `<div class="pfx-saldo">Tu saldo: <b>🪙 ${fmt(mio.upcoins?.total)}</b> UpCoins <button type="button" class="ugx-btn sec" data-recargar>Recargar</button></div>` : ''}
       <div class="ugx-tabs">${(cfg.packs || []).length ? `<button type="button" class="ugx-tab ${tab === 'pack' ? 'on' : ''}" data-tab="pack">🎁 Packs</button>` : ''}${Object.entries(TIPO_TXT).map(([k, t]) => `<button type="button" class="ugx-tab ${k === tab ? 'on' : ''}" data-tab="${k}">${t}</button>`).join('')}</div>
       ${tab === 'insignia' ? '<p class="ugx-sub">Muestra hasta 3 insignias junto a tu nombre. Algunas solo se ganan con misiones.</p>' : ''}
-      ${tab === 'pack' ? packsHTML(mios, est) : `<div class="ugx-grid">${lista.map(c => `<div class="ugx-card ${equipado(c) ? 'eq' : ''}">${prev(c)}<b>${esc(c.nombre)}</b><small>${mios.has(c.id) ? (equipado(c) ? 'En uso' : 'Tuyo') : c.soloMision ? 'De misión' : `${fmt(c.precio)} UpCoins`}</small>${accion(c)}</div>`).join('') || '<p class="ugx-sub">Nada por aquí todavía.</p>'}</div>`}`;
+      ${tab === 'tarjeta' ? `<p class="ugx-sub">Cambia cómo ven todos las tarjetas de tus publicaciones en Explorar y en tu perfil público. Los diseños top piden verificación o seguidores: hoy tienes ${mio.nivel?.verificado ? 'verificación nivel ' + mio.nivel.verificado : 'cuenta sin verificar'} y ${fmt(mio.nivel?.seguidores || 0)} seguidores.</p>` : ''}
+      ${tab === 'pack' ? packsHTML(mios, est) : `<div class="ugx-grid">${lista.map(c => `<div class="ugx-card ${equipado(c) ? 'eq' : ''}">${prev(c)}<b>${esc(c.nombre)}</b><small>${mios.has(c.id) ? (equipado(c) ? 'En uso' : 'Tuyo') : c.soloMision ? 'De misión' : `${fmt(c.precio)} UpCoins`}</small>${c.req && !mios.has(c.id) ? `<small class="ugx-req ${faltaReq(c, mio.nivel) ? 'no' : 'si'}">${esc(reqTxt(c.req))}</small>` : ''}${accion(c)}</div>`).join('') || '<p class="ugx-sub">Nada por aquí todavía.</p>'}</div>`}`;
     const enlazar = b => {
       b.querySelectorAll('[data-pack]').forEach(x => x.onclick = async () => {
         const p = (cfg.packs || []).find(y => y.id === x.dataset.pack), pr = precioPack(p, mios);
@@ -347,6 +354,18 @@
       card.querySelector('.author-info')?.appendChild(ins);
     }
   }
+  // Tarjetas del feed: cada publicación toma el diseño que compró su autor
+  async function estilizarTiles(raiz = document) {
+    const tiles = [...raiz.querySelectorAll('.game-tile[data-u]:not([data-tj])')]; if (!tiles.length) return;
+    tiles.forEach(t => t.dataset.tj = '');
+    for (let i = 0; i < tiles.length; i += 40) {
+      const parte = tiles.slice(i, i + 40), ts = await tarjetas(parte.map(t => t.dataset.u));
+      for (const t of parte) {
+        const tj = ts[t.dataset.u]?.estilo?.tarjeta; if (!tj || !/^tj_[a-z]+$/.test(tj)) continue;
+        t.dataset.tj = tj; t.classList.add('ugs-t', 'ugs-t-' + tj);
+      }
+    }
+  }
   async function estilizarComentarios(lista) {
     const filas = [...(lista?.querySelectorAll('.comment-item[data-u]') || [])]; if (!filas.length) return;
     await cargarCfg();
@@ -426,6 +445,6 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 
-  window.UGX = { precio, activo, cargarCfg, cargarMio, hub, referidos, promoLive, tarjetas, estilizarComentarios, pintarAvatar, misiones, tienda, regalar, apoyar, alAbrirDetalle, prioridad, faltan, aplicarEstilo, insigniasHTML, clasesMarco,
+  window.UGX = { estilizarTiles, precio, activo, cargarCfg, cargarMio, hub, referidos, promoLive, tarjetas, estilizarComentarios, pintarAvatar, misiones, tienda, regalar, apoyar, alAbrirDetalle, prioridad, faltan, aplicarEstilo, insigniasHTML, clasesMarco,
     hoja, cerrarHoja, pagar, fiesta, get cfg() { return cfg; } };
 })();

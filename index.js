@@ -590,7 +590,7 @@ const UsuarioSchema = new mongoose.Schema({
     iaCreditos:       { type: Number, default: 0, min: 0 },
     // Estilo comprado con UpCoins o ganado en misiones (modulos/extras.js)
     cosmeticos:       { type: [String], default: [] },
-    estilo:           { marco: { type: String, default: '' }, color: { type: String, default: '' }, fondo: { type: String, default: '' }, insignias: { type: [String], default: [] } },
+    estilo:           { marco: { type: String, default: '' }, color: { type: String, default: '' }, fondo: { type: String, default: '' }, tarjeta: { type: String, default: '' }, insignias: { type: [String], default: [] } },
     // Dónde recibe sus retiros (rutas/cobros.js). Los datos van cifrados; resumen = versión enmascarada
     cobro: { tipo: { type: String, default: '' }, cifrado: { type: String, default: '' }, resumen: { type: String, default: '' }, actualizado: Date, esperaHasta: Date },
     planAvisadoHasta: { type: Date, default: null },      // vencimiento ya avisado (un aviso por periodo)
