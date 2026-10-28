@@ -529,7 +529,7 @@ JuegoSchema.pre('save', function(next) {
 // Cambios en publicaciones invalidan el catálogo cacheado (ver cacheado()). Los que
 // solo suben contadores (cada descarga, like o vista) no: vaciarían la caché a cada
 // descarga y el TTL de 30 s ya los refresca.
-const CONTADORES_JUEGO = new Set(['descargasEfectivas', 'likesCount', 'vistas', 'scoreRecomendacion', 'reportes']);
+const CONTADORES_JUEGO = new Set(['descargasEfectivas', 'likesCount', 'vistas', 'scoreRecomendacion', 'reportes', 'resenas']);
 const soloContadores = u => !!u && !Array.isArray(u) && Object.keys(u).length > 0 &&
     Object.entries(u).every(([op, campos]) => (op === '$inc' || op === '$set') && campos && Object.keys(campos).every(f => CONTADORES_JUEGO.has(f)));
 JuegoSchema.post(['save', 'insertMany', 'updateOne', 'updateMany', 'findOneAndUpdate', 'deleteOne', 'deleteMany', 'findOneAndDelete', 'findOneAndReplace', 'replaceOne'], function () {
@@ -1984,7 +1984,7 @@ app.get("/items", async (req, res) => {
                 } },
                 { $sort: { promocionado: -1, _orden: -1, createdAt: -1 } },
                 { $limit: 100 },
-                { $project: { _id: 1, title: 1, description: 1, image: 1, images: 1, link: 1, category: 1, usuario: 1, reportes: 1, linkStatus: 1, descargasEfectivas: 1, likesCount: 1, extraData: 1, videoType: 1, featuredItemId: 1, scoreRecomendacion: 1, serie: 1, createdAt: 1, promocionado: 1 } },
+                { $project: { _id: 1, title: 1, description: 1, image: 1, images: 1, link: 1, category: 1, usuario: 1, resenas: 1, reportes: 1, linkStatus: 1, descargasEfectivas: 1, likesCount: 1, extraData: 1, videoType: 1, featuredItemId: 1, scoreRecomendacion: 1, serie: 1, createdAt: 1, promocionado: 1 } },
             ]);
             // Series por partes: solo la primera parte aparece en el catálogo
             return series.colapsar(items, Juego, { status: 'aprobado', linkStatus: { $in: ['online', 'revision'] } });
@@ -3895,6 +3895,8 @@ const tienda = require('./rutas/tienda').registrar(app, {
 live.alRevertir((captureId, sancionar) => tienda.revertir(captureId, 'PayPal', sancionar));
 // Usos extra de los UpCoins: estilo, apoyar, revisión prioritaria, misiones (Super Chat está en live)
 require('./rutas/extrasUC').registrar(app, { verificarToken, verificarAdmin, Usuario, Juego, LiveTx: live.LiveTx, Notificacion, logger, olvidarPerfil: live.olvidarPerfil });
+// Reseñas con estrellas y colecciones de publicaciones
+require('./rutas/social').registrar(app, { verificarToken, verificarAdmin, usuarioOpcional, Usuario, Juego, Moderacion, Limites, crearNotif, logger });
 // Panel admin → Economía (UpCoins, ventas, Premium, NEXUS, destacadas)
 require('./rutas/adminEconomia').registrar(app, { verificarAdmin, Usuario, Juego, LiveTx: live.LiveTx, Pago, Notificacion, logger, olvidarPerfil: live.olvidarPerfil });
 // Estado del correo y envío de prueba (panel admin → Sistema)

@@ -28,9 +28,9 @@
 <link rel="dns-prefetch" href="https://upgames-production.up.railway.app">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="biblioteca.css?v=20261029e">
-<link rel="stylesheet" href="upgames-glass.css?v=20261029e">
-<link rel="stylesheet" href="upgames-estilo.css?v=20261029e">
+<link rel="stylesheet" href="biblioteca.css?v=20261029f">
+<link rel="stylesheet" href="upgames-glass.css?v=20261029f">
+<link rel="stylesheet" href="upgames-estilo.css?v=20261029f">
 <!-- Widget de subida: solo se usa al publicar → diferido (antes bloqueaba el primer render) -->
 <script src="https://upload-widget.cloudinary.com/global/all.js" defer></script>
 
@@ -41,7 +41,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="UpGames">
 <script src="./upgames-pwa.js" defer></script>
-<script src="./upgames-errores.js?v=20261029e"></script>
+<script src="./upgames-errores.js?v=20261029f"></script>
 </head>
 <body>
 
@@ -524,6 +524,9 @@
       <button class="perfil-tab" data-pftab="historial" data-sub="videos" onclick="pfShowPosts('videos',this)">
         <ion-icon name="play-circle-outline"></ion-icon> Videos
       </button>
+      <button class="perfil-tab" data-pftab="colecciones" onclick="pfSwitchTab('colecciones',this)">
+        <ion-icon name="albums-outline"></ion-icon> Colecciones
+      </button>
       <button class="perfil-tab" data-pftab="pagos" onclick="pfSwitchTab('pagos',this)">
         <ion-icon name="cash-outline"></ion-icon> Pagos
       </button>
@@ -566,6 +569,7 @@
     </div>
 
     <!-- ══ TAB: HISTORIAL DE PAGOS ══ -->
+    <div id="pf-tab-colecciones" class="perfil-tab-content"><div id="pf-colecciones" class="ugrs-wrap"></div></div>
     <div id="pf-tab-pagos" class="perfil-tab-content">
       <div class="pf-section-title"><ion-icon name="cash"></ion-icon> HISTORIAL DE RETIROS</div>
       <div id="pf-pagos-content">
@@ -1794,11 +1798,12 @@
 <!-- ION ICONS -->
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
-<script src="script.js?v=20261029e"></script>
-<script src="upgames-extras.js?v=20261029e"></script>
-<script src="upgames-guia.js?v=20261029e"></script>
-<script src="upgames-autoinfo.js?v=20261029e"></script>
-<script src="upgames-motion.js?v=20261029e"></script>
+<script src="script.js?v=20261029f"></script>
+<script src="upgames-extras.js?v=20261029f"></script>
+<script src="upgames-social.js?v=20261029f"></script>
+<script src="upgames-guia.js?v=20261029f"></script>
+<script src="upgames-autoinfo.js?v=20261029f"></script>
+<script src="upgames-motion.js?v=20261029f"></script>
 
 <!-- ══════════════════════════════════════
   EXTENSIÓN DE PERFIL: Nombre / Email / Contraseña / Links

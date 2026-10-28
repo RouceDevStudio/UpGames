@@ -11,10 +11,14 @@
 // IMPORTANTE: bump CACHE_VERSION cuando cambies archivos estáticos.
 // ========================================
 
-const CACHE_VERSION = 'upgames-v6.26.0';
+const CACHE_VERSION = 'upgames-v6.27.0';
 const CACHE_STATIC  = `${CACHE_VERSION}-static`;
 const CACHE_RUNTIME = `${CACHE_VERSION}-runtime`;
 const CACHE_API     = `${CACHE_VERSION}-api`;
+// Imágenes: caché propio que NO se borra al desplegar (las portadas no cambian de URL al cambiar el código)
+const CACHE_IMG     = 'upgames-img-v1';
+const IMG_MAX       = 400;                       // entradas como máximo (se van las más viejas)
+const IMG_REVALIDAR = 7 * 24 * 3600 * 1000;      // las que no son de Cloudinary se refrescan cada 7 días
 
 // Assets esenciales que se precachean
 const PRECACHE_URLS = [
@@ -30,6 +34,7 @@ const PRECACHE_URLS = [
     './upgames-glass.css',
     './upgames-estilo.css',
     './upgames-extras.js',
+    './upgames-social.js',
     './upgames-guia.js',
   './upgames-errores.js',
     './script.js',
@@ -68,7 +73,7 @@ self.addEventListener('activate', (event) => {
         caches.keys().then((nombres) => {
             return Promise.all(
                 nombres
-                    .filter(n => !n.startsWith(CACHE_VERSION))
+                    .filter(n => !n.startsWith(CACHE_VERSION) && n !== CACHE_IMG)
                     .map(n => {
                         console.log('[SW] Borrando caché viejo:', n);
                         return caches.delete(n);
@@ -168,25 +173,48 @@ async function networkFirstAPI(request) {
     }
 }
 
+// Cloudinary: una URL = un archivo que nunca cambia (la versión va en la URL) → se sirve del caché sin volver a bajarlo.
+// Se pide en modo CORS: así la respuesta se puede guardar de verdad (una respuesta "opaca" ocupa ~7 MB de cuota en Chrome).
+const esCloudinary = url => /(^|\.)res\.cloudinary\.com$/i.test(new URL(url).hostname);
+let recortando = null;
+async function recortarImagenes(cache) {
+    if (recortando) return recortando;
+    recortando = (async () => {
+        const claves = await cache.keys();
+        if (claves.length > IMG_MAX) await Promise.all(claves.slice(0, claves.length - IMG_MAX).map(k => cache.delete(k)));
+    })().finally(() => { recortando = null; });
+    return recortando;
+}
+async function guardarImagen(request, response) {
+    if (!response || !response.ok || response.type === 'opaque') return;
+    const tipo = response.headers.get('Content-Type') || '';
+    if (tipo && !/^image\//i.test(tipo)) return;
+    const cache = await caches.open(CACHE_IMG);
+    // Marca de cuándo se guardó (para refrescar las que no son de Cloudinary)
+    const h = new Headers(response.headers); h.set('X-UG-Guardada', String(Date.now()));
+    const cuerpo = await response.blob();
+    await cache.put(request.url, new Response(cuerpo, { status: 200, headers: h }));
+    recortarImagenes(cache).catch(() => {});
+}
+async function bajarImagen(request) {
+    const url = request.url;
+    if (esCloudinary(url) || new URL(url).origin === self.location.origin) {
+        try { return await fetch(url, { mode: 'cors', credentials: 'omit' }); } catch (_) { /* cae al pedido normal */ }
+    }
+    return fetch(request);
+}
 async function cacheFirstImages(request) {
-    const cached = await caches.match(request);
+    const cache = await caches.open(CACHE_IMG);
+    const cached = await cache.match(request.url);
     if (cached) {
-        // Revalidar en background (stale-while-revalidate)
-        fetch(request).then(async (r) => {
-            if (r.ok) {
-                const cache = await caches.open(CACHE_RUNTIME);
-                cache.put(request, r).catch(() => {});
-            }
-        }).catch(() => {});
+        const edad = Date.now() - Number(cached.headers.get('X-UG-Guardada') || 0);
+        if (!esCloudinary(request.url) && edad > IMG_REVALIDAR)
+            bajarImagen(request).then(r => guardarImagen(request, r.clone ? r.clone() : r)).catch(() => {});
         return cached;
     }
-
     try {
-        const response = await fetch(request);
-        if (response.ok) {
-            const cache = await caches.open(CACHE_RUNTIME);
-            cache.put(request, response.clone()).catch(() => {});
-        }
+        const response = await bajarImagen(request);
+        guardarImagen(request, response.clone()).catch(() => {});
         return response;
     } catch (err) {
         // Placeholder SVG genérico para imágenes que fallan offline

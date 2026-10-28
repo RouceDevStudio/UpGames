@@ -463,6 +463,6 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 
-  window.UGX = { estilizarTiles, vestirTarjeta, precio, activo, cargarCfg, cargarMio, hub, referidos, promoLive, tarjetas, estilizarComentarios, pintarAvatar, misiones, tienda, regalar, apoyar, alAbrirDetalle, prioridad, faltan, aplicarEstilo, insigniasHTML, clasesMarco,
+  window.UGX = { hoja, cerrarHoja, api, aviso, estilizarTiles, vestirTarjeta, precio, activo, cargarCfg, cargarMio, hub, referidos, promoLive, tarjetas, estilizarComentarios, pintarAvatar, misiones, tienda, regalar, apoyar, alAbrirDetalle, prioridad, faltan, aplicarEstilo, insigniasHTML, clasesMarco,
     hoja, cerrarHoja, pagar, fiesta, get cfg() { return cfg; } };
 })();

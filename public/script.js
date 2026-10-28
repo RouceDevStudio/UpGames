@@ -32,6 +32,8 @@ const API_URL = "https://upgames-production.up.railway.app";
 })();
 
 // ── SAFE LOCALSTORAGE (modo incógnito estricto no rompe la app) ──────────
+// Catálogo: portadas al ancho de la tarjeta, sin recortar (la tarjeta ya recorta con object-fit)
+const CLD_TILE_FEED = 'c_limit,w_560,q_auto,f_auto', CLD_DESTACADA = 'c_limit,w_1100,q_auto,f_auto';
 const LS = {
   get(k, fallback='') {
     try { return localStorage.getItem(k) ?? fallback; } catch(_) { return fallback; }
@@ -449,9 +451,10 @@ function createTile(item, isFeatured=false) {
   // Para video: la imagen es la miniatura, el link es el video real
   const imgSrc = item.image || '';
   const isVid = !isVideo && /\.(mp4|webm|mov)$/i.test(imgSrc);
+  // Portadas al tamaño de la tarjeta (antes se bajaba la imagen original completa)
   const media = isVid
     ? `<video data-src="${escH(imgSrc)}" muted loop playsinline preload="none" class="lazy-vid"></video>`
-    : `<img src="${escH(imgSrc)}" alt="${escH(tituloT)}" loading="lazy" onerror="this.onerror=null;this.src=window.UG_PH">`;
+    : `<img src="${escH(cldOpt(imgSrc, CLD_TILE_FEED))}" alt="${escH(tituloT)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=window.UG_PH">`;
 
   const favIds = LS.getJSON('favoritos', []);
   const isFav = favIds.includes(item._id);
@@ -465,7 +468,7 @@ function createTile(item, isFeatured=false) {
     el.dataset.id=item._id;
     const ftMedia = isVid
       ? `<video data-src="${escH(imgSrc)}" muted loop playsinline preload="none" class="lazy-vid"></video>`
-      : `<img src="${escH(imgSrc)}" alt="${escH(tituloT)}" loading="lazy" onerror="this.onerror=null;this.src=window.UG_PH">`;
+      : `<img src="${escH(cldOpt(imgSrc, CLD_DESTACADA))}" alt="${escH(tituloT)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=window.UG_PH">`;
     el.innerHTML=`
       <div class="thumb-wrap">${ftMedia}
         ${isVideo?'<div class="tile-video-overlay"><ion-icon name="play-circle"></ion-icon></div>':''}
@@ -511,6 +514,7 @@ function createTile(item, isFeatured=false) {
             <span class="tile-user">@${escH(item.usuario||'Cloud')}${getBadge(item.usuario)}</span>
             ${dl?`<span class="tile-yt-dot">·</span><span class="tile-yt-views"><ion-icon name="eye-outline"></ion-icon>${fmt(dl)}</span>`:''}
             ${lk?`<span class="tile-yt-dot">·</span><span class="tile-yt-likes"><ion-icon name="heart"></ion-icon>${fmt(lk)}</span>`:''}
+            ${window.UGR?.estrellasTile(item)||''}
           </div>
         </div>
       </div>`;
@@ -534,6 +538,7 @@ function createTile(item, isFeatured=false) {
           <div class="tile-avatar">${avatarLetter(item.usuario)}</div>
           <div class="tile-user">@${escH(item.usuario||'Cloud')}</div>
           ${lk?`<div class="tile-downloads"><ion-icon name="heart"></ion-icon>${fmt(lk)}</div>`:''}
+          ${window.UGR?.estrellasTile(item)||''}
         </div>
       </div>`;
   }
@@ -614,7 +619,7 @@ function initHeroCarousel(items, isVideoMode) {
       : '';
 
     slide.innerHTML = `
-      <img src="${escH(mediaSrc)}" alt="${escH(item.title)}" loading="${i===0?'eager':'lazy'}"
+      <img src="${escH(cldOpt(mediaSrc, CLD_DESTACADA))}" alt="${escH(item.title)}" loading="${i===0?'eager':'lazy'}" decoding="async"
            onerror="this.onerror=null;this.src=window.UG_PH">
       ${isYT || isMp4 || isVideoMode ? '<div class="yt-play-badge large"><ion-icon name="play-circle"></ion-icon></div>' : ''}
       <div class="hero-info">
@@ -1299,6 +1304,7 @@ function openDetail(item) {
   document.getElementById('detail-sheet').classList.add('open');
   document.body.style.overflow='hidden';
   window.UGX?.alAbrirDetalle(item);   // botón "Apoyar" (usos extra de los UpCoins)
+  window.UGR?.resenas(item);          // reseñas con estrellas + colecciones donde aparece
   window.dispatchEvent(new CustomEvent('ug:detalle', { detail: item._id }));   // guía de inicio
 
   // Registrar vista si es un video (usa ruta dedicada /items/vistas/:id con dedup IP)
@@ -1857,6 +1863,7 @@ function pfSwitchTab(tabName, el) {
   if(tabName === 'reportes') pfLoadReportes();
   if(tabName === 'pagos') pfLoadHistorialPagos();
   if(tabName === 'logros') pfLoadLogros();
+  if(tabName === 'colecciones') window.UGR?.colecciones(localStorage.getItem('user_admin') || '', document.getElementById('pf-colecciones'), { propio: true });
   if(tabName === 'economia') pfStartEcoPolling();
   else pfStopEcoPolling();
 }
@@ -2318,7 +2325,8 @@ function pfGetUniversalWidget() {
       uploadPreset: CLOUDINARY_UPLOAD_PRESET,
       sources: ['local'],
       resourceType: 'auto',
-      maxFileSize: 524288000, // 500MB
+      maxFileSize: 1610612736, // 1,5 GB (el plan de Cloudinary puede fijar un tope menor: ver el mensaje de error abajo)
+      maxChunkSize: 20000000,  // sube por partes de 20 MB: aguanta mejor los datos móviles
       multiple: false,
       cropping: false,
       showAdvancedOptions: false,
@@ -2333,7 +2341,10 @@ function pfGetUniversalWidget() {
       }
     }, (error, result) => {
       if(error) {
-        if(pfWidgetCallback) pfWidgetCallback({ error: error.message || error.statusText || 'Error' });
+        const msg = String(error.message || error.statusText || error || 'Error');
+        // El plan de almacenamiento rechaza archivos más pesados que su tope: explicar qué hacer
+        const tope = /exceeds maximum|too large|maximum allowed/i.test(msg);
+        if(pfWidgetCallback) pfWidgetCallback({ error: tope ? 'Ese archivo pesa más de lo que hoy acepta la nube de UpGames (100 MB por video). Comprímelo (p. ej. a 720p) o súbelo a YouTube y pega el enlace.' : msg });
         return;
       }
       if(result.event === 'progress' && pfWidgetCallback) {
