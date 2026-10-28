@@ -334,43 +334,15 @@ const API_URL_SELF = process.env.RAILWAY_PUBLIC_DOMAIN
     ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
     : `http://localhost:${process.env.PORT || 10000}`;
 
-// ── NODEMAILER — Gmail ───────────────────────────────────────────────
-let emailTransporter = null;
-try {
-    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) throw new Error('sin credenciales');
-    emailTransporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-            user: process.env.GMAIL_USER,
-            pass: process.env.GMAIL_APP_PASSWORD,
-        },
-        // Sin límites, un Gmail lento dejaba colgada la petición (registro, reenvío…)
-        connectionTimeout: 15000, greetingTimeout: 10000, socketTimeout: 20000,
-    });
-    logger.info('📧 Transporter de email configurado (Gmail)');
-} catch (e) {
-    logger.warn('⚠️ Email no configurado — GMAIL_USER o GMAIL_APP_PASSWORD faltantes');
-}
-
-async function sendEmail({ to, subject, html }) {
-    if (!emailTransporter) {
-        logger.warn(`[Email] No configurado — no se envió a ${to}`);
-        return false;
-    }
-    try {
-        await emailTransporter.sendMail({
-            from: `"UpGames" <${process.env.GMAIL_USER}>`,
-            to,
-            subject,
-            html,
-        });
-        logger.info(`[Email] Enviado a ${to} — ${subject}`);
-        return true;
-    } catch (e) {
-        logger.error(`[Email] Error enviando a ${to}: ${e.message}`);
-        return false;
-    }
-}
+// ── EMAIL ──────────────────────────────────────────────────────────
+// Railway bloquea el SMTP (Gmail) en el plan Hobby: se envía por la API HTTPS de
+// Brevo (BREVO_API_KEY + EMAIL_FROM). Detalles en modulos/correo.js.
+const correo = require('./modulos/correo').crear({ nodemailer, logger });
+correo.verificar().then(e => {
+    if (e.ok) logger.info(`📧 Email listo (${e.proveedor})`);
+    else logger.error(`📧 EMAIL NO FUNCIONA — ${e.detalle}`);
+}).catch(() => {});
+const sendEmail = correo.enviar;
 
 // ── TEMPLATES DE EMAIL ────────────────────────────────────────────────
 function emailVerifTemplate(usuario, link) {
@@ -818,10 +790,8 @@ app.get('/auth/verify-email/:token', async (req, res) => {
             emailVerifExpires: { $gt: new Date() }
         });
         if (!usuario) return res.redirect(`${APP_URL}?verif=error`);
-        usuario.emailVerificado   = true;
-        usuario.emailVerifToken   = null;
-        usuario.emailVerifExpires = null;
-        await usuario.save();
+        // updateOne: save() revalida toda la cuenta y una cuenta antigua podía fallar al verificar
+        await Usuario.updateOne({ _id: usuario._id }, { $set: { emailVerificado: true, emailVerifToken: null, emailVerifExpires: null } });
         logger.info(`Email verificado: @${usuario.usuario}`);
         res.redirect(`${APP_URL}?verif=ok&u=${encodeURIComponent(usuario.usuario)}`);
     } catch (err) {
@@ -837,9 +807,7 @@ app.post('/auth/resend-verification', [body('email').isEmail().normalizeEmail(EM
         if (!usuario || usuario.emailVerificado)
             return res.json({ success: true, mensaje: 'Si el email existe y no está verificado, recibirás el link.' });
         const verifToken = crypto.randomBytes(32).toString('hex');
-        usuario.emailVerifToken   = verifToken;
-        usuario.emailVerifExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
-        await usuario.save();
+        await Usuario.updateOne({ _id: usuario._id }, { $set: { emailVerifToken: verifToken, emailVerifExpires: new Date(Date.now() + 24 * 60 * 60 * 1000) } });
         const verifLink = `${API_URL_SELF}/auth/verify-email/${verifToken}`;
         await sendEmail({ to: email, subject: '✅ Verifica tu email en UpGames', html: emailVerifTemplate(usuario.usuario, verifLink) });
         res.json({ success: true, mensaje: 'Si el email existe y no está verificado, recibirás el link.' });
@@ -866,10 +834,9 @@ app.post('/auth/email-reenviar', verificarToken, async (req, res) => {
         const usuario = await Usuario.findOne({ usuario: req.usuario });
         if (!usuario) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
         if (usuario.emailVerificado) return res.json({ success: true, yaVerificado: true });
-        usuario.emailVerifToken   = crypto.randomBytes(32).toString('hex');
-        usuario.emailVerifExpires = new Date(ahora + 24 * 60 * 60 * 1000);
-        await usuario.save();
-        const enviado = await sendEmail({ to: usuario.email, subject: '✅ Verifica tu email en UpGames', html: emailVerifTemplate(usuario.usuario, `${API_URL_SELF}/auth/verify-email/${usuario.emailVerifToken}`) });
+        const verifToken = crypto.randomBytes(32).toString('hex');
+        await Usuario.updateOne({ _id: usuario._id }, { $set: { emailVerifToken: verifToken, emailVerifExpires: new Date(ahora + 24 * 60 * 60 * 1000) } });
+        const enviado = await sendEmail({ to: usuario.email, subject: '✅ Verifica tu email en UpGames', html: emailVerifTemplate(usuario.usuario, `${API_URL_SELF}/auth/verify-email/${verifToken}`) });
         if (!enviado) return res.status(503).json({ success: false, error: 'No pudimos enviar el correo ahora mismo. Inténtalo en unos minutos.' });
         h.push(ahora); enviosVerif.set(req.usuario, h);
         if (enviosVerif.size > 20000) enviosVerif.clear();
@@ -891,9 +858,7 @@ app.post('/auth/forgot-password', [body('email').isEmail().normalizeEmail(EMAIL_
         if (!usuario)
             return res.json({ success: true, mensaje: 'Si el email está registrado, recibirás un link para restablecer tu contraseña.' });
         const resetToken = crypto.randomBytes(32).toString('hex');
-        usuario.resetPasswordToken   = resetToken;
-        usuario.resetPasswordExpires = new Date(Date.now() + 60 * 60 * 1000);
-        await usuario.save();
+        await Usuario.updateOne({ _id: usuario._id }, { $set: { resetPasswordToken: resetToken, resetPasswordExpires: new Date(Date.now() + 60 * 60 * 1000) } });
         const resetLink = `${APP_URL}?reset_token=${resetToken}`;
         await sendEmail({ to: email, subject: '🔑 Restablece tu contraseña de UpGames', html: emailResetTemplate(usuario.usuario, resetLink) });
         logger.info(`Reset de contraseña solicitado: @${usuario.usuario}`);
@@ -911,12 +876,9 @@ app.post('/auth/reset-password', [body('token').notEmpty(), body('password').isL
         const { token, password } = req.body;
         const usuario = await Usuario.findOne({ resetPasswordToken: token, resetPasswordExpires: { $gt: new Date() } });
         if (!usuario) return res.status(400).json({ success: false, error: 'El link es inválido o ya expiró. Solicita uno nuevo.' });
-        usuario.password             = await bcrypt.hash(password, 10);
-        usuario.sesionVer            = (usuario.sesionVer || 0) + 1;   // cierra todas las sesiones abiertas
+        // updateOne (no save): una cuenta antigua que no cumpla alguna validación actual no debe quedar sin poder recuperar su contraseña
+        await Usuario.updateOne({ _id: usuario._id }, { $set: { password: await bcrypt.hash(password, 10), resetPasswordToken: null, resetPasswordExpires: null }, $inc: { sesionVer: 1 } });   // cierra todas las sesiones abiertas
         versionSesion.delete(usuario.usuario);
-        usuario.resetPasswordToken   = null;
-        usuario.resetPasswordExpires = null;
-        await usuario.save();
         logger.info(`Contraseña restablecida: @${usuario.usuario}`);
         res.json({ success: true, mensaje: 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.' });
     } catch (err) {
@@ -3663,6 +3625,14 @@ const tienda = require('./rutas/tienda').registrar(app, {
     acceso: accesoDirecto, logger, apiUrlSelf: API_URL_SELF, olvidarPerfil: live.olvidarPerfil,
 });
 live.alRevertir((captureId, sancionar) => tienda.revertir(captureId, 'PayPal', sancionar));
+// Estado del correo y envío de prueba (panel admin → Sistema)
+app.get('/admin/sistema/email', verificarAdmin, async (req, res) => res.json({ success: true, ...(await correo.verificar()), ...correo.estado() }));
+app.post('/admin/sistema/email-prueba', verificarAdmin, async (req, res) => {
+    const para = String(req.body?.para || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(para)) return res.status(400).json({ success: false, error: 'Escribe un email válido' });
+    const ok = await sendEmail({ to: para, subject: '✅ Prueba de correo de UpGames', html: emailAvisoTemplate('equipo', 'Si lees esto, los correos de UpGames (verificación de email, recuperar contraseña y avisos) ya funcionan.') });
+    res.status(ok ? 200 : 502).json({ success: ok, ...correo.estado(), error: ok ? undefined : (correo.estado().detalle || 'No se pudo enviar') });
+});
 // Métodos de cobro de los creadores: PayPal, Nequi, Daviplata, banco o Mercado Pago (cifrados)
 const cobros = require('./rutas/cobros').registrar(app, { verificarToken, verificarAdmin, Usuario, logger, sendEmail, plantillaAviso: emailAvisoTemplate });   // contracargos de pases pagados con PayPal
 // =================================================================================

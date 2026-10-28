@@ -542,6 +542,11 @@ body:not(.is-owner) .owner-only{display:none!important}
         <button class="btn pri" onclick="enviarAnuncio()"><ion-icon name="megaphone-outline"></ion-icon> Enviar anuncio</button>
         <p class="small muted" style="margin:12px 0 0">Las notificaciones duran 30 días. El texto se envía tal cual (sin HTML).</p>
       </div>
+      <div class="card" style="max-width:640px;margin-top:14px">
+        <div class="vh" style="margin:0 0 8px"><div><h2 style="font-size:1rem">📧 Correo electrónico</h2><p>Verificación de email, recuperar contraseña y avisos de seguridad</p></div></div>
+        <div id="emEstado" class="small muted">Comprobando…</div>
+        <div class="row" style="margin-top:10px"><input class="in grow" id="emPara" type="email" placeholder="tu@correo.com"><button class="btn" onclick="emailPrueba()"><ion-icon name="send-outline"></ion-icon> Enviar prueba</button></div>
+      </div>
     </section>
 
     <!-- PAGOS -->
@@ -907,6 +912,7 @@ function go(v) {
   history.replaceState(null, '', '#' + v);
   closeMenu(); window.scrollTo({ top: 0 });
   if (v === 'equipo') loadEquipo();
+  if (v === 'anun') emailEstado();
   else if (v === 'audit') loadAudit();
   else if (v === 'api' && !$('diag').innerHTML) { runDiag(); runEndpoints(); }
   else if (v === 'pays' && pF === 'hist') loadHist();
@@ -1340,6 +1346,22 @@ async function enviarAnuncio() {
   try { const { d } = await api('/admin/sistema/anuncio', { method: 'POST', body: { mensaje, destino: anD, usuario: $('anUsr').value } });
     if (d.success) { toast(`📢 Enviado a ${num(d.enviados)} usuarios`); $('anMsg').value = ''; $('anCnt').textContent = '0/280'; } else toast(d.error || 'Error', 'err'); } catch (_) {}
 }
+
+// ─────────── Correo ───────────
+async function emailEstado() {
+  const el = $('emEstado'); if (!el) return;
+  try { const { d } = await api('/admin/sistema/email');
+    el.innerHTML = d.ok ? `<span style="color:var(--ok)">✅ Funcionando</span> · proveedor: <b>${esc(d.proveedor)}</b> · remitente: ${esc(d.remitente || '—')}`
+      : `<span style="color:var(--bad)">❌ No funciona</span> · ${esc(d.detalle || '')}<br>En Railway agrega <b>BREVO_API_KEY</b> y <b>EMAIL_FROM</b> (Railway bloquea Gmail por SMTP en el plan Hobby).`;
+  } catch (_) { el.textContent = 'No se pudo comprobar'; }
+}
+async function emailPrueba() {
+  const para = $('emPara').value.trim(); if (!para) return toast('Escribe un email', 'warn');
+  try { const { d } = await api('/admin/sistema/email-prueba', { method: 'POST', body: { para } });
+    d.success ? toast('📧 Correo de prueba enviado: revisa la bandeja (y spam)') : toast(d.error || 'No se pudo enviar', 'err'); emailEstado();
+  } catch (_) {}
+}
+
 
 // ─────────── Pagos ───────────
 function rPays() {
