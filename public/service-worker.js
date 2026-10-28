@@ -11,7 +11,7 @@
 // IMPORTANTE: bump CACHE_VERSION cuando cambies archivos estáticos.
 // ========================================
 
-const CACHE_VERSION = 'upgames-v6.16.1';
+const CACHE_VERSION = 'upgames-v6.17.0';
 const CACHE_STATIC  = `${CACHE_VERSION}-static`;
 const CACHE_RUNTIME = `${CACHE_VERSION}-runtime`;
 const CACHE_API     = `${CACHE_VERSION}-api`;

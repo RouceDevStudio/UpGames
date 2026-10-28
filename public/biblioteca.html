@@ -28,8 +28,8 @@
 <link rel="dns-prefetch" href="https://upgames-production.up.railway.app">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="biblioteca.css?v=20261028d">
-<link rel="stylesheet" href="upgames-glass.css?v=20261028d">
+<link rel="stylesheet" href="biblioteca.css?v=20261028e">
+<link rel="stylesheet" href="upgames-glass.css?v=20261028e">
 <!-- Widget de subida: solo se usa al publicar → diferido (antes bloqueaba el primer render) -->
 <script src="https://upload-widget.cloudinary.com/global/all.js" defer></script>
 
@@ -66,17 +66,35 @@
     <div id="autocomplete-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#1a1a28;border:1px solid rgba(50,213,131,.2);border-radius:0 0 12px 12px;z-index:1000;max-height:280px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.5)"></div>
   </div>
   <div class="hdr-actions">
-    <button class="hdr-btn hdr-live" onclick="location.href='./live.html'" title="En vivo" aria-label="Transmisiones en vivo">
-      <ion-icon name="radio-outline"></ion-icon><span class="hdr-live-dot" id="hdr-live-dot" hidden></span>
-    </button>
-    <button class="hdr-btn" onclick="switchTab('upload')" title="Subir contenido" aria-label="Subir contenido">
-      <ion-icon name="cloud-upload-outline"></ion-icon>
-    </button>
-    <button class="hdr-btn" onclick="handleMail()" title="Reportar abuso" aria-label="Contactar soporte">
-      <ion-icon name="information-circle-outline"></ion-icon>
+    <!-- Menú rápido: el orbe despliega las opciones en abanico circular (script.js → UGR) -->
+    <button class="hdr-orb" id="hdr-orb" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="hdr-radial" title="Menú rápido" aria-label="Abrir menú rápido">
+      <span class="hdr-orb-ic"><i></i><i></i><i></i><i></i></span>
+      <span class="ugn-badge" id="hdr-orb-badge" hidden>0</span>
+      <span class="hdr-orb-live" id="hdr-orb-live" hidden></span>
     </button>
   </div>
 </header>
+
+<!-- Menú radial (fuera del header: su backdrop-filter recortaría los elementos fijos) -->
+<div class="ugr" id="hdr-radial" aria-hidden="true">
+  <div class="ugr-scrim" data-ugr-cerrar></div>
+  <div class="ugr-glow"></div>
+  <div class="ugr-items" role="menu" aria-label="Menú rápido">
+    <button class="ugr-item" type="button" role="menuitem" data-ugr="live" aria-label="Transmisiones en vivo">
+      <span class="ugr-bub"><ion-icon name="radio-outline"></ion-icon><span class="hdr-live-dot" id="hdr-live-dot" hidden></span></span><span class="ugr-lbl">En vivo</span>
+    </button>
+    <button class="ugr-item" type="button" role="menuitem" data-ugr="subir" aria-label="Subir contenido">
+      <span class="ugr-bub"><ion-icon name="cloud-upload-outline"></ion-icon></span><span class="ugr-lbl">Subir</span>
+    </button>
+    <button class="ugr-item ugr-oro" type="button" role="menuitem" data-ugr="premium" aria-label="Premium y Mi plan">
+      <span class="ugr-bub"><ion-icon name="star"></ion-icon></span><span class="ugr-lbl">Premium</span>
+    </button>
+    <button class="ugr-item" type="button" role="menuitem" data-ugr="soporte" aria-label="Contactar soporte o reportar abuso">
+      <span class="ugr-bub"><ion-icon name="help-buoy-outline"></ion-icon></span><span class="ugr-lbl">Soporte</span>
+    </button>
+  </div>
+  <button class="ugr-core" type="button" data-ugr-cerrar aria-label="Cerrar menú"><ion-icon name="close"></ion-icon></button>
+</div>
 
 <!-- Aviso: email sin verificar (lo muestra script.js → ugVerif) -->
 <div class="ug-verif" id="ug-verif" role="status" hidden>
@@ -1979,9 +1997,9 @@
 <!-- ION ICONS -->
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
-<script src="script.js?v=20261028d"></script>
-<script src="upgames-autoinfo.js?v=20261028d"></script>
-<script src="upgames-motion.js?v=20261028d"></script>
+<script src="script.js?v=20261028e"></script>
+<script src="upgames-autoinfo.js?v=20261028e"></script>
+<script src="upgames-motion.js?v=20261028e"></script>
 
 <!-- ══════════════════════════════════════
   EXTENSIÓN DE PERFIL: Nombre / Email / Contraseña / Links

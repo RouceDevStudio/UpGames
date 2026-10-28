@@ -5363,3 +5363,60 @@ button.pf2-stat { cursor: pointer; }
   .hdr-actions { gap: 4px; }
 }
 @media (max-width: 380px) { #hdr-uc { padding: 0 6px !important; font-size: .7rem !important; } }
+
+/* ══════════ Menú rápido radial (orbe de la cabecera) ══════════ */
+.hdr-orb{position:relative;width:40px;height:40px;flex-shrink:0;border-radius:50%;border:0;padding:0;cursor:pointer;display:grid;place-items:center;
+  background:radial-gradient(circle at 30% 25%,#232836,#12151c 70%);color:var(--txt);
+  box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.06),0 6px 18px -8px rgba(var(--g-rgb),.6);transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.hdr-orb::before{content:"";position:absolute;inset:-2px;border-radius:50%;padding:2px;
+  background:conic-gradient(from var(--orb-a,0deg),var(--g),var(--cy),#a78bfa,var(--g));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;
+  animation:orbGiro 6s linear infinite;opacity:.9}
+@property --orb-a{syntax:'<angle>';inherits:false;initial-value:0deg}
+@keyframes orbGiro{to{--orb-a:360deg}}
+.hdr-orb:hover,.hdr-orb:focus-visible{transform:scale(1.07)}
+.hdr-orb:active{transform:scale(.94)}
+.hdr-orb:focus-visible{outline:2px solid var(--cy);outline-offset:3px}
+/* Ícono: 4 puntos que giran y se juntan al abrir */
+.hdr-orb-ic{width:16px;height:16px;display:grid;grid-template-columns:1fr 1fr;gap:4px;transition:transform .35s cubic-bezier(.34,1.56,.64,1)}
+.hdr-orb-ic i{width:6px;height:6px;border-radius:50%;background:currentColor;transition:background .3s,transform .3s}
+.hdr-orb-ic i:nth-child(1){background:var(--g)} .hdr-orb-ic i:nth-child(4){background:var(--cy)}
+.hdr-orb.on .hdr-orb-ic{transform:rotate(135deg) scale(.6)}
+.hdr-orb .ugn-badge{top:-4px;right:-4px}
+.hdr-orb-live{position:absolute;bottom:0;right:0;width:10px;height:10px;border-radius:50%;background:#ff4d6d;box-shadow:0 0 0 2px var(--bg);animation:hdrLivePulse 1.6s infinite}
+.hdr-orb-live[hidden]{display:none}
+
+.ugr{position:fixed;inset:0;z-index:1150;pointer-events:none;visibility:hidden;transition:visibility 0s .45s}
+.ugr.open{pointer-events:auto;visibility:visible;transition:none}
+.ugr-scrim{position:absolute;inset:0;background:rgba(5,6,10,.55);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);opacity:0;transition:opacity .3s}
+.ugr.open .ugr-scrim{opacity:1}
+/* Onda luminosa que se expande desde el orbe */
+.ugr-glow{position:absolute;left:var(--ox);top:var(--oy);width:470px;height:470px;margin:-235px 0 0 -235px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,rgba(var(--g-rgb),.22) 0 18%,rgba(var(--cy-rgb),.12) 38%,rgba(167,139,250,.07) 55%,transparent 70%);
+  transform:scale(.1);opacity:0;transition:transform .5s cubic-bezier(.22,1,.36,1),opacity .35s}
+.ugr.open .ugr-glow{transform:scale(1);opacity:1}
+.ugr-core{position:absolute;left:var(--ox);top:var(--oy);width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;border:0;cursor:pointer;
+  display:grid;place-items:center;font-size:1.35rem;color:#06210f;background:linear-gradient(135deg,var(--g),var(--cy));
+  box-shadow:0 0 0 6px rgba(var(--g-rgb),.15),0 10px 30px -6px rgba(var(--g-rgb),.8);
+  transform:rotate(-90deg) scale(.4);opacity:0;transition:transform .4s cubic-bezier(.34,1.56,.64,1),opacity .2s}
+.ugr.open .ugr-core{transform:none;opacity:1}
+.ugr-item{position:absolute;left:calc(var(--ox) + var(--x));top:calc(var(--oy) + var(--y));width:52px;height:52px;margin:-26px 0 0 -26px;padding:0;border:0;background:none;cursor:pointer;color:var(--txt);font-family:inherit;
+  transform:translate(calc(var(--x) * -1),calc(var(--y) * -1)) scale(.2);opacity:0;
+  transition:transform .45s cubic-bezier(.34,1.56,.64,1),opacity .25s;transition-delay:calc((3 - var(--i,0)) * 25ms)}
+.ugr.open .ugr-item{transform:none;opacity:1;transition-delay:calc(var(--i,0) * 45ms + 60ms)}
+.ugr-bub{position:relative;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-size:1.35rem;
+  background:linear-gradient(160deg,rgba(255,255,255,.13),rgba(255,255,255,.04)),#161a22;border:1px solid rgba(255,255,255,.14);
+  box-shadow:0 10px 26px -10px rgba(0,0,0,.9),inset 0 1px 0 rgba(255,255,255,.12);transition:transform .2s,border-color .2s,box-shadow .2s}
+.ugr-item:hover .ugr-bub,.ugr-item:focus-visible .ugr-bub{transform:scale(1.1);border-color:rgba(var(--g-rgb),.6);box-shadow:0 0 0 4px rgba(var(--g-rgb),.14),0 12px 28px -10px rgba(var(--g-rgb),.7)}
+.ugr-item:focus-visible{outline:none}
+.ugr-item:active .ugr-bub{transform:scale(.92)}
+.ugr-oro .ugr-bub{color:#ffcc4d;border-color:rgba(255,204,77,.4)}
+.ugr-item .hdr-live-dot{top:7px;right:7px}
+.ugr-item .ugn-badge{top:-3px;right:-3px}
+.ugr-lbl{position:absolute;left:50%;top:50%;transform:translate(calc(-50% + var(--lx,0px)),calc(-50% + var(--ly,0px)));white-space:nowrap;pointer-events:none;
+  font-size:.7rem;font-weight:800;letter-spacing:.02em;color:#e9ecf2;padding:2px 7px;border-radius:999px;background:rgba(10,11,15,.72);border:1px solid rgba(255,255,255,.08)}
+@media (prefers-reduced-motion:reduce){
+  .hdr-orb::before{animation:none}
+  .ugr-item,.ugr.open .ugr-item,.ugr-glow,.ugr-core{transition:opacity .15s;transition-delay:0s}
+  .ugr-item{transform:none} .ugr-glow{transform:none}
+}

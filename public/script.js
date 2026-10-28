@@ -101,6 +101,70 @@ window.ugContadorUC = ugContadorUC;
 document.addEventListener('DOMContentLoaded', () => ugContadorUC());
 window.addEventListener('ug:upcoins', () => ugContadorUC());
 
+// ── Menú rápido radial: el orbe de la cabecera despliega las opciones en abanico ──
+// Las burbujas se reparten en un cuarto de círculo hacia abajo-izquierda del orbe;
+// las etiquetas van por fuera, sobre el mismo radio, para que nunca se pisen.
+const UGR = (() => {
+  let abierto = false;
+  const raiz = () => document.getElementById('hdr-radial'), orbe = () => document.getElementById('hdr-orb');
+  const ACCIONES = {
+    live: () => { location.href = './live.html'; },
+    subir: () => switchTab('upload'),
+    premium: () => { switchTab('economia'); setTimeout(() => window.ecoCargarPlan?.(true), 350); },
+    soporte: () => handleMail(),
+  };
+  function colocar() {
+    const r = raiz(), o = orbe(); if (!r || !o) return;
+    const b = o.getBoundingClientRect();
+    r.style.setProperty('--ox', `${b.left + b.width / 2}px`); r.style.setProperty('--oy', `${b.top + b.height / 2}px`);   // --cy ya es el color cian
+    const items = [...r.querySelectorAll('.ugr-item')], n = items.length;
+    // Orbe pegado al borde (móviles angostos): el abanico termina un poco antes de "abajo"
+    // para que la última etiqueta no se salga por la derecha.
+    const fin = innerWidth - (b.left + b.width / 2) < 45 ? 102 : 90, arco = 180 - fin;
+    const R = Math.min(n > 4 ? (arco < 90 ? 166 : 150) : 132, (innerWidth - 40) * 0.6);
+    items.forEach((it, i) => {
+      const ang = (180 - (n > 1 ? i * arco / (n - 1) : arco / 2)) * Math.PI / 180;   // 180° = izquierda · 90° = abajo
+      const x = R * Math.cos(ang), y = R * Math.sin(ang);
+      it.style.setProperty('--x', `${x.toFixed(1)}px`); it.style.setProperty('--y', `${y.toFixed(1)}px`);
+      it.style.setProperty('--lx', `${(Math.cos(ang) * 62).toFixed(1)}px`); it.style.setProperty('--ly', `${(Math.sin(ang) * 44).toFixed(1)}px`);
+      it.style.setProperty('--i', i);
+    });
+  }
+  function abrir() {
+    const r = raiz(); if (!r || abierto) return;
+    abierto = true; colocar();
+    r.classList.add('open'); r.setAttribute('aria-hidden', 'false');
+    orbe()?.setAttribute('aria-expanded', 'true'); orbe()?.classList.add('on');
+    setTimeout(() => r.querySelector('.ugr-item')?.focus({ preventScroll: true }), 120);
+  }
+  function cerrar(volverFoco) {
+    const r = raiz(); if (!r || !abierto) return;
+    abierto = false;
+    r.classList.remove('open'); r.setAttribute('aria-hidden', 'true');
+    orbe()?.setAttribute('aria-expanded', 'false'); orbe()?.classList.remove('on');
+    if (volverFoco) orbe()?.focus({ preventScroll: true });
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    const r = raiz(), o = orbe(); if (!r || !o) return;
+    o.addEventListener('click', e => { e.stopPropagation(); abierto ? cerrar() : abrir(); });
+    r.addEventListener('click', e => {
+      if (e.target.closest('[data-ugr-cerrar]')) return cerrar(true);
+      const it = e.target.closest('.ugr-item[data-ugr]'); if (!it) return;
+      cerrar(); ACCIONES[it.dataset.ugr]?.();
+    });
+    r.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { e.preventDefault(); return cerrar(true); }
+      if (!/^Arrow/.test(e.key)) return;
+      const l = [...r.querySelectorAll('.ugr-item')], i = l.indexOf(document.activeElement);
+      e.preventDefault(); l[(i + (e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : -1) + l.length) % l.length]?.focus();
+    });
+    addEventListener('resize', () => cerrar());
+    addEventListener('scroll', () => cerrar(), { passive: true });
+  });
+  return { abrir, cerrar, colocar, get abierto() { return abierto; } };
+})();
+window.UGR = UGR;
+
 // Invitados: botón "Entrar" en la cabecera (en lugar de pedir cuenta para mirar)
 document.addEventListener('DOMContentLoaded', () => {
   if (ugSesion()) return;
@@ -4362,7 +4426,7 @@ const TUT_STEPS = [
   {
     sel: '#app-header',
     title: '📌 La Barra Superior',
-    body: 'En la parte de arriba tienes todo lo esencial: el <strong>logo de UpGames</strong>, un <strong>buscador</strong> y dos botones de acción. Ahora los explico uno por uno.'
+    body: 'En la parte de arriba tienes todo lo esencial: el <strong>logo de UpGames</strong>, un <strong>buscador</strong>, tu contador de <strong>UpCoins</strong> y el <strong>menú rápido</strong>. Ahora los explico uno por uno.'
   },
   {
     sel: '#buscador',
@@ -4370,14 +4434,9 @@ const TUT_STEPS = [
     body: 'Escribe aquí para buscar <strong>cualquier cosa al instante</strong>: el nombre de un juego, el usuario que lo subió, la categoría, o una etiqueta. Los resultados se filtran <em>mientras escribes</em>, sin necesidad de pulsar Enter.'
   },
   {
-    sel: '.hdr-actions .hdr-btn:first-child',
-    title: '☁️ Botón Subir Contenido',
-    body: 'Este botón con el ícono de nube te lleva directamente a tu <strong>Perfil → pestaña Publicar</strong>. Desde ahí puedes subir juegos, mods, apps y ganar dinero con tus aportes.'
-  },
-  {
-    sel: '.hdr-actions .hdr-btn:last-child',
-    title: '🚨 Botón de Soporte',
-    body: 'El ícono <strong>ⓘ</strong> abre tu correo para contactar directamente al equipo de UpGames. Úsalo para reportar abuso, contenido ilegal o pedir ayuda. El equipo responde en menos de 72 horas.'
+    sel: '#hdr-orb',
+    title: '✨ Menú rápido',
+    body: 'Toca este botón y las opciones se despliegan <strong>en círculo</strong>: <strong>Avisos</strong> (notificaciones), <strong>En vivo</strong>, <strong>Subir</strong> contenido, <strong>Premium</strong> y <strong>Soporte</strong>. El número sobre el botón son tus avisos sin leer y el punto rojo indica que alguien está en vivo.'
   },
   {
     sel: '#category-row',
@@ -5150,12 +5209,22 @@ const ugnAuth = () => ({ Authorization: `Bearer ${LS.get('token')}` });
 // ── Botón de campana + panel ─────────────────────────
 function _initNotifUI() {
   const hdrActions = document.querySelector('.hdr-actions');
-  if (!hdrActions || document.getElementById('notif-btn')) return;
+  const radial = document.querySelector('#hdr-radial .ugr-items');   // la campana vive en el menú radial
+  if ((!hdrActions && !radial) || document.getElementById('notif-btn')) return;
   const btn = document.createElement('button');
-  btn.className = 'hdr-btn'; btn.id = 'notif-btn'; btn.title = 'Notificaciones'; btn.setAttribute('aria-label', 'Notificaciones');
-  btn.innerHTML = '<ion-icon name="notifications-outline"></ion-icon><span id="notif-badge" class="ugn-badge" hidden>0</span>';
-  btn.onclick = e => { e.stopPropagation(); ugnToggle(); };
-  hdrActions.insertBefore(btn, hdrActions.firstChild);
+  btn.id = 'notif-btn'; btn.type = 'button'; btn.title = 'Notificaciones'; btn.setAttribute('aria-label', 'Notificaciones');
+  if (radial) {
+    btn.className = 'ugr-item'; btn.setAttribute('role', 'menuitem');
+    btn.innerHTML = '<span class="ugr-bub"><ion-icon name="notifications-outline"></ion-icon><span id="notif-badge" class="ugn-badge" hidden>0</span></span><span class="ugr-lbl">Avisos</span>';
+    btn.onclick = e => { e.stopPropagation(); UGR.cerrar(); ugnToggle(); };
+    radial.insertBefore(btn, radial.firstChild);
+    if (UGR.abierto) UGR.colocar();   // si el menú ya estaba abierto, reacomoda el abanico
+  } else {
+    btn.className = 'hdr-btn';
+    btn.innerHTML = '<ion-icon name="notifications-outline"></ion-icon><span id="notif-badge" class="ugn-badge" hidden>0</span>';
+    btn.onclick = e => { e.stopPropagation(); ugnToggle(); };
+    hdrActions.insertBefore(btn, hdrActions.firstChild);
+  }
 
   const panel = document.createElement('div');
   panel.id = 'ugn-panel'; panel.className = 'ugn-panel'; panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Notificaciones');
@@ -5299,8 +5368,11 @@ async function ugnVaciar() {
 }
 
 function _updateNotifBadge(count) {
-  const b = document.getElementById('notif-badge');
-  if (b) { b.hidden = !(count > 0); b.textContent = count > 99 ? '99+' : count; }
+  for (const id of ['notif-badge', 'hdr-orb-badge']) {   // el orbe del menú también muestra el número
+    const b = document.getElementById(id);
+    if (b) { b.hidden = !(count > 0); b.textContent = count > 99 ? '99+' : count; }
+  }
+  document.getElementById('hdr-orb')?.setAttribute('aria-label', count > 0 ? `Abrir menú rápido · ${count} notificaciones sin leer` : 'Abrir menú rápido');
   try { if ('setAppBadge' in navigator) count > 0 ? navigator.setAppBadge(count) : navigator.clearAppBadge(); } catch (_) {}
 }
 // Conteo periódico: si sube, trae las nuevas y las muestra en la isla
@@ -5759,7 +5831,8 @@ async function pfLoadLogros() {
     fetch(`${API_URL}/live/activos`).then(r => r.ok ? r.json() : null).then(d => {
       const n = d?.lives?.length || 0;
       dot.hidden = !n;
-      dot.parentElement.title = n ? `${n} en vivo ahora` : 'En vivo';
+      const orbLive = document.getElementById('hdr-orb-live'); if (orbLive) orbLive.hidden = !n;   // punto rojo también en el orbe
+      dot.closest('button')?.setAttribute('aria-label', n ? `Transmisiones en vivo · ${n} en vivo ahora` : 'Transmisiones en vivo');
     }).catch(() => {});
   };
   setTimeout(revisar, 2500);
