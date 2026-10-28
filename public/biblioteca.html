@@ -28,9 +28,9 @@
 <link rel="dns-prefetch" href="https://upgames-production.up.railway.app">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="biblioteca.css?v=20261029b">
-<link rel="stylesheet" href="upgames-glass.css?v=20261029b">
-<link rel="stylesheet" href="upgames-estilo.css?v=20261029b">
+<link rel="stylesheet" href="biblioteca.css?v=20261029c">
+<link rel="stylesheet" href="upgames-glass.css?v=20261029c">
+<link rel="stylesheet" href="upgames-estilo.css?v=20261029c">
 <!-- Widget de subida: solo se usa al publicar → diferido (antes bloqueaba el primer render) -->
 <script src="https://upload-widget.cloudinary.com/global/all.js" defer></script>
 
@@ -41,7 +41,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="UpGames">
 <script src="./upgames-pwa.js" defer></script>
-<script src="./upgames-errores.js?v=20261029b"></script>
+<script src="./upgames-errores.js?v=20261029c"></script>
 </head>
 <body>
 
@@ -181,6 +181,7 @@
     <!-- ══ CABECERA TIPO RED SOCIAL: portada 3:1 + avatar + stats + acciones ══ -->
     <div class="pf2-hero">
       <div class="pf2-cover" id="pf-cover">
+        <button type="button" class="pf2-cover-share" onclick="pfShareProfile()" aria-label="Compartir perfil" title="Compartir perfil"><ion-icon name="share-social-outline"></ion-icon></button>
         <button type="button" class="pf2-cover-btn" onclick="pfOpenSettings('portada')" aria-label="Editar portada">
           <ion-icon name="camera-outline"></ion-icon><span>Editar portada</span>
         </button>
@@ -213,8 +214,6 @@
 
       <div class="pf2-actions">
         <button type="button" class="pf2-btn" onclick="pfOpenSettings()">Editar perfil</button>
-        <button type="button" class="pf2-btn pf2-btn-icon pf2-btn-estilo" onclick="pfOpenSettings('estilo')" aria-label="Personalizar estilo" title="Personalizar: marcos, colores, fondos e insignias"><ion-icon name="color-palette"></ion-icon></button>
-        <button type="button" class="pf2-btn" onclick="pfShareProfile()">Compartir perfil</button>
         <button type="button" class="pf2-btn pf2-btn-icon pf2-btn-live" onclick="window.location.href='./live.html?estudio=1'" aria-label="Ir en vivo" title="Ir en vivo"><ion-icon name="radio"></ion-icon></button>
         <button type="button" class="pf2-btn pf2-btn-icon" id="pf-chat-btn" onclick="window.location.href='./chats.html'" aria-label="Chats"><ion-icon name="chatbubbles-outline"></ion-icon><span class="pf2-chat-n" id="pf-chat-n" hidden></span></button>
         <button type="button" class="pf2-btn pf2-btn-icon pf2-btn-danger" onclick="pfLogout()" aria-label="Cerrar sesión"><ion-icon name="log-out-outline"></ion-icon></button>
@@ -1795,11 +1794,11 @@
 <!-- ION ICONS -->
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
-<script src="script.js?v=20261029b"></script>
-<script src="upgames-extras.js?v=20261029b"></script>
-<script src="upgames-guia.js?v=20261029b"></script>
-<script src="upgames-autoinfo.js?v=20261029b"></script>
-<script src="upgames-motion.js?v=20261029b"></script>
+<script src="script.js?v=20261029c"></script>
+<script src="upgames-extras.js?v=20261029c"></script>
+<script src="upgames-guia.js?v=20261029c"></script>
+<script src="upgames-autoinfo.js?v=20261029c"></script>
+<script src="upgames-motion.js?v=20261029c"></script>
 
 <!-- ══════════════════════════════════════
   EXTENSIÓN DE PERFIL: Nombre / Email / Contraseña / Links
