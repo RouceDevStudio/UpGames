@@ -2424,6 +2424,19 @@ app.get('/usuarios/nexus-stats/:usuario', async (req, res) => {
     }
 });
 
+// Tarjetas de creador (avatar + estilo comprado) para el detalle y los comentarios: hasta 40 a la vez, 2 min de caché
+app.get('/usuarios/tarjetas', async (req, res) => {
+    try {
+        const nombres = [...new Set(String(req.query.u || '').toLowerCase().split(',').map(x => x.trim()).filter(x => /^[a-z0-9_.-]{1,30}$/.test(x)))].slice(0, 40);
+        if (!nombres.length) return res.json({ success: true, tarjetas: {} });
+        const tarjetas = await cacheado('tarjetas:' + nombres.sort().join(','), 120, async () => {
+            const us = await Usuario.find({ usuario: { $in: nombres } }).select('usuario avatar verificadoNivel estilo planHasta listaSeguidores').lean();
+            return Object.fromEntries(us.map(u => [u.usuario, { avatar: u.avatar || '', verificado: u.verificadoNivel || 0, estilo: u.estilo || {}, premium: !!(u.planHasta && new Date(u.planHasta) > new Date()), seguidores: (u.listaSeguidores || []).length }]));
+        });
+        res.set('Cache-Control', 'public, max-age=60').json({ success: true, tarjetas });
+    } catch (e) { res.status(500).json({ success: false, tarjetas: {} }); }
+});
+
 app.get('/usuarios/perfil-publico/:usuario', async (req, res) => {
     try {
         const username = req.params.usuario.toLowerCase().trim();

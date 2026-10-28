@@ -114,7 +114,6 @@
     const pend = (mio?.misiones?.misiones || []).filter(m => m.completa && !m.reclamada).length;
     const t = [];
     if (activo('misiones')) t.push(['misiones', '🎯', 'Misiones semanales', 'Gana UpCoins e insignias', pend]);
-    if (activo('cosmeticos')) t.push(['estilo', '✨', 'Estilo del perfil', 'Marcos, colores, fondos']);
     if (activo('regalarPremium')) t.push(['regalar', '🎁', 'Regalar Premium', 'Sorprende a un amigo']);
     if (activo('nombre')) t.push(['nombre', '✏️', 'Cambiar nombre ya', `Sin esperar · ${precio('nombre')} UC`]);
     if (!t.length) { caja.innerHTML = ''; return; }
@@ -191,8 +190,12 @@
   }
 
   // ── Tienda de estilo ─────────────────────────────────────────────────────
-  async function tienda(tab = 'marco') {
+  /** Tienda de estilo. destino = contenedor (Editar perfil → Estilo); sin él, se abre como hoja. */
+  async function tienda(tab = 'marco', destino) {
     if (!tok()) return window.ugPedirSesion?.('personalizar tu perfil');
+    if (!destino && typeof window.pfOpenSettings === 'function' && document.getElementById('pfx-estilo')) {   // vive en Editar perfil
+      window.switchTab?.('profile'); setTimeout(() => window.pfOpenSettings('estilo'), 250); return;
+    }
     await cargarMio(); if (!mio) return aviso('No se pudo cargar tu estilo', 'error');
     const mios = new Set(mio.cosmeticos), est = mio.estilo || {};
     const av = document.getElementById('pf-avatar-img')?.getAttribute('src') || '';
@@ -204,25 +207,28 @@
     const accion = c => mios.has(c.id)
       ? (equipado(c) ? `<button type="button" class="ugx-btn sec" data-quitar="${esc(c.id)}">Quitar</button>` : `<button type="button" class="ugx-btn" data-equipar="${esc(c.id)}">Usar</button>`)
       : `<button type="button" class="ugx-btn oro" data-comprar="${esc(c.id)}">🪙 ${fmt(c.precio)}</button>`;
-    const html = `<div class="ugx-preview ${est.fondo ? 'ugs-f-' + esc(est.fondo) : ''}"><div class="ugx-av ${est.marco ? 'ugs-marco ugs-m-' + esc(est.marco) : ''}" style="${av ? `background-image:url('${esc(av)}')` : ''}">${av ? '' : esc((yo()[0] || '?').toUpperCase())}</div>
-        <div><b class="${est.color ? 'ugs-c-' + esc(est.color) : ''}" style="font-size:1.05rem">@${esc(yo())}</b><div style="margin-top:5px">${insigniasHTML(est.insignias)}</div></div><span class="ugx-saldo" style="margin-left:auto">🪙 ${fmt(mio.upcoins?.total)}</span></div>
+    const html = (destino ? '' : `<div class="ugx-preview ${est.fondo ? 'ugs-f-' + esc(est.fondo) : ''}"><div class="ugx-av ${est.marco ? 'ugs-marco ugs-m-' + esc(est.marco) : ''}" style="${av ? `background-image:url('${esc(av)}')` : ''}">${av ? '' : esc((yo()[0] || '?').toUpperCase())}</div>
+        <div><b class="${est.color ? 'ugs-c-' + esc(est.color) : ''}" style="font-size:1.05rem">@${esc(yo())}</b><div style="margin-top:5px">${insigniasHTML(est.insignias)}</div></div><span class="ugx-saldo" style="margin-left:auto">🪙 ${fmt(mio.upcoins?.total)}</span></div>`) + `
+      ${destino ? `<div class="pfx-saldo">Tu saldo: <b>🪙 ${fmt(mio.upcoins?.total)}</b> UpCoins <button type="button" class="ugx-btn sec" data-recargar>Recargar</button></div>` : ''}
       <div class="ugx-tabs">${Object.entries(TIPO_TXT).map(([k, t]) => `<button type="button" class="ugx-tab ${k === tab ? 'on' : ''}" data-tab="${k}">${t}</button>`).join('')}</div>
       ${tab === 'insignia' ? '<p class="ugx-sub">Muestra hasta 3 insignias junto a tu nombre. Algunas solo se ganan con misiones.</p>' : ''}
       <div class="ugx-grid">${lista.map(c => `<div class="ugx-card ${equipado(c) ? 'eq' : ''}">${prev(c)}<b>${esc(c.nombre)}</b><small>${mios.has(c.id) ? (equipado(c) ? 'En uso' : 'Tuyo') : c.soloMision ? 'De misión' : `${fmt(c.precio)} UpCoins`}</small>${accion(c)}</div>`).join('') || '<p class="ugx-sub">Nada por aquí todavía.</p>'}</div>`;
-    hoja('✨ Estilo del perfil', html, b => {
-      b.querySelectorAll('[data-tab]').forEach(x => x.onclick = () => tienda(x.dataset.tab));
+    const enlazar = b => {
+      const otra = t => { if (window.pfxGrupo) window.pfxGrupo.tipo = t; tienda(t, destino); };
+      b.querySelector('[data-recargar]')?.addEventListener('click', () => { window.pfCloseSettings?.(); window.switchTab?.('economia'); setTimeout(() => window.ecoAbrirTienda?.(), 350); });
+      b.querySelectorAll('[data-tab]').forEach(x => x.onclick = () => otra(x.dataset.tab));
       b.querySelectorAll('[data-comprar]').forEach(x => x.onclick = async () => {
         const c = cfg.cosmeticos.find(y => y.id === x.dataset.comprar);
         if (!confirm(`¿Comprar "${c.nombre}" por ${fmt(c.precio)} UpCoins? Se queda en tu cuenta para siempre.`)) return;
         const r = await pagar('/extras/cosmetico', { id: c.id }, x);
-        if (r) { fiesta(c.emoji, `¡${c.nombre} es tuyo!`); mio = null; await cargarMio(); estiloPropio(); tienda(tab); }
+        if (r) { fiesta(c.emoji, `¡${c.nombre} es tuyo!`); mio = null; await cargarMio(); estiloPropio(); window.pfxVista?.(); tienda(tab, destino); }
       });
       const guardar = async (cambio, x) => {
         x.disabled = true;
         const r = await api('/extras/estilo', { method: 'PUT', body: cambio });
         x.disabled = false;
         if (!r.ok) return aviso(r.d.error || 'No se pudo guardar', 'error');
-        mio.estilo = r.d.estilo; estiloPropio(); tienda(tab);
+        mio.estilo = r.d.estilo; estiloPropio(); window.pfxVista?.(); tienda(tab, destino);
       };
       b.querySelectorAll('[data-equipar]').forEach(x => x.onclick = () => {
         const c = cfg.cosmeticos.find(y => y.id === x.dataset.equipar);
@@ -235,7 +241,9 @@
         const c = cfg.cosmeticos.find(y => y.id === x.dataset.quitar);
         guardar(c.tipo === 'insignia' ? { insignias: (est.insignias || []).filter(i => i !== c.id) } : { [c.tipo]: '' }, x);
       });
-    });
+    };
+    if (destino) { destino.innerHTML = html; enlazar(destino); }
+    else hoja('✨ Estilo del perfil', html, enlazar);
   }
 
   // ── Regalar Premium ──────────────────────────────────────────────────────
@@ -263,7 +271,61 @@
   }
 
   // ── Apoyar una publicación (detalle) ─────────────────────────────────────
+  // ── Tarjetas de creador: lo que compró en "Estilo" se ve donde aparece su nombre ──
+  const cacheTarj = new Map();
+  async function tarjetas(nombres) {
+    const faltan = [...new Set(nombres.map(n => String(n || '').toLowerCase()))].filter(n => n && !cacheTarj.has(n));
+    if (faltan.length) {
+      try { const r = await api('/usuarios/tarjetas?u=' + encodeURIComponent(faltan.slice(0, 40).join(','))); if (r.ok) for (const n of faltan) cacheTarj.set(n, r.d.tarjetas?.[n] || null); } catch (_) {}
+    }
+    return Object.fromEntries(nombres.map(n => [String(n).toLowerCase(), cacheTarj.get(String(n).toLowerCase()) || null]));
+  }
+  const fotoOk = u => /^https:\/\//.test(u || '');
+  function pintarAvatar(el, t, letra) {
+    if (!el) return;
+    if (t && fotoOk(t.avatar)) { el.textContent = ''; el.style.backgroundImage = `url("${String(t.avatar).replace(/"/g, '%22')}")`; el.classList.add('ugs-av-foto'); }
+    else { el.style.backgroundImage = ''; el.classList.remove('ugs-av-foto'); if (letra) el.textContent = letra; }
+    el.classList.add('ugs-av-pos');
+    aplicarEstilo(t?.estilo || {}, { avatar: el });
+  }
+  async function pintarAutor(item) {
+    const card = document.getElementById('ds-author'); if (!card || !item?.usuario) return;
+    const u = String(item.usuario).toLowerCase();
+    card.dataset.u = u;
+    card.className = card.className.replace(/\bugs-f-\S+\b|\bugs-autor-pro\b/g, '').trim();
+    card.querySelector('.ugs-ins-autor')?.remove();
+    await cargarCfg();
+    const t = (await tarjetas([u]))[u];
+    if (card.dataset.u !== u) return;   // se abrió otra publicación mientras cargaba
+    pintarAvatar(document.getElementById('ds-av-letter'), t);
+    const nombre = document.getElementById('ds-author-name');
+    if (nombre) { let n = nombre.querySelector('.an-n'); if (!n) { nombre.innerHTML = nombre.innerHTML.replace(/^@([^<\s]+)/, '<span class="an-n">@$1</span>'); n = nombre.querySelector('.an-n'); } aplicarEstilo(t?.estilo || {}, { nombre: n }); }
+    if (!t) return;
+    const est = t.estilo || {};
+    if (est.fondo) card.classList.add('ugs-f-' + est.fondo, 'ugs-autor-pro');
+    const sub = card.querySelector('.author-sub');
+    if (sub) sub.textContent = `${t.seguidores ? fmt(t.seguidores) + ' seguidor' + (t.seguidores === 1 ? '' : 'es') + ' · ' : ''}Ver perfil completo`;
+    if ((est.insignias || []).length || t.premium) {
+      const ins = document.createElement('div'); ins.className = 'ugs-ins-autor';
+      ins.innerHTML = insigniasHTML(est.insignias) + (t.premium ? '<span class="ugs-ins"><span>⭐ Premium</span></span>' : '');
+      card.querySelector('.author-info')?.appendChild(ins);
+    }
+  }
+  async function estilizarComentarios(lista) {
+    const filas = [...(lista?.querySelectorAll('.comment-item[data-u]') || [])]; if (!filas.length) return;
+    await cargarCfg();
+    const ts = await tarjetas(filas.map(f => f.dataset.u));
+    for (const f of filas) {
+      const t = ts[f.dataset.u]; if (!t) continue;
+      pintarAvatar(f.querySelector('.comment-avatar'), t);
+      aplicarEstilo(t.estilo || {}, { nombre: f.querySelector('.cu-n') });
+      const ins = (t.estilo?.insignias || []).slice(0, 1);
+      if (ins.length && !f.querySelector('.ugs-ins')) f.querySelector('.comment-user')?.insertAdjacentHTML('beforeend', ' ' + insigniasHTML(ins));
+    }
+  }
+
   async function alAbrirDetalle(item) {
+    pintarAutor(item);
     document.getElementById('ugx-apoyar')?.remove();
     await cargarCfg();
     if (!item || !activo('apoyar') || (item.status && item.status !== 'aprobado') || item.usuario === yo()) return;   // el catálogo público no trae status: solo lista aprobadas
@@ -328,6 +390,6 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 
-  window.UGX = { precio, activo, cargarCfg, cargarMio, hub, referidos, promoLive, misiones, tienda, regalar, apoyar, alAbrirDetalle, prioridad, faltan, aplicarEstilo, insigniasHTML, clasesMarco,
+  window.UGX = { precio, activo, cargarCfg, cargarMio, hub, referidos, promoLive, tarjetas, estilizarComentarios, pintarAvatar, misiones, tienda, regalar, apoyar, alAbrirDetalle, prioridad, faltan, aplicarEstilo, insigniasHTML, clasesMarco,
     hoja, cerrarHoja, pagar, fiesta, get cfg() { return cfg; } };
 })();

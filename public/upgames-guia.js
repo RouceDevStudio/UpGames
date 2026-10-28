@@ -92,7 +92,7 @@
   // ── Pistas (una burbuja, una vez, sin bloquear) ──────────────────────────
   let ultimaPista = 0, pistaActual = null;
   const vistas = () => LSx.get('ug_pistas', {});
-  const bloqueado = () => document.getElementById('onboarding-modal')?.classList.contains('show') || document.querySelector('.ugx-ov') || document.getElementById('btut-lock')?.classList.contains('on');
+  const bloqueado = () => document.getElementById('onboarding-modal')?.classList.contains('show') || document.querySelector('.ugx-ov') || document.querySelector('.pf-modal-overlay.show') || document.getElementById('btut-lock')?.classList.contains('on');
   function cerrarPista() { if (!pistaActual) return; pistaActual.b.remove(); pistaActual.r.remove(); pistaActual = null; removeEventListener('scroll', cerrarPista, true); removeEventListener('resize', cerrarPista); }
   /** Muestra una pista junto a `sel`. `id` evita repetirla (salvo 'guia', que es a pedido). */
   function pista(sel, texto, id, opts = {}) {
@@ -105,6 +105,7 @@
     cerrarPista();
     if (!opts.sinScroll) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
     setTimeout(() => {
+      if (bloqueado()) return;   // se abrió una ventana mientras tanto (p. ej. Editar perfil)
       const r = el.getBoundingClientRect(), PAD = 6;
       const ring = document.createElement('div'); ring.className = 'ugg-ring';
       Object.assign(ring.style, { top: `${r.top - PAD}px`, left: `${r.left - PAD}px`, width: `${r.width + PAD * 2}px`, height: `${r.height + PAD * 2}px` });
@@ -162,7 +163,7 @@
     ['📥', 'Descargar', ['Abre una publicación y toca "Obtener link".', 'Pasas por la página puente: espera 30 s y toca "Obtener enlace". Así el creador gana por tu descarga.', 'Con el acceso directo (US$1 o 50 UpCoins) o con Premium te saltas la espera y los anuncios.', 'Si un enlace no funciona, toca "Reportar" en el detalle.']],
     ['☁️', 'Publicar y ganar', ['Ve a Perfil → Crear publicación: título, categoría, portada y un enlace de una plataforma permitida (MediaFire, MEGA, Drive…).', 'NEXUS revisa tu publicación y el equipo la aprueba antes de salir en el inicio. Con la revisión prioritaria pasa al frente de la fila.', 'Ganas 50 UpCoins por cada 1.000 descargas verificadas, más el 25 % de regalos, Super Chats y apoyos.', 'Retira desde 500 UC ganados (US$10) con PayPal, Nequi, Daviplata, banco o Mercado Pago. Necesitas verificación (100 seguidores) y email verificado.']],
     ['🪙', 'UpCoins y Premium', ['1 UpCoin = US$0,02. Recárgalos con tarjeta o PayPal en Economía.', 'Úsalos en regalos y Super Chat en lives, apoyos, NEXUS, Premium, destacar tu publicación y el estilo de tu perfil.', 'Lo que ganas como creador se retira como dinero; lo que compras o te regalan se usa dentro de UpGames.', 'Premium: sin anuncios ni espera, NEXUS ilimitado y más visibilidad. Es prepago: no hay cobros automáticos.']],
-    ['🎯', 'Misiones y estilo', ['Cada semana tienes misiones (comentar, seguir creadores, mirar un live…) que dan UpCoins de regalo o insignias.', 'Reclámalas en Economía → Usa tus UpCoins (necesitas el email verificado). Se reinician cada lunes.', 'En "Estilo del perfil" compras marcos animados, color del nombre, fondos e insignias: son tuyos para siempre.']],
+    ['🎯', 'Misiones y estilo', ['Cada semana tienes misiones (comentar, seguir creadores, mirar un live…) que dan UpCoins de regalo o insignias.', 'Reclámalas en Economía → Usa tus UpCoins (necesitas el email verificado). Se reinician cada lunes.', 'En Perfil → Editar perfil → Estilo ✨ compras marcos animados, color del nombre, fondos e insignias: se ven en tus publicaciones, comentarios y lives, y son tuyos para siempre.']],
     ['🔴', 'Lives', ['Toca el menú rápido (arriba a la derecha) → En vivo.', 'Para transmitir: comparte tu pantalla desde el PC o usa la cámara del móvil.', 'Los espectadores chatean, dan likes, envían regalos y Super Chats; tú recibes el 25 %.']],
     ['✦', 'NEXUS IA', ['El asistente de UpGames: recomienda contenido real, resuelve dudas y te ayuda a publicar.', '10 mensajes gratis al día; más con UpCoins o ilimitado con Premium.', 'Si no sabe algo, te lo dice: no inventa títulos.']],
     ['🔐', 'Cuenta y seguridad', ['Verifica tu email desde el aviso del inicio o en Ajustes.', 'Cambia avatar, portada, bio, nombre y contraseña en Perfil → Editar perfil.', 'Activa las notificaciones push desde la campana → Ajustes.', 'Reporta abuso o contenido ilegal con "Reportar" o escribiendo a soporte.']],

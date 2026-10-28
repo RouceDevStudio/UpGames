@@ -1,3 +1,5 @@
+// Imagen de respaldo local (antes via.placeholder.com, que dejó de existir: se veía la imagen rota)
+window.UG_PH = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180"><rect width="320" height="180" fill="#12141c"/><text x="160" y="98" font-family="sans-serif" font-size="18" font-weight="700" fill="#3a3f4d" text-anchor="middle">UpGames</text></svg>');
 
 // ═══════════════════════════════════════════════════════════
 // UPGAMES — BIBLIOTECA REDESIGN v3.0
@@ -449,7 +451,7 @@ function createTile(item, isFeatured=false) {
   const isVid = !isVideo && /\.(mp4|webm|mov)$/i.test(imgSrc);
   const media = isVid
     ? `<video data-src="${escH(imgSrc)}" muted loop playsinline preload="none" class="lazy-vid"></video>`
-    : `<img src="${escH(imgSrc)}" alt="${escH(tituloT)}" loading="lazy" onerror="this.src='https://via.placeholder.com/300x170/12121f/555570?text=Sin+imagen'">`;
+    : `<img src="${escH(imgSrc)}" alt="${escH(tituloT)}" loading="lazy" onerror="this.onerror=null;this.src=window.UG_PH">`;
 
   const favIds = LS.getJSON('favoritos', []);
   const isFav = favIds.includes(item._id);
@@ -463,7 +465,7 @@ function createTile(item, isFeatured=false) {
     el.dataset.id=item._id;
     const ftMedia = isVid
       ? `<video data-src="${escH(imgSrc)}" muted loop playsinline preload="none" class="lazy-vid"></video>`
-      : `<img src="${escH(imgSrc)}" alt="${escH(tituloT)}" loading="lazy" onerror="this.src='https://via.placeholder.com/600x260/12121f/555570?text=Sin+imagen'">`;
+      : `<img src="${escH(imgSrc)}" alt="${escH(tituloT)}" loading="lazy" onerror="this.onerror=null;this.src=window.UG_PH">`;
     el.innerHTML=`
       <div class="thumb-wrap">${ftMedia}
         ${isVideo?'<div class="tile-video-overlay"><ion-icon name="play-circle"></ion-icon></div>':''}
@@ -606,7 +608,7 @@ function initHeroCarousel(items, isVideoMode) {
 
     slide.innerHTML = `
       <img src="${escH(mediaSrc)}" alt="${escH(item.title)}" loading="${i===0?'eager':'lazy'}"
-           onerror="this.src='https://via.placeholder.com/600x260/12121f/555570?text=UpGames'">
+           onerror="this.onerror=null;this.src=window.UG_PH">
       ${isYT || isMp4 || isVideoMode ? '<div class="yt-play-badge large"><ion-icon name="play-circle"></ion-icon></div>' : ''}
       <div class="hero-info">
         ${badgeHTML}
@@ -1092,7 +1094,7 @@ function openDetail(item) {
       vid2.style.display = 'none'; vid2.src = '';
       if(overlay) overlay.style.display = '';
       img2.style.display = 'block'; img2.src = mediaUrl;
-      img2.onerror = () => { img2.src = 'https://via.placeholder.com/600x340/12121f/555570?text=Sin+imagen'; };
+      img2.onerror = () => { img2.src = window.UG_PH; };
     }
   }
   loadSheetMedia(primaryMedia);
@@ -1109,7 +1111,7 @@ function openDetail(item) {
 
       if(isMp4t) {
         // Punto 9: auto-capturar frame del video via canvas
-        th.innerHTML=`<img src="https://via.placeholder.com/72x52/12121f/5EFF43?text=▶" alt="media ${i+1}">
+        th.innerHTML=`<img src="${window.UG_PH}" alt="media ${i+1}">
           <div class="gallery-yt-icon"><ion-icon name="play-circle"></ion-icon></div>`;
         // Intentar captura de frame en segundo plano
         const tmpVid = document.createElement('video');
@@ -1129,7 +1131,7 @@ function openDetail(item) {
         }, { once: true });
       } else {
         const tSrc=isYTt?getYouTubeThumbnail(m):m;
-        th.innerHTML=`<img src="${tSrc}" alt="media ${i+1}" onerror="this.src='https://via.placeholder.com/72x52/12121f/555570?text=?'">
+        th.innerHTML=`<img src="${tSrc}" alt="media ${i+1}" onerror="this.onerror=null;this.src=window.UG_PH">
           ${isYTt?'<div class="gallery-yt-icon"><ion-icon name="play-circle"></ion-icon></div>':''}`;
       }
       th.onclick=()=>{
@@ -1328,7 +1330,7 @@ function renderFeaturedEntry(container, item) {
       </div>
       <div class="ds-featured-card">
         <img src="${img}" alt="${title}"
-             onerror="this.src='https://via.placeholder.com/72x50/12121f/555570?text=?'">
+             onerror="this.onerror=null;this.src=window.UG_PH">
         <div class="ds-featured-info">
           <div class="ds-featured-cat">${catLabel(cat)}</div>
           <div class="ds-featured-title">${title}</div>
@@ -1426,14 +1428,15 @@ async function loadComments(id) {
       return;
     }
     list.innerHTML=comms.map(c=>`
-      <div class="comment-item">
+      <div class="comment-item" data-u="${escH(c.usuario)}">
         <div class="comment-head">
           <div class="comment-avatar">${escH(avatarLetter(c.usuario))}</div>
-          <div class="comment-user">@${escH(c.usuario)}${getBadge(c.usuario)}</div>
+          <div class="comment-user"><span class="cu-n">@${escH(c.usuario)}</span>${getBadge(c.usuario)}</div>
           <div class="comment-time">${timeAgo(c.fecha)}</div>
         </div>
         <div class="comment-text">${escH(c.texto)}</div>
       </div>`).join('');
+    window.UGX?.estilizarComentarios?.(list);   // foto, marco, color e insignias de cada autor
   } catch(e) {
     list.innerHTML='<div class="no-comments" style="color:#ff4343">Error al cargar</div>';
   }
@@ -1670,7 +1673,7 @@ async function renderFavs() {
       const card = document.createElement('div');
       card.className='pf-vault-card';
       card.innerHTML=`
-        <img src="${item.image||'https://via.placeholder.com/300x170?text=Sin+Imagen'}" alt="${item.title||''}" onerror="this.src='https://via.placeholder.com/300x170?text=Sin+Imagen'">
+        <img src="${item.image||window.UG_PH}" alt="${item.title||''}" onerror="this.onerror=null;this.src=window.UG_PH">
         <div class="pf-vault-info">
           <div class="pf-vault-title">${(item.title||'Sin título').substring(0,40)}</div>
           <div class="pf-vault-user">@${escH(item.usuario||'Anónimo')}</div>
@@ -1878,6 +1881,7 @@ function pfOpenPublish(open) {
   wrap.hidden = !abrir;
   btn.setAttribute('aria-expanded', String(abrir));
   btn.classList.toggle('open', abrir);
+  if (typeof pfpVigilar === 'function') pfpVigilar(abrir);   // vista previa en vivo solo con el formulario abierto
   if (abrir) {
     wrap.classList.remove('pf2-publish-in'); void wrap.offsetWidth; wrap.classList.add('pf2-publish-in');
     setTimeout(() => btn.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
@@ -1967,17 +1971,14 @@ function pfPreviewSlot(slotIdx) {
   const img = prev.querySelector('img');
   const displaySrc = isYouTubeUrl(url) ? getYouTubeThumbnail(url) : url;
   img.src = displaySrc;
-  img.onerror = () => { img.src = 'https://via.placeholder.com/100x44/12121f/555570?text=?'; };
+  img.onerror = () => { prev.classList.remove('show'); prev.classList.add('rota'); };   // (via.placeholder.com ya no existe)
+  img.onload = () => prev.classList.remove('rota');
   prev.classList.add('show');
+  if (slotIdx === 0) pfpRender();
 }
 
 function pfUpdatePreview() {
-  const t = document.getElementById('pf-addTitle')?.value || 'Título del Proyecto';
-  const c = document.getElementById('pf-addCategory')?.value || 'Categoría';
-  const i = document.getElementById('pf-addImage')?.value || 'https://via.placeholder.com/300x150?text=Esperando+Imagen';
-  document.getElementById('pf-prev-title').textContent = t;
-  document.getElementById('pf-prev-tag').textContent = c.toUpperCase();
-  document.getElementById('pf-prev-img').src = i;
+  pfpRender();
   const linkEl = document.getElementById('pf-addLink');
   if(linkEl && linkEl.value.trim()) {
     const r = pfAnalizarLink(linkEl.value.trim());
@@ -1985,6 +1986,39 @@ function pfUpdatePreview() {
     linkEl.classList.toggle('invalid', r.ok === false);
   } else if(linkEl) { linkEl.classList.remove('valid','invalid'); }
 }
+
+/* ── Vista previa fiel de la publicación: como la tarjeta del catálogo, con tu estilo ──
+   Antes usaba via.placeholder.com (ya no existe: imagen rota) y solo cambiaba al pegar la portada. */
+let _pfpSnap = '', _pfpTimer = null;
+function pfpRender() {
+  const v = id => (document.getElementById(id)?.value || '').trim();
+  const titulo = v('pf-addTitle'), cat = v('pf-addCategory') || 'Juego', img = v('pf-addImage'), link = v('pf-addLink'), desc = v('pf-addDescription');
+  const snap = [titulo, cat, img, link, desc.length].join('|'); if (snap === _pfpSnap) return; _pfpSnap = snap;
+  const t = document.getElementById('pf-prev-title'); if (t) t.textContent = titulo || 'Título de tu publicación';
+  const tag = document.getElementById('pf-prev-tag'); if (tag) tag.textContent = catLabel(cat).toUpperCase();
+  const box = document.getElementById('pfp-prev-img');
+  if (box) {
+    const src = img ? (isYouTubeUrl(img) ? getYouTubeThumbnail(img) : img) : '';
+    if (src) { box.innerHTML = `<img src="${ugEsc(src)}" alt="">${isYouTubeUrl(img) ? '<i class="pfp-play">▶</i>' : ''}`; box.querySelector('img').onerror = () => { box.innerHTML = '<span>⚠️ No se pudo cargar la imagen</span>'; }; }
+    else box.innerHTML = '<span>Sin portada</span>';
+  }
+  document.getElementById('pfp-portada')?.classList.toggle('con', !!img);
+  const yo = LS.get('user_admin', ''), au = document.getElementById('pfp-prev-autor');
+  if (au && !au.dataset.ok && yo) { au.dataset.ok = '1'; au.innerHTML = `<span class="pfp-prev-av"></span><span class="pfp-prev-n">@${ugEsc(yo)}</span>`; window.UGX?.tarjetas?.([yo]).then(ts => { const tj = ts[yo.toLowerCase()]; window.UGX?.pintarAvatar?.(au.querySelector('.pfp-prev-av'), tj, yo[0].toUpperCase()); window.UGX?.aplicarEstilo?.(tj?.estilo || {}, { nombre: au.querySelector('.pfp-prev-n') }); }); }
+  // Lista de lo que falta (simple y en lenguaje claro)
+  const lk = link ? pfAnalizarLink(link) : { ok: null };
+  const items = [
+    [titulo.length >= 5, titulo ? (titulo.length >= 5 ? 'Título listo' : 'El título es muy corto') : 'Escribe un título'],
+    [lk.ok === true, !link ? 'Pega el enlace de descarga' : lk.ok ? 'Enlace permitido' : (lk.msg || 'Revisa el enlace').replace(/^\W+\s*/, '')],
+    [!!img, img ? 'Portada lista' : 'Agrega una portada (las publicaciones con portada se descargan mucho más)'],
+    [desc.length >= 30, desc.length >= 30 ? 'Descripción lista' : 'Opcional: una descripción ayuda a que te encuentren'],
+  ];
+  const ul = document.getElementById('pfp-check');
+  if (ul) ul.innerHTML = items.map(([ok, txt], i) => `<li class="${ok ? 'ok' : i === 3 ? 'opc' : 'falta'}">${ok ? '✓' : i === 3 ? '○' : '•'} ${ugEsc(txt)}</li>`).join('');
+}
+// Los campos que llenan la nube o NEXUS cambian sin evento "input": se revisa cada 700 ms solo con el formulario abierto
+function pfpVigilar(on) { clearInterval(_pfpTimer); _pfpTimer = on ? setInterval(() => { if (!document.hidden) pfpRender(); }, 700) : null; if (on) { _pfpSnap = ''; pfpRender(); } }
+document.getElementById('pf-tab-publicar')?.addEventListener('input', () => pfpRender());
 
 function pfValidateTitle() {
   const el = document.getElementById('pf-addTitle');
@@ -2186,9 +2220,9 @@ function pfRenderFeaturedList(items) {
     const safeCat   = (item.category || 'General').replace(/'/g, '&#39;');
     return `
       <div class="pf-featured-item" onclick="pfSelectFeaturedItem('${item._id}','${safeTitle}','${safeImg}','${safeCat}')">
-        <img src="${item.image || 'https://via.placeholder.com/50x35/12121f/555570?text=?'}"
+        <img src="${item.image || window.UG_PH}"
              alt="" loading="lazy"
-             onerror="this.src='https://via.placeholder.com/50x35/12121f/555570?text=?'">
+             onerror="this.onerror=null;this.src=window.UG_PH">
         <div class="pf-featured-item-info">
           <div class="pf-featured-item-cat">${catLabel(item.category)}</div>
           <div class="pf-featured-item-title">${(item.title || 'Sin título').substring(0, 52)}</div>
@@ -2211,8 +2245,8 @@ function pfFilterFeaturedItems(query) {
 function pfSelectFeaturedItem(id, title, image, cat) {
   document.getElementById('pf-vid-featured-id').value = id;
   const img = document.getElementById('pf-featured-sel-img');
-  img.src = image || 'https://via.placeholder.com/56x40/12121f/555570?text=?';
-  img.onerror = () => { img.src = 'https://via.placeholder.com/56x40/12121f/555570?text=?'; };
+  img.src = image || window.UG_PH;
+  img.onerror = () => { img.src = window.UG_PH; };
   document.getElementById('pf-featured-sel-title').textContent = title;
   document.getElementById('pf-featured-sel-cat').textContent   = cat;
   document.getElementById('pf-featured-selected').style.display = 'flex';
@@ -2999,7 +3033,7 @@ async function pfLoadBoveda() {
       const card = document.createElement('div');
       card.className='pf-vault-card';
       card.innerHTML=`
-        <img src="${item.image||'https://via.placeholder.com/300x170?text=Sin+Imagen'}" alt="${item.title||''}" onerror="this.src='https://via.placeholder.com/300x170?text=Sin+Imagen'">
+        <img src="${item.image||window.UG_PH}" alt="${item.title||''}" onerror="this.onerror=null;this.src=window.UG_PH">
         <div class="pf-vault-info">
           <div class="pf-vault-title">${(item.title||'Sin título').substring(0,40)}</div>
           <div class="pf-vault-user">@${escH(item.usuario||'Anónimo')}</div>
@@ -3790,25 +3824,50 @@ async function pfSetTarjetaPrincipal(tarjetaId) {
 }
 
 // ── Settings Modal ──
+// Editar perfil: 3 grupos (Perfil · Estilo · Cuenta) con vista previa en vivo.
+// pfOpenSettings('avatar'|'portada'|'bio'|'links'|'nombre'|'email'|'pass'|'repair'|'estilo') sigue funcionando.
+const PFX_GRUPO = { avatar: 'perfil', portada: 'perfil', bio: 'perfil', links: 'perfil', estilo: 'estilo', nombre: 'cuenta', email: 'cuenta', pass: 'cuenta', repair: 'cuenta' };
 function pfOpenSettings(tab) {
   document.getElementById('pf-settingsModal').classList.add('show');
   document.body.style.overflow='hidden';
-  // Abrir directamente una pestaña (p. ej. 'portada' desde el botón de la cabecera)
-  if (typeof tab === 'string') {
-    const btn = document.querySelector(`.pf-stab[onclick*="'${tab}'"]`);
-    if (btn) pfSwitchSettings(tab, btn);
-  }
+  pfSwitchSettings(typeof tab === 'string' ? tab : 'avatar');
+  pfxVista();
 }
 function pfCloseSettings() {
   document.getElementById('pf-settingsModal').classList.remove('show');
   document.body.style.overflow='';
 }
-function pfSwitchSettings(type, el) {
-  document.querySelectorAll('.pf-stab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.pf-scontent').forEach(c => c.classList.remove('active'));
-  el.classList.add('active');
-  document.getElementById(`pf-settings-${type}`).classList.add('active');
+function pfxGrupo(g) {
+  document.querySelectorAll('#pf-settingsModal .pfx-tabs [data-g]').forEach(b => { const on = b.dataset.g === g; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
+  document.querySelectorAll('#pf-settingsModal .pfx-grupo').forEach(x => x.classList.toggle('on', x.dataset.g === g));
+  if (g === 'estilo') window.UGX?.tienda?.(pfxGrupo.tipo || 'marco', document.getElementById('pfx-estilo'));
 }
+function pfSwitchSettings(type, el) {
+  const g = PFX_GRUPO[type] || 'perfil';
+  pfxGrupo(g);
+  const card = document.getElementById(`pf-settings-${type}`);
+  if (card?.classList.contains('pfx-plegable')) card.classList.add('abierto');
+  if (card && type !== 'avatar') setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+  else document.querySelector('#pf-settingsModal .pf-modal-sheet')?.scrollTo({ top: 0 });
+}
+function pfxPlegar(b) { b.closest('.pfx-plegable')?.classList.toggle('abierto'); }
+document.querySelectorAll('#pf-settingsModal .pfx-tabs [data-g]').forEach(b => b.addEventListener('click', () => pfxGrupo(b.dataset.g)));
+/** Vista previa: foto, portada o fondo, color del nombre e insignias, tal como te ven los demás. */
+async function pfxVista() {
+  const yo = LS.get('user_admin', ''); if (!yo) return;
+  const av = document.getElementById('pfx-vista-av'), nom = document.getElementById('pfx-vista-nombre'), fondo = document.getElementById('pfx-vista-fondo');
+  if (!av) return;
+  const img = document.getElementById('pf-avatar-img'), foto = img && img.style.display !== 'none' ? img.getAttribute('src') : '';
+  nom.textContent = '@' + yo;
+  document.getElementById('pfx-vista-bio').textContent = (document.getElementById('pf-bio')?.textContent || '').replace(/^Sin biografía$/, '').slice(0, 90);
+  const banner = document.getElementById('pf-cover')?.style.backgroundImage || '';
+  const mio = await window.UGX?.cargarMio?.().catch(() => null), est = mio?.estilo || {};
+  window.UGX?.pintarAvatar?.(av, { avatar: foto, estilo: est }, (yo[0] || '?').toUpperCase());
+  window.UGX?.aplicarEstilo?.(est, { nombre: nom, fondo });
+  fondo.style.backgroundImage = !est.fondo && /url\(/.test(banner) ? banner : '';
+  document.getElementById('pfx-vista-ins').innerHTML = window.UGX?.insigniasHTML?.(est.insignias) || '';
+}
+window.pfxVista = pfxVista;
 function pfUpdateAvatarPreview() {
   const url = document.getElementById('pf-input-avatar-url').value;
   const prev = document.getElementById('pf-preview-avatar');
@@ -4801,9 +4860,9 @@ function triggerAutoplay(currentItem) {
     <div class="autoplay-next-title">${escH(nextItem.title)}</div>
     <div class="autoplay-related">
       ${related.map((v,i) => {
-        const thumb = v.image || 'https://via.placeholder.com/88x50/07070f/00f2ff?text=▶';
+        const thumb = v.image || window.UG_PH;
         return `<div class="autoplay-rel-thumb" data-id="${v._id}">
-          <img src="${escH(thumb)}" alt="${escH(v.title)}" onerror="this.src='https://via.placeholder.com/88x50/07070f/00f2ff?text=▶'">
+          <img src="${escH(thumb)}" alt="${escH(v.title)}" onerror="this.onerror=null;this.src=window.UG_PH">
           <span>${escH(v.title)}</span>
         </div>`;
       }).join('')}

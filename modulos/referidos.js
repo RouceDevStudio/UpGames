@@ -56,6 +56,9 @@ async function alVerificar(Usuario, nuevo, { crearNotif, logger } = {}) {
         await tx(nuevo, pNuevo, `referido-bienvenida:${nuevo}`);
         if (pagaInv) {
             await Usuario.updateOne({ usuario: inv.usuario }, { $inc: { monedas: pInv } });
+            // 5 invitados verificados → insignia Embajador (no se vende)
+            if (await Usuario.countDocuments({ referidoPor: inv.usuario, referidoEstado: 'pagado' }) >= 5)
+                await Usuario.updateOne({ usuario: inv.usuario, cosmeticos: { $ne: 'ins_embajador' } }, { $addToSet: { cosmeticos: 'ins_embajador' } });
             await tx(inv.usuario, pInv, `referido:${inv.usuario}:${nuevo}`);
             crearNotif?.({ destinatario: inv.usuario, tipo: 'sistema', emisor: nuevo, itemTitle: 'Referidos', mensaje: `🎉 @${nuevo} se unió con tu invitación: ganaste ${pInv} UpCoins` });
         }

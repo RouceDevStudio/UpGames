@@ -14,7 +14,7 @@ const Seo = require('../modulos/seo');
     const fuente = process.argv[2] || 'https://upgames-production.up.railway.app/seo/paginas.json';
     const data = /^https?:/.test(fuente) ? await (await fetch(fuente)).json() : JSON.parse(fs.readFileSync(fuente, 'utf8'));
     if (!data?.success || !Array.isArray(data.items)) throw new Error('Respuesta inválida del backend');
-    const dir = path.join(__dirname, '..', 'public', 'p');
+    const dir = process.env.SEO_DIR || path.join(__dirname, '..', 'public', 'p');   // SEO_DIR: carpeta de pruebas
     fs.mkdirSync(dir, { recursive: true });
     const quedan = new Set();
     for (const it of data.items) {

@@ -17,30 +17,53 @@
 const mongoose = require('mongoose');
 
 const COSMETICOS = [
-    // Marcos del avatar (animados con CSS)
-    { id: 'marco_neon', tipo: 'marco', nombre: 'Neón', emoji: '💚', precio: 80 },
-    { id: 'marco_fuego', tipo: 'marco', nombre: 'Fuego', emoji: '🔥', precio: 120 },
-    { id: 'marco_oro', tipo: 'marco', nombre: 'Oro', emoji: '👑', precio: 150 },
-    { id: 'marco_arcoiris', tipo: 'marco', nombre: 'Arcoíris', emoji: '🌈', precio: 200 },
-    { id: 'marco_galaxia', tipo: 'marco', nombre: 'Galaxia', emoji: '🌌', precio: 300 },
-    // Color del nombre (perfil y chat de los lives)
-    { id: 'color_cian', tipo: 'color', nombre: 'Cian', emoji: '🩵', precio: 50 },
-    { id: 'color_rosa', tipo: 'color', nombre: 'Rosa', emoji: '🩷', precio: 50 },
-    { id: 'color_oro', tipo: 'color', nombre: 'Dorado', emoji: '💛', precio: 80 },
-    { id: 'color_degradado', tipo: 'color', nombre: 'Degradado vivo', emoji: '✨', precio: 150 },
-    // Fondo del perfil público (cuando no hay portada propia o detrás de ella)
-    { id: 'fondo_aurora', tipo: 'fondo', nombre: 'Aurora', emoji: '🌠', precio: 120 },
-    { id: 'fondo_atardecer', tipo: 'fondo', nombre: 'Atardecer', emoji: '🌇', precio: 120 },
-    { id: 'fondo_ciber', tipo: 'fondo', nombre: 'Ciberpunk', emoji: '🌆', precio: 150 },
-    { id: 'fondo_espacio', tipo: 'fondo', nombre: 'Espacio', emoji: '🪐', precio: 200 },
-    // Insignias de colección (se muestran hasta 3 en el perfil)
-    { id: 'ins_gamer', tipo: 'insignia', nombre: 'Gamer', emoji: '🎮', precio: 60 },
-    { id: 'ins_retro', tipo: 'insignia', nombre: 'Retro', emoji: '👾', precio: 60 },
-    { id: 'ins_modder', tipo: 'insignia', nombre: 'Modder', emoji: '🛠️', precio: 80 },
-    { id: 'ins_leyenda', tipo: 'insignia', nombre: 'Leyenda', emoji: '🏆', precio: 250 },
-    // Solo se ganan con misiones (no se venden)
+    // Marcos del avatar (animados con CSS). Precios de octubre 2026: lo ya comprado se conserva.
+    { id: 'marco_neon', tipo: 'marco', nombre: 'Neón', emoji: '💚', precio: 100 },
+    { id: 'marco_hielo', tipo: 'marco', nombre: 'Hielo', emoji: '❄️', precio: 150 },
+    { id: 'marco_fuego', tipo: 'marco', nombre: 'Fuego', emoji: '🔥', precio: 150 },
+    { id: 'marco_rayo', tipo: 'marco', nombre: 'Eléctrico', emoji: '⚡', precio: 180 },
+    { id: 'marco_toxico', tipo: 'marco', nombre: 'Tóxico', emoji: '☢️', precio: 180 },
+    { id: 'marco_oro', tipo: 'marco', nombre: 'Oro', emoji: '👑', precio: 200 },
+    { id: 'marco_arcoiris', tipo: 'marco', nombre: 'Arcoíris', emoji: '🌈', precio: 250 },
+    { id: 'marco_glitch', tipo: 'marco', nombre: 'Glitch', emoji: '👾', precio: 280 },
+    { id: 'marco_dragon', tipo: 'marco', nombre: 'Dragón', emoji: '🐉', precio: 350 },
+    { id: 'marco_galaxia', tipo: 'marco', nombre: 'Galaxia', emoji: '🌌', precio: 400 },
+    { id: 'marco_diamante', tipo: 'marco', nombre: 'Diamante', emoji: '💎', precio: 600 },
+    // Color del nombre (perfil, publicaciones, comentarios y chat de los lives)
+    { id: 'color_cian', tipo: 'color', nombre: 'Cian', emoji: '🩵', precio: 70 },
+    { id: 'color_rosa', tipo: 'color', nombre: 'Rosa', emoji: '🩷', precio: 70 },
+    { id: 'color_verde', tipo: 'color', nombre: 'Verde neón', emoji: '💚', precio: 70 },
+    { id: 'color_oro', tipo: 'color', nombre: 'Dorado', emoji: '💛', precio: 100 },
+    { id: 'color_plata', tipo: 'color', nombre: 'Plata', emoji: '🤍', precio: 120 },
+    { id: 'color_hielo', tipo: 'color', nombre: 'Hielo', emoji: '🧊', precio: 140 },
+    { id: 'color_fuego', tipo: 'color', nombre: 'Fuego', emoji: '🔥', precio: 180 },
+    { id: 'color_degradado', tipo: 'color', nombre: 'Degradado vivo', emoji: '✨', precio: 200 },
+    { id: 'color_arcoiris', tipo: 'color', nombre: 'Arcoíris', emoji: '🌈', precio: 260 },
+    // Fondo del perfil público y de tu tarjeta de creador en las publicaciones
+    { id: 'fondo_selva', tipo: 'fondo', nombre: 'Selva', emoji: '🌿', precio: 150 },
+    { id: 'fondo_oceano', tipo: 'fondo', nombre: 'Océano', emoji: '🌊', precio: 150 },
+    { id: 'fondo_aurora', tipo: 'fondo', nombre: 'Aurora', emoji: '🌠', precio: 160 },
+    { id: 'fondo_atardecer', tipo: 'fondo', nombre: 'Atardecer', emoji: '🌇', precio: 160 },
+    { id: 'fondo_ciber', tipo: 'fondo', nombre: 'Ciberpunk', emoji: '🌆', precio: 200 },
+    { id: 'fondo_lava', tipo: 'fondo', nombre: 'Lava', emoji: '🌋', precio: 220 },
+    { id: 'fondo_espacio', tipo: 'fondo', nombre: 'Espacio', emoji: '🪐', precio: 250 },
+    { id: 'fondo_neon', tipo: 'fondo', nombre: 'Ciudad neón', emoji: '🏙️', precio: 280 },
+    { id: 'fondo_matrix', tipo: 'fondo', nombre: 'Matrix', emoji: '💾', precio: 320 },
+    // Insignias de colección (se muestran hasta 3 en el perfil y en tus publicaciones)
+    { id: 'ins_gamer', tipo: 'insignia', nombre: 'Gamer', emoji: '🎮', precio: 80 },
+    { id: 'ins_retro', tipo: 'insignia', nombre: 'Retro', emoji: '👾', precio: 80 },
+    { id: 'ins_modder', tipo: 'insignia', nombre: 'Modder', emoji: '🛠️', precio: 100 },
+    { id: 'ins_streamer', tipo: 'insignia', nombre: 'Streamer', emoji: '🎙️', precio: 100 },
+    { id: 'ins_speedrun', tipo: 'insignia', nombre: 'Speedrunner', emoji: '⏱️', precio: 100 },
+    { id: 'ins_creador', tipo: 'insignia', nombre: 'Creador', emoji: '🎨', precio: 120 },
+    { id: 'ins_coleccionista', tipo: 'insignia', nombre: 'Coleccionista', emoji: '🗃️', precio: 150 },
+    { id: 'ins_mvp', tipo: 'insignia', nombre: 'MVP', emoji: '🏅', precio: 220 },
+    { id: 'ins_leyenda', tipo: 'insignia', nombre: 'Leyenda', emoji: '🏆', precio: 300 },
+    { id: 'ins_realeza', tipo: 'insignia', nombre: 'Realeza', emoji: '👑', precio: 450 },
+    // Solo se ganan (no se venden)
     { id: 'ins_mecenas', tipo: 'insignia', nombre: 'Mecenas', emoji: '🎁', precio: 0, soloMision: true },
     { id: 'ins_activo', tipo: 'insignia', nombre: 'Siempre activo', emoji: '⚡', precio: 0, soloMision: true },
+    { id: 'ins_embajador', tipo: 'insignia', nombre: 'Embajador', emoji: '🤝', precio: 0, soloMision: true },   // 5 invitados verificados
     // Exclusiva: cuentas creadas antes de FUNDADOR_HASTA. No se vende ni se gana después.
     { id: 'ins_fundador', tipo: 'insignia', nombre: 'Fundador', emoji: '🏛️', precio: 0, soloMision: true },
 ];
