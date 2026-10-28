@@ -20,6 +20,7 @@ const L = require('../modulos/live');
 const MP = require('../modulos/mercadopago');
 const REPARTO = require('../modulos/reparto');
 const UC = require('../modulos/upcoins');
+const Extras = require('../modulos/extras');
 
 // Premium. `monedas` = precio en UpCoins; `monedasRegalo` = UpCoins de regalo, SOLO si se paga con dinero
 const PLANES = [
@@ -106,7 +107,7 @@ function registrar(app, deps) {
     });
 
     // ── Entrega (idempotente por ref) ───────────────────────────────────────
-    async function entregar(usuario, p, { ref, captureId = '', metodo, usd }) {
+    async function entregar(usuario, p, { ref, captureId = '', metodo, usd, para = '' }) {
         if (p.tipo === 'monedas') {
             // Con un pase vigente cada paquete trae un 10% extra
             const yo = await Usuario.findOne({ usuario }).select('planHasta').lean();
@@ -144,19 +145,25 @@ function registrar(app, deps) {
         const regalo = conUC ? 0 : (p.plan.monedasRegalo || 0);
         const monedasPagadas = conUC ? p.plan.monedas : 0;
         const fondo = REPARTO.fondoPase({ usd, monedas: monedasPagadas, metodo, monedasRegalo: regalo });   // para los creadores que abra con el pase
-        try { await LiveTx.create({ tipo: 'plan', usuario, monedas: monedasPagadas, bonoMonedas: regalo, creadorUsd: fondo, plataformaUsd: Math.max(0, usd - fondo), usd, planId: p.plan.id, ref, captureId, metodo, estado: 'completada' }); }
-        catch (e) { if (e.code !== 11000) throw e; const u = await Usuario.findOne({ usuario }).select('planId planHasta monedas').lean(); return { plan: u?.planId, hasta: u?.planHasta, monedas: u?.monedas || 0, repetida: true }; }
-        const u = await Usuario.findOneAndUpdate({ usuario }, [{ $set: {
+        const quien = para || usuario;   // Premium regalado: lo recibe `para`, lo paga `usuario`
+        try { await LiveTx.create({ tipo: 'plan', usuario, destinatario: para, monedas: monedasPagadas, bonoMonedas: regalo, creadorUsd: fondo, plataformaUsd: Math.max(0, usd - fondo), usd, planId: p.plan.id, ref, captureId, metodo, estado: 'completada' }); }
+        catch (e) { if (e.code !== 11000) throw e; const u = await Usuario.findOne({ usuario: quien }).select('planId planHasta monedas').lean(); return { plan: u?.planId, hasta: u?.planHasta, monedas: u?.monedas || 0, repetida: true }; }
+        const u = await Usuario.findOneAndUpdate({ usuario: quien }, [{ $set: {
             planId: p.plan.id,
             planHasta: { $add: [{ $max: ['$$NOW', { $ifNull: ['$planHasta', '$$NOW'] }] }, p.plan.dias * 864e5] },
             planAvisadoHasta: null,
             monedas: { $add: [{ $ifNull: ['$monedas', 0] }, regalo] },
             paseFondoUsd: { $add: [{ $ifNull: ['$paseFondoUsd', 0] }, fondo] },
         } }], { new: true }).select('planId planHasta monedas').lean();
-        olvidarPerfil(usuario);   // la insignia ⭐ del chat aparece al instante
+        olvidarPerfil(quien);   // la insignia ⭐ del chat aparece al instante
         // Más visibilidad: sus publicaciones suben en el inicio mientras dure Premium
-        if (Juego && u?.planHasta) { Juego.updateMany({ usuario }, { $set: { impulsoHasta: u.planHasta } }).then(() => limpiarCache?.()).catch(() => {}); }
-        logger.info(`[tienda] @${usuario}: ${p.plan.nombre} (${metodo}) +${regalo} UpCoins de regalo → vence ${u?.planHasta?.toISOString?.().slice(0, 10)}`);
+        if (Juego && u?.planHasta) { Juego.updateMany({ usuario: quien }, { $set: { impulsoHasta: u.planHasta } }).then(() => limpiarCache?.()).catch(() => {}); }
+        logger.info(`[tienda] @${quien}: ${p.plan.nombre} (${metodo}${para ? `, regalo de @${usuario}` : ''}) +${regalo} UpCoins de regalo → vence ${u?.planHasta?.toISOString?.().slice(0, 10)}`);
+        if (para) {
+            avisar(para, 'Premium', `🎁 ¡@${usuario} te regaló ${p.plan.nombre}! Activo hasta el ${new Date(u?.planHasta).toLocaleDateString('es-CO')}: sin anuncios, NEXUS ilimitado y más visibilidad.`);
+            avisar(usuario, 'Compra', `🎁 Regalaste ${p.plan.nombre} a @${para}. Ya le avisamos.`);
+            return { plan: u?.planId, hasta: u?.planHasta, para, monedasRegalo: 0 };
+        }
         avisar(usuario, 'Premium', `⭐ ¡Has desbloqueado ${p.plan.nombre}! Activo hasta el ${new Date(u?.planHasta).toLocaleDateString('es-CO')}: sin anuncios, NEXUS ilimitado y más visibilidad.${regalo ? ` Además recibiste ${regalo.toLocaleString('es-CO')} UpCoins de regalo.` : ''}`);
         return { plan: u?.planId, hasta: u?.planHasta, monedas: u?.monedas || 0, monedasRegalo: regalo };
     }
@@ -171,11 +178,11 @@ function registrar(app, deps) {
             await mongoose.connection.collection('accesos_directos').deleteOne({ usuario: tx.usuario, juegoId: tx.juegoId }).catch(() => {});
         }
         if (tx.tipo === 'plan') {
-            await Usuario.updateOne({ usuario: tx.usuario }, [{ $set: { planHasta: '$$NOW',
+            await Usuario.updateOne({ usuario: tx.destinatario || tx.usuario }, [{ $set: { planHasta: '$$NOW',
                 monedas: { $max: [0, { $subtract: [{ $ifNull: ['$monedas', 0] }, tx.bonoMonedas || 0] }] },
                 paseFondoUsd: { $max: [0, { $subtract: [{ $ifNull: ['$paseFondoUsd', 0] }, tx.creadorUsd || 0] }] } } }]);
-            olvidarPerfil(tx.usuario);
-            if (Juego) await Juego.updateMany({ usuario: tx.usuario }, { $set: { impulsoHasta: null } }).catch(() => {});
+            olvidarPerfil(tx.destinatario || tx.usuario);
+            if (Juego) await Juego.updateMany({ usuario: tx.destinatario || tx.usuario }, { $set: { impulsoHasta: null } }).catch(() => {});
         }
         if (sancionar) await Usuario.updateOne({ usuario: tx.usuario }, { $set: { listaNegraAdmin: true, notasAdmin: `Contracargo (${motivo}) de ${tx.tipo}`, fechaListaNegra: new Date() } });
         logger.warn(`[tienda] ${motivo}: ${tx.tipo} de @${tx.usuario} revertido (${captureId})`);
@@ -246,7 +253,7 @@ function registrar(app, deps) {
 
     // ── Pagar con saldo o monedas (instantáneo) ─────────────────────────────
     const enCurso = new Map();
-    async function pagarInterno(usuario, p, metodo, clave) {
+    async function pagarInterno(usuario, p, metodo, clave, para = '') {
         const ref = `${metodo}:${usuario}:${clave}`;
         const previa = await LiveTx.findOne({ ref }).select('_id').lean();
         if (previa) return [200, { repetida: true }];
@@ -259,7 +266,7 @@ function registrar(app, deps) {
             return [/cuenta no puede/.test(motivo) ? 403 : /retiro pendiente/.test(motivo) ? 409 : 402, { error: motivo }];
         }
         try {
-            const entrega = await entregar(usuario, p, { ref, metodo, usd: r2(costo * L.MONEDA_USD) });
+            const entrega = await entregar(usuario, p, { ref, metodo, usd: r2(costo * L.MONEDA_USD), para });
             if (entrega.repetida) await UC.devolver(Usuario, usuario, cobro);
             const u = await Usuario.findOne({ usuario }).select('monedas saldo solicitudPagoPendiente').lean();
             return [200, { ...entrega, cobradoUC: costo, upcoins: UC.saldoUC(u || {}), monedas: Math.floor(UC.saldoUC(u || {}).total) }];
@@ -277,8 +284,18 @@ function registrar(app, deps) {
             if (!p) return err(res, 400, 'Producto no válido');
             if (!metodo) return err(res, 400, 'Método no válido');
             if (!/^[A-Za-z0-9_-]{8,64}$/.test(clave)) return err(res, 400, 'Falta la clave del pago');
+            // Regalar Premium a otra persona (solo con UpCoins)
+            let para = '';
+            if (req.body?.para) {
+                if (p.tipo !== 'plan') return err(res, 400, 'Solo Premium se puede regalar');
+                if (!(await Extras.config()).activo.regalarPremium) return err(res, 409, 'Regalar Premium está pausado');
+                para = String(req.body.para).trim().toLowerCase().replace(/^@/, '');
+                if (para === req.usuario) return err(res, 400, 'Para ti mismo, compra Premium normalmente');
+                const dest = /^[a-z0-9_.-]{3,20}$/.test(para) ? await Usuario.findOne({ usuario: para }).select('suspendido').lean() : null;
+                if (!dest || dest.suspendido) return err(res, 404, `No encontramos a @${para}`);
+            }
             const k = `${req.usuario}:${clave}`;
-            if (!enCurso.has(k)) enCurso.set(k, pagarInterno(req.usuario, p, metodo, clave).finally(() => enCurso.delete(k)));
+            if (!enCurso.has(k)) enCurso.set(k, pagarInterno(req.usuario, p, metodo, clave, para).finally(() => enCurso.delete(k)));
             const [code, body] = await enCurso.get(k);
             code === 200 ? ok(res, body) : err(res, code, body.error);
         } catch (e) { logger.error(`[tienda] pagar: ${e.message}`); err(res, e.status || 500, e.status ? e.message : 'No se pudo completar el pago'); }

@@ -24,6 +24,7 @@
     <meta name="theme-color" content="#0A0B0F">
     <title>Perfil de Usuario — UpGames</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="./upgames-estilo.css?v=20261028f">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="preconnect" href="https://unpkg.com">
     <style>
@@ -737,6 +738,7 @@ display:block;
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="UpGames">
 <script src="./upgames-pwa.js" defer></script>
+<script src="./upgames-extras.js?v=20261028f"></script>
 </head>
 <body>
 
@@ -972,6 +974,27 @@ display:block;
                 }
                 const esMiPerfil = usuarioActual && usuarioActual.toLowerCase() === String(user.usuario).toLowerCase();
                 document.getElementById('hero-cover-edit').classList.toggle('show', !!esMiPerfil);
+
+                // Estilo comprado con UpCoins: marco del avatar, color del nombre, fondo (si no tiene portada) e insignias
+                const pintarEstilo = () => {
+                    if (!window.UGX) return;
+                    let ins = document.getElementById('pp-insignias');
+                    if (!ins) { ins = document.createElement('div'); ins.id = 'pp-insignias'; ins.style.marginTop = '6px'; document.querySelector('.hero-username')?.after(ins); }
+                    window.UGX.aplicarEstilo(user.estilo || {}, { avatar: document.querySelector('.hero-avatar-wrap'), nombre: document.getElementById('user-name-display'),
+                        fondo: cover.classList.contains('has-banner') ? null : cover, insignias: ins });
+                    if (user.premium && !document.getElementById('pp-premium')) document.getElementById('verificado-badge')?.insertAdjacentHTML('afterend', '<span id="pp-premium" title="Premium" style="margin-left:4px;color:#ffcc4d">⭐</span>');
+                };
+                window.UGX?.cargarCfg().then(pintarEstilo);
+                // Regalar Premium a este creador (con UpCoins)
+                if (!esMiPerfil && usuarioActual && !document.getElementById('pp-regalar')) {
+                    window.UGX?.cargarCfg().then(c => {
+                        if (!c?.activo?.regalarPremium) return;
+                        const b = document.createElement('button'); b.id = 'pp-regalar'; b.type = 'button'; b.className = 'btn-seguir';
+                        b.style.cssText = 'background:linear-gradient(135deg,#ffcc4d,#ff9a3c);color:#2b1a00;border:0';
+                        b.innerHTML = '🎁 Regalar'; b.title = 'Regalar Premium con UpCoins'; b.onclick = () => window.UGX.regalar(user.usuario);
+                        document.getElementById('btn-seguir')?.after(b);
+                    });
+                }
 
                 // Biografía
                 document.getElementById('user-bio').textContent = user.bio || 'Sin biografía';

@@ -121,9 +121,13 @@ async function vistaDirectorio() {
 }
 
 /* ══════════════ Chat (compartido por espectador y estudio) ══════════════ */
+/** Nivel visual del Super Chat según el monto (1 a 4). */
+const nivelSC = m => m >= 200 ? 4 : m >= 100 ? 3 : m >= 50 ? 2 : 1;
+
 function crearChat(raiz, { liveId, esHost, alEnviar }) {
   raiz.innerHTML = `
     <div class="side-tabs"><button class="on" data-t="chat">Chat</button><button data-t="top">🏆 Top regalos</button></div>
+    <div class="sc-pins" id="sc-pins"></div>
     <div class="chat" id="chat-list" aria-live="polite"></div>
     <div class="top-list" id="top-list" hidden></div>
     <button class="newmsgs" id="chat-new" hidden>Mensajes nuevos ↓</button>
@@ -132,7 +136,7 @@ function crearChat(raiz, { liveId, esHost, alEnviar }) {
         ${esHost ? '' : '<button type="button" class="heart-btn" id="btn-like" aria-label="Me gusta"><ion-icon name="heart"></ion-icon></button>'}
         <button class="send" aria-label="Enviar"><ion-icon name="send"></ion-icon></button>
       </form>` : `<div class="chat-login"><a href="${urlLogin()}">Inicia sesión</a> para chatear y enviar regalos</div>`}`;
-  const list = raiz.querySelector('#chat-list'), nuevo = raiz.querySelector('#chat-new'), top = raiz.querySelector('#top-list');
+  const list = raiz.querySelector('#chat-list'), nuevo = raiz.querySelector('#chat-new'), top = raiz.querySelector('#top-list'), pins = raiz.querySelector('#sc-pins');
   raiz.querySelectorAll('.side-tabs button').forEach(b => b.onclick = () => {
     raiz.querySelectorAll('.side-tabs button').forEach(x => x.classList.toggle('on', x === b));
     list.hidden = b.dataset.t !== 'chat'; top.hidden = b.dataset.t !== 'top'; nuevo.hidden = true;
@@ -146,12 +150,23 @@ function crearChat(raiz, { liveId, esHost, alEnviar }) {
     while (list.children.length > 200) list.firstChild.remove();
     if (pegado) list.scrollTop = list.scrollHeight; else if (!list.hidden) nuevo.hidden = false;
   }
+  // Super Chat: fijado arriba del chat durante unos segundos según el monto (m.sc.seg)
+  function fijar(m) {
+    const resta = m.ts + m.sc.seg * 1000 - Date.now();
+    if (resta <= 0 || !pins || pins.querySelector(`[data-id="${CSS.escape(m.id)}"]`)) return;
+    const p = document.createElement('div'); p.className = `sc-pin sc-t${nivelSC(m.sc.monto)}`; p.dataset.id = m.id;
+    p.innerHTML = `<b class="${m.c ? 'ugs-c-' + esc(m.c) : ''}">@${esc(m.u)}</b><span class="sc-m">🪙 ${fmt(m.sc.monto)}</span><div>${esc(m.t)}</div><i style="animation-duration:${resta}ms"></i>`;
+    pins.prepend(p);
+    while (pins.children.length > 3) pins.lastChild.remove();
+    setTimeout(() => p.remove(), resta);
+  }
   function add(m) {
     const el = document.createElement('div');
-    el.className = 'msg'; el.dataset.id = m.id; el.dataset.u = m.u;
-    const color = `hsl(${hue(m.u)} 75% 68%)`;
+    el.className = 'msg' + (m.sc ? ` superchat sc-t${nivelSC(m.sc.monto)}` : ''); el.dataset.id = m.id; el.dataset.u = m.u;
+    const color = m.c ? '' : `color:hsl(${hue(m.u)} 75% 68%)`;   // color comprado con UpCoins: clase ugs-c-*
+    if (m.sc) fijar(m);
     el.innerHTML = `${m.av && /^https:\/\//.test(m.av) ? `<img class="mav" src="${esc(cld(m.av, 'c_fill,w_48,h_48,q_auto,f_auto'))}" alt="">` : `<div class="mav" style="background:hsl(${hue(m.u)} 60% 45%)">${esc(m.u[0].toUpperCase())}</div>`}
-      <div class="mb">${m.host ? '<span class="badge-host">CREADOR</span>' : ''}<span class="mu" style="color:${color}">${esc(m.u)}${m.v ? ' <ion-icon class="verif" name="checkmark-circle"></ion-icon>' : ''}${m.pase ? ' <span class="badge-pase" title="Es Premium">⭐</span>' : ''}</span>${esc(m.t)}</div>
+      <div class="mb">${m.sc ? `<span class="sc-tag">💬 Super Chat · 🪙 ${fmt(m.sc.monto)}</span>` : ''}${m.host ? '<span class="badge-host">CREADOR</span>' : ''}<span class="mu ${m.c ? 'ugs-c-' + esc(m.c) : ''}" style="${color}">${esc(m.u)}${m.v ? ' <ion-icon class="verif" name="checkmark-circle"></ion-icon>' : ''}${m.pase ? ' <span class="badge-pase" title="Es Premium">⭐</span>' : ''}</span>${esc(m.t)}</div>
       ${esHost && !m.host ? `<div class="mod"><button data-a="borrar" title="Borrar mensaje"><ion-icon name="trash-outline"></ion-icon></button><button data-a="silenciar" title="Silenciar a @${esc(m.u)}"><ion-icon name="volume-mute-outline"></ion-icon></button></div>` : ''}`;
     el.querySelector('.mu').onclick = () => window.open(`./perfil-publico.html?u=${encodeURIComponent(m.u)}`, '_blank');
     el.querySelectorAll('.mod button').forEach(b => b.onclick = () => {
@@ -222,7 +237,7 @@ function burbujas(el, max = 6) {
     ? `<img class="mav" src="${esc(cld(av, 'c_fill,w_48,h_48,q_auto,f_auto'))}" alt="">`
     : `<span class="mav" style="background:hsl(${hue(u)} 60% 45%)">${esc((u || '?')[0].toUpperCase())}</span>`;
   return {
-    add: m => poner(`${mini(m.u, m.av)}<div><b style="color:hsl(${hue(m.u)} 85% 76%)">${esc(m.u)}${m.pase ? ' ⭐' : ''}</b>${esc(m.t)}</div>`, m.host ? 'host' : '', { id: m.id, u: m.u }),
+    add: m => poner(`${mini(m.u, m.av)}<div><b class="${m.c ? 'ugs-c-' + esc(m.c) : ''}" style="${m.c ? '' : `color:hsl(${hue(m.u)} 85% 76%)`}">${esc(m.u)}${m.pase ? ' ⭐' : ''}${m.sc ? ` · 🪙 ${fmt(m.sc.monto)}` : ''}</b>${esc(m.t)}</div>`, m.sc ? `superchat sc-t${nivelSC(m.sc.monto)}` : m.host ? 'host' : '', { id: m.id, u: m.u }),
     regalo: g => poner(`<span style="font-size:1.15rem;line-height:1">${esc(g.regalo.emoji)}</span><div><b>${esc(g.de)}</b>envió ${esc(g.regalo.nombre)}${g.cantidad > 1 ? ` ×${g.cantidad}` : ''}</div>`, 'regalo'),
     sys: t => poner(`<div>${esc(t)}</div>`, 'sys'),
     borrar: id => el.querySelector(`[data-id="${CSS.escape(id)}"]`)?.remove(),
@@ -396,7 +411,7 @@ async function vistaEspectador(usuario) {
         <div class="acts"><button class="btn btn-ghost" id="b-share"><ion-icon name="share-social"></ion-icon> Compartir</button></div>
       </div>
       ${usuario === ME ? '' : `<div class="gifts glass">
-        <div class="gifts-head"><span>🎁 Envía un regalo a @${esc(c.usuario)}</span>${TOKEN ? '<button class="coins-chip" id="b-recargar">🪙 Recargar</button>' : ''}</div>
+        <div class="gifts-head"><span>🎁 Envía un regalo a @${esc(c.usuario)}</span>${TOKEN ? '<span style="display:flex;gap:6px"><button class="coins-chip sc-btn" data-superchat hidden>💬 Super Chat</button><button class="coins-chip" id="b-recargar">🪙 Recargar</button></span>' : ''}</div>
         <div class="gifts-row">${CFG.regalos.map(g => `<button class="gift" data-g="${g.id}" title="${esc(g.nombre)} · ${g.monedas} UpCoins"><span class="e">${g.emoji}</span><span class="n">${esc(g.nombre)}</span><span class="c">🪙 ${fmt(g.monedas)}</span></button>`).join('')}</div>
       </div>`}
     </section>
@@ -405,7 +420,7 @@ async function vistaEspectador(usuario) {
   ${usuario === ME ? '' : `<div class="sheet-bg" id="sheet-bg"></div>
   <div class="gift-sheet" id="gift-sheet" role="dialog" aria-label="Enviar regalo">
     <div class="grab"></div>
-    <div class="gifts-head"><span>🎁 Regalo para @${esc(c.usuario)}</span>${TOKEN ? '<button class="coins-chip" id="sheet-recargar">🪙 <span id="sheet-coins">0</span> · Recargar</button>' : ''}</div>
+    <div class="gifts-head"><span>🎁 Regalo para @${esc(c.usuario)}</span>${TOKEN ? '<span style="display:flex;gap:6px"><button class="coins-chip sc-btn" data-superchat hidden>💬 Super Chat</button><button class="coins-chip" id="sheet-recargar">🪙 <span id="sheet-coins">0</span> · Recargar</button></span>' : ''}</div>
     <div class="gifts-row">${CFG.regalos.map(g => `<button class="gift" data-g="${g.id}" title="${esc(g.nombre)} · ${g.monedas} UpCoins"><span class="e">${g.emoji}</span><span class="n">${esc(g.nombre)}</span><span class="c">🪙 ${fmt(g.monedas)}</span></button>`).join('')}</div>
   </div>`}`;
 
@@ -499,6 +514,35 @@ async function vistaEspectador(usuario) {
   if (fondo) fondo.onclick = () => abrirHoja(false);
   const recargar = () => { abrirHoja(false); abrirMonedas(); };
   $('b-recargar') && ($('b-recargar').onclick = recargar);
+  // ── Super Chat (usa la hoja y el cobro de upgames-extras.js) ──
+  window.UGX?.cargarCfg().then(cfgX => {
+    if (!cfgX?.activo?.superchat || !TOKEN) return;
+    document.querySelectorAll('[data-superchat]').forEach(b => { b.hidden = false; b.onclick = () => superChat(cfgX.precios.superchat); });
+  });
+  function superChat(montos) {
+    let monto = montos[0];
+    const seg = m => m >= 200 ? '5 min' : m >= 100 ? '2 min' : m >= 50 ? '1 min' : '30 s';
+    window.UGX.hoja('💬 Super Chat', `<p class="ugx-sub">Tu mensaje sale destacado y fijado arriba del chat. @${esc(c.usuario)} recibe el 25 % como ganancia.</p>
+      <input class="ugx-in" id="sc-texto" maxlength="200" placeholder="Escribe tu mensaje…" autocomplete="off">
+      <div class="ugx-montos">${montos.map(m => `<button type="button" class="ugx-monto ${m === monto ? 'on' : ''}" data-m="${m}">🪙 ${fmt(m)}<small>fijado ${seg(m)}</small></button>`).join('')}</div>
+      <button type="button" class="ugx-btn oro" id="sc-ok" style="width:100%">Enviar Super Chat · 🪙 <span>${fmt(monto)}</span></button>`, b => {
+      b.querySelectorAll('[data-m]').forEach(x => x.onclick = () => { monto = +x.dataset.m; b.querySelectorAll('[data-m]').forEach(y => y.classList.toggle('on', y === x)); b.querySelector('#sc-ok span').textContent = fmt(monto); });
+      b.querySelector('#sc-ok').onclick = async e => {
+        const texto = b.querySelector('#sc-texto').value.trim();
+        if (!texto) return toast('Escribe tu mensaje');
+        const r = await window.UGX.pagar(`/live/${liveId}/superchat`, { monto, texto }, e.currentTarget);
+        if (!r) return;
+        window.UGX.cerrarHoja();
+        if (typeof r.monedas === 'number') { monedas = r.monedas; $('coins-n') && ($('coins-n').textContent = fmt(monedas)); $('sheet-coins') && ($('sheet-coins').textContent = fmt(monedas)); }
+        toast('💬 ¡Super Chat enviado!');
+      };
+    });
+  }
+  // Misión "Mira un live": cuenta tras 2 minutos viendo (el servidor valida el live)
+  if (TOKEN && usuario !== ME) {
+    const tMision = setTimeout(() => { fetch(`${API}/misiones/evento`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${TOKEN}` }, body: JSON.stringify({ tipo: 'ver_live', liveId }) }).catch(() => {}); }, 125000);
+    cleanup.push(() => clearTimeout(tMision));
+  }
   $('sheet-recargar') && ($('sheet-recargar').onclick = recargar);
   // Regalos: el mismo envío para el panel y para la hoja
   document.querySelectorAll('.gift').forEach(b => b.onclick = async () => {

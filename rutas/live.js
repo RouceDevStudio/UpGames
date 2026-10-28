@@ -17,6 +17,7 @@ const { Server } = require('socket.io');
 const L = require('../modulos/live');
 const UC = require('../modulos/upcoins');
 const PayPal = require('../modulos/paypal');
+const Extras = require('../modulos/extras');
 
 // ── Modelos ──────────────────────────────────────────────────────────────────
 const LiveSchema = new mongoose.Schema({
@@ -38,7 +39,7 @@ const LiveSchema = new mongoose.Schema({
 LiveSchema.index({ creador: 1 }, { unique: true, partialFilterExpression: { estado: 'en_vivo' }, name: 'un_live_activo' });
 
 const TxSchema = new mongoose.Schema({
-    tipo:         { type: String, enum: ['compra', 'regalo', 'acceso', 'plan'], required: true },   // acceso = saltar la página puente · plan = Premium
+    tipo:         { type: String, enum: ['compra', 'regalo', 'acceso', 'plan', 'mision'], required: true },   // acceso = saltar la página puente · plan = Premium
     usuario:      { type: String, required: true, index: true },   // quien paga
     destinatario: { type: String, default: '', index: true },      // creador (regalos)
     monedas:      { type: Number, required: true },
@@ -116,8 +117,9 @@ function registrar(app, server, deps) {
     async function perfil(u) {
         const c = perfilCache.get(u);
         if (c && Date.now() - c.ts < 5 * 60000) return c;
-        const d = await Usuario.findOne({ usuario: u }).select('avatar verificadoNivel planHasta').lean().catch(() => null);
-        const p = { avatar: d?.avatar || '', verificado: d?.verificadoNivel || 0, pase: !!(d?.planHasta && new Date(d.planHasta) > new Date()), ts: Date.now() };
+        const d = await Usuario.findOne({ usuario: u }).select('avatar verificadoNivel planHasta estilo').lean().catch(() => null);
+        const p = { avatar: d?.avatar || '', verificado: d?.verificadoNivel || 0, pase: !!(d?.planHasta && new Date(d.planHasta) > new Date()),
+            color: d?.estilo?.color || '', marco: d?.estilo?.marco || '', ts: Date.now() };   // estilo comprado con UpCoins
         if (perfilCache.size > 5000) perfilCache.clear();
         perfilCache.set(u, p);
         return p;
@@ -264,7 +266,7 @@ function registrar(app, server, deps) {
             const t = L.limpiarChat(p.texto);
             if (!t) return responder({ ok: false });
             const pf = await perfil(u);
-            const m = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, u, t, ts: Date.now(), av: pf.avatar, v: pf.verificado, pase: pf.pase || undefined, host: u === s.live.creador };
+            const m = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, u, t, ts: Date.now(), av: pf.avatar, v: pf.verificado, pase: pf.pase || undefined, host: u === s.live.creador, c: pf.color || undefined, mk: pf.marco || undefined };
             s.chat.push(m); if (s.chat.length > 80) s.chat.splice(0, s.chat.length - 80);
             io.to(rid(id)).emit('chat', m);
             responder({ ok: true });
@@ -620,8 +622,55 @@ function registrar(app, server, deps) {
             const pf = await perfil(req.usuario);
             io.to(rid(id)).emit('regalo', { de: req.usuario, av: pf.avatar, regalo: { id: g.id, nombre: g.nombre, emoji: g.emoji, monedas: g.monedas }, cantidad, total: costo, ts: Date.now() });
             topDonantes(id).then(top => io.to(rid(id)).emit('top', { top })).catch(() => {});
+            Extras.evento(req.usuario, 'regalo_live', id);
             ok(res, { monedas: await totalUC() });
         } catch (e) { logger.error(`[live] regalo: ${e.message}`); err(res, 500, 'No se pudo enviar el regalo'); }
+    });
+
+    // ── Super Chat: mensaje destacado y fijado (el creador recibe su parte como en los regalos) ──
+    app.post('/live/:id/superchat', verificarToken, async (req, res) => {
+        try {
+            const id = String(req.params.id), c = await Extras.config();
+            if (!c.activo.superchat) return err(res, 409, 'El Super Chat está pausado');
+            const monto = parseInt(req.body?.monto, 10);
+            if (!c.precios.superchat.includes(monto)) return err(res, 400, 'Monto no válido');
+            const texto = L.limpiarChat(req.body?.texto, 200);
+            if (!texto) return err(res, 400, 'Escribe tu mensaje');
+            const claveIdem = String(req.body?.clave || '');
+            if (!/^[A-Za-z0-9_-]{8,64}$/.test(claveIdem)) return err(res, 400, 'Falta la clave del pago');
+            if (!limRegalo(req.usuario)) return err(res, 429, 'Espera un momento');
+            const s = await cargarSala(id);
+            if (!s) return err(res, 404, 'Este live ya terminó');
+            if (s.live.creador === req.usuario) return err(res, 400, 'No puedes enviarte un Super Chat a ti mismo');
+            if (s.silenciados.has(req.usuario)) return err(res, 403, 'El creador te silenció en este live');
+            const ref = `superchat:${req.usuario}:${claveIdem}`;
+            const totalUC = async () => Math.floor(UC.saldoUC(await Usuario.findOne({ usuario: req.usuario }).select('monedas saldo solicitudPagoPendiente').lean() || {}).total);
+            if (await LiveTx.exists({ ref })) return ok(res, { repetido: true, monedas: await totalUC() });
+            const cobro = await UC.cobrar(Usuario, req.usuario, monto);
+            if (!cobro) {
+                const motivo = await UC.motivoSinSaldo(Usuario, req.usuario, monto), tengo = await totalUC();
+                return err(res, /cuenta no puede/.test(motivo) ? 403 : 402, motivo, { monedas: tengo, faltan: Math.max(0, monto - tengo) });
+            }
+            const rep = L.reparto(monto), retener = L.RETENCION_DIAS > 0;
+            try {
+                await LiveTx.create({ tipo: 'regalo', usuario: req.usuario, destinatario: s.live.creador, monedas: monto, usd: rep.bruto, creadorUsd: rep.creador, plataformaUsd: rep.plataforma,
+                    regaloId: 'superchat', cantidad: 1, liveId: id, ref, metodo: 'upcoins', estado: retener ? 'retenida' : 'liberada', liberarEn: retener ? new Date(Date.now() + L.RETENCION_DIAS * 864e5) : null });
+            } catch (e) {
+                await UC.devolver(Usuario, req.usuario, cobro);
+                if (e.code === 11000) return ok(res, { repetido: true, monedas: await totalUC() });
+                throw e;
+            }
+            await Usuario.updateOne({ usuario: s.live.creador }, { $inc: retener ? { saldoRetenido: rep.creador } : { saldo: rep.creador } });
+            Live.updateOne({ _id: id }, { $inc: { monedas: monto } }).catch(() => {});
+            const pf = await perfil(req.usuario);
+            const m = { id: `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, u: req.usuario, t: texto, ts: Date.now(), av: pf.avatar, v: pf.verificado,
+                pase: pf.pase || undefined, c: pf.color || undefined, mk: pf.marco || undefined, sc: { monto, seg: Extras.SUPERCHAT_SEG(monto) } };
+            s.chat.push(m); if (s.chat.length > 80) s.chat.splice(0, s.chat.length - 80);
+            io.to(rid(id)).emit('chat', m);
+            topDonantes(id).then(top => io.to(rid(id)).emit('top', { top })).catch(() => {});
+            Extras.evento(req.usuario, 'regalo_live', id);
+            ok(res, { enviado: true, monedas: await totalUC() });
+        } catch (e) { logger.error(`[live] superchat: ${e.message}`); err(res, 500, 'No se pudo enviar el Super Chat'); }
     });
 
     // ── Admin ───────────────────────────────────────────────────────────────

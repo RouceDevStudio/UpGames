@@ -73,6 +73,8 @@ const series          = require('./modulos/series');
 const push            = require('./modulos/push');
 const autoInfo        = require('./modulos/autoInfo');
 const memCache        = require('./modulos/cache');
+const Extras          = require('./modulos/extras');     // usos extra de los UpCoins y misiones
+const UCmod           = require('./modulos/upcoins');
 const searchModule    = require('./modulos/search');
 // ==========================================
 
@@ -497,6 +499,8 @@ JuegoSchema.add({ imageOrigen: { type: String, default: '' }, portadaMigrada: { 
 // Visibilidad: impulsoHasta = el autor tiene Premium (sube en el inicio); destacadoHasta = lo
 // destacó pagando UpCoins (aparece arriba marcado como "Promocionado")
 JuegoSchema.add({ impulsoHasta: { type: Date, default: null }, destacadoHasta: { type: Date, default: null } });
+// Revisión prioritaria pagada con UpCoins (rutas/extrasUC.js): va primero en la cola; si no se revisa en 24 h se devuelve
+JuegoSchema.add({ prioridadDesde: { type: Date, default: null }, prioridadReembolso: { type: Boolean, default: false } });
 const Juego = mongoose.model('Juego', JuegoSchema);
 
 // ── Caché de lecturas públicas calientes ──
@@ -536,6 +540,9 @@ const UsuarioSchema = new mongoose.Schema({
     // NEXUS IA: mensajes gratis usados hoy y créditos comprados con UpCoins
     iaUso:            { dia: { type: String, default: '' }, usados: { type: Number, default: 0 }, premium: { type: Number, default: 0 } },   // premium: solo estadística
     iaCreditos:       { type: Number, default: 0, min: 0 },
+    // Estilo comprado con UpCoins o ganado en misiones (modulos/extras.js)
+    cosmeticos:       { type: [String], default: [] },
+    estilo:           { marco: { type: String, default: '' }, color: { type: String, default: '' }, fondo: { type: String, default: '' }, insignias: { type: [String], default: [] } },
     // Dónde recibe sus retiros (rutas/cobros.js). Los datos van cifrados; resumen = versión enmascarada
     cobro: { tipo: { type: String, default: '' }, cifrado: { type: String, default: '' }, resumen: { type: String, default: '' }, actualizado: Date, esperaHasta: Date },
     planAvisadoHasta: { type: Date, default: null },      // vencimiento ya avisado (un aviso por periodo)
@@ -1858,7 +1865,7 @@ app.get("/items/user/:usuario", async (req, res) => {
         if (t && t.length > 20) { try { yo = jwt.verify(t, JWT_SECRET).usuario; } catch (_) {} }
         const propio = yo && yo === String(req.params.usuario).toLowerCase();
         const filtro = propio ? { usuario: req.params.usuario, status: { $ne: 'privado' } } : { usuario: req.params.usuario, status: 'aprobado' };
-        const aportes = await Juego.find(filtro).select('_id title description image images link category usuario reportes reportesDesglose linkStatus descargasEfectivas likesCount status createdAt scoreRecomendacion extraData videoType featuredItemId serie motivoRechazo nexusMentor destacadoHasta').sort({ scoreRecomendacion: -1, createdAt: -1 }).lean();
+        const aportes = await Juego.find(filtro).select('_id title description image images link category usuario reportes reportesDesglose linkStatus descargasEfectivas likesCount status createdAt scoreRecomendacion extraData videoType featuredItemId serie motivoRechazo nexusMentor destacadoHasta prioridadDesde prioridadReembolso').sort({ scoreRecomendacion: -1, createdAt: -1 }).lean();
         res.json(propio ? aportes : await series.colapsar(aportes, Juego, { usuario: req.params.usuario, status: 'aprobado' }));
     } catch (error) {
         res.status(500).json([]);
@@ -2316,13 +2323,13 @@ app.get('/usuarios/perfil-publico/:usuario', async (req, res) => {
             // LISTA BLANCA: antes se devolvía el documento entero (menos password y
             // paypalEmail) — incluía resetPasswordToken, email, IP, saldo y tarjetas.
             Usuario.findOne({ usuario: username })
-                .select('usuario avatar banner bio verificadoNivel isVerificado socialLinks ultimoLogin createdAt fecha listaSeguidores siguiendo')
+                .select('usuario avatar banner bio verificadoNivel isVerificado socialLinks ultimoLogin createdAt fecha listaSeguidores siguiendo estilo planHasta')
                 .lean(),
             Juego.countDocuments({ usuario: username, status: 'aprobado' })
         ]);
         if (!user) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
-        const { listaSeguidores, siguiendo, _id, ...publico } = user;
-        res.json({ success: true, usuario: { ...publico, publicaciones, seguidores: listaSeguidores?.length || 0, siguiendo: siguiendo?.length || 0 } });
+        const { listaSeguidores, siguiendo, _id, planHasta, ...publico } = user;
+        res.json({ success: true, usuario: { ...publico, premium: !!(planHasta && new Date(planHasta) > new Date()), publicaciones, seguidores: listaSeguidores?.length || 0, siguiendo: siguiendo?.length || 0 } });
     } catch (err) {
         res.status(500).json({ success: false, error: "Error al cargar perfil" });
     }
@@ -2365,6 +2372,7 @@ app.put('/usuarios/toggle-seguir/:actual/:objetivo', verificarToken, async (req,
                 Usuario.updateOne({ usuario: objetivo }, { $addToSet: { listaSeguidores: actual } })
             ]);
             res.json({ success: true, siguiendo: true });
+            Extras.evento(actual, 'seguir', objetivo);   // misiones
             // Notificar al usuario seguido + registrar evento en Nexus (fire & forget)
             crearNotif({
                 destinatario: objetivo, tipo: 'seguidor', emisor: actual,
@@ -2448,6 +2456,30 @@ app.put('/usuarios/update-bio', [verificarToken, body('bio').isLength({ max: 200
     }
 });
 
+/**
+ * Renombra a un usuario en TODAS las colecciones que guardan su nombre: cualquier
+ * modelo con usuario/destinatario/creador/emisor/de/para (publicaciones, comentarios,
+ * pagos, regalos y accesos, lives, notificaciones, mensajes…), sus seguidores y sus
+ * misiones. Antes faltaban pagos y transacciones: el dinero retenido de regalos se
+ * liberaba al nombre viejo y se perdía.
+ */
+async function cascadaNombre(oldName, newName) {
+    const tareas = [];
+    for (const [nombre, M] of Object.entries(mongoose.models)) {
+        if (nombre === 'Usuario') continue;
+        for (const campo of ['usuario', 'destinatario', 'creador', 'emisor', 'de', 'para']) {
+            const t = M.schema.path(campo);
+            if (t && t.instance === 'String') tareas.push(M.updateMany({ [campo]: oldName }, { $set: { [campo]: newName } }));
+        }
+    }
+    tareas.push(mongoose.connection.collection('misiones_progreso').updateMany({ usuario: oldName }, { $set: { usuario: newName } }));
+    tareas.push(Usuario.updateMany({ listaSeguidores: oldName }, { $set: { 'listaSeguidores.$': newName } }));
+    tareas.push(Usuario.updateMany({ siguiendo: oldName }, { $set: { 'siguiendo.$': newName } }));
+    const r = await Promise.allSettled(tareas);
+    const fallos = r.filter(x => x.status === 'rejected');
+    if (fallos.length) logger.error(`[update-username] ${fallos.length} actualización(es) de la cascada fallaron: ${fallos[0].reason?.message}`);
+}
+
 app.put('/usuarios/update-username', [verificarToken, body('nuevoUsuario').trim().isLength({ min: 3, max: 20 }).matches(/^[a-z0-9_]+$/), body('password').notEmpty()], async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'Nombre inválido (3-20 chars, solo letras minúsculas, números y _)' });
@@ -2462,25 +2494,31 @@ app.put('/usuarios/update-username', [verificarToken, body('nuevoUsuario').trim(
         if (!usuario) return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
         const passOk = await bcrypt.compare(password, usuario.password);
         if (!passOk) return res.status(401).json({ success: false, error: 'Contraseña incorrecta' });
+        // Antes de 30 días solo se puede pagando UpCoins (cambio inmediato)
+        let cobroNombre = null, precioNombre = 0;
         if (usuario.lastUsernameChange) {
             const diffDays = (Date.now() - new Date(usuario.lastUsernameChange).getTime()) / (1000 * 60 * 60 * 24);
-            if (diffDays < 30) { const restante = Math.ceil(30 - diffDays); return res.status(429).json({ success: false, error: `Debes esperar ${restante} día${restante !== 1 ? 's' : ''} más para cambiar tu nombre` }); }
+            if (diffDays < 30) {
+                const restante = Math.ceil(30 - diffDays);
+                const cfgX = await Extras.config();
+                if (!req.body.pagarUC || !cfgX.activo.nombre) return res.status(429).json({ success: false, code: 'NOMBRE_ESPERA', diasRestantes: restante, precioUC: cfgX.activo.nombre ? cfgX.precios.nombre : null,
+                    error: `Debes esperar ${restante} día${restante !== 1 ? 's' : ''} más para cambiar tu nombre${cfgX.activo.nombre ? ` (o cámbialo ya por ${cfgX.precios.nombre} UpCoins)` : ''}` });
+                precioNombre = cfgX.precios.nombre;
+            }
         }
         const existe = await Usuario.findOne({ usuario: newName }).select('_id').lean();
         if (existe) return res.status(409).json({ success: false, error: `El nombre @${newName} ya está en uso. Elige otro` });
+        if (precioNombre) {
+            cobroNombre = await UCmod.cobrar(Usuario, oldName, precioNombre);
+            if (!cobroNombre) return res.status(402).json({ success: false, error: await UCmod.motivoSinSaldo(Usuario, oldName, precioNombre) });
+        }
         // Primero el usuario (el índice único frena una carrera); luego la cascada
-        await Usuario.updateOne({ usuario: oldName }, { $set: { usuario: newName, lastUsernameChange: new Date() } });
-        await Promise.all([
-            Juego.updateMany({ usuario: oldName }, { $set: { usuario: newName } }),
-            Comentario.updateMany({ usuario: oldName }, { $set: { usuario: newName } }),
-            Notificacion.updateMany({ destinatario: oldName }, { $set: { destinatario: newName } }),
-            Notificacion.updateMany({ emisor: oldName }, { $set: { emisor: newName } }),
-            Mensaje.updateMany({ de: oldName }, { $set: { de: newName } }),
-            Mensaje.updateMany({ para: oldName }, { $set: { para: newName } }),
-            Story.updateMany({ usuario: oldName }, { $set: { usuario: newName } }),
-            Usuario.updateMany({ listaSeguidores: oldName }, { $set: { 'listaSeguidores.$': newName } }),
-            Usuario.updateMany({ siguiendo: oldName }, { $set: { 'siguiendo.$': newName } })
-        ]);
+        try { await Usuario.updateOne({ usuario: oldName }, { $set: { usuario: newName, lastUsernameChange: new Date() } }); }
+        catch (e) { if (cobroNombre) await UCmod.devolver(Usuario, oldName, cobroNombre); throw e; }
+        await cascadaNombre(oldName, newName);
+        if (cobroNombre) {
+            mongoose.models.LiveTx?.create({ tipo: 'compra', usuario: newName, monedas: precioNombre, usd: Math.round(precioNombre * UCmod.UC_USD * 100) / 100, planId: 'nombre', metodo: 'upcoins', ref: `nombre:${oldName}:${newName}:${Date.now()}`, estado: 'completada' }).catch(() => {});
+        }
         const nuevoToken = firmarToken({ ...usuario.toObject?.() ?? usuario, usuario: newName });
         logger.info(`[update-username] ${oldName} → ${newName} | Cascada completada`);
         res.json({ success: true, nuevoToken, nuevoUsuario: newName });
@@ -2592,6 +2630,7 @@ app.post('/comentarios', [verificarToken, body('itemId').notEmpty(), body('texto
         Juego.findById(req.body.itemId).select('usuario title image category tags').lean()
             .then(item => {
                 if (!item) return;
+                if (item.usuario !== req.usuario && textoLimpio.length >= 10) Extras.evento(req.usuario, 'comentar', String(req.body.itemId));   // misiones
                 crearNotif({
                     destinatario: item.usuario, tipo: 'comentario', emisor: req.usuario,
                     itemId: req.body.itemId, itemTitle: item.title, itemImage: item.image || '',
@@ -2627,6 +2666,7 @@ app.post('/favoritos/add', [verificarToken, body('itemId').isMongoId()], async (
         calcularScoreRecomendacion(itemId).catch(() => {}); // fire & forget
         gamification.onFavorito(req.usuario).catch(() => {});
         recommendations.invalidateUserCache(req.usuario);
+        Extras.evento(req.usuario, 'favorito', String(itemId));   // misiones
         res.json({ success: true, ok: true });
 
         // Notificar al autor + registrar evento en Nexus (fire & forget, server-side)
@@ -3625,6 +3665,8 @@ const tienda = require('./rutas/tienda').registrar(app, {
     acceso: accesoDirecto, logger, apiUrlSelf: API_URL_SELF, olvidarPerfil: live.olvidarPerfil,
 });
 live.alRevertir((captureId, sancionar) => tienda.revertir(captureId, 'PayPal', sancionar));
+// Usos extra de los UpCoins: estilo, apoyar, revisión prioritaria, misiones (Super Chat está en live)
+require('./rutas/extrasUC').registrar(app, { verificarToken, verificarAdmin, Usuario, Juego, LiveTx: live.LiveTx, Notificacion, logger, olvidarPerfil: live.olvidarPerfil });
 // Panel admin → Economía (UpCoins, ventas, Premium, NEXUS, destacadas)
 require('./rutas/adminEconomia').registrar(app, { verificarAdmin, Usuario, Juego, LiveTx: live.LiveTx, Pago, Notificacion, logger, olvidarPerfil: live.olvidarPerfil });
 // Estado del correo y envío de prueba (panel admin → Sistema)

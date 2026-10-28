@@ -35,4 +35,13 @@ test('regalos en lives nunca cuentan como ingreso nuevo', () => {
     assert.deepStrictEqual(clasificar({ tipo: 'regalo', metodo: '', monedas: 500 }), { producto: 'regalo', conDinero: false });
 });
 
+test('usos extra: Super Chat y apoyos son consumo de UC; misiones no son ingreso ni gasto', () => {
+    assert.deepStrictEqual(clasificar({ tipo: 'regalo', regaloId: 'superchat', metodo: 'upcoins', monedas: 50 }), { producto: 'superchat', conDinero: false });
+    assert.deepStrictEqual(clasificar({ tipo: 'regalo', regaloId: 'apoyo', metodo: 'upcoins', monedas: 10 }), { producto: 'apoyo', conDinero: false });
+    assert.deepStrictEqual(clasificar({ tipo: 'mision', metodo: 'mision', monedas: 5 }), { producto: 'mision', conDinero: false });
+    assert.strictEqual(clasificar({ tipo: 'compra', metodo: 'upcoins', planId: 'cosmetico:marco_oro' }).producto, 'estilo');
+    assert.strictEqual(clasificar({ tipo: 'compra', metodo: 'upcoins', planId: 'prioridad:abc' }).producto, 'prioridad');
+    assert.strictEqual(clasificar({ tipo: 'compra', metodo: 'upcoins', planId: 'nombre' }).producto, 'nombre');
+});
+
 console.log(`\n${passed} pruebas OK`);

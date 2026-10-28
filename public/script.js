@@ -252,6 +252,9 @@ function cacheGet(key) {
 }
 
 // ── TOAST ─────────────────────────────────────────────────
+// Ajustes (biblioteca.html) llama a showToast(msg, 'error'|'success'): no existía y cada aviso
+// lanzaba un error silencioso (el usuario no veía si su cambio funcionó).
+function showToast(msg, tipo) { toast((tipo === 'error' ? '⚠️ ' : tipo === 'success' ? '✅ ' : '') + msg, tipo === 'error' ? 3800 : 2600); }
 function toast(msg, dur=2500) {
   const c = document.getElementById('toast-container');
   const t = document.createElement('div');
@@ -1282,6 +1285,7 @@ function openDetail(item) {
   document.getElementById('detail-overlay').classList.add('show');
   document.getElementById('detail-sheet').classList.add('open');
   document.body.style.overflow='hidden';
+  window.UGX?.alAbrirDetalle(item);   // botón "Apoyar" (usos extra de los UpCoins)
 
   // Registrar vista si es un video (usa ruta dedicada /items/vistas/:id con dedup IP)
   if(isVideoItem) {
@@ -1620,7 +1624,7 @@ function switchTab(t) {
   economiaView.classList.toggle('active', t==='economia');
   profileView.classList.toggle('active',  t==='profile');
   if(t==='favs')     renderFavs();
-  if(t==='economia') { renderEconomia(); pfStartEcoPolling(); ecoCargarPlan(); }
+  if(t==='economia') { renderEconomia(); pfStartEcoPolling(); ecoCargarPlan(); window.UGX?.hub(); }
   else               { pfStopEcoPolling(); }
   if(t==='profile')  renderProfile();
 }
@@ -2713,6 +2717,9 @@ function pfOpenPostSheet(i) {
         ${isRejected ? `<div class="pf2-rechazo"><b>Motivo del rechazo:</b> ${ugEsc(item.motivoRechazo || 'No cumple las normas de publicación.')}<br><small>Corrígelo con Editar o publícalo de nuevo.</small></div>` : ''}
         ${mentorHTML}
         <button type="button" class="pf2-btn pf2-btn-nexus" onclick="pfClosePostSheet();nexusPreguntar(${ugEsc(JSON.stringify(`¿Cómo puedo mejorar mi publicación "${item.title}" para conseguir más descargas?`))})"><span class="pf2-nexus-ic">✦</span> Pedir consejo a Nexus</button>
+        ${isPending ? `<div class="pf2-destacar" id="pf2-prioridad">${item.prioridadDesde
+          ? `<span>⚡ <b>Revisión prioritaria activa</b>: va primera en la fila${item.prioridadReembolso ? ' (te devolvimos los UpCoins por la espera)' : ''}</span>`
+          : `<span>⚡ <b>Revisión prioritaria</b>: pasa al frente de la fila por 🪙 <b data-ugx-precio="prioridad">30</b> UC. Si no se revisa en 24 h, te devolvemos los UpCoins.</span><button type="button" class="pf2-btn" onclick="UGX.prioridad('${item._id}', this)">Priorizar</button>`}</div>` : ''}
         ${!isPending && !isRejected ? `<div class="pf2-destacar" id="pf2-destacar">${item.destacadoHasta && new Date(item.destacadoHasta) > new Date()
           ? `<span>🚀 Destacada hasta el ${new Date(item.destacadoHasta).toLocaleString('es-CO')}</span><button type="button" class="pf2-btn" onclick="pfDestacar('${item._id}')">Extender 24 h</button>`
           : `<span>🚀 <b>Destácala 24 h</b> arriba en el inicio por 🪙 50 UC</span><button type="button" class="pf2-btn" onclick="pfDestacar('${item._id}')">Destacar</button>`}</div><div id="pf2-destacar-pago"></div>` : ''}

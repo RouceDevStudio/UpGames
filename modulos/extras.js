@@ -1,0 +1,227 @@
+/**
+ * Usos extra de los UpCoins: configuración editable desde el panel admin.
+ *
+ *   Estilo del perfil ... marcos de avatar, color del nombre, fondo e insignias (cosméticos)
+ *   Super Chat .......... mensaje destacado y fijado en un live (el creador recibe 25 %)
+ *   Apoyar .............. propina a una publicación (el creador recibe 25 %)
+ *   Revisión prioritaria  la publicación pasa al frente de la cola; si no se revisa en 24 h se devuelve
+ *   Regalar Premium ..... pagar con UpCoins el Premium de otra persona
+ *   Cambio de nombre .... sin esperar los 30 días
+ *   Misiones semanales .. dan UpCoins de regalo (no retirables) o insignias
+ *
+ * La configuración vive en un solo documento (config_extras/_id: 'extras'). Lo que no
+ * esté guardado toma el valor por defecto de aquí, así que agregar algo nuevo no rompe nada.
+ */
+'use strict';
+
+const mongoose = require('mongoose');
+
+const COSMETICOS = [
+    // Marcos del avatar (animados con CSS)
+    { id: 'marco_neon', tipo: 'marco', nombre: 'Neón', emoji: '💚', precio: 80 },
+    { id: 'marco_fuego', tipo: 'marco', nombre: 'Fuego', emoji: '🔥', precio: 120 },
+    { id: 'marco_oro', tipo: 'marco', nombre: 'Oro', emoji: '👑', precio: 150 },
+    { id: 'marco_arcoiris', tipo: 'marco', nombre: 'Arcoíris', emoji: '🌈', precio: 200 },
+    { id: 'marco_galaxia', tipo: 'marco', nombre: 'Galaxia', emoji: '🌌', precio: 300 },
+    // Color del nombre (perfil y chat de los lives)
+    { id: 'color_cian', tipo: 'color', nombre: 'Cian', emoji: '🩵', precio: 50 },
+    { id: 'color_rosa', tipo: 'color', nombre: 'Rosa', emoji: '🩷', precio: 50 },
+    { id: 'color_oro', tipo: 'color', nombre: 'Dorado', emoji: '💛', precio: 80 },
+    { id: 'color_degradado', tipo: 'color', nombre: 'Degradado vivo', emoji: '✨', precio: 150 },
+    // Fondo del perfil público (cuando no hay portada propia o detrás de ella)
+    { id: 'fondo_aurora', tipo: 'fondo', nombre: 'Aurora', emoji: '🌠', precio: 120 },
+    { id: 'fondo_atardecer', tipo: 'fondo', nombre: 'Atardecer', emoji: '🌇', precio: 120 },
+    { id: 'fondo_ciber', tipo: 'fondo', nombre: 'Ciberpunk', emoji: '🌆', precio: 150 },
+    { id: 'fondo_espacio', tipo: 'fondo', nombre: 'Espacio', emoji: '🪐', precio: 200 },
+    // Insignias de colección (se muestran hasta 3 en el perfil)
+    { id: 'ins_gamer', tipo: 'insignia', nombre: 'Gamer', emoji: '🎮', precio: 60 },
+    { id: 'ins_retro', tipo: 'insignia', nombre: 'Retro', emoji: '👾', precio: 60 },
+    { id: 'ins_modder', tipo: 'insignia', nombre: 'Modder', emoji: '🛠️', precio: 80 },
+    { id: 'ins_leyenda', tipo: 'insignia', nombre: 'Leyenda', emoji: '🏆', precio: 250 },
+    // Solo se ganan con misiones (no se venden)
+    { id: 'ins_mecenas', tipo: 'insignia', nombre: 'Mecenas', emoji: '🎁', precio: 0, soloMision: true },
+    { id: 'ins_activo', tipo: 'insignia', nombre: 'Siempre activo', emoji: '⚡', precio: 0, soloMision: true },
+];
+
+// Tipos de misión que el servidor sabe contar (el admin elige objetivo y recompensa)
+const TIPOS_MISION = {
+    comentar: 'Comenta publicaciones distintas',
+    favorito: 'Guarda publicaciones en favoritos',
+    seguir: 'Sigue a creadores',
+    ver_live: 'Mira lives (2 minutos o más)',
+    apoyar: 'Apoya publicaciones con UpCoins',
+    regalo_live: 'Envía regalos o Super Chats en lives',
+};
+
+const DEFECTO = {
+    activo: { cosmeticos: true, superchat: true, apoyar: true, prioridad: true, regalarPremium: true, nombre: true, misiones: true },
+    precios: { superchat: [20, 50, 100, 200], apoyo: [10, 50, 100], prioridad: 30, nombre: 100 },
+    cosmeticos: {},   // { id: { precio, activo } } — cambios del admin sobre el catálogo base
+    misiones: [
+        { id: 'm_comentar', tipo: 'comentar', titulo: 'Comenta 5 publicaciones', objetivo: 5, uc: 5, insignia: '', activa: true },
+        { id: 'm_favoritos', tipo: 'favorito', titulo: 'Guarda 3 favoritos', objetivo: 3, uc: 3, insignia: '', activa: true },
+        { id: 'm_seguir', tipo: 'seguir', titulo: 'Sigue a 2 creadores', objetivo: 2, uc: 3, insignia: '', activa: true },
+        { id: 'm_live', tipo: 'ver_live', titulo: 'Mira un live', objetivo: 1, uc: 5, insignia: '', activa: true },
+        { id: 'm_apoyar', tipo: 'apoyar', titulo: 'Apoya una publicación', objetivo: 1, uc: 10, insignia: '', activa: true },
+        { id: 'm_regalo', tipo: 'regalo_live', titulo: 'Envía un regalo en un live', objetivo: 1, uc: 0, insignia: 'ins_mecenas', activa: true },
+    ],
+};
+// Duración del Super Chat fijado según el monto (segundos)
+const SUPERCHAT_SEG = m => m >= 200 ? 300 : m >= 100 ? 120 : m >= 50 ? 60 : 30;
+
+const col = () => mongoose.connection.collection('config_extras');
+let cache = null, cacheAt = 0;
+
+/** Configuración efectiva (defectos + lo guardado), con 30 s de caché. */
+async function config(forzar) {
+    if (!forzar && cache && Date.now() - cacheAt < 30000) return cache;
+    const g = (await col().findOne({ _id: 'extras' }).catch(() => null)) || {};
+    const c = {
+        activo: { ...DEFECTO.activo, ...(g.activo || {}) },
+        precios: { ...DEFECTO.precios, ...(g.precios || {}) },
+        cosmeticos: COSMETICOS.map(b => ({ ...b, ...(g.cosmeticos?.[b.id] || {}), activo: g.cosmeticos?.[b.id]?.activo !== false })),
+        misiones: Array.isArray(g.misiones) && g.misiones.length ? g.misiones : DEFECTO.misiones,
+    };
+    cache = c; cacheAt = Date.now();
+    return c;
+}
+
+const entero = (v, min, max) => { const n = Math.round(Number(v)); return Number.isFinite(n) && n >= min && n <= max ? n : null; };
+
+/** Valida y guarda los cambios del panel admin. Lanza { status: 400 } si algo no es válido. */
+async function guardar(cambios = {}) {
+    const actual = (await col().findOne({ _id: 'extras' })) || {};
+    const set = {};
+    const malo = m => { const e = new Error(m); e.status = 400; throw e; };
+    if (cambios.activo) {
+        set.activo = { ...(actual.activo || {}) };
+        for (const k of Object.keys(DEFECTO.activo)) if (typeof cambios.activo[k] === 'boolean') set.activo[k] = cambios.activo[k];
+    }
+    if (cambios.precios) {
+        const p = { ...(actual.precios || {}) }, c = cambios.precios;
+        for (const k of ['superchat', 'apoyo']) if (c[k] != null) {
+            const l = [...new Set((Array.isArray(c[k]) ? c[k] : String(c[k]).split(',')).map(x => entero(x, 1, 100000)))];
+            if (!l.length || l.some(x => x == null) || l.length > 6) malo(`Montos de ${k} no válidos (1 a 6 números enteros)`);
+            p[k] = l.sort((a, b) => a - b);
+        }
+        for (const k of ['prioridad', 'nombre']) if (c[k] != null) { const n = entero(c[k], 1, 100000); if (n == null) malo(`Precio de ${k} no válido`); p[k] = n; }
+        set.precios = p;
+    }
+    if (cambios.cosmeticos) {
+        const m = { ...(actual.cosmeticos || {}) };
+        for (const [id, v] of Object.entries(cambios.cosmeticos)) {
+            const b = COSMETICOS.find(x => x.id === id); if (!b) malo(`Cosmético desconocido: ${id}`);
+            const n = { ...(m[id] || {}) };
+            if (v.precio != null && !b.soloMision) { const pr = entero(v.precio, 1, 100000); if (pr == null) malo(`Precio no válido para ${b.nombre}`); n.precio = pr; }
+            if (typeof v.activo === 'boolean') n.activo = v.activo;
+            m[id] = n;
+        }
+        set.cosmeticos = m;
+    }
+    if (cambios.misiones) {
+        if (!Array.isArray(cambios.misiones) || cambios.misiones.length > 12) malo('Máximo 12 misiones');
+        const ids = new Set();
+        set.misiones = cambios.misiones.map((x, i) => {
+            const id = String(x.id || `m_${Date.now().toString(36)}_${i}`).replace(/[^\w-]/g, '').slice(0, 40);
+            if (!id || ids.has(id)) malo('Cada misión necesita un id único'); ids.add(id);
+            if (!TIPOS_MISION[x.tipo]) malo(`Tipo de misión no válido: ${x.tipo}`);
+            const objetivo = entero(x.objetivo, 1, 100), uc = entero(x.uc ?? 0, 0, 500);
+            if (objetivo == null) malo('Objetivo no válido (1 a 100)'); if (uc == null) malo('Recompensa en UC no válida (0 a 500)');
+            const insignia = x.insignia ? String(x.insignia) : '';
+            if (insignia && !COSMETICOS.some(c => c.id === insignia && c.tipo === 'insignia')) malo(`Insignia no válida: ${insignia}`);
+            if (!uc && !insignia) malo('Cada misión debe dar UpCoins o una insignia');
+            const titulo = String(x.titulo || TIPOS_MISION[x.tipo]).replace(/[<>]/g, '').trim().slice(0, 60);
+            return { id, tipo: x.tipo, titulo, objetivo, uc, insignia, activa: x.activa !== false };
+        });
+    }
+    await col().updateOne({ _id: 'extras' }, { $set: { ...set, actualizado: new Date() } }, { upsert: true });
+    return config(true);
+}
+
+// ── Misiones semanales ───────────────────────────────────────────────────
+/** Semana actual en hora de Colombia, p. ej. "2026-W44" (lunes a domingo). */
+function semana(fecha = new Date()) {
+    const d = new Date(fecha.getTime() - 5 * 3600e3);
+    const dia = (d.getUTCDay() + 6) % 7;                       // 0 = lunes
+    const jueves = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - dia + 3));
+    const enero4 = new Date(Date.UTC(jueves.getUTCFullYear(), 0, 4));
+    const n = 1 + Math.round(((jueves - enero4) / 864e5 - 3 + ((enero4.getUTCDay() + 6) % 7)) / 7);
+    return `${jueves.getUTCFullYear()}-W${String(n).padStart(2, '0')}`;
+}
+/** Fin de la semana actual (lunes 00:00 hora de Colombia). */
+function finSemana(fecha = new Date()) {
+    const d = new Date(fecha.getTime() - 5 * 3600e3);
+    const dia = (d.getUTCDay() + 6) % 7;
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - dia + 7) + 5 * 3600e3);
+}
+const progreso = () => mongoose.connection.collection('misiones_progreso');
+let indices = false;
+async function asegurarIndices() {
+    if (indices) return; indices = true;
+    await progreso().createIndex({ usuario: 1, semana: 1 }, { unique: true }).catch(() => {});
+    await progreso().createIndex({ creado: 1 }, { expireAfterSeconds: 60 * 864e2 }).catch(() => {});   // se borra a los 60 días
+}
+
+/**
+ * Registra una acción para las misiones. `clave` evita contar dos veces lo mismo
+ * (comentar 5 veces la misma publicación cuenta 1). Nunca lanza: las misiones no
+ * deben romper la acción principal.
+ */
+async function evento(usuario, tipo, clave) {
+    try {
+        if (!usuario || !TIPOS_MISION[tipo]) return false;
+        const c = await config();
+        if (!c.activo.misiones || !c.misiones.some(m => m.activa && m.tipo === tipo)) return false;
+        await asegurarIndices();
+        const k = `${tipo}:${String(clave || Date.now()).slice(0, 60)}`, s = semana();
+        const r = await progreso().updateOne({ usuario, semana: s, claves: { $ne: k } },
+            { $inc: { [`conteo.${tipo}`]: 1 }, $push: { claves: { $each: [k], $slice: -400 } }, $setOnInsert: { creado: new Date(), reclamadas: [] } },
+            { upsert: true }).catch(e => { if (e.code === 11000) return { modifiedCount: 0 }; throw e; });   // ya contada
+        return !!(r.modifiedCount || r.upsertedCount);
+    } catch (_) { return false; }
+}
+
+/** Estado de las misiones de la semana para un usuario. */
+async function estado(usuario) {
+    const c = await config();
+    const doc = (await progreso().findOne({ usuario, semana: semana() }).catch(() => null)) || {};
+    return {
+        activo: c.activo.misiones, semana: semana(), terminaEn: finSemana(),
+        misiones: c.misiones.filter(m => m.activa).map(m => {
+            const n = Math.min(m.objetivo, doc.conteo?.[m.tipo] || 0);
+            const ins = m.insignia ? COSMETICOS.find(x => x.id === m.insignia) : null;
+            return { id: m.id, tipo: m.tipo, titulo: m.titulo, objetivo: m.objetivo, progreso: n, uc: m.uc,
+                insignia: ins ? { id: ins.id, nombre: ins.nombre, emoji: ins.emoji } : null,
+                completa: n >= m.objetivo, reclamada: (doc.reclamadas || []).includes(m.id) };
+        }),
+    };
+}
+
+/**
+ * Entrega la recompensa de una misión completa (una vez por semana). Exige email
+ * verificado y que la cuenta no esté en la lista negra (evita granjas de cuentas).
+ */
+async function reclamar(Usuario, usuario, misionId) {
+    const c = await config();
+    if (!c.activo.misiones) return { status: 409, error: 'Las misiones están pausadas' };
+    const m = c.misiones.find(x => x.id === misionId && x.activa);
+    if (!m) return { status: 404, error: 'Misión no disponible' };
+    const u = await Usuario.findOne({ usuario }).select('emailVerificado listaNegraAdmin').lean();
+    if (!u) return { status: 404, error: 'Cuenta no encontrada' };
+    if (!u.emailVerificado) return { status: 403, error: 'Verifica tu email para reclamar recompensas', code: 'EMAIL_NO_VERIFICADO' };
+    if (u.listaNegraAdmin) return { status: 403, error: 'Tu cuenta no puede reclamar recompensas ahora' };
+    const s = semana();
+    // Atómico: solo si llegó al objetivo y no la reclamó antes
+    const r = await progreso().updateOne({ usuario, semana: s, [`conteo.${m.tipo}`]: { $gte: m.objetivo }, reclamadas: { $ne: m.id } }, { $push: { reclamadas: m.id } });
+    if (!r.modifiedCount) {
+        const doc = await progreso().findOne({ usuario, semana: s });
+        return (doc?.reclamadas || []).includes(m.id) ? { status: 409, error: 'Ya reclamaste esta misión esta semana' } : { status: 409, error: 'Aún no completas esta misión' };
+    }
+    const inc = m.uc ? { monedas: m.uc } : {};
+    await Usuario.updateOne({ usuario }, { ...(m.uc ? { $inc: inc } : {}), ...(m.insignia ? { $addToSet: { cosmeticos: m.insignia } } : {}) });
+    const LiveTx = mongoose.models.LiveTx;
+    if (LiveTx && m.uc) await LiveTx.create({ tipo: 'mision', usuario, monedas: m.uc, usd: 0, planId: m.id, metodo: 'mision', ref: `mision:${usuario}:${s}:${m.id}`, estado: 'completada' }).catch(() => {});
+    return { status: 200, uc: m.uc, insignia: m.insignia || null };
+}
+
+module.exports = { COSMETICOS, TIPOS_MISION, DEFECTO, SUPERCHAT_SEG, config, guardar, semana, finSemana, evento, estado, reclamar };

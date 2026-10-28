@@ -23,26 +23,35 @@ const PAGO_UC = ['upcoins', 'monedas', 'saldo', 'pase'];
 function clasificar(tx) {
     const conUC = PAGO_UC.includes(tx.metodo) || (tx.tipo === 'acceso' && tx.monedas > 0);
     let producto;
-    if (tx.tipo === 'regalo') producto = 'regalo';
+    if (tx.tipo === 'mision') producto = 'mision';
+    else if (tx.tipo === 'regalo') producto = ['superchat', 'apoyo'].includes(tx.regaloId) ? tx.regaloId : 'regalo';
     else if (tx.tipo === 'plan') producto = 'premium';
     else if (tx.tipo === 'acceso') producto = tx.metodo === 'pase' ? 'apertura_premium' : 'acceso';
     else if (/^ia/.test(tx.planId || '')) producto = 'nexus';
     else if (/^impulso/.test(tx.planId || '')) producto = 'destacar';
+    else if (/^cosmetico:/.test(tx.planId || '')) producto = 'estilo';
+    else if (/^prioridad:/.test(tx.planId || '')) producto = 'prioridad';
+    else if (tx.planId === 'nombre') producto = 'nombre';
     else producto = 'paquete';
-    return { producto, conDinero: tx.tipo !== 'regalo' && !conUC };
+    return { producto, conDinero: !['regalo', 'mision'].includes(tx.tipo) && !conUC };
 }
 
 // Expresión de agregación equivalente a clasificar() (para sumar en MongoDB)
 const EXPR_PRODUCTO = { $switch: { branches: [
+    { case: { $eq: ['$tipo', 'mision'] }, then: 'mision' },
+    { case: { $and: [{ $eq: ['$tipo', 'regalo'] }, { $in: ['$regaloId', ['superchat', 'apoyo']] }] }, then: '$regaloId' },
     { case: { $eq: ['$tipo', 'regalo'] }, then: 'regalo' },
     { case: { $eq: ['$tipo', 'plan'] }, then: 'premium' },
     { case: { $and: [{ $eq: ['$tipo', 'acceso'] }, { $eq: ['$metodo', 'pase'] }] }, then: 'apertura_premium' },
     { case: { $eq: ['$tipo', 'acceso'] }, then: 'acceso' },
     { case: { $regexMatch: { input: { $ifNull: ['$planId', ''] }, regex: /^ia/ } }, then: 'nexus' },
     { case: { $regexMatch: { input: { $ifNull: ['$planId', ''] }, regex: /^impulso/ } }, then: 'destacar' },
+    { case: { $regexMatch: { input: { $ifNull: ['$planId', ''] }, regex: /^cosmetico:/ } }, then: 'estilo' },
+    { case: { $regexMatch: { input: { $ifNull: ['$planId', ''] }, regex: /^prioridad:/ } }, then: 'prioridad' },
+    { case: { $eq: ['$planId', 'nombre'] }, then: 'nombre' },
 ], default: 'paquete' } };
 const EXPR_DINERO = { $and: [
-    { $ne: ['$tipo', 'regalo'] },
+    { $not: [{ $in: ['$tipo', ['regalo', 'mision']] }] },
     { $not: [{ $in: [{ $ifNull: ['$metodo', ''] }, PAGO_UC] }] },
     { $not: [{ $and: [{ $eq: ['$tipo', 'acceso'] }, { $gt: ['$monedas', 0] }] }] },
 ] };
@@ -79,7 +88,7 @@ function registrar(app, deps) {
 
             // Resumen de un periodo: ingresos con dinero por producto y consumo de UpCoins
             const resumir = filas => {
-                const r = { ingresosUsd: 0, ventas: 0, porProducto: {}, porMetodo: {}, ucGastados: 0, ucRegalados: 0, paraCreadoresUsd: 0 };
+                const r = { ingresosUsd: 0, ventas: 0, porProducto: {}, porMetodo: {}, ucGastados: 0, ucRegalados: 0, ucMisiones: 0, paraCreadoresUsd: 0 };
                 for (const f of filas) {
                     const { producto, dinero, metodo } = f._id;
                     if (dinero) {
@@ -88,6 +97,7 @@ function registrar(app, deps) {
                         const m = { tarjeta_mp: 'Tarjeta (Mercado Pago)', paypal: 'PayPal', tarjeta_paypal: 'Tarjeta (PayPal)' }[metodo] || 'PayPal';
                         const pm = (r.porMetodo[m] ||= { n: 0, usd: 0 }); pm.n += f.n; pm.usd += f.usd;
                     } else if (producto === 'regalo') r.ucRegalados += f.uc;
+                    else if (producto === 'mision') r.ucMisiones += f.uc;   // UC de regalo entregados, no un gasto
                     else if (producto !== 'apertura_premium') {
                         r.ucGastados += f.uc;
                         const p = (r.porProducto['uc_' + producto] ||= { n: 0, uc: 0 }); p.n += f.n; p.uc += f.uc;

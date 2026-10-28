@@ -79,18 +79,21 @@ function registrar(app, { verificarAdmin, Juego, Usuario, Comentario, Pago, logg
         if (algun(adm, ['finanzas', 'estadisticas']) && mongoose.models.LiveTx) tareas.push((async () => {
             const LiveTx = mongoose.models.LiveTx, ahoraD = new Date(ahora);
             const conDinero = { estado: { $ne: 'revertida' }, tipo: { $in: ['compra', 'plan', 'acceso'] }, metodo: { $nin: ['upcoins', 'monedas', 'saldo', 'pase'] }, $or: [{ tipo: { $ne: 'acceso' } }, { monedas: 0 }] };
-            const [v30, circ, premium, vencen, revertidas7] = await Promise.all([
+            const [v30, circ, premium, vencen, revertidas7, prioritarias] = await Promise.all([
                 LiveTx.aggregate([{ $match: { ...conDinero, fecha: { $gte: new Date(ahora - 30 * D) } } }, { $group: { _id: '$tipo', n: { $sum: 1 }, usd: { $sum: '$usd' } } }]),
                 Usuario.aggregate([{ $group: { _id: null, compradas: { $sum: '$monedas' }, ganadasUsd: { $sum: '$saldo' } } }]),
                 Usuario.countDocuments({ planHasta: { $gt: ahoraD } }),
                 Usuario.countDocuments({ planHasta: { $gt: ahoraD, $lte: new Date(ahora + 3 * D) } }),
                 LiveTx.countDocuments({ estado: 'revertida', fecha: { $gte: new Date(ahora - 7 * D) } }),
+                // Revisión prioritaria pagada: si pasan 24 h sin revisar se devuelven los UC
+                Juego.find({ status: { $in: ['pendiente', 'pending'] }, prioridadDesde: { $ne: null }, prioridadReembolso: { $ne: true } }).select('prioridadDesde').lean(),
             ]);
             const c = circ[0] || {};
             datos.economia = { valorUC_USD: UC_USD, ventasConDinero30d: Object.fromEntries(v30.map(x => [x._id === 'compra' ? 'paquetesUC' : x._id === 'plan' ? 'premium' : 'accesoDirecto', { ventas: x.n, usd: +x.usd.toFixed(2) }])),
                 ingresos30dUSD: +v30.reduce((a, x) => a + x.usd, 0).toFixed(2), ucCompradosEnCuentas: Math.floor(c.compradas || 0),
                 ucGanadosPorCreadores: Math.floor((c.ganadasUsd || 0) / UC_USD + 1e-6), deudaRetirableUSD: +(c.ganadasUsd || 0).toFixed(2),
-                premiumActivos: premium, premiumVencenEn3Dias: vencen, contracargosOReembolsos7d: revertidas7 };
+                premiumActivos: premium, premiumVencenEn3Dias: vencen, contracargosOReembolsos7d: revertidas7,
+                revisionesPrioritariasPendientes: prioritarias.length, prioritariasCercaDe24h: prioritarias.filter(j => ahora - new Date(j.prioridadDesde) > 18 * H).length };
         })());
         if (puede(adm, 'estadisticas')) tareas.push((async () => {
             const [items24, items7, topSemana, descargas] = await Promise.all([
@@ -132,6 +135,7 @@ function registrar(app, { verificarAdmin, Juego, Usuario, Comentario, Pago, logg
         if (p?.pendientes) add(p.masAntiguoHaceDias >= 3 ? 'alta' : 'media', '💰', `${p.pendientes} pago(s) pendiente(s) por $${p.totalPendienteUSD}${p.masAntiguoHaceDias ? ` (el más antiguo hace ${p.masAntiguoHaceDias} días)` : ''}`, 'pays');
         if (e?.intentosBloqueados24h?.length) add('alta', '🔐', `Intentos bloqueados del equipo en 24 h: ${e.intentosBloqueados24h.map(x => `@${x.admin} (${x.intentos})`).join(', ')}`, 'audit');
         if (u?.alertasFraudeGraves) add('alta', '🚨', `${u.alertasFraudeGraves} alerta(s) de fraude grave sin revisar`, 'usrs');
+        if (d.economia?.revisionesPrioritariasPendientes) add(d.economia.prioritariasCercaDe24h ? 'alta' : 'media', '⚡', `${d.economia.revisionesPrioritariasPendientes} publicación(es) con revisión prioritaria pagada${d.economia.prioritariasCercaDe24h ? ` (${d.economia.prioritariasCercaDe24h} a punto de cumplir 24 h: si no se revisan se devuelven los UpCoins)` : ''}`, 'revn');
         if (d.economia?.contracargosOReembolsos7d) add('alta', '↩️', `${d.economia.contracargosOReembolsos7d} compra(s) reembolsada(s) o con contracargo en 7 días: revisa esas cuentas (quedan en lista negra)`, 'econ');
         if (r?.sinAnalizar) add('media', '✦', `${r.sinAnalizar} publicación(es) en revisión sin analizar con Nexus`, 'revn');
         if (r?.nexusRecomiendaAprobar) add('media', '✅', `${r.nexusRecomiendaAprobar} publicación(es) que Nexus recomienda aprobar: puedes aprobarlas rápido`, 'revn');

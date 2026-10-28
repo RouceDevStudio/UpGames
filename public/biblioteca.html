@@ -28,8 +28,9 @@
 <link rel="dns-prefetch" href="https://upgames-production.up.railway.app">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="biblioteca.css?v=20261028e">
-<link rel="stylesheet" href="upgames-glass.css?v=20261028e">
+<link rel="stylesheet" href="biblioteca.css?v=20261028f">
+<link rel="stylesheet" href="upgames-glass.css?v=20261028f">
+<link rel="stylesheet" href="upgames-estilo.css?v=20261028f">
 <!-- Widget de subida: solo se usa al publicar → diferido (antes bloqueaba el primer render) -->
 <script src="https://upload-widget.cloudinary.com/global/all.js" defer></script>
 
@@ -654,6 +655,9 @@
       <div class="eco-ring-caption">Meta retiro</div>
     </div>
   </div>
+
+  <!-- Usos de los UpCoins: misiones, estilo, regalar Premium, nombre (upgames-extras.js) -->
+  <div id="ugx-hub"></div>
 
   <!-- ══ KPI STRIP ══ -->
   <div class="eco-kpi-strip">
@@ -1807,8 +1811,8 @@
             <a href="https://apps.derechodeautor.gov.co/Certificados-API/api/v1/dnda/certificates/registrations/filing/QzY3NDJGQkVFQThCRUY3QkQ3MTVGMTA0QUIzN0NGMkU" target="_blank" rel="noopener">Ver certificado</a></div>
         </div>
         <div class="ob-legal-link" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-          <a href="./terminos_condiciones.html" target="_blank" style="color:inherit">Términos v6.0</a> ·
-          <a href="./politica-privacidad.html" target="_blank" style="color:inherit">Privacidad v3.4</a> ·
+          <a href="./terminos_condiciones.html" target="_blank" style="color:inherit">Términos v6.1</a> ·
+          <a href="./politica-privacidad.html" target="_blank" style="color:inherit">Privacidad v3.5</a> ·
           <a href="./terminos_condiciones.html#pagos" target="_blank" style="color:inherit">Pagos</a> ·
           <a href="./terminos_condiciones.html#ia" target="_blank" style="color:inherit">IA</a> ·
           <a href="./terminos_condiciones.html#derechos-autor" target="_blank" style="color:inherit">Derechos de autor</a>
@@ -1997,9 +2001,10 @@
 <!-- ION ICONS -->
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
-<script src="script.js?v=20261028e"></script>
-<script src="upgames-autoinfo.js?v=20261028e"></script>
-<script src="upgames-motion.js?v=20261028e"></script>
+<script src="script.js?v=20261028f"></script>
+<script src="upgames-extras.js?v=20261028f"></script>
+<script src="upgames-autoinfo.js?v=20261028f"></script>
+<script src="upgames-motion.js?v=20261028f"></script>
 
 <!-- ══════════════════════════════════════
   EXTENSIÓN DE PERFIL: Nombre / Email / Contraseña / Links
@@ -2092,11 +2097,15 @@ function pfCheckCooldown(type, lastChange) {
   const diffDays = diffMs / (1000 * 60 * 60 * 24);
   const remaining = Math.ceil(30 - diffDays);
 
+  if (btn && type === 'nombre') { if (!btn.dataset.txt) btn.dataset.txt = btn.innerHTML; btn.dataset.pagar = ''; btn.innerHTML = btn.dataset.txt; }
   if (remaining > 0) {
     badge.style.display = 'flex';
+    // Nombre: con UpCoins se puede cambiar ya, sin esperar (rutas: PUT /usuarios/update-username { pagarUC })
+    const precio = type === 'nombre' && window.UGX?.precio?.('nombre');
     document.getElementById(`pf-${type}-cooldown-msg`).textContent =
-      `Podrás cambiar tu ${type === 'nombre' ? 'nombre' : 'email'} en ${remaining} día${remaining !== 1 ? 's' : ''}`;
-    if (btn) { btn.disabled = true; btn.style.opacity = '.5'; btn.style.cursor = 'not-allowed'; }
+      `Podrás cambiar tu ${type === 'nombre' ? 'nombre' : 'email'} en ${remaining} día${remaining !== 1 ? 's' : ''}${precio ? ` · o cámbialo ya por 🪙 ${precio} UpCoins` : ''}`;
+    if (btn && precio) { btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; btn.dataset.pagar = String(precio); btn.innerHTML = `⚡ Cambiar ya · 🪙 ${precio} UC`; }
+    else if (btn) { btn.disabled = true; btn.style.opacity = '.5'; btn.style.cursor = 'not-allowed'; }
   } else {
     badge.style.display = 'none';
     if (btn) { btn.disabled = false; btn.style.opacity = ''; btn.style.cursor = ''; }
@@ -2135,15 +2144,18 @@ async function pfSaveUsername() {
   if (!newUser || newUser.length < 3) { showToast('El nombre debe tener al menos 3 caracteres', 'error'); return; }
   if (_pfDisp.usuario === false) { showToast(document.getElementById('pf-username-disp')?.textContent || 'Ese nombre no está disponible', 'error'); return; }
   if (!password) { showToast('Ingresa tu contraseña para confirmar', 'error'); return; }
+  const pagar = +(document.getElementById('pf-btn-save-username')?.dataset.pagar || 0);
+  if (pagar && !confirm(`¿Cambiar tu nombre a @${newUser} ahora por 🪙 ${pagar} UpCoins?`)) return;
   const token = localStorage.getItem('token');
   try {
     const res = await fetch(`${API_URL}/usuarios/update-username`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ nuevoUsuario: newUser, password })
+      body: JSON.stringify({ nuevoUsuario: newUser, password, pagarUC: !!pagar })
     });
     const data = await res.json();
-    if (!data.success) { showToast(data.error || 'Error al cambiar nombre', 'error'); return; }
+    if (!data.success) { if (res.status === 402) window.UGX?.faltan?.(data.error); else showToast(data.error || 'Error al cambiar nombre', 'error'); return; }
+    if (pagar) window.ugContadorUC?.();
     /* Actualizar localStorage — user_admin es un string plano (el que confirmó el servidor) */
     localStorage.setItem('user_admin', data.nuevoUsuario || newUser);
     if (data.nuevoToken) localStorage.setItem('token', data.nuevoToken);
