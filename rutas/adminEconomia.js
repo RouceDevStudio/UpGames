@@ -32,6 +32,7 @@ function clasificar(tx) {
     else if (/^cosmetico:/.test(tx.planId || '')) producto = 'estilo';
     else if (/^prioridad:/.test(tx.planId || '')) producto = 'prioridad';
     else if (tx.planId === 'nombre') producto = 'nombre';
+    else if (/^promolive:/.test(tx.planId || '')) producto = 'promolive';
     else producto = 'paquete';
     return { producto, conDinero: !['regalo', 'mision'].includes(tx.tipo) && !conUC };
 }
@@ -49,6 +50,7 @@ const EXPR_PRODUCTO = { $switch: { branches: [
     { case: { $regexMatch: { input: { $ifNull: ['$planId', ''] }, regex: /^cosmetico:/ } }, then: 'estilo' },
     { case: { $regexMatch: { input: { $ifNull: ['$planId', ''] }, regex: /^prioridad:/ } }, then: 'prioridad' },
     { case: { $eq: ['$planId', 'nombre'] }, then: 'nombre' },
+    { case: { $regexMatch: { input: { $ifNull: ['$planId', ''] }, regex: /^promolive:/ } }, then: 'promolive' },
 ], default: 'paquete' } };
 const EXPR_DINERO = { $and: [
     { $not: [{ $in: ['$tipo', ['regalo', 'mision']] }] },
@@ -118,7 +120,7 @@ function registrar(app, deps) {
                 circulacion: {
                     compradas: Math.floor(c.compradas || 0),
                     ganadas: Math.floor((c.ganadasUsd || 0) / ucUsd),
-                    ganadasUsd: r2(c.ganadasUsd), retenidasUsd: r2(c.retenidoUsd), fondoPremiumUsd: r2(c.fondoPase),
+                    ganadasUsd: r2(c.ganadasUsd), retenidasUsd: Math.round((c.retenidoUsd || 0) * 10000) / 10000, fondoPremiumUsd: r2(c.fondoPase),
                     // Lo comprado no se retira: solo lo ganado es deuda real en dinero con los creadores
                     deudaRetirableUsd: r2((c.ganadasUsd || 0) + (c.retenidoUsd || 0)),
                 },

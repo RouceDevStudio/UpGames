@@ -116,19 +116,19 @@ function registrar(app, { verificarToken, verificarAdmin, Usuario, logger, sendE
         });
     });
 
-    const intentos = new Map();   // usuario → intentos fallidos de contraseña
+    const Limites = require('../modulos/limites');
     app.put('/economia/metodo-cobro', verificarToken, async (req, res) => {
         try {
             const u = await Usuario.findOne({ usuario: req.usuario }).select('usuario email password cobro paypalEmail solicitudPagoPendiente').lean();
             if (!u) return err(res, 404, 'Usuario no encontrado');
             // Máximo 5 intentos de contraseña cada 15 min (un token robado no sirve para adivinarla)
-            const ahora = Date.now(), previos = (intentos.get(req.usuario) || []).filter(t => ahora - t < 15 * 60000);
-            if (previos.length >= 5) return err(res, 429, 'Demasiados intentos. Espera 15 minutos.');
+            const kI = `cobro-pass:${req.usuario}`;   // contador en Mongo: no se reinicia con un despliegue
+            if (await Limites.lleno(kI, 15 * Limites.MIN, 5)) return err(res, 429, 'Demasiados intentos. Espera 15 minutos.');
             if (!req.body?.password || !(await bcrypt.compare(String(req.body.password), u.password || ''))) {
-                previos.push(ahora); intentos.set(req.usuario, previos); if (intentos.size > 10000) intentos.clear();
+                await Limites.sumar(kI, 15 * Limites.MIN);
                 return err(res, 401, 'La contraseña no es correcta');
             }
-            intentos.delete(req.usuario);
+            await Limites.reiniciar(kI, 15 * Limites.MIN);   // acertó: se olvidan los fallos
             if (u.solicitudPagoPendiente) return err(res, 409, 'Tienes un retiro pendiente: espera a que se procese para cambiar el método de cobro');
             const { datos, resumen, paypalEmail } = validar(String(req.body.tipo || ''), req.body.datos || {});
             const tenia = !!metodoDe(u);

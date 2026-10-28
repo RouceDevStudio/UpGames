@@ -57,7 +57,7 @@
     { id: 'seguir', ic: '👥', t: 'Sigue a un creador', d: 'Te avisamos cuando publique o esté en vivo.', ir: () => { irInicio(); setTimeout(() => pista('.game-tile', 'Abre una publicación, toca el nombre del creador y luego "Seguir"', 'guia'), 350); } },
     { id: 'nexus', ic: '✦', t: 'Pregúntale algo a NEXUS', d: 'Recomendaciones, dudas y ayuda para publicar.', ir: () => { irInicio(); window.nexusPreguntar ? window.nexusPreguntar('¿Qué puedo hacer en UpGames?') : window.nxToggle?.(); } },
     { id: 'live', ic: '🔴', t: 'Mira un live', d: 'Gameplay en directo con chat y regalos.', ir: () => { location.href = './live.html'; } },
-    { id: 'upcoins', ic: '🪙', t: 'Conoce tus UpCoins', d: 'Misiones, estilo del perfil y Premium.', ir: () => { window.switchTab?.('economia'); setTimeout(() => pista('#ugx-hub', 'Aquí reclamas misiones y usas tus UpCoins', 'guia'), 900); } },
+    { id: 'upcoins', ic: '🪙', t: 'Conoce tus UpCoins', d: 'Misiones, estilo del perfil y Premium.', ir: () => { window.switchTab?.('economia'); window.ecoSec?.('ganar'); setTimeout(() => pista('#ugx-hub', 'Aquí reclamas misiones y usas tus UpCoins', 'guia'), 900); } },
     { id: 'publicar', ic: '☁️', t: 'Publica tu primer contenido', d: 'Gana 50 UpCoins por cada 1.000 descargas.', ir: () => window.switchTab?.('upload') },
   ];
   const pasos = () => tok() ? PASOS_USR : PASOS_INV;
@@ -135,7 +135,7 @@
   });
   window.addEventListener('ug:tab', e => {
     const t = e.detail;
-    if (t === 'economia') { marcar('upcoins'); setTimeout(() => pista('#ugx-hub', 'Aquí reclamas tus misiones semanales y usas tus UpCoins', 'economia'), 1400); }
+    if (t === 'economia') { marcar('upcoins'); setTimeout(() => document.querySelector('.eco-sec[data-sec="ganar"].active') && pista('#ugx-hub', 'Aquí reclamas tus misiones semanales y usas tus UpCoins', 'economia'), 1400); }
     if (t === 'profile' && tok()) setTimeout(() => pista('#pf-create-btn', 'Publica aquí juegos, mods, apps o videos y gana UpCoins por cada descarga', 'publicar'), 1200);
   });
   // Cosas que se hacen fuera de la biblioteca o en otros módulos
@@ -154,6 +154,11 @@
   const raiz = w => w.slice(0, Math.max(4, w.length - 3));
   const coincide = (txt, q) => norm(q).split(/\s+/).filter(Boolean).every(w => norm(txt).includes(w.length > 4 ? raiz(w) : w));
   const GUIAS = [
+    ['🤝', 'Invitar amigos (referidos)', ['En Economía → Ganar más copia tu enlace de invitación o compártelo por WhatsApp.', 'Cuando tu amigo crea su cuenta y verifica su email, los dos reciben UpCoins de regalo.', 'Hay un tope de invitaciones pagadas por mes y no cuentan cuentas desde tu misma red ni cuentas falsas.']],
+    ['🚀', 'Promover tu live', ['Estando en vivo toca 🚀 Promover (en el estudio) o ve a Economía → Ganar más.', 'Tu live sube en "En vivo ahora" con la etiqueta Promocionado mientras dure.', 'Cuentan más tus espectadores, seguidores y descargas: los UpCoins son un extra, no compran el primer puesto.']],
+    ['🎬', 'Repeticiones de lives', ['Antes de empezar deja activo "💾 Guardar repetición" (se graba en tu dispositivo).', 'Al terminar elige Publicar como video, Descargar o Descartar. No cierres la pestaña mientras se sube.', 'La repetición aparece en tu perfil y en tu canal, y sigue sumando vistas y apoyos.']],
+    ['📊', 'Estadísticas de mis publicaciones', ['Economía → Publicaciones: vistas, descargas, apoyos y UC ganados por publicación (7, 30 o 90 días).', 'Ordena por más descargadas, vistas, ganancias o apoyos y toca una para abrirla.', 'En retención = lo ganado con regalos, Super Chat, apoyos y accesos: pasa solo a retirables en 7 días.']],
+    ['🛡️', 'Normas y moderación', ['NEXUS revisa comentarios, chat, publicaciones y lives de forma automática.', 'El contenido sexual se elimina sin aviso previo y cierra el live; el odio, el acoso, los insultos y el spam no se publican.', 'Si crees que fue un error, escríbenos desde Soporte.']],
     ['📥', 'Descargar', ['Abre una publicación y toca "Obtener link".', 'Pasas por la página puente: espera 30 s y toca "Obtener enlace". Así el creador gana por tu descarga.', 'Con el acceso directo (US$1 o 50 UpCoins) o con Premium te saltas la espera y los anuncios.', 'Si un enlace no funciona, toca "Reportar" en el detalle.']],
     ['☁️', 'Publicar y ganar', ['Ve a Perfil → Crear publicación: título, categoría, portada y un enlace de una plataforma permitida (MediaFire, MEGA, Drive…).', 'NEXUS revisa tu publicación y el equipo la aprueba antes de salir en el inicio. Con la revisión prioritaria pasa al frente de la fila.', 'Ganas 50 UpCoins por cada 1.000 descargas verificadas, más el 25 % de regalos, Super Chats y apoyos.', 'Retira desde 500 UC ganados (US$10) con PayPal, Nequi, Daviplata, banco o Mercado Pago. Necesitas verificación (100 seguidores) y email verificado.']],
     ['🪙', 'UpCoins y Premium', ['1 UpCoin = US$0,02. Recárgalos con tarjeta o PayPal en Economía.', 'Úsalos en regalos y Super Chat en lives, apoyos, NEXUS, Premium, destacar tu publicación y el estilo de tu perfil.', 'Lo que ganas como creador se retira como dinero; lo que compras o te regalan se usa dentro de UpGames.', 'Premium: sin anuncios ni espera, NEXUS ilimitado y más visibilidad. Es prepago: no hay cobros automáticos.']],

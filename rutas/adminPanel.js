@@ -90,6 +90,7 @@ function permisoRequerido(method, path) {
     if (method === 'GET' && /^\/(auth\/users|admin\/users\/detalle)/.test(path)) return ['usuarios', 'sanciones', 'finanzas'];
     if (/^\/(admin\/users|auth\/users|auth\/admin|admin\/fraud|admin\/nexus)/.test(path)) return ['usuarios'];
     if (/^\/comentarios/.test(path)) return ['comentarios'];
+    if (/^\/admin\/moderacion/.test(path)) return ['comentarios', 'contenido', 'sanciones'];
     if (method === 'DELETE' && /^\/items\//.test(path)) return ['contenido'];
     if (/^\/(admin\/items|items\/|admin\/links)/.test(path)) return ['revision', 'contenido'];
     return ['sistema'];

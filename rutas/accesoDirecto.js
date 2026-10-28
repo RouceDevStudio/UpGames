@@ -11,6 +11,7 @@
  */
 'use strict';
 
+const StatsItems = require('../modulos/statsItems');
 const mongoose = require('mongoose');
 const L = require('../modulos/live');
 const UC = require('../modulos/upcoins');
@@ -51,6 +52,7 @@ function registrar(app, { verificarToken, Juego, Usuario, LiveTx, paypal, mp, lo
         const retener = L.RETENCION_DIAS > 0;
         await Usuario.updateOne({ usuario: juego.usuario }, { $inc: retener ? { saldoRetenido: tx.creadorUsd } : { saldo: tx.creadorUsd } });
         Juego.updateOne({ _id: juego._id }, { $inc: { descargasEfectivas: 1 } }).catch(() => {});
+        StatsItems.sumar(String(juego._id), juego.usuario, { d: 1, g: tx.creadorUsd });
     }
     const datosTx = (juego, usuario, extra) => {
         const creadorUsd = r4(PRECIO_USD * PARTE_CREADOR);
@@ -215,6 +217,7 @@ function registrar(app, { verificarToken, Juego, Usuario, LiveTx, paypal, mp, lo
                 if (creada) {
                     await Usuario.updateOne({ usuario: juego.usuario }, { $inc: retener ? { saldoRetenido: PASE_CREADOR_USD } : { saldo: PASE_CREADOR_USD } });
                     Juego.updateOne({ _id: juego._id }, { $inc: { descargasEfectivas: 1 } }).catch(() => {});
+                    StatsItems.sumar(String(juego._id), juego.usuario, { d: 1, g: PASE_CREADOR_USD });
                 }
             }
             ok(res, { link: juego.link, hasta: u.planHasta });

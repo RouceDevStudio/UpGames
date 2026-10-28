@@ -1,0 +1,60 @@
+# Vigila que la API y la web respondan. Si la API falla dos veces seguidas, abre un
+# issue "🔴 API caída" (GitHub te avisa por correo y en la app); cuando vuelve, lo cierra.
+name: Uptime
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # cada 10 minutos (GitHub puede retrasarlo unos minutos)
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  vigilar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comprobar
+        id: chequeo
+        run: |
+          probar() { curl -fsS --max-time 20 -o /dev/null -w '%{http_code} %{time_total}s' "$1"; }
+          codigo() { curl -s --max-time 20 -o /dev/null -w '%{http_code}' "$1"; }
+          api="caida"; web="caida"
+          for i in 1 2; do
+            c=$(codigo https://upgames-production.up.railway.app/salud)
+            if [ "$c" = "200" ]; then api="ok (salud 200)"; break; fi
+            # Servidor anterior sin /salud: basta con que responda la API
+            if [ "$c" = "404" ] && r=$(probar https://upgames-production.up.railway.app/live/config); then api="ok ($r)"; break; fi
+            api="caida (HTTP $c)"; sleep 45
+          done
+          if r=$(probar https://upgames.games/public/biblioteca.html); then web="ok ($r)"; fi
+          echo "API: $api · Web: $web"
+          echo "api=$api" >> "$GITHUB_OUTPUT"; echo "web=$web" >> "$GITHUB_OUTPUT"
+      - name: Abrir o cerrar el aviso
+        uses: actions/github-script@v7
+        env:
+          API: ${{ steps.chequeo.outputs.api }}
+          WEB: ${{ steps.chequeo.outputs.web }}
+        with:
+          script: |
+            const titulo = '🔴 UpGames caído (monitor automático)';
+            const caido = process.env.API.startsWith('caida') || process.env.WEB.startsWith('caida');
+            const { data: abiertos } = await github.rest.issues.listForRepo({ owner: context.repo.owner, repo: context.repo.repo, state: 'open', labels: 'caida', per_page: 5 });
+            const hora = new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' });
+            if (caido && !abiertos.length) {
+              await github.rest.issues.create({ owner: context.repo.owner, repo: context.repo.repo, title: titulo, labels: ['caida'],
+                body: `Detectado el ${hora} (hora Colombia).\n\n- API (\`/salud\`): **${process.env.API}**\n- Web: **${process.env.WEB}**\n\nRevisa Railway (logs y estado de MongoDB). Este aviso se cierra solo cuando todo vuelva a responder.` });
+              core.setFailed('Servicio caído');
+            } else if (caido) {
+              core.setFailed('Sigue caído');
+            } else if (abiertos.length) {
+              for (const i of abiertos) {
+                await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: i.number, body: `✅ Volvió a responder el ${hora}. API: ${process.env.API} · Web: ${process.env.WEB}` });
+                await github.rest.issues.update({ owner: context.repo.owner, repo: context.repo.repo, issue_number: i.number, state: 'closed' });
+              }
+            }

@@ -1,5 +1,6 @@
 # Copia a diario el sitemap generado por el backend a public/sitemap.xml
-# (Google exige que el sitemap esté en el mismo dominio que las páginas).
+# (Google exige que el sitemap esté en el mismo dominio que las páginas) y escribe
+# las páginas estáticas por publicación en public/p/ (scripts/generar-paginas.js).
 name: Sitemap
 
 on:
@@ -24,13 +25,18 @@ jobs:
           curl -fsS --retry 3 --max-time 60 https://upgames-production.up.railway.app/seo/sitemap.xml -o /tmp/sitemap.xml
           grep -q '<urlset' /tmp/sitemap.xml
           cp /tmp/sitemap.xml public/sitemap.xml
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Páginas por publicación
+        run: node scripts/generar-paginas.js
       - name: Publicar si cambió
         run: |
-          if git diff --quiet -- public/sitemap.xml && git ls-files --error-unmatch public/sitemap.xml >/dev/null 2>&1; then
+          git add -A public/sitemap.xml public/p
+          if git diff --cached --quiet; then
             echo "Sin cambios"; exit 0
           fi
           git config user.name "upgames-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add public/sitemap.xml
-          git commit -m "SEO: sitemap actualizado"
+          git commit -m "SEO: sitemap y páginas por publicación actualizados"
           git push
