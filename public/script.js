@@ -329,9 +329,28 @@ function getYouTubeId(url) {
   return m ? m[1] : null;
 }
 function isYouTubeUrl(url) { return !!getYouTubeId(url); }
+// ── Videos subidos ──
+// Los teléfonos graban en formatos que el navegador no reproduce (3gp en Android, mov/hevc en iPhone…).
+// Todo lo que está en /video/upload/ de Cloudinary es video, tenga la extensión que tenga, y se pide
+// convertido a MP4 (H.264) cambiando la extensión: Cloudinary lo transcodifica y lo guarda.
+const UG_VIDEO_EXT = /\.(mp4|webm|mov|m4v|avi|3gp|3g2|mkv|ogv|mpe?g|wmv|flv)(\?.*)?$/i;
+const UG_CLD_VIDEO = /^https:\/\/res\.cloudinary\.com\/[^/]+\/video\/upload\//i;
+function ugEsVideoArchivo(url) { return !!url && (UG_VIDEO_EXT.test(url) || UG_CLD_VIDEO.test(url)); }
+function ugVideoSrc(url) {
+  const u = String(url || '');
+  if (!UG_CLD_VIDEO.test(u) || /\.(mp4|webm)(\?.*)?$/i.test(u)) return u;
+  return /\/[^/?]+\.[a-z0-9]{2,4}(\?.*)?$/i.test(u) ? u.replace(/\.[a-z0-9]{2,4}(\?.*)?$/i, '.mp4$1') : u + '.mp4';
+}
+// Miniatura de un video de Cloudinary (fotograma en el segundo 1)
+function ugVideoThumb(url) {
+  const u = String(url || '');
+  if (!UG_CLD_VIDEO.test(u)) return '';
+  const base = /\/[^/?]+\.[a-z0-9]{2,4}(\?.*)?$/i.test(u) ? u.replace(/\.[a-z0-9]{2,4}(\?.*)?$/i, '.jpg') : u + '.jpg';
+  return base.replace('/video/upload/', '/video/upload/so_1,c_limit,w_960,q_auto/');
+}
 function isVideoUrl(url) {
   if(!url) return false;
-  return /\.(mp4|webm|mov|avi)(\?.*)?$/i.test(url) || isYouTubeUrl(url);
+  return ugEsVideoArchivo(url) || isYouTubeUrl(url);
 }
 function getYouTubeThumbnail(url) {
   const id = getYouTubeId(url);
@@ -450,10 +469,10 @@ function createTile(item, isFeatured=false) {
 
   // Para video: la imagen es la miniatura, el link es el video real
   const imgSrc = item.image || '';
-  const isVid = !isVideo && /\.(mp4|webm|mov)$/i.test(imgSrc);
+  const isVid = !isVideo && ugEsVideoArchivo(imgSrc);
   // Portadas al tamaño de la tarjeta (antes se bajaba la imagen original completa)
   const media = isVid
-    ? `<video data-src="${escH(imgSrc)}" muted loop playsinline preload="none" class="lazy-vid"></video>`
+    ? `<video data-src="${escH(ugVideoSrc(imgSrc))}" muted loop playsinline preload="none" class="lazy-vid"></video>`
     : `<img src="${escH(cldOpt(imgSrc, CLD_TILE_FEED))}" alt="${escH(tituloT)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=window.UG_PH">`;
 
   const favIds = LS.getJSON('favoritos', []);
@@ -467,7 +486,7 @@ function createTile(item, isFeatured=false) {
     el.className='featured-tile';
     el.dataset.id=item._id;
     const ftMedia = isVid
-      ? `<video data-src="${escH(imgSrc)}" muted loop playsinline preload="none" class="lazy-vid"></video>`
+      ? `<video data-src="${escH(ugVideoSrc(imgSrc))}" muted loop playsinline preload="none" class="lazy-vid"></video>`
       : `<img src="${escH(cldOpt(imgSrc, CLD_DESTACADA))}" alt="${escH(tituloT)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=window.UG_PH">`;
     el.innerHTML=`
       <div class="thumb-wrap">${ftMedia}
@@ -601,7 +620,7 @@ function initHeroCarousel(items, isVideoMode) {
     slide.dataset.id = item._id;
 
     const isYT  = isYouTubeUrl(item.image);
-    const isMp4 = /\.(mp4|webm|mov)(\?.*)?$/i.test(item.image);
+    const isMp4 = ugEsVideoArchivo(item.image);
     let mediaSrc = item.image;
     if(isYT) mediaSrc = getYouTubeThumbnail(item.image);
 
@@ -1007,7 +1026,7 @@ function openDetail(item) {
 
   const firstVideo = isVideoItem
     ? (item.link || allMedias[0] || '')
-    : (allMedias.find(m=>isYouTubeUrl(m)||/\.(mp4|webm|mov|avi)(\?.*)?$/i.test(m)) || allMedias[0] || '');
+    : (allMedias.find(m=>isYouTubeUrl(m)||ugEsVideoArchivo(m)) || allMedias[0] || '');
   const primaryMedia = firstVideo || allMedias[0] || '';
 
   function loadSheetMedia(mediaUrl) {
@@ -1023,7 +1042,7 @@ function openDetail(item) {
     if(oldVid) oldVid.remove();
 
     const isYT2  = isYouTubeUrl(mediaUrl);
-    const isMp42 = /\.(mp4|webm|mov|avi)(\?.*)?$/i.test(mediaUrl);
+    const isMp42 = ugEsVideoArchivo(mediaUrl);
 
     if(isYT2) {
       img2.style.display='none'; vid2.style.display='none'; vid2.src='';
@@ -1050,7 +1069,8 @@ function openDetail(item) {
 
         const nv = document.createElement('video');
         nv.id = 'ds-injected-vid';
-        nv.src = mediaUrl;
+        nv.src = ugVideoSrc(mediaUrl);
+        if (ugVideoThumb(mediaUrl)) nv.poster = ugVideoThumb(mediaUrl);
         nv.controls = true;
         nv.autoplay  = true;
         nv.playsInline = true;
@@ -1120,15 +1140,19 @@ function openDetail(item) {
       const th=document.createElement('div');
       th.className='gallery-thumb'+(m===primaryMedia?' active':'');
       const isYTt=isYouTubeUrl(m);
-      const isMp4t=/\.(mp4|webm|mov|avi)(\?.*)?$/i.test(m);
+      const isMp4t=ugEsVideoArchivo(m);
 
       if(isMp4t) {
         // Punto 9: auto-capturar frame del video via canvas
         th.innerHTML=`<img src="${window.UG_PH}" alt="media ${i+1}">
           <div class="gallery-yt-icon"><ion-icon name="play-circle"></ion-icon></div>`;
-        // Intentar captura de frame en segundo plano
-        const tmpVid = document.createElement('video');
-        tmpVid.src = m; tmpVid.crossOrigin = 'anonymous';
+        // Cloudinary da el fotograma ya hecho (antes se bajaba el video entero para capturarlo)
+        const thC = ugVideoThumb(m);
+        if (thC) { th.querySelector('img').src = thC.replace('c_limit,w_960', 'c_fill,w_288,h_208'); }
+        // Otros servidores: captura de frame en segundo plano
+        const tmpVid = thC ? null : document.createElement('video');
+        if (tmpVid) {
+        tmpVid.src = ugVideoSrc(m); tmpVid.crossOrigin = 'anonymous';
         tmpVid.muted = true; tmpVid.preload = 'metadata';
         tmpVid.currentTime = 1;
         tmpVid.addEventListener('loadeddata', () => {
@@ -1142,6 +1166,7 @@ function openDetail(item) {
             tmpVid.src = '';
           } catch(_) { tmpVid.src = ''; }
         }, { once: true });
+        }
       } else {
         const tSrc=isYTt?getYouTubeThumbnail(m):m;
         th.innerHTML=`<img src="${tSrc}" alt="media ${i+1}" onerror="this.onerror=null;this.src=window.UG_PH">
@@ -2455,7 +2480,7 @@ function pfCldShowDone(url) {
   document.getElementById('pf-cld-uploading').style.display = 'none';
   document.getElementById('pf-cld-done').style.display = '';
   const vid = document.getElementById('pf-vid-preview');
-  if(vid) { vid.src = url; }
+  if(vid) { vid.src = ugVideoSrc(url); }
   pfUpdateVideoPreview();
 }
 
@@ -2475,7 +2500,7 @@ function pfUpdateVideoPreview() {
     if(prev) { prev.querySelector('img').src = thumb; prev.classList.add('show'); }
   } else if(pfVideoUrl) {
     // Auto-generate thumbnail from Cloudinary (replace extension with .jpg)
-    img.src = pfVideoUrl.replace(/\.(mp4|webm|mov|avi)/i, '.jpg');
+    img.src = ugVideoThumb(pfVideoUrl) || pfVideoUrl.replace(/\.(mp4|webm|mov|avi)/i, '.jpg');
   }
 }
 
@@ -2501,7 +2526,8 @@ async function pfSubirVideo() {
   if(!vidUrl)  return toast('⚠️ Debes subir un video primero.');
 
   // Auto-thumb desde Cloudinary si no hay manual
-  const thumbFinal = thumb || vidUrl.replace(/\.(mp4|webm|mov|avi)/i, '.jpg');
+  // Sin portada manual: fotograma del video (antes, con un .3gp quedaba el mismo video como "imagen")
+  const thumbFinal = thumb || ugVideoThumb(vidUrl) || (ugEsVideoArchivo(vidUrl) ? '' : vidUrl);
 
   const token = LS.get('token');
   if(!token) { alert('⚠️ Sesión expirada.'); location.href='./index.html'; return; }
@@ -2631,7 +2657,7 @@ async function pfSubirJuego() {
     // Extensión de imagen
     if(/\.(jpg|jpeg|png|webp|gif|avif|svg)(\?.*)?$/i.test(url)) return true;
     // Extensión de video
-    if(/\.(mp4|webm|mov|avi)(\?.*)?$/i.test(url)) return true;
+    if(ugEsVideoArchivo(url)) return true;
     // URLs de servicios conocidos que no terminan en extensión
     const knownHosts = ['imgur.com','i.imgur.com','drive.google.com','lh3.googleusercontent.com',
       'googleusercontent.com','pbs.twimg.com','cdn.discordapp.com','media.discordapp.net',
@@ -2715,7 +2741,7 @@ function cldOpt(url, t) {
 const CLD_BANNER = 'c_fill,g_auto,w_1500,h_500,q_auto,f_auto';
 const CLD_AVATAR = 'c_fill,g_face,w_400,h_400,q_auto,f_auto';
 const CLD_TILE   = 'c_fill,g_auto,w_420,h_420,q_auto,f_auto';
-const UG_VIDEO_RE = /\.(mp4|webm|mov|m4v|avi)(\?.*)?$/i;
+const UG_VIDEO_RE = { test: u => ugEsVideoArchivo(u) };   // portadas que en realidad son video
 
 // ── Publicaciones del perfil: cuadrícula tipo Instagram ──
 let _pfMisItems = [];
@@ -3969,7 +3995,7 @@ function pfPreviewBanner(url) {
 async function pfSaveBanner(url) {
   url = (url || '').trim();
   if (url && !PF_BANNER_RE.test(url)) { toast('⚠️ La URL debe empezar por https:// y no tener espacios'); return; }
-  if (url && /\.(mp4|webm|mov|m4v)(\?|$)/i.test(url)) { toast('⚠️ La portada debe ser una imagen, no un video'); return; }
+  if (url && ugEsVideoArchivo(url)) { toast('⚠️ La portada debe ser una imagen, no un video'); return; }
   try {
     const res = await fetch(`${PF_API}/usuarios/update-banner`, {
       method: 'PUT',
@@ -4999,7 +5025,7 @@ function openTheater(item) {
   wrap.innerHTML = '';
 
   const isYT2  = isYouTubeUrl(item.link);
-  const isMp42 = /\.(mp4|webm|mov|avi)(\?.*)?$/i.test(item.link);
+  const isMp42 = ugEsVideoArchivo(item.link);
 
   if(isYT2) {
     const ytId = getYouTubeId(item.link);
@@ -5010,7 +5036,8 @@ function openTheater(item) {
     wrap.appendChild(iframe);
   } else if(isMp42) {
     const nv = document.createElement('video');
-    nv.src = item.link;
+    nv.src = ugVideoSrc(item.link);
+    if (ugVideoThumb(item.link)) nv.poster = ugVideoThumb(item.link);
     nv.controls = true;
     nv.autoplay = true;
     nv.playsInline = true;
@@ -5208,7 +5235,7 @@ function ugnPintar() {
   for (const n of items) {
     const g = grupo(n.fecha); if (g !== actual) { actual = g; html += `<div class="ugn-group">${g}</div>`; }
     const meta = ugnMeta(n), tx = ugnTexto(n);
-    const img = /^https?:\/\//.test(n.itemImage || '') && !/\.(mp4|webm|mov)(\?|$)/i.test(n.itemImage) ? n.itemImage : '';
+    const img = /^https?:\/\//.test(n.itemImage || '') && !ugEsVideoArchivo(n.itemImage) ? n.itemImage : '';
     html += `<div class="ugn-item ${n.leida ? '' : 'unread'} ${tx.anuncio ? 'anuncio' : ''}" data-id="${escH(n._id)}" role="button" tabindex="0">
       ${ugnAvatar(n, meta)}
       <div class="ugn-body">

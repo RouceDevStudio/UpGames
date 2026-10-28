@@ -81,7 +81,7 @@ function contenido(n) {
     const e = n.emisor ? '@' + n.emisor : 'UpGames';
     const titulo = decodificar(n.itemTitle);
     const msg = decodificar(n.mensaje);
-    const img = /^https:\/\//i.test(n.itemImage || '') && !/\.(mp4|webm|mov)(\?|$)/i.test(n.itemImage) ? n.itemImage : undefined;
+    const img = /^https:\/\//i.test(n.itemImage || '') && !/\.(mp4|webm|mov|m4v|avi|3gp|3g2|mkv|ogv|mpe?g|wmv|flv)(\?|$)|\/video\/upload\//i.test(n.itemImage) ? n.itemImage : undefined;
     const item = n.itemId && /^[a-f\d]{24}$/i.test(n.itemId) ? `${BASE}biblioteca.html?id=${n.itemId}` : `${BASE}biblioteca.html`;
     switch (n.tipo) {
         case 'nueva_publicacion': return { title: `${e} publicó algo nuevo`, body: recorta(titulo || 'Toca para verlo', 120), url: item, image: img, tag: `pub-${n.itemId}` };

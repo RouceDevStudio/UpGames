@@ -291,7 +291,7 @@ ion-icon { pointer-events: none; }
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="UpGames">
 <script src="./upgames-pwa.js" defer></script>
-<script src="./upgames-errores.js?v=20261029f"></script>
+<script src="./upgames-errores.js?v=20261029g"></script>
 </head>
 <body>
 <div class="app" id="app">
@@ -838,7 +838,7 @@ async function hydrateCards() {
       itemCache.set(id, it);
     }
     if (!it || !it._id) continue;
-    const img = it.image && !/\.(mp4|webm|mov)(\?|$)/i.test(it.image) ? cld(it.image, 'c_fill,w_120,h_120,q_auto,f_auto') : '';
+    const img = it.image && !/\.(mp4|webm|mov|m4v|avi|3gp|3g2|mkv|ogv|mpe?g|wmv|flv)(\?|$)|\/video\/upload\//i.test(it.image) ? cld(it.image, 'c_fill,w_120,h_120,q_auto,f_auto') : '';
     a.innerHTML = `${img ? `<img src="${esc(img)}" alt="">` : '<img alt="">'}<span><b>${esc(it.title)}</b><small>${esc(it.category || 'UpGames')} · por @${esc(it.usuario || '')}</small></span>`;
   }
 }

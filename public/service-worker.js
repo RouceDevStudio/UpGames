@@ -11,7 +11,7 @@
 // IMPORTANTE: bump CACHE_VERSION cuando cambies archivos estáticos.
 // ========================================
 
-const CACHE_VERSION = 'upgames-v6.27.0';
+const CACHE_VERSION = 'upgames-v6.28.0';
 const CACHE_STATIC  = `${CACHE_VERSION}-static`;
 const CACHE_RUNTIME = `${CACHE_VERSION}-runtime`;
 const CACHE_API     = `${CACHE_VERSION}-api`;
@@ -95,6 +95,8 @@ self.addEventListener('fetch', (event) => {
     if (url.protocol === 'chrome-extension:') return;
     // Tiempo real y video en vivo: nunca pasar por caché (Socket.IO, HLS)
     if (url.pathname.startsWith('/socket.io/') || /\.(m3u8|m4s|ts)(\?|$)/i.test(url.pathname)) return;
+    // Video y audio: el navegador los pide por rangos (Range/206) para avanzar y adelantar; no se guardan en caché
+    if (request.destination === 'video' || request.destination === 'audio' || request.headers.has('range') || (/\/video\/upload\//.test(url.pathname) && !/\.(jpe?g|png|webp|gif)$/i.test(url.pathname))) return;
     // Pagos: el SDK de PayPal es dinámico (sesión, riesgo, idioma) → siempre de la red
     if (/(^|\.)(paypal|paypalobjects|mercadopago|mercadolibre|mlstatic|mercadolivre)\.com(\.\w+)?$/i.test(url.hostname)) return;
 

@@ -77,7 +77,7 @@
         .ad-pass.done { border-color: var(--neon-green); background: rgba(57,255,20,.08); box-shadow: none; }
         .debug-info { background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 5px; font-size: 0.7rem; color: #666; margin-top: 15px; text-align: left; max-height: 200px; overflow-y: auto; }
     </style>
-<script src="./upgames-errores.js?v=20261029f"></script>
+<script src="./upgames-errores.js?v=20261029g"></script>
 </head>
 <body>
     
@@ -141,7 +141,7 @@
         <div id="debug-info" class="debug-info" style="display:none;"></div>
     </div>
 
-    <script src="./upgames-pagos.js?v=20261029f" defer></script>
+    <script src="./upgames-pagos.js?v=20261029g" defer></script>
     <script>
         // ⭐ CONFIGURACIÓN
         const API_URL   = "https://upgames-production.up.railway.app";
@@ -238,7 +238,7 @@
             if (url.protocol !== 'https:' && url.protocol !== 'http:') return;   // fuera javascript:, data:…
 
             const isYT  = /(^|\.)(youtube\.com|youtu\.be)$/i.test(url.hostname);
-            const isMp4 = /\.(mp4|webm|mov)$/i.test(url.pathname);
+            const isMp4 = /\.(mp4|webm|mov|m4v|avi|3gp|3g2|mkv|ogv|mpe?g|wmv|flv)$/i.test(url.pathname) || /^res\.cloudinary\.com$/i.test(url.hostname) && /\/video\/upload\//.test(url.pathname);
             let el = null;
             if (isYT) {
                 const ytId = url.hostname.endsWith('youtu.be') ? url.pathname.slice(1)
@@ -250,7 +250,9 @@
                 el.allowFullscreen = true;
             } else if (isMp4) {
                 el = document.createElement('video');
-                Object.assign(el, { src: url.href, autoplay: true, muted: true, loop: true, playsInline: true, controls: true });
+                // Cloudinary convierte al vuelo a MP4 (3gp, mov… no se reproducen en todos los navegadores)
+                const src = /^res\.cloudinary\.com$/i.test(url.hostname) && !/\.(mp4|webm)$/i.test(url.pathname) ? url.href.replace(/(\.[a-z0-9]{2,4})?(\?.*)?$/i, '.mp4') : url.href;
+                Object.assign(el, { src, autoplay: true, muted: true, loop: true, playsInline: true, controls: true });
             } else {
                 el = document.createElement('img');
                 el.src = url.href; el.alt = titleParam.slice(0, 160);

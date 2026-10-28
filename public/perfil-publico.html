@@ -24,7 +24,7 @@
     <meta name="theme-color" content="#0A0B0F">
     <title>Perfil de Usuario — UpGames</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="stylesheet" href="./upgames-estilo.css?v=20261029f">
+    <link rel="stylesheet" href="./upgames-estilo.css?v=20261029g">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="preconnect" href="https://unpkg.com">
     <style>
@@ -738,9 +738,9 @@ display:block;
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="UpGames">
 <script src="./upgames-pwa.js" defer></script>
-<script src="./upgames-extras.js?v=20261029f"></script>
-<script src="./upgames-social.js?v=20261029f"></script>
-<script src="./upgames-errores.js?v=20261029f"></script>
+<script src="./upgames-extras.js?v=20261029g"></script>
+<script src="./upgames-social.js?v=20261029g"></script>
+<script src="./upgames-errores.js?v=20261029g"></script>
 </head>
 <body>
 
@@ -890,7 +890,7 @@ display:block;
         }
         function ppTile(item) {
             const isVideo = item.category === 'Video';
-            const img = item.image && !/\.(mp4|webm|mov|m4v|avi)(\?.*)?$/i.test(item.image) ? cldOpt(item.image, 'c_fill,g_auto,w_420,h_420,q_auto,f_auto') : '';
+            const img = item.image && !/\.(mp4|webm|mov|m4v|avi|3gp|3g2|mkv|ogv|mpe?g|wmv|flv)(\?|$)|\/video\/upload\//i.test(item.image) ? cldOpt(item.image, 'c_fill,g_auto,w_420,h_420,q_auto,f_auto') : '';
             const ls = item.linkStatus || 'online';
             const pending = item.status === 'pendiente' || item.status === 'pending';
             return `<a class="pp-tile${img ? '' : ' no-img'}" href="./biblioteca.html?id=${encodeURIComponent(item._id)}" aria-label="${ppEsc(item.title)}">

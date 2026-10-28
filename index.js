@@ -91,7 +91,7 @@ async function moderarPublicacion(id) {
         let motivo = null, fuente = 'NEXUS', categoria = textoV?.categoria;
         if (Moderacion.debeQuitar(textoV) && ['sexual', 'odio', 'acoso'].includes(textoV.categoria)) motivo = Moderacion.MENSAJE[textoV.categoria];
         if (!motivo) {
-            for (const img of [j.image, ...(j.images || [])].filter(u => /^https:\/\//.test(u || '') && !/\.(mp4|webm|mov)(\?|$)/i.test(u)).slice(0, 2)) {
+            for (const img of [j.image, ...(j.images || [])].filter(u => /^https:\/\//.test(u || '') && !/\.(mp4|webm|mov|m4v|avi|3gp|3g2|mkv|ogv|mpe?g|wmv|flv)(\?|$)|\/video\/upload\//i.test(u)).slice(0, 2)) {
                 const v = await Moderacion.imagen(img.replace('/upload/', '/upload/w_640,q_auto,f_jpg/'));
                 if (v?.sexual && v.confianza >= 0.75) { motivo = 'su imagen tiene contenido sexual'; fuente = 'NEXUS visión'; categoria = 'sexual'; break; }
             }

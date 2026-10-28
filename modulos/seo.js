@@ -22,7 +22,7 @@ const archivo = it => `${slug(it.title)}-${it.id}.html`;
 const urlPagina = it => `${SITIO}/p/${archivo(it)}`;
 
 const CAT = { Juego: 'Juego', Mod: 'Mod', Apps: 'App', Software: 'Software', Ajustes: 'Herramienta', Optimizacion: 'Optimización', ROM: 'ROM', Video: 'Video' };
-const esImg = u => /^https:\/\//i.test(u || '') && !/\.(mp4|webm|mov)(\?|$)/i.test(u);
+const esImg = u => /^https:\/\//i.test(u || '') && !/\.(mp4|webm|mov|m4v|avi|3gp|3g2|mkv|ogv|mpe?g|wmv|flv)(\?|$)|\/video\/upload\//i.test(u);
 
 /** HTML completo de la página de una publicación. */
 function pagina(it) {
