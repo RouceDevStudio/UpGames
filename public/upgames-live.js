@@ -151,7 +151,7 @@ function crearChat(raiz, { liveId, esHost, alEnviar }) {
     el.className = 'msg'; el.dataset.id = m.id; el.dataset.u = m.u;
     const color = `hsl(${hue(m.u)} 75% 68%)`;
     el.innerHTML = `${m.av && /^https:\/\//.test(m.av) ? `<img class="mav" src="${esc(cld(m.av, 'c_fill,w_48,h_48,q_auto,f_auto'))}" alt="">` : `<div class="mav" style="background:hsl(${hue(m.u)} 60% 45%)">${esc(m.u[0].toUpperCase())}</div>`}
-      <div class="mb">${m.host ? '<span class="badge-host">CREADOR</span>' : ''}<span class="mu" style="color:${color}">${esc(m.u)}${m.v ? ' <ion-icon class="verif" name="checkmark-circle"></ion-icon>' : ''}${m.pase ? ' <span class="badge-pase" title="Tiene un Pase UpGames">⭐</span>' : ''}</span>${esc(m.t)}</div>
+      <div class="mb">${m.host ? '<span class="badge-host">CREADOR</span>' : ''}<span class="mu" style="color:${color}">${esc(m.u)}${m.v ? ' <ion-icon class="verif" name="checkmark-circle"></ion-icon>' : ''}${m.pase ? ' <span class="badge-pase" title="Es Premium">⭐</span>' : ''}</span>${esc(m.t)}</div>
       ${esHost && !m.host ? `<div class="mod"><button data-a="borrar" title="Borrar mensaje"><ion-icon name="trash-outline"></ion-icon></button><button data-a="silenciar" title="Silenciar a @${esc(m.u)}"><ion-icon name="volume-mute-outline"></ion-icon></button></div>` : ''}`;
     el.querySelector('.mu').onclick = () => window.open(`./perfil-publico.html?u=${encodeURIComponent(m.u)}`, '_blank');
     el.querySelectorAll('.mod button').forEach(b => b.onclick = () => {
@@ -397,7 +397,7 @@ async function vistaEspectador(usuario) {
       </div>
       ${usuario === ME ? '' : `<div class="gifts glass">
         <div class="gifts-head"><span>🎁 Envía un regalo a @${esc(c.usuario)}</span>${TOKEN ? '<button class="coins-chip" id="b-recargar">🪙 Recargar</button>' : ''}</div>
-        <div class="gifts-row">${CFG.regalos.map(g => `<button class="gift" data-g="${g.id}" title="${esc(g.nombre)} · ${g.monedas} monedas"><span class="e">${g.emoji}</span><span class="n">${esc(g.nombre)}</span><span class="c">🪙 ${fmt(g.monedas)}</span></button>`).join('')}</div>
+        <div class="gifts-row">${CFG.regalos.map(g => `<button class="gift" data-g="${g.id}" title="${esc(g.nombre)} · ${g.monedas} UpCoins"><span class="e">${g.emoji}</span><span class="n">${esc(g.nombre)}</span><span class="c">🪙 ${fmt(g.monedas)}</span></button>`).join('')}</div>
       </div>`}
     </section>
     <aside class="side glass" id="side"></aside>
@@ -406,7 +406,7 @@ async function vistaEspectador(usuario) {
   <div class="gift-sheet" id="gift-sheet" role="dialog" aria-label="Enviar regalo">
     <div class="grab"></div>
     <div class="gifts-head"><span>🎁 Regalo para @${esc(c.usuario)}</span>${TOKEN ? '<button class="coins-chip" id="sheet-recargar">🪙 <span id="sheet-coins">0</span> · Recargar</button>' : ''}</div>
-    <div class="gifts-row">${CFG.regalos.map(g => `<button class="gift" data-g="${g.id}" title="${esc(g.nombre)} · ${g.monedas} monedas"><span class="e">${g.emoji}</span><span class="n">${esc(g.nombre)}</span><span class="c">🪙 ${fmt(g.monedas)}</span></button>`).join('')}</div>
+    <div class="gifts-row">${CFG.regalos.map(g => `<button class="gift" data-g="${g.id}" title="${esc(g.nombre)} · ${g.monedas} UpCoins"><span class="e">${g.emoji}</span><span class="n">${esc(g.nombre)}</span><span class="c">🪙 ${fmt(g.monedas)}</span></button>`).join('')}</div>
   </div>`}`;
 
   const video = $('vid'), pov = $('pov'), capa = capaRegalos($('gl')), pw = $('pw'), ov = burbujas($('ov-chat'));
@@ -504,7 +504,7 @@ async function vistaEspectador(usuario) {
   document.querySelectorAll('.gift').forEach(b => b.onclick = async () => {
     if (!TOKEN) return irLogin();
     const g = CFG.regalos.find(x => x.id === b.dataset.g);
-    if (monedas < g.monedas) { toast(`Necesitas ${g.monedas} monedas para ${g.nombre}`); recargar(); return; }
+    if (monedas < g.monedas) { toast(`Necesitas ${g.monedas} UpCoins para ${g.nombre}`); recargar(); return; }
     b.classList.add('sending');
     try {
       const d = await api(`/live/${liveId}/regalo`, { method: 'POST', body: { regaloId: g.id, cantidad: 1, clave: uid() } });
@@ -1048,7 +1048,7 @@ async function abrirMonedas() {
   bg.onclick = e => { if (e.target === bg) cerrar(); };
   bg.querySelector('#m-x').onclick = cerrar;
   window.UGPagos.tienda(bg.querySelector('#m-tienda'), {
-    alComprar: d => { monedas = d.monedas; $('coins-n').textContent = fmt(monedas); toast(`✅ +${fmt(d.acreditadas)} monedas`); setTimeout(cerrar, 900); },
+    alComprar: d => { monedas = d.monedas; $('coins-n').textContent = fmt(monedas); toast(`✅ +${fmt(d.acreditadas)} UpCoins`); setTimeout(cerrar, 900); },
   });
 }
 

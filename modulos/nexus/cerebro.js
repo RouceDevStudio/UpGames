@@ -121,7 +121,7 @@ async function modoBasico(p, ej) {
         const c = await ej.mi_cuenta();
         if (c.error) return `${reglas}\n\nInicia sesión y te digo exactamente cuánto llevas y qué te falta.`;
         await ej.proponer_accion({ tipo: 'ir_a', valor: 'economia', etiqueta: 'Abrir Economía' });
-        return `Tu saldo es **${c.saldo_usd} USD** con ${c.descargas_totales} descargas en total.\n${c.puede_retirar ? '¡Ya puedes solicitar tu retiro desde Economía!' : `Para retirar te falta: ${c.le_falta.join('; ')}.`}`;
+        return `Tienes **${Math.floor(c.upcoins_ganados_retirables).toLocaleString('es')} UpCoins ganados** (≈ US$${c.equivalente_usd}, retirables) y ${Math.floor(c.upcoins_comprados).toLocaleString('es')} UpCoins comprados (solo para usar en UpGames), con ${c.descargas_totales} descargas en total.\n${c.puede_retirar ? '¡Ya puedes solicitar tu retiro desde Economía!' : `Para retirar te falta: ${c.le_falta.join('; ')}.`}`;
     }
     if (/mis (publicaciones|mods|aportes|juegos)|c[oó]mo van/.test(m)) {
         const r = await ej.mis_publicaciones({});

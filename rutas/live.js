@@ -38,7 +38,7 @@ const LiveSchema = new mongoose.Schema({
 LiveSchema.index({ creador: 1 }, { unique: true, partialFilterExpression: { estado: 'en_vivo' }, name: 'un_live_activo' });
 
 const TxSchema = new mongoose.Schema({
-    tipo:         { type: String, enum: ['compra', 'regalo', 'acceso', 'plan'], required: true },   // acceso = saltar la página puente · plan = pase sin anuncios
+    tipo:         { type: String, enum: ['compra', 'regalo', 'acceso', 'plan'], required: true },   // acceso = saltar la página puente · plan = Premium
     usuario:      { type: String, required: true, index: true },   // quien paga
     destinatario: { type: String, default: '', index: true },      // creador (regalos)
     monedas:      { type: Number, required: true },
@@ -49,7 +49,7 @@ const TxSchema = new mongoose.Schema({
     cantidad:     { type: Number, default: 1 },
     liveId:       { type: String, default: '', index: true },
     juegoId:      { type: String, default: '' },                   // acceso directo
-    planId:       { type: String, default: '' },                   // pase sin anuncios
+    planId:       { type: String, default: '' },                   // Premium (pase7…), ia:… o impulso:…
     bonoMonedas:  { type: Number, default: 0 },                    // monedas de regalo incluidas (pases y bono del pase)
     metodo:       { type: String, default: '' },                   // tarjeta_mp | paypal | monedas | saldo | pase
     ref:          { type: String, required: true, unique: true },  // idempotencia (orden PayPal / clave del regalo)

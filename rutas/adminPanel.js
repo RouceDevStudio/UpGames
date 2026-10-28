@@ -40,7 +40,7 @@ const PERMISOS = {
     usuarios:     { nombre: 'Usuarios',      desc: 'Ver cuentas, verificación, lista negra y notas' },
     sanciones:    { nombre: 'Sanciones',     desc: 'Suspender y eliminar cuentas' },
     anuncios:     { nombre: 'Anuncios',      desc: 'Enviar notificaciones a la comunidad' },
-    finanzas:     { nombre: 'Finanzas',      desc: 'Pagos, saldos y tarjetas' },
+    finanzas:     { nombre: 'Finanzas',      desc: 'Pagos, UpCoins, Premium, ventas y tarjetas' },
     estadisticas: { nombre: 'Estadísticas',  desc: 'Inicio con métricas, gráficos y rankings' },
     sistema:      { nombre: 'Sistema',       desc: 'API Test, diagnóstico y caché' },
 };
@@ -80,6 +80,7 @@ function permisoRequerido(method, path) {
     if (/^\/admin\/sistema\/anuncio/.test(path)) return ['anuncios'];
     if (/^\/admin\/(sistema|cache)/.test(path)) return ['sistema'];
     if (/^\/(admin\/stats|analytics\/admin)/.test(path)) return ['estadisticas'];
+    if (method === 'GET' && /^\/admin\/finanzas\/economia/.test(path)) return ['finanzas', 'estadisticas'];
     if (/^\/admin\/(finanzas|payments-pending)/.test(path)) return ['finanzas'];
     if (/^\/admin\/live/.test(path)) return method === 'GET' ? ['finanzas', 'sanciones', 'estadisticas'] : ['sanciones'];
     if (/^\/admin\/users\/(ajustar-saldo|[^/]+\/reset-saldo)/.test(path)) return ['finanzas'];
@@ -108,7 +109,7 @@ function limiteRevision(req) {
 // Acciones de un sub-admin que se notifican al dueño
 const SENSIBLES = [
     [/DELETE \/auth\/users/, 'eliminó una cuenta'], [/DELETE \/admin\/users\/[^/]+\/items/, 'borró todas las publicaciones de un usuario'],
-    [/suspender/, 'cambió la suspensión de una cuenta'], [/ajustar-saldo|reset-saldo/, 'ajustó un saldo'],
+    [/suspender/, 'cambió la suspensión de una cuenta'], [/ajustar-saldo|reset-saldo/, 'ajustó un saldo'], [/usuarios\/[^/]+\/upcoins/, 'ajustó los UpCoins de una cuenta'], [/usuarios\/[^/]+\/premium/, 'cambió el Premium de una cuenta'],
     [/procesar-pago/, 'marcó un pago como enviado'], [/datos-cobro/, 'consultó los datos de cobro (cuenta bancaria/celular) de un usuario'], [/rechazar-pago/, 'rechazó un pago'], [/DELETE \/admin\/finanzas\/tarjetas/, 'eliminó una tarjeta'],
     [/anuncio/, 'envió un anuncio'], [/bulk-action/, 'hizo una acción masiva'],
 ];
@@ -200,7 +201,7 @@ function registrar(app, { Usuario, Juego, Comentario, Notificacion, Pago, JWT_SE
 
     // Un sub-admin no puede tocar al dueño ni a otros administradores
     async function objetivoProtegido(req) {
-        const m = req.path.match(/^\/(?:admin\/users\/(?:ajustar-saldo\/|lista-negra\/|notas\/|suspender\/)?|auth\/users\/|auth\/admin\/verificacion\/)([^/]+)/);
+        const m = req.path.match(/^\/(?:admin\/users\/(?:ajustar-saldo\/|lista-negra\/|notas\/|suspender\/)?|admin\/finanzas\/usuarios\/|auth\/users\/|auth\/admin\/verificacion\/)([^/]+)/);
         if (!m) return false;
         const id = m[1];
         const q = mongoose.isValidObjectId(id) ? { _id: id } : { usuario: String(id).toLowerCase() };

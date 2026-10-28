@@ -509,17 +509,18 @@ body:not(.is-owner) .owner-only{display:none!important}
 
     <!-- USUARIOS -->
     <section class="view" id="v-usrs">
-      <div class="vh"><div><h2>Usuarios</h2><p>Cuentas, verificación, saldos y sanciones</p></div><button class="btn sm owner-only" onclick="exportUsers()"><ion-icon name="download-outline"></ion-icon> Exportar CSV</button></div>
+      <div class="vh"><div><h2>Usuarios</h2><p>Cuentas, verificación, UpCoins, Premium y sanciones</p></div><button class="btn sm owner-only" onclick="exportUsers()"><ion-icon name="download-outline"></ion-icon> Exportar CSV</button></div>
       <div class="qs" id="uQs"></div>
       <div class="row" style="gap:8px">
         <div class="chips grow" id="uF">
           <button class="chip on" data-f="all">Todos</button><button class="chip" data-f="verif">✅ Verificados</button>
           <button class="chip" data-f="equipo">🛡️ Equipo</button><button class="chip" data-f="sus">⛔ Suspendidos</button>
-          <button class="chip" data-f="neg">🚫 Lista negra</button><button class="chip" data-f="saldo">💰 Con saldo</button>
-          <button class="chip" data-f="sinpp">Sin PayPal</button><button class="chip" data-f="contarj">Con tarjetas</button>
+          <button class="chip" data-f="neg">🚫 Lista negra</button><button class="chip" data-f="saldo">💰 UC ganados</button>
+          <button class="chip" data-f="uc">🪙 UC comprados</button><button class="chip" data-f="premium">⭐ Premium</button>
+          <button class="chip" data-f="sinpp">Sin método de cobro</button><button class="chip" data-f="contarj">Con tarjetas</button>
         </div>
         <select class="in" id="uSort" style="width:auto;padding:8px 34px 8px 12px" onchange="render()">
-          <option value="fecha">Más recientes</option><option value="saldo">Mayor saldo</option>
+          <option value="fecha">Más recientes</option><option value="uc">Más UpCoins</option><option value="saldo">Más UC ganados</option>
           <option value="descargas">Más descargas</option><option value="nombre">Nombre A-Z</option><option value="activo">Última actividad</option>
         </select>
       </div>
@@ -549,9 +550,29 @@ body:not(.is-owner) .owner-only{display:none!important}
       </div>
     </section>
 
+    <!-- ECONOMÍA -->
+    <section class="view" id="v-econ">
+      <div class="vh"><div><h2>Economía</h2><p>UpCoins, ventas, Premium, NEXUS y publicaciones destacadas · 1 UC = US$<span id="ecUcv">0,02</span></p></div><button class="btn sm" onclick="loadEcon(true)"><ion-icon name="refresh-outline"></ion-icon> Actualizar</button></div>
+      <div class="chips" id="ecF" style="margin-bottom:12px"><button class="chip" data-f="hoy">Últimas 24 h</button><button class="chip on" data-f="mes">30 días</button><button class="chip" data-f="total">Todo</button></div>
+      <div class="kpis" id="ecKpis"><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+      <div class="grid2" style="margin-bottom:14px">
+        <div class="card"><p class="ct">💵 Ventas con dinero</p><p class="cs">Tarjeta y PayPal, por producto</p><div id="ecProd"></div></div>
+        <div class="card"><p class="ct">🪙 Consumo de UpCoins</p><p class="cs">En qué gastan los usuarios sus UC</p><div id="ecUC"></div></div>
+      </div>
+      <div class="grid2" style="margin-bottom:14px">
+        <div class="card"><p class="ct">⭐ Premium activos</p><p class="cs" id="ecPremS"></p><div id="ecPrem" style="max-height:320px;overflow:auto"></div></div>
+        <div class="card"><p class="ct">🚀 Publicaciones destacadas</p><p class="cs">Promocionadas con UpCoins ahora mismo</p><div id="ecDest" style="max-height:320px;overflow:auto"></div></div>
+      </div>
+      <div class="card" style="margin-bottom:14px"><p class="ct">🧾 Últimas transacciones</p><p class="cs">Compras, Premium, accesos, NEXUS y destacados (los regalos de lives están en el resumen de lives)</p><div id="ecTx" style="max-height:420px;overflow:auto"></div></div>
+      <div class="grid2">
+        <div class="card"><p class="ct">📦 Catálogo vigente</p><p class="cs">Precios que cobra el servidor</p><div id="ecCat"></div></div>
+        <div class="card"><p class="ct">⚖️ Reparto y reglas</p><p class="cs">Lo que recibe el creador (tope 30 %)</p><div id="ecRep"></div></div>
+      </div>
+    </section>
+
     <!-- PAGOS -->
     <section class="view" id="v-pays">
-      <div class="vh"><div><h2>Pagos</h2><p>Solicitudes de cobro de los creadores</p></div><button class="btn sm" onclick="exportPagos()"><ion-icon name="download-outline"></ion-icon> Exportar historial</button></div>
+      <div class="vh"><div><h2>Pagos</h2><p>Retiros de UpCoins ganados que piden los creadores (se paga el valor en dinero)</p></div><button class="btn sm" onclick="exportPagos()"><ion-icon name="download-outline"></ion-icon> Exportar historial</button></div>
       <div class="chips" id="pF" style="margin-bottom:12px"><button class="chip on" data-f="pend">⏳ Pendientes</button><button class="chip" data-f="hist">📋 Historial</button></div>
       <div class="list" id="payList"></div>
     </section>
@@ -730,7 +751,7 @@ let PERMS = {
   usuarios: { nombre: 'Usuarios', desc: 'Ver cuentas, verificación, lista negra y notas' },
   sanciones: { nombre: 'Sanciones', desc: 'Suspender y eliminar cuentas' },
   anuncios: { nombre: 'Anuncios', desc: 'Enviar notificaciones a la comunidad' },
-  finanzas: { nombre: 'Finanzas', desc: 'Pagos, saldos y tarjetas' },
+  finanzas: { nombre: 'Finanzas', desc: 'Pagos, UpCoins, Premium, ventas y tarjetas' },
   estadisticas: { nombre: 'Estadísticas', desc: 'Inicio con métricas y gráficos' },
   sistema: { nombre: 'Sistema', desc: 'API Test, diagnóstico y caché' },
 };
@@ -749,6 +770,12 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const safeUrl = u => /^https?:\/\//i.test(String(u || '').trim()) ? String(u).trim() : '';
 const money = n => '$' + (Number(n) || 0).toFixed(2);
+// UpCoins: 1 UC = US$0,02 (se actualiza con el valor que envía el servidor)
+let UCV = 0.02;
+const ucDe = usd => (Number(usd) || 0) / UCV + 1e-6;   // +1e-6: 0,06 / 0,02 = 2,9999…
+const ucFmt = n => Math.floor(Number(n) || 0).toLocaleString('es') + ' UC';
+const ucTotal = u => Math.floor(u.monedas || 0) + Math.floor(ucDe(u.saldo));
+const esPremium = u => !!u.planHasta && new Date(u.planHasta) > Date.now();
 const num = n => (Number(n) || 0).toLocaleString('es');
 const fdate = d => d ? new Date(d).toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 const ago = d => { if (!d) return '—'; const s = (Date.now() - new Date(d)) / 1000; if (s < 60) return 'ahora'; if (s < 3600) return Math.floor(s / 60) + ' min'; if (s < 86400) return Math.floor(s / 3600) + ' h'; if (s < 2592000) return Math.floor(s / 86400) + ' d'; return fdate(d); };
@@ -871,6 +898,7 @@ const NAV = [
   { id: 'usrs', ic: 'people-outline', t: 'Usuarios', perm: ['usuarios', 'sanciones', 'finanzas'], b: () => D.users.length },
   { id: 'anun', ic: 'megaphone-outline', t: 'Anuncios', perm: 'anuncios' },
   { g: 'Finanzas' },
+  { id: 'econ', ic: 'diamond-outline', t: 'Economía', perm: ['finanzas', 'estadisticas'] },
   { id: 'pays', ic: 'wallet-outline', t: 'Pagos', perm: 'finanzas', b: () => D.pagos.length, hot: true },
   { id: 'tarj', ic: 'card-outline', t: 'Tarjetas', perm: 'finanzas', b: () => D.tarjetas.length },
   { g: 'Sistema' },
@@ -890,7 +918,7 @@ function buildNav() {
     html += `<button class="nav-i" data-v="${n.id}" onclick="go('${n.id}')"><ion-icon name="${n.ic}"></ion-icon>${n.t}${n.b ? `<span class="nbadge" id="nb-${n.id}">0</span>` : ''}</button>`;
   }
   $('nav').innerHTML = html;
-  const prim = ['dash', 'revn', 'usrs', 'pays', 'apro', 'reportes', 'comt', 'anun', 'tarj', 'api', 'equipo'].map(id => NAV.find(n => n.id === id)).filter(n => n && navOk(n)).slice(0, 4);
+  const prim = ['dash', 'revn', 'usrs', 'pays', 'econ', 'apro', 'reportes', 'comt', 'anun', 'tarj', 'api', 'equipo'].map(id => NAV.find(n => n.id === id)).filter(n => n && navOk(n)).slice(0, 4);
   $('bnav').innerHTML = prim.map(n => `<button class="bn" data-v="${n.id}" onclick="go('${n.id}')"><ion-icon name="${n.ic}"></ion-icon>${n.t}${n.b && n.hot ? `<span class="nbadge hot" id="bb-${n.id}" style="display:none">0</span>` : ''}</button>`).join('')
     + `<button class="bn" onclick="openMenu()"><ion-icon name="ellipsis-horizontal-circle-outline"></ion-icon>Más</button>`;
   $('bnav').style.gridTemplateColumns = `repeat(${prim.length + 1},1fr)`;
@@ -912,6 +940,7 @@ function go(v) {
   history.replaceState(null, '', '#' + v);
   closeMenu(); window.scrollTo({ top: 0 });
   if (v === 'equipo') loadEquipo();
+  if (v === 'econ') loadEcon(true);
   if (v === 'anun') emailEstado();
   else if (v === 'audit') loadAudit();
   else if (v === 'api' && !$('diag').innerHTML) { runDiag(); runEndpoints(); }
@@ -963,13 +992,14 @@ async function sync(manual) {
     if (fallos.length) toast('⚠ No cargó: ' + fallos.join(', '), 'err');
     else if (manual) toast(`✓ Sincronizado · ${num(D.items.length)} entradas · ${num(D.users.length)} usuarios`);
     if (view === 'dash') loadCharts();
+    loadEcon(view === 'econ');
   } finally { syncing = false; $('syncIco').style.animation = ''; }
 }
 const st = document.createElement('style'); st.textContent = '@keyframes spin{to{transform:rotate(360deg)}}'; document.head.appendChild(st);
 
 function render() {
   if (!S.admin) return;
-  ({ dash: rDash, revn: rRev, apro: rItems, vids: rVids, reportes: rRep, comt: rComm, usrs: rUsers, pays: rPays, tarj: rTarj }[view] || (() => {}))();
+  ({ dash: rDash, econ: rEcon, revn: rRev, apro: rItems, vids: rVids, reportes: rRep, comt: rComm, usrs: rUsers, pays: rPays, tarj: rTarj }[view] || (() => {}))();
   if (bulk) updBulk();
 }
 
@@ -989,7 +1019,8 @@ function rDash() {
     k('people', 'var(--g1)', num(d.usuarios?.total), 'Usuarios', `Hoy <b>+${num(d.usuarios?.hoy)}</b> · Semana <b>+${num(d.usuarios?.semana)}</b>`) +
     k('game-controller', 'var(--info)', num(d.items?.total), 'Publicaciones', `Aprobadas <b>${num(d.items?.aprobados)}</b> · Hoy <b>+${num(d.items?.hoy)}</b>`) +
     k('download', 'var(--vio)', num(d.descargas?.total), 'Descargas efectivas', `Hoy <b>+${num(d.descargas?.hoy)}</b>`) +
-    k('cash', 'var(--warn)', money(d.finanzas?.saldoEnCirculacion), 'Saldo en circulación', `Pendiente de pago <b>${money(d.finanzas?.pendienteDePago)}</b>`) +
+    k('diamond', 'var(--warn)', ucFmt(ucDe(d.finanzas?.saldoEnCirculacion)), 'UC ganados por creadores', `≈ ${money(d.finanzas?.saldoEnCirculacion)} · por pagar <b>${money(d.finanzas?.pendienteDePago)}</b>`) +
+    (econ ? k('cash', 'var(--ok)', money(econ.periodos.mes.ingresosUsd), 'Ventas 30 días', `<b>${num(econ.premium.activos)}</b> Premium activos · <a href="#econ" onclick="go('econ');return false" style="color:var(--g1)">Economía →</a>`) : '') +
     k('chatbubbles', 'var(--g2)', num(d.comentarios?.total), 'Comentarios', `Hoy <b>+${num(d.comentarios?.hoy)}</b>`) +
     k('ban', 'var(--org)', num(d.usuarios?.listaNegra), 'Lista negra', 'Cuentas vigiladas');
   const tbl = (rows, head) => rows?.length ? `<table class="tbl"><tr>${head}</tr>${rows}</table>` : '<div class="empty" style="padding:20px">Sin datos todavía</div>';
@@ -1242,35 +1273,37 @@ async function delComm(id) { if (!confirm('¿Eliminar este comentario?')) return
 function rUsers() {
   const U = D.users, q = qv();
   const qs = (n, l, c) => `<div class="card"><div class="q-n" style="color:${c}">${num(n)}</div><div class="q-l">${l}</div></div>`;
-  $('uQs').innerHTML = qs(U.length, 'Total', 'var(--g1)') + qs(U.filter(u => u.verificadoNivel > 0 || u.isVerificado).length, 'Verificados', 'var(--oro)') + qs(U.filter(u => u.adminRol || isOwnerUser(u)).length, 'Equipo', 'var(--info)') + qs(U.filter(u => u.suspendido).length, 'Suspendidos', 'var(--bad)') + qs(U.filter(u => u.listaNegraAdmin).length, 'Lista negra', 'var(--org)') + qs(U.filter(u => u.saldo > 0).length, 'Con saldo', 'var(--warn)');
-  const f = { all: () => true, verif: u => u.verificadoNivel > 0 || u.isVerificado, equipo: u => !!u.adminRol || isOwnerUser(u), sus: u => u.suspendido, neg: u => u.listaNegraAdmin, saldo: u => u.saldo > 0, sinpp: u => !u.paypalEmail, contarj: u => (u.tarjetas || []).length > 0 }[uF];
+  $('uQs').innerHTML = qs(U.length, 'Total', 'var(--g1)') + qs(U.filter(u => u.verificadoNivel > 0 || u.isVerificado).length, 'Verificados', 'var(--oro)') + qs(U.filter(u => u.adminRol || isOwnerUser(u)).length, 'Equipo', 'var(--info)') + qs(U.filter(u => u.suspendido).length, 'Suspendidos', 'var(--bad)') + qs(U.filter(u => u.listaNegraAdmin).length, 'Lista negra', 'var(--org)') + qs(U.filter(u => u.saldo > 0).length, 'Con UC ganados', 'var(--warn)') + qs(U.filter(esPremium).length, 'Premium', 'var(--vio)');
+  const f = { all: () => true, verif: u => u.verificadoNivel > 0 || u.isVerificado, equipo: u => !!u.adminRol || isOwnerUser(u), sus: u => u.suspendido, neg: u => u.listaNegraAdmin, saldo: u => u.saldo > 0, premium: esPremium, uc: u => (u.monedas || 0) > 0, sinpp: u => !u.cobro?.tipo && !u.paypalEmail, contarj: u => (u.tarjetas || []).length > 0 }[uF];
   let l = U.filter(u => f(u) && (!q || (u.usuario || '').includes(q) || (u.email || '').toLowerCase().includes(q) || (u.paypalEmail || '').toLowerCase().includes(q) || (u.registrationIP || '').includes(q)));
   const s = $('uSort').value;
-  l.sort(s === 'saldo' ? (a, b) => (b.saldo || 0) - (a.saldo || 0) : s === 'descargas' ? (a, b) => (b.descargasTotales || 0) - (a.descargasTotales || 0) : s === 'nombre' ? (a, b) => (a.usuario || '').localeCompare(b.usuario || '') : s === 'activo' ? (a, b) => new Date(b.ultimoLogin || 0) - new Date(a.ultimoLogin || 0) : (a, b) => new Date(b.fecha || b.createdAt || 0) - new Date(a.fecha || a.createdAt || 0));
+  l.sort(s === 'uc' ? (a, b) => ucTotal(b) - ucTotal(a) : s === 'saldo' ? (a, b) => (b.saldo || 0) - (a.saldo || 0) : s === 'descargas' ? (a, b) => (b.descargasTotales || 0) - (a.descargasTotales || 0) : s === 'nombre' ? (a, b) => (a.usuario || '').localeCompare(b.usuario || '') : s === 'activo' ? (a, b) => new Date(b.ultimoLogin || 0) - new Date(a.ultimoLogin || 0) : (a, b) => new Date(b.fecha || b.createdAt || 0) - new Date(a.fecha || a.createdAt || 0));
   $('uList').innerHTML = l.length ? l.slice(0, uLimit).map(userCard).join('') : '<div class="empty"><ion-icon name="people-outline"></ion-icon>Sin usuarios</div>';
   $('uMore').style.display = l.length > uLimit ? '' : 'none';
 }
 function userCard(u) {
   const p = protegido(u), own = isOwnerUser(u), av = safeUrl(u.avatar);
-  const tags = [own ? '<span class="tag t-info">👑 Dueño</span>' : '', u.adminRol ? `<span class="tag t-info">🛡️ ${esc(rolNombre(u.adminRol))}</span>` : '', u.suspendido ? '<span class="tag t-bad">⛔ Suspendido</span>' : '', u.listaNegraAdmin ? '<span class="tag t-org">🚫 Lista negra</span>' : '', u.emailVerificado ? '<span class="tag t-ok">✉ verificado</span>' : '<span class="tag t-mut">✉ sin verificar</span>'].join('');
+  const tags = [own ? '<span class="tag t-info">👑 Dueño</span>' : '', u.adminRol ? `<span class="tag t-info">🛡️ ${esc(rolNombre(u.adminRol))}</span>` : '', u.suspendido ? '<span class="tag t-bad">⛔ Suspendido</span>' : '', u.listaNegraAdmin ? '<span class="tag t-org">🚫 Lista negra</span>' : '', esPremium(u) ? `<span class="tag t-info" title="Hasta ${fdate(u.planHasta)}">⭐ Premium</span>` : '', u.emailVerificado ? '<span class="tag t-ok">✉ verificado</span>' : '<span class="tag t-mut">✉ sin verificar</span>'].join('');
   const dis = p ? 'disabled title="Protegido: es parte del equipo"' : '';
   return `<div class="card uc ${u.suspendido ? 'sus' : u.listaNegraAdmin ? 'neg' : ''}">
     <div class="uc-h"><div class="av">${av ? `<img src="${esc(av)}" alt="" onerror="this.remove()">` : esc((u.usuario || '?')[0].toUpperCase())}</div>
       <div class="grow" style="min-width:0"><div class="uc-n"><span>@${esc(u.usuario)}</span>${vNiv(u.verificadoNivel)}</div><div class="uc-tags">${tags}</div></div></div>
     <div class="uc-d">
       <div class="uc-f"><span>Email</span><span onclick="cp(this.textContent)">${esc(u.email || '—')}</span></div>
-      <div class="uc-f"><span>PayPal</span><span onclick="cp(this.textContent)">${esc(u.paypalEmail || '—')}</span></div>
+      <div class="uc-f"><span>Cobro</span><span onclick="cp(this.textContent)">${esc(u.cobro?.resumen || (u.paypalEmail ? 'PayPal · ' + u.paypalEmail : '—'))}</span></div>
       <div class="uc-f"><span>Registro · Activo</span><span>${fdate(u.fecha || u.createdAt)} · ${ago(u.ultimoLogin)}</span></div>
       <div class="uc-f"><span>IP registro</span><span class="mono" onclick="cp(this.textContent)">${esc(u.registrationIP || '—')}</span></div>
     </div>
-    <div class="uc-s"><div><b style="color:var(--warn)">${money(u.saldo)}</b><small>Saldo</small></div><div><b>${num(u.descargasTotales)}</b><small>Descargas</small></div><div><b>${num((u.listaSeguidores || []).length)}</b><small>Seguidores</small></div></div>
+    <div class="uc-s"><div title="Comprados ${ucFmt(u.monedas)} · ganados ${ucFmt(ucDe(u.saldo))} (${money(u.saldo)})"><b style="color:var(--warn)">${ucFmt(ucTotal(u))}</b><small>UpCoins</small></div><div><b>${num(u.descargasTotales)}</b><small>Descargas</small></div><div><b>${num((u.listaSeguidores || []).length)}</b><small>Seguidores</small></div></div>
     ${can('usuarios') ? `<div class="uc-nt"><textarea placeholder="Notas privadas del equipo…" onblur="saveNotas('${u._id}',this.value)" ${dis}>${esc(u.notasAdmin || '')}</textarea></div>` : ''}
     <div class="uc-a">
       <button onclick="omDetail('${u._id}')" title="Detalle"><ion-icon name="eye-outline"></ion-icon></button>
       ${can('usuarios') ? `<button onclick="omVerif('${u._id}')" title="Verificación" ${dis}><ion-icon name="checkmark-circle-outline" class="v2"></ion-icon></button>
       <button onclick="omNeg('${u._id}')" title="Lista negra" ${dis}><ion-icon name="eye-off-outline" style="color:var(--org)"></ion-icon></button>` : ''}
       ${can('sanciones') ? `<button onclick="omSus('${u._id}')" title="${u.suspendido ? 'Reactivar' : 'Suspender'}" ${own ? 'disabled' : dis}><ion-icon name="${u.suspendido ? 'lock-open-outline' : 'ban-outline'}" style="color:var(--bad)"></ion-icon></button>` : ''}
-      ${can('finanzas') ? `<button onclick="omSaldo('${u._id}')" title="Ajustar saldo" ${dis}><ion-icon name="cash-outline" style="color:var(--warn)"></ion-icon></button>` : ''}
+      ${can('finanzas') ? `<button onclick="omSaldo('${u._id}')" title="UpCoins ganados (retirables)" ${dis}><ion-icon name="cash-outline" style="color:var(--warn)"></ion-icon></button>
+      <button onclick="omUC('${u._id}')" title="UpCoins comprados/regalo" ${dis}><ion-icon name="diamond-outline" style="color:var(--oro)"></ion-icon></button>
+      <button onclick="omPremium('${u._id}')" title="Premium" ${dis}><ion-icon name="star-outline" style="color:var(--vio)"></ion-icon></button>` : ''}
       ${can('sanciones') ? `<button onclick="delUser('${u._id}')" title="Eliminar" ${own ? 'disabled' : dis}><ion-icon name="trash-outline" style="color:var(--bad)"></ion-icon></button>` : ''}
     </div></div>`;
 }
@@ -1297,9 +1330,22 @@ function omNeg(id) { const u = U(id); if (!u) return; const act = !!u.listaNegra
 function omSus(id) { const u = U(id); if (!u) return; const act = !!u.suspendido;
   txtModal({ t: (act ? 'Reactivar' : 'Suspender') + ' a @' + u.usuario, s: act ? 'Podrá volver a iniciar sesión.' : 'No podrá iniciar sesión ni usar la app hasta que lo reactives.', l: 'Motivo (lo verá el usuario)', v: act ? '' : (u.motivoSuspension || ''), ok: act ? 'Reactivar' : 'Suspender', cls: act ? 'btn ok' : 'btn bad',
     fn: async motivo => { const { ok, d } = await api(`/admin/users/suspender/${id}`, { method: 'PUT', body: { suspendido: !act, motivo } }); if (ok) { Object.assign(u, { suspendido: !act, motivoSuspension: motivo }); cm('mTxt'); render(); toast(act ? '✓ Cuenta reactivada' : '⛔ Cuenta suspendida', act ? '' : 'warn'); } else toast(d.error || 'Error', 'err'); } }); }
-function omSaldo(id) { const u = U(id); if (!u) return;
-  txtModal({ t: 'Ajustar saldo · @' + u.usuario, s: 'Saldo actual: ' + money(u.saldo), l: 'Motivo', ok: 'Guardar saldo', numero: { l: 'Nuevo saldo (USD)', v: (u.saldo || 0).toFixed(2), quick: [['$0', 0], ['+$1', ((u.saldo || 0) + 1).toFixed(2)], ['+$5', ((u.saldo || 0) + 5).toFixed(2)], ['+$10', ((u.saldo || 0) + 10).toFixed(2)]] },
-    fn: async (motivo, val) => { if (isNaN(val) || val < 0) return toast('Monto inválido', 'err'); const { d } = await api(`/admin/users/ajustar-saldo/${id}`, { method: 'PUT', body: { saldo: val, motivo } }); if (d.success) { u.saldo = val; cm('mTxt'); render(); toast(`💰 @${u.usuario} → ${money(val)}`); } else toast(d.error || 'Error', 'err'); } }); }
+// UpCoins ganados (campo saldo en USD): son los únicos retirables como dinero
+function omSaldo(id) { const u = U(id); if (!u) return; const act = Math.floor(ucDe(u.saldo));
+  txtModal({ t: 'UpCoins ganados · @' + u.usuario, s: `Actual: ${ucFmt(act)} (≈ ${money(u.saldo)}). Son ganancias de creador: se pueden retirar como dinero.`, l: 'Motivo (queda en el registro)', ok: 'Guardar', numero: { l: 'Nuevos UpCoins ganados', v: act, quick: [['0', 0], ['+50', act + 50], ['+250', act + 250], ['+500', act + 500]] },
+    fn: async (motivo, val) => { val = Math.round(val); if (isNaN(val) || val < 0) return toast('Cantidad inválida', 'err'); if (!motivo) return toast('Escribe el motivo', 'err');
+      const saldo = Math.round(val * UCV * 10000) / 10000;
+      const { d } = await api(`/admin/users/ajustar-saldo/${id}`, { method: 'PUT', body: { saldo, motivo } }); if (d.success) { u.saldo = saldo; cm('mTxt'); render(); toast(`💰 @${u.usuario} → ${ucFmt(val)} ganados`); } else toast(d.error || 'Error', 'err'); } }); }
+// UpCoins comprados o de regalo (campo monedas): se gastan en UpGames, no se retiran
+function omUC(id) { const u = U(id); if (!u) return; const act = Math.floor(u.monedas || 0);
+  txtModal({ t: 'UpCoins comprados · @' + u.usuario, s: `Actual: ${ucFmt(act)}. Úsalo para compensar un error o regalar UpCoins: no se pueden retirar como dinero. Si sumas, el usuario recibe un aviso.`, l: 'Motivo (lo verá el usuario si sumas)', ok: 'Guardar', numero: { l: 'Nuevos UpCoins comprados', v: act, quick: [['0', 0], ['+50', act + 50], ['+250', act + 250], ['+1000', act + 1000]] },
+    fn: async (motivo, val) => { val = Math.round(val); if (isNaN(val) || val < 0) return toast('Cantidad inválida', 'err'); if (!motivo) return toast('Escribe el motivo', 'err');
+      const { ok, d } = await api(`/admin/finanzas/usuarios/${id}/upcoins`, { method: 'PUT', body: { upcoins: val, motivo } }); if (ok && d.success) { u.monedas = val; cm('mTxt'); render(); toast(`🪙 @${u.usuario} → ${ucFmt(val)} comprados`); econAt = 0; } else toast(d.error || 'Error', 'err'); } }); }
+function omPremium(id) { const u = U(id); if (!u) return; const on = esPremium(u);
+  txtModal({ t: 'Premium · @' + u.usuario, s: on ? `Activo hasta el ${fdate(u.planHasta)}. Los días se suman al vencimiento; 0 lo quita.` : 'No tiene Premium. Los días de cortesía no regalan UpCoins ni generan fondo para creadores.', l: 'Motivo', ok: 'Guardar', numero: { l: 'Días a sumar (0 = quitar Premium)', v: on ? 0 : 7, quick: [['Quitar', 0], ['7 días', 7], ['30 días', 30], ['1 año', 365]] },
+    fn: async (motivo, val) => { val = Math.round(val); if (isNaN(val) || val < 0) return toast('Días inválidos', 'err'); if (!motivo) return toast('Escribe el motivo', 'err');
+      if (val === 0 && !on) return toast('No tiene Premium que quitar', 'err');
+      const { ok, d } = await api(`/admin/finanzas/usuarios/${id}/premium`, { method: 'PUT', body: { dias: val, motivo } }); if (ok && d.success) { u.planHasta = d.planHasta; u.planId = d.planId; cm('mTxt'); render(); toast(val ? `⭐ Premium hasta el ${fdate(d.planHasta)}` : '✓ Premium retirado'); econAt = 0; } else toast(d.error || 'Error', 'err'); } }); }
 async function delUser(id) {
   const u = U(id); if (!u) return;
   const c = prompt(`⚠️ Esto borra la cuenta de @${u.usuario} y TODAS sus publicaciones. No se puede deshacer.\n\nEscribe su nombre de usuario para confirmar:`);
@@ -1315,7 +1361,7 @@ function omDetail(id) {
   const u = U(id); if (!u) return; const p = protegido(u);
   const its = D.items.filter(i => i.usuario === u.usuario), tj = D.tarjetas.filter(t => t.usuario === u.usuario);
   $('mdT').textContent = '@' + u.usuario;
-  const kv = [['Email', u.email], ['PayPal', u.paypalEmail || '—'], ['Verificación', ['Sin verificar', 'Bronce', 'Oro', 'Élite'][u.verificadoNivel || 0]], ['Saldo', money(u.saldo)], ['Descargas', num(u.descargasTotales)], ['Publicaciones', its.length],
+  const kv = [['Email', u.email], ['Verificación', ['Sin verificar', 'Bronce', 'Oro', 'Élite'][u.verificadoNivel || 0]], ['UpCoins comprados', ucFmt(u.monedas)], ['UpCoins ganados', `${ucFmt(ucDe(u.saldo))} (${money(u.saldo)})`], ['Premium', esPremium(u) ? `${u.planId || '—'} · hasta ${fdate(u.planHasta)}` : (u.planHasta ? 'Venció el ' + fdate(u.planHasta) : 'No')], ['Créditos NEXUS', num(u.iaCreditos)], ['Método de cobro', u.cobro?.resumen || (u.paypalEmail ? 'PayPal · ' + u.paypalEmail : '—')], ['Descargas', num(u.descargasTotales)], ['Publicaciones', its.length],
     ['Seguidores', num((u.listaSeguidores || []).length)], ['Siguiendo', num((u.siguiendo || []).length)], ['Registro', fdate(u.fecha || u.createdAt)], ['Última actividad', ago(u.ultimoLogin)], ['IP registro', u.registrationIP || '—'], ['Pago pendiente', u.solicitudPagoPendiente ? 'Sí' : 'No'],
     ['Rol', isOwnerUser(u) ? 'Dueño' : (u.adminRol ? rolNombre(u.adminRol) : 'Usuario')], ['Estado', u.suspendido ? 'Suspendido' + (u.motivoSuspension ? ': ' + u.motivoSuspension : '') : 'Activo']];
   $('mdB').innerHTML = `<div class="kv">${kv.map(([a, b]) => `<div><small>${a}</small><span title="${esc(b)}">${esc(b)}</span></div>`).join('')}</div>
@@ -1327,7 +1373,7 @@ function omDetail(id) {
       ${can('contenido') ? `<button class="btn" onclick="cm('mDetail');$('q').value='${esc(u.usuario)}';go('apro')">📦 Sus entradas</button>` : ''}
       ${p ? '' : `${can('usuarios') ? `<button class="btn" onclick="cm('mDetail');omVerif('${id}')">✅ Verificación</button>` : ''}
       ${can('sanciones') && !isOwnerUser(u) ? `<button class="btn warn" onclick="cm('mDetail');omSus('${id}')">${u.suspendido ? '🔓 Reactivar' : '⛔ Suspender'}</button>` : ''}
-      ${can('finanzas') ? `<button class="btn" onclick="cm('mDetail');omSaldo('${id}')">💰 Saldo</button>` : ''}
+      ${can('finanzas') ? `<button class="btn" onclick="cm('mDetail');omUC('${id}')">🪙 UpCoins</button><button class="btn" onclick="cm('mDetail');omSaldo('${id}')">💰 UC ganados</button><button class="btn" onclick="cm('mDetail');omPremium('${id}')">⭐ Premium</button>` : ''}
       ${can('anuncios') ? `<button class="btn" onclick="cm('mDetail');anunciarA('${esc(u.usuario)}')">📢 Notificar</button>` : ''}
       ${can('sanciones') && !isOwnerUser(u) ? `<button class="btn bad" onclick="delUser('${id}')">🗑 Eliminar</button>` : ''}`}
     </div>`;
@@ -1363,12 +1409,67 @@ async function emailPrueba() {
 }
 
 
+// ─────────── Economía ───────────
+let econ = null, econAt = 0, ecP = 'mes';
+chips('ecF', f => { ecP = f; rEcon(); });
+async function loadEcon(forzar) {
+  if (!can(['finanzas', 'estadisticas'])) return;
+  if (!forzar && Date.now() - econAt < 120e3) return; econAt = Date.now();
+  try { const { ok, d } = await api('/admin/finanzas/economia'); if (ok && d.success) { econ = d; UCV = d.ucUsd || UCV; if (view === 'econ' || view === 'dash') render(); } } catch (_) {}
+}
+const PROD = { paquete: '🪙 Paquetes de UpCoins', premium: '⭐ Premium', acceso: '⚡ Acceso directo', nexus: '🧠 NEXUS IA', destacar: '🚀 Destacar', regalo: '🎁 Regalo en live', apertura_premium: '⭐ Apertura con Premium' };
+const prodNombre = k => PROD[String(k).replace(/^uc_/, '')] || k;
+function rEcon() {
+  const e = econ;
+  if (!e) { $('ecKpis').innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div>'; loadEcon(true); return; }
+  $('ecUcv').textContent = String(e.ucUsd).replace('.', ',');
+  const per = e.periodos[ecP], c = e.circulacion, nx = e.nexus, pr = e.premium;
+  const k = (ic, col, v, l, det) => `<div class="card kpi"><div class="k-ic" style="background:color-mix(in srgb,${col} 15%,transparent);color:${col}"><ion-icon name="${ic}"></ion-icon></div><div class="k-l">${l}</div><div class="k-v">${v}</div><div class="k-d">${det}</div></div>`;
+  $('ecKpis').innerHTML =
+    k('cash', 'var(--ok)', money(per.ingresosUsd), 'Ingresos con dinero', `<b>${num(per.ventas)}</b> ventas · creadores <b>${money(per.paraCreadoresUsd)}</b>`) +
+    k('diamond', 'var(--oro)', ucFmt(per.ucGastados), 'UpCoins gastados', `Regalados en lives <b>${ucFmt(per.ucRegalados)}</b>`) +
+    k('wallet', 'var(--info)', ucFmt(c.compradas), 'UC comprados en cuentas', 'No se retiran: solo se gastan en UpGames') +
+    k('trending-up', 'var(--warn)', ucFmt(c.ganadas), 'UC ganados por creadores', `Retirables · deuda <b>${money(c.deudaRetirableUsd)}</b>${c.retenidasUsd ? ` (retenido ${money(c.retenidasUsd)})` : ''}`) +
+    k('star', 'var(--vio)', num(pr.activos), 'Premium activos', `Vencen en 7 días <b>${num(pr.vencen7dias)}</b>`) +
+    k('sparkles', 'var(--g2)', num(nx.mensajesHoy), 'Mensajes NEXUS hoy', `<b>${num(nx.usuariosHoy)}</b> usuarios · ${num(nx.creditosCirculando)} créditos sin usar`) +
+    k('rocket', 'var(--g1)', num(e.destacadas.length), 'Destacadas ahora', 'Publicaciones con “Promocionado”') +
+    k('alert-circle', 'var(--bad)', num(e.revertidas.n), 'Reembolsos / contracargos', `Monto <b>${money(e.revertidas.usd)}</b> · cuenta en lista negra`);
+  const tbl = (rows, head) => rows.length ? `<table class="tbl"><tr>${head}</tr>${rows.join('')}</table>` : '<div class="empty" style="padding:20px">Sin datos en este periodo</div>';
+  const pp = Object.entries(per.porProducto);
+  $('ecProd').innerHTML = tbl(pp.filter(([kk]) => !kk.startsWith('uc_')).sort((a, b) => b[1].usd - a[1].usd).map(([kk, v]) => `<tr><td>${prodNombre(kk)}</td><td class="num muted">${num(v.n)}</td><td class="num">${money(v.usd)}</td></tr>`), '<th>Producto</th><th class="num">Ventas</th><th class="num">USD</th>')
+    + (Object.keys(per.porMetodo).length ? `<p class="small muted" style="margin:10px 0 0">${Object.entries(per.porMetodo).map(([m, v]) => `${esc(m)}: <b>${money(v.usd)}</b> (${num(v.n)})`).join(' · ')}</p>` : '');
+  $('ecUC').innerHTML = tbl(pp.filter(([kk]) => kk.startsWith('uc_')).sort((a, b) => b[1].uc - a[1].uc).map(([kk, v]) => `<tr><td>${prodNombre(kk)}</td><td class="num muted">${num(v.n)}</td><td class="num">${ucFmt(v.uc)}</td></tr>`)
+    .concat(per.ucRegalados ? [`<tr><td>${PROD.regalo}</td><td class="num muted">—</td><td class="num">${ucFmt(per.ucRegalados)}</td></tr>`] : []), '<th>Uso</th><th class="num">Veces</th><th class="num">UpCoins</th>');
+  $('ecPremS').textContent = Object.entries(pr.porPlan).map(([id, n]) => `${(e.catalogo.premium.find(p => p.id === id)?.nombre) || (id === 'cortesia' ? 'Cortesía' : id)}: ${n}`).join(' · ') || 'Nadie tiene Premium ahora';
+  $('ecPrem').innerHTML = tbl(pr.lista.map(u => { const dl = Math.ceil((new Date(u.hasta) - Date.now()) / 864e5); return `<tr><td style="color:var(--g1);font-weight:700">@${esc(u.usuario)}</td><td class="muted small">${esc(u.planId)}</td><td class="num ${dl <= 2 ? '' : 'muted'}" style="${dl <= 2 ? 'color:var(--warn)' : ''}">${fdate(u.hasta)} · ${dl} d</td></tr>`; }), '<th>Usuario</th><th>Plan</th><th class="num">Vence</th>');
+  $('ecDest').innerHTML = tbl(e.destacadas.map(j => `<tr><td class="ell">${esc(j.titulo)}</td><td class="muted">@${esc(j.usuario)}</td><td class="num muted">${Math.max(0, Math.round((new Date(j.hasta) - Date.now()) / 36e5))} h</td></tr>`), '<th>Publicación</th><th>Por</th><th class="num">Vence</th>');
+  const met = m => ({ tarjeta_mp: '💳 Tarjeta MP', paypal: '🅿️ PayPal', tarjeta_paypal: '💳 Tarjeta PayPal', upcoins: '🪙 UpCoins', monedas: '🪙 UpCoins', saldo: '🪙 UpCoins' }[m] || (m ? esc(m) : '🅿️ PayPal'));
+  $('ecTx').innerHTML = tbl(e.ultimas.filter(t => t.producto !== 'apertura_premium').map(t => `<tr><td class="muted small">${ago(t.fecha)}</td><td style="color:var(--g1)">@${esc(t.usuario)}</td><td>${prodNombre(t.producto)}${t.bono ? ` <span class="tag t-ok">+${num(t.bono)} UC</span>` : ''}${t.estado === 'revertida' ? ' <span class="tag t-bad">revertida</span>' : ''}</td><td class="small">${t.conDinero ? met(t.metodo) : '🪙 UpCoins'}</td><td class="num">${t.conDinero ? money(t.usd) : ucFmt(t.uc)}</td></tr>`), '<th>Cuándo</th><th>Usuario</th><th>Qué</th><th>Pago</th><th class="num">Monto</th>');
+  const ct = e.catalogo;
+  $('ecCat').innerHTML = `<table class="tbl">
+    ${ct.paquetes.map(p => `<tr><td>🪙 ${num(p.monedas)} UC</td><td class="num">${money(p.usd)}</td><td class="num muted small">+${Math.round(ct.bonoPremium * 100)}% con Premium</td></tr>`).join('')}
+    ${ct.premium.map(p => `<tr><td>⭐ ${esc(p.nombre)}</td><td class="num">${money(p.usd)} · ${ucFmt(p.monedas)}</td><td class="num muted small">regalo ${ucFmt(p.monedasRegalo)} (solo con dinero)</td></tr>`).join('')}
+    ${ct.nexus.map(p => `<tr><td>🧠 ${num(p.mensajes)} mensajes NEXUS</td><td class="num">${ucFmt(p.monedas)}</td><td class="num muted small">${esc(p.extra || '')}</td></tr>`).join('')}
+    <tr><td>🚀 Destacar ${num(ct.destacar.horas)} h</td><td class="num">${ucFmt(ct.destacar.monedas)}</td><td></td></tr>
+    <tr><td>⚡ Acceso directo</td><td class="num">${money(ct.accesoDirecto.usd)} · ${ucFmt(ct.accesoDirecto.uc)}</td><td></td></tr>
+    <tr><td>🧠 NEXUS gratis</td><td class="num">${num(nx.gratisDia)} mensajes/día</td><td class="num muted small">Premium: ilimitado</td></tr></table>`;
+  const pct = x => Math.round(x * 100) + ' %';
+  $('ecRep').innerHTML = `<table class="tbl">
+    <tr><td>🎁 Regalos en lives</td><td class="num">${pct(e.reparto.regalos)}</td></tr>
+    <tr><td>⚡ Acceso directo</td><td class="num">${pct(e.reparto.accesoDirecto)}</td></tr>
+    <tr><td>⭐ Premium (fondo por aperturas, ${money(e.reparto.paseApertura)} c/u)</td><td class="num">${pct(e.reparto.pases)}</td></tr>
+    <tr><td>⬇️ Descargas (CPM)</td><td class="num">${ucFmt(ucDe(ct.cpmUsd))} (${money(ct.cpmUsd)}) / 1.000</td></tr>
+    <tr><td><b>Tope del creador</b></td><td class="num"><b>${pct(e.reparto.tope)}</b></td></tr></table>
+    <p class="small muted" style="margin:10px 0 0">Fondo Premium acumulado sin repartir: <b>${money(c.fondoPremiumUsd)}</b>. Los UC comprados nunca se retiran; los ganados sí (retiro mínimo y retención según términos).</p>
+    ${Object.keys(e.retiros || {}).length ? `<p class="small muted" style="margin:6px 0 0">Retiros: ${Object.entries(e.retiros).map(([st, v]) => `${esc(st)} <b>${money(v.usd)}</b> (${num(v.n)})`).join(' · ')}</p>` : ''}`;
+}
+
 // ─────────── Pagos ───────────
 function rPays() {
   if (pF === 'hist') return;
   const q = qv(), l = D.pagos.filter(p => !q || (p.usuario || '').toLowerCase().includes(q) || (p.paypalEmail || '').toLowerCase().includes(q) || (p.resumen || '').toLowerCase().includes(q));
   $('payList').innerHTML = l.length ? l.map(p => { const du = p.datosUsuario || {}, tj = D.tarjetas.filter(t => t.usuario === p.usuario && t.proposito !== 'pagos');
-    return `<div class="card"><div class="pay-h"><div><div style="font-weight:800;color:var(--g1)">@${esc(p.usuario)} ${vNiv(du.verificadoNivel)}</div><div class="small muted">${fdate(p.fecha || p.createdAt)}</div></div><div class="pay-m">${money(p.monto)}</div></div>
+    return `<div class="card"><div class="pay-h"><div><div style="font-weight:800;color:var(--g1)">@${esc(p.usuario)} ${vNiv(du.verificadoNivel)}</div><div class="small muted">${fdate(p.fecha || p.createdAt)}</div></div><div class="pay-m">${money(p.monto)}<div class="small muted" style="font-weight:600;text-align:right">${ucFmt(ucDe(p.monto))}</div></div></div>
       <div class="kv"><div style="grid-column:1/-1"><small>Pagar por</small><span style="color:var(--g1)">${esc(p.resumen || ('PayPal · ' + (p.paypalEmail || '—')))}</span>${TASA_COP ? `<span class="small muted"> · ≈ COP ${Math.round(p.monto * TASA_COP).toLocaleString('es-CO')}</span>` : ''}</div>
       <div style="grid-column:1/-1" id="dc-${p._id}"><button class="btn" style="padding:6px 10px;font-size:.78rem" onclick="verDatosCobro('${p._id}')"><ion-icon name="eye-outline"></ion-icon> Ver datos para pagar</button></div><div><small>Email</small><span>${esc(du.email || '—')}</span></div><div><small>Descargas</small><span>${num(du.descargasTotales)}</span></div><div><small>Juegos +2K</small><span>${num(du.juegosElegibles)}</span></div>
       ${tj.slice(0, 2).map(t => `<div><small>Tarjeta ${esc(t.tipo)}</small><span class="mono">•••• ${esc(t.ultimos4)} ${t.esPrincipal ? '⭐' : ''}</span></div>`).join('')}</div>
@@ -1552,7 +1653,7 @@ async function quitarMiembro(u) { if (!confirm(`¿Quitar a @${u} del equipo? Per
 let nxHist = [], nxBrief = null, nxBusy = false;
 const NX_QUICK = [
   ['¿Qué debo revisar primero hoy?', null], ['¿Qué publicaciones en revisión son más arriesgadas?', ['revision', 'contenido']],
-  ['¿Ves señales de fraude o multicuentas?', ['usuarios', 'sanciones']], ['Resume los pagos pendientes y sus riesgos', 'finanzas'],
+  ['¿Ves señales de fraude o multicuentas?', ['usuarios', 'sanciones']], ['Resume los pagos pendientes y sus riesgos', 'finanzas'], ['¿Cómo van las ventas de UpCoins y Premium este mes?', ['finanzas', 'estadisticas']],
   ['¿Cómo va el crecimiento esta semana?', 'estadisticas'], ['¿Qué hizo mi equipo en las últimas 24 h?', 'owner'],
 ];
 function nxFmt(t) {
@@ -1613,8 +1714,8 @@ function csv(nombre, filas) {
   a.href = URL.createObjectURL(new Blob(['﻿' + filas.map(f => f.map(celda).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
   a.download = `${nombre}-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 3000);
 }
-function exportUsers() { csv('usuarios-upgames', [['usuario', 'email', 'paypal', 'verificacion', 'saldo', 'descargas', 'seguidores', 'registro', 'ultima_actividad', 'suspendido', 'lista_negra', 'rol_panel', 'ip_registro'],
-  ...D.users.map(u => [u.usuario, u.email, u.paypalEmail, u.verificadoNivel || 0, (u.saldo || 0).toFixed(2), u.descargasTotales || 0, (u.listaSeguidores || []).length, u.fecha || u.createdAt, u.ultimoLogin, u.suspendido ? 'si' : 'no', u.listaNegraAdmin ? 'si' : 'no', u.esDueno ? 'dueño' : (u.adminRol || ''), u.registrationIP])]); }
+function exportUsers() { csv('usuarios-upgames', [['usuario', 'email', 'paypal', 'verificacion', 'saldo_usd', 'uc_comprados', 'uc_ganados', 'premium_hasta', 'descargas', 'seguidores', 'registro', 'ultima_actividad', 'suspendido', 'lista_negra', 'rol_panel', 'ip_registro'],
+  ...D.users.map(u => [u.usuario, u.email, u.paypalEmail, u.verificadoNivel || 0, (u.saldo || 0).toFixed(2), Math.floor(u.monedas || 0), Math.floor(ucDe(u.saldo)), esPremium(u) ? new Date(u.planHasta).toISOString().slice(0, 10) : '', u.descargasTotales || 0, (u.listaSeguidores || []).length, u.fecha || u.createdAt, u.ultimoLogin, u.suspendido ? 'si' : 'no', u.listaNegraAdmin ? 'si' : 'no', u.esDueno ? 'dueño' : (u.adminRol || ''), u.registrationIP])]); }
 async function exportPagos() { try { const { d } = await api('/admin/finanzas/historial-completo?limite=5000'); csv('pagos-upgames', [['fecha', 'usuario', 'monto', 'estado', 'paypal', 'notas'], ...(d.historial || []).map(p => [p.fecha, p.usuario, (p.monto || 0).toFixed(2), p.estado, p.paypalEmail, p.notas])]); } catch (_) {} }
 async function exportAudit() { try { const qs = new URLSearchParams({ limite: 1000 }); if ($('auF').value) qs.set('admin', $('auF').value); if ($('auC').checked) qs.set('soloCambios', '1');
   const { d } = await api('/admin/auditoria?' + qs); csv('auditoria-upgames', [['fecha', 'admin', 'rol', 'accion', 'descripcion', 'objetivo', 'detalle', 'estado', 'ip'], ...(d.logs || []).map(l => [l.fecha, l.admin, l.rol, l.accion, descAccion(l.accion), l.objetivo, l.detalle, l.estado, l.ip])]); } catch (_) {} }
@@ -1624,7 +1725,7 @@ function descAccion(a) {
   const M = [[/^LOGIN$/, '🔑 Inició sesión'], [/^LOGIN pin/, '🗝️ Entró con la llave maestra'], [/^LOGIN denegado/, '🚷 Intento de acceso sin permiso'], [/^LOGOUT/, '👋 Cerró sesión'], [/^BLOQUEADO/, '⛔ Acción bloqueada'],
     [/equipo-emergencia/, '🚨 Pausa de emergencia del equipo'], [/\/pausa$/, '⏸ Pausó o reanudó a un miembro'], [/cerrar-sesiones/, '🔒 Cerró sesiones de un miembro'],
     [/PUT \/admin\/equipo/, '🛡️ Asignó un rol'], [/DELETE \/admin\/equipo/, '🛡️ Quitó a un miembro'], [/suspender/, '⛔ Suspensión de cuenta'], [/anuncio/, '📢 Envió un anuncio'],
-    [/ajustar-saldo|reset-saldo/, '💰 Ajustó un saldo'], [/procesar-pago/, '✅ Marcó un pago'], [/rechazar-pago/, '✗ Rechazó un pago'], [/tarjetas/, '💳 Cambió una tarjeta'],
+    [/ajustar-saldo|reset-saldo/, '💰 Ajustó UC ganados'], [/\/upcoins$/, '🪙 Ajustó UpCoins comprados'], [/\/premium$/, '⭐ Cambió un Premium'], [/economia/, '📊 Vio la economía'], [/procesar-pago/, '✅ Marcó un pago'], [/rechazar-pago/, '✗ Rechazó un pago'], [/tarjetas/, '💳 Cambió una tarjeta'],
     [/lista-negra/, '🚫 Lista negra'], [/notas/, '📝 Nota interna'], [/verificacion/, '🏅 Cambió verificación'], [/DELETE \/auth\/users/, '🗑 Eliminó una cuenta'], [/DELETE \/admin\/users\/.*\/items/, '🗑 Borró las publicaciones de un usuario'],
     [/bulk-action/, '☑️ Acción masiva'], [/reset-reports/, '🧹 Limpió reportes'], [/DELETE \/items/, '🗑 Eliminó una publicación'], [/\/admin\/items/, '✏️ Editó una publicación'], [/DELETE \/comentarios/, '💬 Eliminó un comentario'], [/cache/, '⚙️ Caché']];
   return (M.find(([r]) => r.test(a)) || [, '⚙️ ' + a])[1];

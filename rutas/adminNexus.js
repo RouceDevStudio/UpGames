@@ -17,7 +17,8 @@ const mongoose = require('mongoose');
 const llm = require('../modulos/nexus/llm');
 
 const H = 3600e3, D = 24 * H;
-const SECCIONES = 'Inicio, Revisión, Entradas, Videos, Reportes, Comentarios, Usuarios, Anuncios, Pagos, Tarjetas, API Test, Equipo y Auditoría';
+const SECCIONES = 'Inicio, Revisión, Entradas, Videos, Reportes, Comentarios, Usuarios, Anuncios, Economía, Pagos, Tarjetas, API Test, Equipo y Auditoría';
+const UC_USD = require('../modulos/live').MONEDA_USD;
 const escRegex = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 function registrar(app, { verificarAdmin, Juego, Usuario, Comentario, Pago, logger }) {
@@ -74,6 +75,23 @@ function registrar(app, { verificarAdmin, Juego, Usuario, Comentario, Pago, logg
             datos.pagos = { pendientes: pend.length, totalPendienteUSD: +pend.reduce((a, p) => a + (p.monto || 0), 0).toFixed(2),
                 masAntiguoHaceDias: pend[0] ? Math.floor((ahora - new Date(pend[0].fecha)) / D) : 0, deUsuariosEnListaNegra: negros.map(u => u.usuario) };
         })());
+        // Economía UpCoins (ventas con dinero, Premium, circulación y contracargos)
+        if (algun(adm, ['finanzas', 'estadisticas']) && mongoose.models.LiveTx) tareas.push((async () => {
+            const LiveTx = mongoose.models.LiveTx, ahoraD = new Date(ahora);
+            const conDinero = { estado: { $ne: 'revertida' }, tipo: { $in: ['compra', 'plan', 'acceso'] }, metodo: { $nin: ['upcoins', 'monedas', 'saldo', 'pase'] }, $or: [{ tipo: { $ne: 'acceso' } }, { monedas: 0 }] };
+            const [v30, circ, premium, vencen, revertidas7] = await Promise.all([
+                LiveTx.aggregate([{ $match: { ...conDinero, fecha: { $gte: new Date(ahora - 30 * D) } } }, { $group: { _id: '$tipo', n: { $sum: 1 }, usd: { $sum: '$usd' } } }]),
+                Usuario.aggregate([{ $group: { _id: null, compradas: { $sum: '$monedas' }, ganadasUsd: { $sum: '$saldo' } } }]),
+                Usuario.countDocuments({ planHasta: { $gt: ahoraD } }),
+                Usuario.countDocuments({ planHasta: { $gt: ahoraD, $lte: new Date(ahora + 3 * D) } }),
+                LiveTx.countDocuments({ estado: 'revertida', fecha: { $gte: new Date(ahora - 7 * D) } }),
+            ]);
+            const c = circ[0] || {};
+            datos.economia = { valorUC_USD: UC_USD, ventasConDinero30d: Object.fromEntries(v30.map(x => [x._id === 'compra' ? 'paquetesUC' : x._id === 'plan' ? 'premium' : 'accesoDirecto', { ventas: x.n, usd: +x.usd.toFixed(2) }])),
+                ingresos30dUSD: +v30.reduce((a, x) => a + x.usd, 0).toFixed(2), ucCompradosEnCuentas: Math.floor(c.compradas || 0),
+                ucGanadosPorCreadores: Math.floor((c.ganadasUsd || 0) / UC_USD + 1e-6), deudaRetirableUSD: +(c.ganadasUsd || 0).toFixed(2),
+                premiumActivos: premium, premiumVencenEn3Dias: vencen, contracargosOReembolsos7d: revertidas7 };
+        })());
         if (puede(adm, 'estadisticas')) tareas.push((async () => {
             const [items24, items7, topSemana, descargas] = await Promise.all([
                 Juego.countDocuments({ createdAt: { $gte: new Date(ahora - D) } }),
@@ -97,7 +115,7 @@ function registrar(app, { verificarAdmin, Juego, Usuario, Comentario, Pago, logg
         if (puede(adm, 'sistema')) tareas.push((async () => {
             const p = await llm.ping();
             const e = llm.estado();
-            datos.sistema = { iaNexus: p.ok ? 'en línea' : `sin conexión (${p.error})`, modelosIA: p.modelosDisponibles || [], respuestasIAOk: e.ok, fallosIA: e.fallos, ultimoErrorIA: e.ultimoError, emailConfigurado: !!(process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) };
+            datos.sistema = { iaNexus: p.ok ? 'en línea' : `sin conexión (${p.error})`, modelosIA: p.modelosDisponibles || [], respuestasIAOk: e.ok, fallosIA: e.fallos, ultimoErrorIA: e.ultimoError, emailConfigurado: !!(process.env.BREVO_API_KEY || process.env.RESEND_API_KEY || (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD)) };
         })());
         await Promise.all(tareas.map(t => t.catch(e => logger.warn(`[adminNexus] ${e.message}`))));
         return datos;
@@ -114,6 +132,7 @@ function registrar(app, { verificarAdmin, Juego, Usuario, Comentario, Pago, logg
         if (p?.pendientes) add(p.masAntiguoHaceDias >= 3 ? 'alta' : 'media', '💰', `${p.pendientes} pago(s) pendiente(s) por $${p.totalPendienteUSD}${p.masAntiguoHaceDias ? ` (el más antiguo hace ${p.masAntiguoHaceDias} días)` : ''}`, 'pays');
         if (e?.intentosBloqueados24h?.length) add('alta', '🔐', `Intentos bloqueados del equipo en 24 h: ${e.intentosBloqueados24h.map(x => `@${x.admin} (${x.intentos})`).join(', ')}`, 'audit');
         if (u?.alertasFraudeGraves) add('alta', '🚨', `${u.alertasFraudeGraves} alerta(s) de fraude grave sin revisar`, 'usrs');
+        if (d.economia?.contracargosOReembolsos7d) add('alta', '↩️', `${d.economia.contracargosOReembolsos7d} compra(s) reembolsada(s) o con contracargo en 7 días: revisa esas cuentas (quedan en lista negra)`, 'econ');
         if (r?.sinAnalizar) add('media', '✦', `${r.sinAnalizar} publicación(es) en revisión sin analizar con Nexus`, 'revn');
         if (r?.nexusRecomiendaAprobar) add('media', '✅', `${r.nexusRecomiendaAprobar} publicación(es) que Nexus recomienda aprobar: puedes aprobarlas rápido`, 'revn');
         if (rp?.publicacionesReportadas) add('media', '🚩', `${rp.publicacionesReportadas} publicación(es) con reportes de usuarios`, 'reportes');
@@ -125,7 +144,8 @@ function registrar(app, { verificarAdmin, Juego, Usuario, Comentario, Pago, logg
     }
 
     const ROL_TXT = { owner: 'dueño de UpGames' };
-    const sistemaBase = adm => `Eres NEXUS, el asistente de administración de UpGames (plataforma de mods, juegos indie, ROMs homebrew, apps, software y videos con economía CPM para creadores).
+    const sistemaBase = adm => `Eres NEXUS, el asistente de administración de UpGames (plataforma de mods, juegos indie, ROMs homebrew, apps, software y videos con una sola moneda: UpCoins, 1 UC = US$0,02).
+Economía: los usuarios compran UpCoins con tarjeta (Mercado Pago) o PayPal y los gastan en regalos de lives, acceso directo, Premium, mensajes de NEXUS y destacar publicaciones. Los creadores ganan UpCoins (50 UC por cada 1.000 descargas, 25 % de regalos y accesos) y SOLO lo ganado se retira como dinero; lo comprado nunca. Premium (7, 30 o 365 días) quita anuncios, da NEXUS ilimitado y más visibilidad. El creador recibe como máximo el 30 % de cada venta.
 Hablas con @${adm.usuario}, ${ROL_TXT[adm.rol] || `sub-administrador (${adm.rolNombre || adm.rol})`} con permisos: ${adm.rol === 'owner' ? 'todos' : (adm.permisos || []).join(', ')}.
 Responde SIEMPRE en español, como un analista profesional: directo, con cifras concretas y prioridades claras. Usa viñetas cortas cuando ayuden.
 Usa SOLO los datos que te doy (son reales y actuales). Si algo no está en los datos o no es de su área, dilo y sugiere dónde mirarlo. No inventes cifras ni nombres.
@@ -175,11 +195,12 @@ Las decisiones finales son del administrador: recomienda, no ordenes.`;
             const handles = [...new Set((mensaje.match(/@([a-z0-9_.-]{3,20})/gi) || []).map(h => h.slice(1).toLowerCase()))].slice(0, 3);
             if (handles.length && algun(adm, ['usuarios', 'sanciones', 'finanzas'])) {
                 extra.usuariosMencionados = await Promise.all(handles.map(async h => {
-                    const u = await Usuario.findOne({ usuario: h }).select('usuario fecha verificadoNivel saldo descargasTotales listaNegraAdmin suspendido emailVerificado listaSeguidores ultimoLogin adminRol').lean();
+                    const u = await Usuario.findOne({ usuario: h }).select('usuario fecha verificadoNivel saldo monedas planId planHasta iaCreditos cobro.resumen descargasTotales listaNegraAdmin suspendido emailVerificado listaSeguidores ultimoLogin adminRol').lean();
                     if (!u) return { usuario: h, existe: false };
                     const [pubs, caidas, rechazadas] = await Promise.all([
                         Juego.countDocuments({ usuario: h }), Juego.countDocuments({ usuario: h, linkStatus: 'caido' }), Juego.countDocuments({ usuario: h, status: 'rechazado' })]);
-                    return { usuario: u.usuario, registro: u.fecha, verificacion: u.verificadoNivel, saldoUSD: puede(adm, 'finanzas') ? u.saldo : 'sin permiso', descargas: u.descargasTotales,
+                    return { usuario: u.usuario, registro: u.fecha, verificacion: u.verificadoNivel, ...(puede(adm, 'finanzas') ? { ucComprados: Math.floor(u.monedas || 0), ucGanadosRetirables: Math.floor((u.saldo || 0) / UC_USD + 1e-6), ganadoUSD: u.saldo || 0, metodoCobro: u.cobro?.resumen || '' } : { upcoins: 'sin permiso' }),
+                        premiumHasta: u.planHasta && new Date(u.planHasta) > new Date() ? u.planHasta : null, creditosNexus: u.iaCreditos || 0, descargas: u.descargasTotales,
                         seguidores: (u.listaSeguidores || []).length, publicaciones: pubs, caidas, rechazadas, listaNegra: !!u.listaNegraAdmin, suspendido: !!u.suspendido,
                         emailVerificado: !!u.emailVerificado, ultimaActividad: u.ultimoLogin, esEquipo: !!u.adminRol };
                 }));

@@ -3505,7 +3505,7 @@ async function pfSolicitarPago() {
   const ok = await customConfirm({
     icon: '💸',
     title: 'Solicitar pago',
-    msg: '¿Confirmas que deseas retirar tu saldo? Lo enviaremos al método de cobro que configuraste, normalmente en 24-72 h hábiles.',
+    msg: '¿Confirmas que deseas retirar tus UpCoins ganados? Te pagamos su valor en dinero al método de cobro que configuraste, normalmente en 24-72 h hábiles.',
     okText: 'Solicitar',
     okDanger: false
   });
@@ -4626,7 +4626,7 @@ const TUT_STEPS = [
   },
   {
     sel: '.pf-saldo-box',
-    title: '💵 Tu Saldo Disponible',
+    title: '🪙 Tus UpCoins',
     body: 'Muestra tus <strong>UpCoins</strong>: los ganados (retirables) y los comprados (para usar en la app). 1 UpCoin = US$0,02.<br><br>Fórmula de descargas: Descargas ÷ 1000 × 50 UC'
   },
   {
@@ -5107,7 +5107,7 @@ function ugnMeta(n) {
     if (t.startsWith('Mensaje')) return { ic: 'chatbubbles', c: '#5AC8FA', cat: 'mensajes' };
     if (t === 'En vivo') return { ic: 'radio', c: '#ff4d6d', cat: 'social' };
     if (t === 'Verifica tu email') return { ic: 'mail-unread', c: '#ffcc4d', cat: 'anuncios' };
-    if (t === 'Tu pase vence') return { ic: 'star', c: '#5AC8FA', cat: 'anuncios' };
+    if (t === 'Tu pase vence' || t === 'Tu Premium vence') return { ic: 'star', c: '#5AC8FA', cat: 'anuncios' };
     if (t === 'Anuncio') return { ic: 'megaphone', c: '#32D583', cat: 'anuncios' };
     if (t === 'Revisión') return { ic: 'shield-checkmark', c: '#ff8a8d', cat: 'anuncios' };
     if (t === 'Equipo') return { ic: 'shield-half', c: '#a78bfa', cat: 'anuncios' };
@@ -5131,7 +5131,7 @@ function ugnTexto(n) {
   if (t.startsWith('Mensaje')) return { quien: e, accion: 'te envió un mensaje', sub: 'Toca para responder' };
   if (t === 'En vivo') return { quien: e, accion: 'está en vivo 🔴', sub: msg || 'Toca para verlo' };
   if (t === 'Verifica tu email') return { quien: 'Verifica tu email', accion: '', sub: msg.replace(/^📧\s*/, '') };
-  if (t === 'Tu pase vence') return { quien: 'Tu pase vence pronto', accion: '', sub: msg.replace(/^⏳\s*/, '') };
+  if (t === 'Tu pase vence' || t === 'Tu Premium vence') return { quien: 'Tu Premium vence pronto', accion: '', sub: msg.replace(/^⏳\s*/, '') };
   if (t === 'Anuncio') return { quien: 'UpGames', accion: '', sub: msg.replace(/^📢\s*/, ''), anuncio: true };
   if (t === 'Revisión') return { quien: 'Revisión', accion: '', sub: msg, anuncio: true };
   if (t === 'Equipo') return { quien: 'Equipo UpGames', accion: '', sub: msg, anuncio: true };
@@ -5263,7 +5263,7 @@ async function ugnAbrir(n) {
   const t = n.itemTitle || '';
   if (n.tipo === 'sistema' && t.startsWith('Mensaje')) { location.href = `./chats.html?usuario=${encodeURIComponent(n.emisor || '')}`; return; }
   if (n.tipo === 'sistema' && t === 'Verifica tu email') { ugnCerrar(); window.ugVerifMostrar?.(); return; }
-  if (n.tipo === 'sistema' && t === 'Tu pase vence') { ugnCerrar(); switchTab('economia'); setTimeout(() => ecoCargarPlan(true), 500); return; }
+  if (n.tipo === 'sistema' && (t === 'Tu pase vence' || t === 'Tu Premium vence')) { ugnCerrar(); switchTab('economia'); setTimeout(() => ecoCargarPlan(true), 500); return; }
   if (n.tipo === 'sistema' && t === 'En vivo') { location.href = `./live.html?u=${encodeURIComponent(n.emisor || '')}`; return; }
   if (n.tipo === 'seguidor') { location.href = `./perfil-publico.html?u=${encodeURIComponent(n.emisor || '')}`; return; }
   if (t === 'Revisión') { ugnCerrar(); switchTab('profile'); return; }

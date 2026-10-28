@@ -57,9 +57,9 @@ function registrar(app, deps) {
     /** Descuenta un mensaje: gratis del día → crédito. Devuelve la vía usada o null si no queda. */
     async function consumir(usuario) {
         const c = await cuota(usuario);
-        if (c.premium) return 'premium';
         const d = hoy();
         await Usuario.updateOne({ usuario, 'iaUso.dia': { $ne: d } }, { $set: { iaUso: { dia: d, usados: 0 } } });
+        if (c.premium) { await Usuario.updateOne({ usuario }, { $inc: { 'iaUso.premium': 1 } }); return 'premium'; }   // sin límite: solo se cuenta (aparte de los gratis)
         if (await Usuario.findOneAndUpdate({ usuario, 'iaUso.dia': d, 'iaUso.usados': { $lt: IA_GRATIS } }, { $inc: { 'iaUso.usados': 1 } }).select('_id').lean()) return 'gratis';
         if (await Usuario.findOneAndUpdate({ usuario, iaCreditos: { $gte: 1 } }, { $inc: { iaCreditos: -1 } }).select('_id').lean()) return 'credito';
         return null;

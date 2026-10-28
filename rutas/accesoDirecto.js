@@ -1,5 +1,5 @@
 /**
- * Acceso directo: pagar US$1 (tarjeta o PayPal) o 100 monedas para saltarse la
+ * Acceso directo: pagar US$1 (tarjeta o PayPal) o 50 UpCoins para saltarse la
  * página puente (espera + anuncios) y abrir el enlace al instante.
  *
  * - Se paga UNA vez por publicación: después el enlace queda desbloqueado para
@@ -101,7 +101,7 @@ function registrar(app, { verificarToken, Juego, Usuario, LiveTx, paypal, mp, lo
         const totalUC = async () => UC.saldoUC(await Usuario.findOne({ usuario }).select('monedas saldo solicitudPagoPendiente').lean() || {}).total;
         let tx;
         try {
-            tx = await LiveTx.create(datosTx(juego, usuario, { ref: `acceso:${usuario}:${juegoId}` }));
+            tx = await LiveTx.create(datosTx(juego, usuario, { ref: `acceso:${usuario}:${juegoId}`, metodo: 'upcoins' }));
         } catch (e) {
             await UC.devolver(Usuario, usuario, cobro);   // ya estaba pagado: devolver
             if (e.code === 11000) { await desbloquear(usuario, juegoId, 'monedas'); return [200, { link: juego.link, yaDesbloqueado: true, monedas: await totalUC() }]; }

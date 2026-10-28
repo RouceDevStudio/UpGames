@@ -46,6 +46,8 @@ const PAQUETES_IA = [
 // Destacar una publicación (aparece arriba en el inicio, marcada como "Promocionado")
 const IMPULSO = { horas: 24, monedas: 50 };
 const plan = id => PLANES.find(p => p.id === id) || null;
+// Premium dado desde el panel admin (cortesía, soporte): mismos beneficios, sin precio
+const nombrePlan = id => plan(id)?.nombre || (id === 'cortesia' ? 'Premium (cortesía)' : 'Premium');
 const paqueteIA = id => PAQUETES_IA.find(p => p.id === id) || null;
 const r2 = n => Math.round(n * 100) / 100;
 const SOLO_UC = ['ia', 'impulso'];   // productos que solo se pagan con UpCoins
@@ -227,8 +229,8 @@ function registrar(app, deps) {
                 activo ? LiveTx.countDocuments({ usuario: req.usuario, metodo: 'pase', fecha: { $gte: new Date(Date.now() - 30 * 864e5) } }) : 0,
             ]);
             ok(res, {
-                plan: activo ? { ...plan(u.planId), hasta: u.planHasta, diasRestantes: Math.ceil((new Date(u.planHasta) - Date.now()) / 864e5) } : null,
-                vencido: !activo && u.planHasta ? { id: u.planId, nombre: plan(u.planId)?.nombre, hasta: u.planHasta } : null,
+                plan: activo ? { id: u.planId, ...plan(u.planId), nombre: nombrePlan(u.planId), hasta: u.planHasta, diasRestantes: Math.ceil((new Date(u.planHasta) - Date.now()) / 864e5) } : null,
+                vencido: !activo && u.planHasta ? { id: u.planId, nombre: nombrePlan(u.planId), hasta: u.planHasta } : null,
                 recordatorio: u.planRecordatorio !== false,
                 saldo: u.saldo || 0, saldoBloqueado: !!u.solicitudPagoPendiente, monedas: u.monedas || 0, upcoins: UC.saldoUC(u), iaCreditos: u.iaCreditos || 0,
                 accesosComprados: accesos, descargasConPase30d: conPase,
@@ -373,8 +375,8 @@ function registrar(app, deps) {
                 .select('usuario planId planHasta planAvisadoHasta').limit(500).lean();
             const avisar = pronto.filter(u => !u.planAvisadoHasta || +new Date(u.planAvisadoHasta) !== +new Date(u.planHasta));
             if (!avisar.length) return;
-            await Notificacion.insertMany(avisar.map(u => ({ destinatario: u.usuario, tipo: 'sistema', emisor: 'UpGames', itemTitle: 'Tu pase vence', leida: false, fecha: new Date(),
-                mensaje: `⏳ Tu ${plan(u.planId)?.nombre || 'pase'} vence el ${new Date(u.planHasta).toLocaleDateString('es-CO')}. Renuévalo para seguir sin anuncios (no hay cobros automáticos).` })), { ordered: false });
+            await Notificacion.insertMany(avisar.map(u => ({ destinatario: u.usuario, tipo: 'sistema', emisor: 'UpGames', itemTitle: 'Tu Premium vence', leida: false, fecha: new Date(),
+                mensaje: `⏳ Tu ${nombrePlan(u.planId)} vence el ${new Date(u.planHasta).toLocaleDateString('es-CO')}. Renuévalo para seguir sin anuncios, con NEXUS ilimitado y más visibilidad (no hay cobros automáticos).` })), { ordered: false });
             for (const u of avisar) await Usuario.updateOne({ usuario: u.usuario }, { $set: { planAvisadoHasta: u.planHasta } });
             logger.info(`[tienda] Recordatorio de vencimiento enviado a ${avisar.length} usuario(s)`);
         } catch (e) { logger.warn(`[tienda] recordar: ${e.message}`); }

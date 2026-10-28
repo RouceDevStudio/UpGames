@@ -528,17 +528,17 @@ const UsuarioSchema = new mongoose.Schema({
     liveKey:       { type: String, default: null, select: false },   // clave de transmisión (OBS)
     sesionVer:     { type: Number, default: 0 },
     avisoVerifEnviado: { type: Boolean, default: false },   // notificación "verifica tu email" ya enviada
-    // Pase sin anuncios (prepago, sin cobros automáticos)
+    // Premium (prepago, sin cobros automáticos). planId: pase7 | pase30 | pase365 | cortesia
     planId:           { type: String, default: '' },
     planHasta:        { type: Date, default: null },
     planRecordatorio: { type: Boolean, default: true },   // avisar 2 días antes de que venza
-    paseFondoUsd:     { type: Number, default: 0 },
+    paseFondoUsd:     { type: Number, default: 0 },   // fondo para creadores de sus Premium (≤ 25 % de lo pagado)
     // NEXUS IA: mensajes gratis usados hoy y créditos comprados con UpCoins
-    iaUso:            { dia: { type: String, default: '' }, usados: { type: Number, default: 0 } },
+    iaUso:            { dia: { type: String, default: '' }, usados: { type: Number, default: 0 }, premium: { type: Number, default: 0 } },   // premium: solo estadística
     iaCreditos:       { type: Number, default: 0, min: 0 },
     // Dónde recibe sus retiros (rutas/cobros.js). Los datos van cifrados; resumen = versión enmascarada
-    cobro: { tipo: { type: String, default: '' }, cifrado: { type: String, default: '' }, resumen: { type: String, default: '' }, actualizado: Date, esperaHasta: Date },       // fondo para creadores de sus pases (≤ 25 % de lo pagado)
-    planAvisadoHasta: { type: Date, default: null },      // vencimiento ya avisado (un aviso por periodo)   // +1 al cambiar/restablecer la contraseña → cierra las demás sesiones
+    cobro: { tipo: { type: String, default: '' }, cifrado: { type: String, default: '' }, resumen: { type: String, default: '' }, actualizado: Date, esperaHasta: Date },
+    planAvisadoHasta: { type: Date, default: null },      // vencimiento ya avisado (un aviso por periodo)
     descargasTotales:      { type: Number, default: 0, min: 0 },
     isVerificado:          { type: Boolean, default: false, index: true },
     solicitudPagoPendiente:{ type: Boolean, default: false },
@@ -1562,7 +1562,7 @@ app.put('/admin/users/ajustar-saldo/:id', verificarAdmin, [param('id').isMongoId
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: "Datos inválidos" });
         const { saldo, motivo } = req.body;
-        const user = await Usuario.findByIdAndUpdate(req.params.id, { $set: { saldo: parseFloat(saldo) } }, { new: true }).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires');
+        const user = await Usuario.findByIdAndUpdate(req.params.id, { $set: { saldo: parseFloat(saldo) } }, { new: true }).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires -cobro.cifrado');
         if (!user) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
         logger.info(`ADMIN: Saldo ajustado @${user.usuario} → $${saldo} (${motivo || 'Sin motivo'})`);
         res.json({ success: true, usuario: user.usuario, nuevoSaldo: user.saldo });
@@ -2202,7 +2202,7 @@ app.get('/auth/users', verificarAdmin, async (req, res) => {
         const [total, users] = await Promise.all([
             Usuario.countDocuments(q),
             // Nunca exponer hashes ni tokens de reset/verificación (un sub-admin podría secuestrar cuentas)
-            Usuario.find(q).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires').sort({ fecha: -1 }).skip(skip).limit(limit).lean()
+            Usuario.find(q).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires -cobro.cifrado').sort({ fecha: -1 }).skip(skip).limit(limit).lean()
         ]);
         users.forEach(u => { u.esDueno = adminPanel.esOwnerEmail(u.email); });
         res.json({ users, total, page, limit, pages: Math.ceil(total / limit) });
@@ -2213,7 +2213,7 @@ app.get('/auth/users', verificarAdmin, async (req, res) => {
 
 app.get('/admin/users/detalle/:id', verificarAdmin, async (req, res) => {
     try {
-        const user = await Usuario.findById(req.params.id).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires').lean();
+        const user = await Usuario.findById(req.params.id).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires -cobro.cifrado').lean();
         if (!user) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
         const juegos = await Juego.find({ usuario: user.usuario }).select('title status descargasEfectivas likesCount linkStatus createdAt').lean();
         res.json({ success: true, user, juegos });
@@ -2227,7 +2227,7 @@ app.put('/admin/users/lista-negra/:id', verificarAdmin, [body('listaNegraAdmin')
         const { listaNegraAdmin, notasAdmin } = req.body;
         const updates = { listaNegraAdmin: !!listaNegraAdmin, fechaListaNegra: listaNegraAdmin ? new Date() : null };
         if (notasAdmin !== undefined) updates.notasAdmin = notasAdmin;
-        const user = await Usuario.findByIdAndUpdate(req.params.id, { $set: updates }, { new: true }).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires');
+        const user = await Usuario.findByIdAndUpdate(req.params.id, { $set: updates }, { new: true }).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires -cobro.cifrado');
         if (!user) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
         logger.warn(`Lista negra actualizada: @${user.usuario} → ${listaNegraAdmin}`);
         res.json({ success: true, user });
@@ -2238,7 +2238,7 @@ app.put('/admin/users/lista-negra/:id', verificarAdmin, [body('listaNegraAdmin')
 
 app.put('/admin/users/notas/:id', verificarAdmin, [body('notasAdmin').trim().isLength({ max: 500 })], async (req, res) => {
     try {
-        const user = await Usuario.findByIdAndUpdate(req.params.id, { $set: { notasAdmin: req.body.notasAdmin } }, { new: true }).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires');
+        const user = await Usuario.findByIdAndUpdate(req.params.id, { $set: { notasAdmin: req.body.notasAdmin } }, { new: true }).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires -cobro.cifrado');
         if (!user) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
         res.json({ success: true, mensaje: "Notas actualizadas" });
     } catch (error) {
@@ -2248,7 +2248,7 @@ app.put('/admin/users/notas/:id', verificarAdmin, [body('notasAdmin').trim().isL
 
 app.get('/admin/users/lista-negra', verificarAdmin, async (req, res) => {
     try {
-        const users = await Usuario.find({ listaNegraAdmin: true }).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires').sort({ fechaListaNegra: -1 }).lean();
+        const users = await Usuario.find({ listaNegraAdmin: true }).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires -cobro.cifrado').sort({ fechaListaNegra: -1 }).lean();
         res.json({ success: true, users, total: users.length });
     } catch (error) {
         res.status(500).json({ success: false, error: "Error al obtener lista negra" });
@@ -2271,7 +2271,7 @@ app.put('/auth/admin/verificacion/:username', verificarAdmin, [body('nivel').isI
     try {
         const { username } = req.params;
         const { nivel } = req.body;
-        const user = await Usuario.findOneAndUpdate({ usuario: username.toLowerCase() }, { $set: { verificadoNivel: nivel } }, { new: true }).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires');
+        const user = await Usuario.findOneAndUpdate({ usuario: username.toLowerCase() }, { $set: { verificadoNivel: nivel } }, { new: true }).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires -cobro.cifrado');
         if (!user) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
         logger.info(`Verificación actualizada: @${username} → Nivel ${nivel}`);
         // ⭐ Recalcular scores al cambiar nivel
@@ -3616,7 +3616,7 @@ const live = require('./rutas/live').registrar(app, server, {
     verificarToken, verificarAdmin, Usuario, Notificacion, logger, config, JWT_SECRET,
     estaSuspendido: u => adminPanel.estaSuspendido(u), getPayPalAccessToken,
 });
-// Acceso directo: US$1 o 100 monedas para saltarse la página puente (o gratis con un pase)
+// Acceso directo: US$1 o 50 UpCoins para saltarse la página puente (o gratis con Premium)
 const mercadoPago = require('./modulos/mercadopago').crear();
 const accesoDirecto = require('./rutas/accesoDirecto').registrar(app, { verificarToken, Juego, Usuario, LiveTx: live.LiveTx, paypal: live.paypal, mp: mercadoPago, logger });
 // Tienda: pases sin anuncios, "Mi plan", tarjeta con Mercado Pago, PayPal, saldo y monedas
@@ -3625,6 +3625,8 @@ const tienda = require('./rutas/tienda').registrar(app, {
     acceso: accesoDirecto, logger, apiUrlSelf: API_URL_SELF, olvidarPerfil: live.olvidarPerfil,
 });
 live.alRevertir((captureId, sancionar) => tienda.revertir(captureId, 'PayPal', sancionar));
+// Panel admin → Economía (UpCoins, ventas, Premium, NEXUS, destacadas)
+require('./rutas/adminEconomia').registrar(app, { verificarAdmin, Usuario, Juego, LiveTx: live.LiveTx, Pago, Notificacion, logger, olvidarPerfil: live.olvidarPerfil });
 // Estado del correo y envío de prueba (panel admin → Sistema)
 app.get('/admin/sistema/email', verificarAdmin, async (req, res) => res.json({ success: true, ...(await correo.verificar()), ...correo.estado() }));
 app.post('/admin/sistema/email-prueba', verificarAdmin, async (req, res) => {
@@ -3693,7 +3695,7 @@ const PORT = config.PORT;
 server.listen(PORT, () => {
     logger.info(`SERVIDOR CORRIENDO EN PUERTO ${PORT}`);
     logger.info(`Endpoint: http://localhost:${PORT}`);
-    logger.info(`Sistema de Economía: ACTIVO | CPM: $${CPM_VALUE} | Autor: ${AUTHOR_PERCENTAGE * 100}%`);
+    logger.info(`Sistema de Economía: ACTIVO | el creador gana US$${(CPM_VALUE * AUTHOR_PERCENTAGE).toFixed(2)} (${Math.round(CPM_VALUE * AUTHOR_PERCENTAGE / 0.02)} UC) por 1.000 descargas`);
     logger.info(`Anti-bots: Máx ${MAX_DOWNLOADS_PER_IP_PER_DAY} descargas/IP/día`);
     logger.info(`Detección de fraude: ACTIVA | Auto-lista negra: HABILITADA`);
 

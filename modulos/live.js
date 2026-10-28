@@ -2,7 +2,7 @@
  * UpGames Live — reglas puras (sin BD ni red) para poder probarlas solas.
  *
  * Economía:
- *   - El espectador compra MONEDAS con dinero real (PayPal). 1 moneda = MONEDA_USD.
+ *   - El espectador compra UpCoins con dinero real (tarjeta o PayPal). 1 UC = MONEDA_USD.
  *   - Un regalo cuesta N monedas. El creador recibe N × MONEDA_USD × (1 − comisión)
  *     en `saldoRetenido`; pasa a `saldo` (retirable) tras LIVE_RETENCION_DIAS para
  *     cubrir contracargos (compra con tarjeta robada → regalo → retiro).
