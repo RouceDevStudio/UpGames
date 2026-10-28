@@ -807,11 +807,23 @@ app.get('/auth/verify-email/:token', async (req, res) => {
     }
 });
 
+// Correos que cualquiera puede pedir escribiendo un email: máx. 1 cada 2 min y 5 al día por dirección
+// (sin esto se podía bombardear una bandeja ajena y agotar el cupo diario de Resend). Respuesta idéntica.
+const correosPorEmail = new Map();   // tipo:email → [timestamps]
+function correoPermitido(tipo, email) {
+    const k = `${tipo}:${String(email).toLowerCase()}`, ahora = Date.now();
+    const h = (correosPorEmail.get(k) || []).filter(t => ahora - t < 864e5);
+    if ((h.length && ahora - h[h.length - 1] < 120000) || h.length >= 5) return false;
+    h.push(ahora); correosPorEmail.set(k, h);
+    if (correosPorEmail.size > 20000) correosPorEmail.clear();
+    return true;
+}
+
 app.post('/auth/resend-verification', [body('email').isEmail().normalizeEmail(EMAIL_NORMALIZE_OPTS)], async (req, res) => {
     try {
         const { email } = req.body;
         const usuario = await Usuario.findOne({ email: email.toLowerCase() });
-        if (!usuario || usuario.emailVerificado)
+        if (!usuario || usuario.emailVerificado || !correoPermitido('verif', email))
             return res.json({ success: true, mensaje: 'Si el email existe y no está verificado, recibirás el link.' });
         const verifToken = crypto.randomBytes(32).toString('hex');
         await Usuario.updateOne({ _id: usuario._id }, { $set: { emailVerifToken: verifToken, emailVerifExpires: new Date(Date.now() + 24 * 60 * 60 * 1000) } });
@@ -862,7 +874,7 @@ app.post('/auth/forgot-password', [body('email').isEmail().normalizeEmail(EMAIL_
     try {
         const { email } = req.body;
         const usuario = await Usuario.findOne({ email: email.toLowerCase() });
-        if (!usuario)
+        if (!usuario || !correoPermitido('reset', email))
             return res.json({ success: true, mensaje: 'Si el email está registrado, recibirás un link para restablecer tu contraseña.' });
         const resetToken = crypto.randomBytes(32).toString('hex');
         await Usuario.updateOne({ _id: usuario._id }, { $set: { resetPasswordToken: resetToken, resetPasswordExpires: new Date(Date.now() + 60 * 60 * 1000) } });
@@ -2604,24 +2616,32 @@ app.put('/usuarios/update-social-links', [verificarToken, body('socialLinks').is
 
 app.get('/comentarios', async (req, res) => {
     try {
-        const comms = await Comentario.find().sort({ fecha: -1 }).lean();
+        // Antes devolvía TODOS los comentarios de la base en cada llamada
+        const limite = Math.min(2000, Math.max(1, parseInt(req.query.limit, 10) || 1000));
+        const comms = await Comentario.find().sort({ fecha: -1 }).limit(limite).lean();
         res.json(comms);
     } catch (error) { res.status(500).json([]); }
 });
 
 app.get('/comentarios/:itemId', async (req, res) => {
     try {
-        const comms = await Comentario.find({ itemId: req.params.itemId }).sort({ fecha: -1 }).lean();
+        const comms = await Comentario.find({ itemId: String(req.params.itemId) }).sort({ fecha: -1 }).limit(300).lean();
         res.json(comms);
     } catch (error) { res.status(500).json([]); }
 });
 
+const comentariosRecientes = new Map();   // usuario → [timestamps] (máx. 15 cada 10 min)
 app.post('/comentarios', [verificarToken, body('itemId').notEmpty(), body('texto').notEmpty().isLength({ max: 500 })], async (req, res) => {
     try {
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'Datos inválidos' });
         const textoLimpio = (req.body.texto || '').replace(/<[^>]*>/g, '').trim();
-        const nuevo = new Comentario({ ...req.body, texto: textoLimpio, usuario: req.usuario });
+        if (!textoLimpio) return res.status(400).json({ success: false, error: 'El comentario está vacío' });
+        const ahora = Date.now(), h = (comentariosRecientes.get(req.usuario) || []).filter(t => ahora - t < 600000);
+        if (h.length >= 15) return res.status(429).json({ success: false, error: 'Vas muy rápido. Espera unos minutos para comentar de nuevo.' });
+        h.push(ahora); comentariosRecientes.set(req.usuario, h); if (comentariosRecientes.size > 20000) comentariosRecientes.clear();
+        // Solo los campos permitidos: antes {...req.body} dejaba elegir la fecha (un comentario "del futuro" quedaba siempre primero)
+        const nuevo = new Comentario({ itemId: String(req.body.itemId), texto: textoLimpio, usuario: req.usuario });
         await nuevo.save();
         gamification.onComentario(req.usuario).catch(() => {});
         res.status(201).json({ success: true, comentario: nuevo });

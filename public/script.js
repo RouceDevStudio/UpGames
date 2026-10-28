@@ -1452,6 +1452,9 @@ async function postComment(id) {
       input.value='';
       loadComments(id);
       toast('✅ Comentario publicado');
+    } else {
+      const d = await r.json().catch(() => ({}));   // antes un error no mostraba nada
+      toast('❌ ' + (d.error || (r.status === 401 ? 'Inicia sesión de nuevo para comentar' : 'No se pudo publicar el comentario')));
     }
   } catch(e) { toast('❌ Error al comentar'); }
 }
