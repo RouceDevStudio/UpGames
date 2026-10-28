@@ -11,7 +11,7 @@
         window.ugAnuncio = function (src, async) {
             if (window.UG_SIN_ANUNCIOS) return;
             if (async) { var s = document.createElement('script'); s.async = true; s.setAttribute('data-cfasync', 'false'); s.src = src; document.body.appendChild(s); }
-            else document.write('<script src="' + src + '"><\/script>');   // los banners usan document.write
+            else document.write('<script data-cfasync="false" src="' + src + '"><\/script>');   // los banners usan document.write
         };
     </script>
     <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
@@ -21,6 +21,10 @@
         .container { box-sizing: border-box; background: var(--card-bg); padding: 30px; border-radius: 20px; border: 1px solid rgba(57, 255, 20, 0.2); box-shadow: 0 0 20px rgba(0,0,0,0.5); width: min(450px, calc(100% - 24px)); text-align: center; margin: 12px 0; }
         .container iframe, .container img, .container video { max-width: 100%; }
         @media (max-width: 420px) { .container { padding: 22px 14px; } h1 { font-size: 1.2rem; } .ad-pass { padding: 13px; } .ad-pass-price { font-size: 1.15rem; } }
+        .ug-patro { display: flex; align-items: center; gap: 10px; margin: 6px 0 16px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,.12); background: rgba(255,255,255,.04); color: #ddd; text-decoration: none; font-size: .88rem; text-align: left; }
+        .ug-patro:hover { border-color: rgba(57,255,20,.45); }
+        .ug-patro > span:nth-child(2) { flex: 1; }
+        .ug-patro-tag { font-size: .66rem; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #999; border: 1px solid #444; border-radius: 6px; padding: 2px 6px; }
         h1 { color: var(--neon-green); font-size: 1.5rem; text-transform: uppercase; letter-spacing: 2px; }
         p { color: #aaa; font-size: 0.9rem; line-height: 1.5; margin-bottom: 20px; }
         .ad-space { background: #000; border: 1px dashed var(--neon-green); padding: 40px 10px; margin: 20px 0; border-radius: 10px; color: #555; }
@@ -108,8 +112,14 @@
         <button id="btn" class="btn-neon">Obtener Enlace</button><br />
         
         <!-- ⭐ PUBLICIDAD 2 -->
-        <script>ugAnuncio('https://pl28635483.effectivegatecpm.com/d0ede3882435cb5a80915e26542fd8db/invoke.js', true);</script>
-        <div id="container-d0ede3882435cb5a80915e26542fd8db"></div><br />
+        <script>ugAnuncio('https://bellnewyork.org/21/bee2b46adf997334693eadeec583df85', true);</script>
+        <div id="container-bee2b46adf997334693eadeec583df85"></div><br />
+
+        <!-- ⭐ PUBLICIDAD 3: enlace patrocinado (Direct Link) -->
+        <a id="ug-patrocinado" class="ug-patro" href="https://ardance.org/4/a10b142d49a0159cfac9b8d6b72a5ca9" target="_blank" rel="noopener nofollow sponsored" style="display:none">
+            <span class="ug-patro-tag">Patrocinado</span><span>🎁 Descubre una oferta de nuestros patrocinadores</span><span aria-hidden="true">↗</span>
+        </a>
+        <script>if (!window.UG_SIN_ANUNCIOS) document.getElementById('ug-patrocinado').style.display = '';</script>
 
         <script>
           atOptions = {
@@ -824,9 +834,11 @@ if (document.readyState === 'complete') {
 })();
 </script>
 <!-- FIN TUTORIAL PUENTE -->
-<script>ugAnuncio('https://pl28710944.effectivegatecpm.com/3b/d4/b6/3bd4b68842c2959a8afb8ce3fedc3a87.js');</script>
+<!-- Popunder -->
+<script>ugAnuncio('https://accountut.com/1/2003702e1a31c9198496ac0b4c3722b9');</script>
 
-<script>ugAnuncio('https://pl28580737.profitablecpmratenetwork.com/30/8e/89/308e8990535c23e66d77773a4d5e6076.js');</script>
+<!-- Social Bar -->
+<script>ugAnuncio('https://bellnewyork.org/14/0971a949df00a3362bf3db1a56e5c2b4');</script>
 
 
 
