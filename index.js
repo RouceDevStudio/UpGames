@@ -336,7 +336,7 @@ const API_URL_SELF = process.env.RAILWAY_PUBLIC_DOMAIN
 
 // ── EMAIL ──────────────────────────────────────────────────────────
 // Railway bloquea el SMTP (Gmail) en el plan Hobby: se envía por la API HTTPS de
-// Brevo (BREVO_API_KEY + EMAIL_FROM). Detalles en modulos/correo.js.
+// Resend (RESEND_API_KEY + EMAIL_FROM) o Brevo. Detalles en modulos/correo.js.
 const correo = require('./modulos/correo').crear({ nodemailer, logger });
 correo.verificar().then(e => {
     if (e.ok) logger.info(`📧 Email listo (${e.proveedor})`);

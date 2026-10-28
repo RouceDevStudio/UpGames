@@ -1398,7 +1398,7 @@ async function emailEstado() {
   const el = $('emEstado'); if (!el) return;
   try { const { d } = await api('/admin/sistema/email');
     el.innerHTML = d.ok ? `<span style="color:var(--ok)">✅ Funcionando</span> · proveedor: <b>${esc(d.proveedor)}</b> · remitente: ${esc(d.remitente || '—')}`
-      : `<span style="color:var(--bad)">❌ No funciona</span> · ${esc(d.detalle || '')}<br>En Railway agrega <b>BREVO_API_KEY</b> y <b>EMAIL_FROM</b> (Railway bloquea Gmail por SMTP en el plan Hobby).`;
+      : `<span style="color:var(--bad)">❌ No funciona</span> · ${esc(d.detalle || '')}<br>En Railway agrega <b>RESEND_API_KEY</b> y <b>EMAIL_FROM</b> (p. ej. no-reply@upgames.games, con el dominio verificado en Resend).`;
   } catch (_) { el.textContent = 'No se pudo comprobar'; }
 }
 async function emailPrueba() {

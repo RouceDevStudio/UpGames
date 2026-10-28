@@ -34,17 +34,21 @@ async function test(name, fn) {
         assert.strictEqual(await c.enviar({ to: 'a@b.com', subject: 's', html: 'h' }), true);
         assert.strictEqual(h.host, 'api.resend.com'); assert.strictEqual(h.headers.Authorization, 'Bearer re_1');
     });
+    await test('Resend tiene prioridad si también hay clave de Brevo', async () => {
+        const c = C.crear({ env: { RESEND_API_KEY: 're_1', BREVO_API_KEY: 'xkeysib-1', EMAIL_FROM: 'no-reply@upgames.games' }, logger: log, transporte: async () => ({ status: 200, data: {} }) });
+        assert.strictEqual(c.proveedor, 'resend');
+    });
     await test('sin proveedor ni remitente → false con explicación', async () => {
         const c = C.crear({ env: {}, logger: log });
         assert.strictEqual(c.proveedor, null);
         assert.strictEqual(await c.enviar({ to: 'a@b.com', subject: 's', html: 'h' }), false);
-        assert.match((await c.verificar()).detalle, /BREVO_API_KEY/);
+        assert.match((await c.verificar()).detalle, /RESEND_API_KEY/);
     });
     await test('SMTP bloqueado por el hosting: lo explica', async () => {
         const nodemailer = { createTransport: () => ({ sendMail: async () => { throw new Error('connect ETIMEDOUT 74.125.0.1:465'); }, verify: async () => { throw new Error('Connection timeout'); } }) };
         const c = C.crear({ env: { GMAIL_USER: 'yo@gmail.com', GMAIL_APP_PASSWORD: 'x' }, nodemailer, logger: log });
         assert.strictEqual(await c.enviar({ to: 'a@b.com', subject: 's', html: 'h' }), false);
-        assert.match(c.estado().detalle, /BREVO_API_KEY/);
+        assert.match(c.estado().detalle, /RESEND_API_KEY/);
         assert.match((await c.verificar()).detalle, /bloquea SMTP/);
     });
     console.log(`\n${passed} pruebas OK`);

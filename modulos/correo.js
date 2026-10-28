@@ -3,10 +3,10 @@
  *
  * Railway bloquea el SMTP saliente (puertos 25/465/587) en los planes Free, Trial
  * y Hobby: con Gmail por SMTP los correos nunca salían. Por eso se envía por una
- * API HTTPS, que funciona en todos los planes:
- *   1. Brevo   — BREVO_API_KEY. Gratis hasta 300 correos/día y permite enviar desde
- *                un Gmail verificado como remitente (no hace falta dominio propio).
- *   2. Resend  — RESEND_API_KEY (necesita un dominio verificado en Resend).
+ * API HTTPS, que funciona en todos los planes (se usa el primero configurado):
+ *   1. Resend  — RESEND_API_KEY + dominio verificado (upgames.games). EMAIL_FROM p. ej.
+ *                no-reply@upgames.games. Gratis hasta 3.000 correos/mes (100/día).
+ *   2. Brevo   — BREVO_API_KEY. Permite un Gmail verificado como remitente.
  *   3. SMTP    — GMAIL_USER + GMAIL_APP_PASSWORD (solo si el plan permite SMTP).
  * Remitente: EMAIL_FROM (o GMAIL_USER). Nombre: EMAIL_FROM_NAME (por defecto UpGames).
  */
@@ -43,7 +43,7 @@ function crear({ env = process.env, nodemailer, logger, transporte } = {}) {
     const limpio = v => String(v ?? '').trim().replace(/^(['"])(.*)\1$/, '$2').trim();
     const remitente = () => limpio(env.EMAIL_FROM || env.GMAIL_USER);
     const nombre = () => limpio(env.EMAIL_FROM_NAME) || 'UpGames';
-    const proveedor = limpio(env.BREVO_API_KEY) ? 'brevo' : limpio(env.RESEND_API_KEY) ? 'resend'
+    const proveedor = limpio(env.RESEND_API_KEY) ? 'resend' : limpio(env.BREVO_API_KEY) ? 'brevo'
         : (limpio(env.GMAIL_USER) && limpio(env.GMAIL_APP_PASSWORD)) ? 'smtp' : null;
     let smtp = null;
     if (proveedor === 'smtp' && nodemailer) {
@@ -74,26 +74,36 @@ function crear({ env = process.env, nodemailer, logger, transporte } = {}) {
         } catch (e) {
             const msg = String(e.message || e);
             const bloqueado = proveedor === 'smtp' && /timeout|ETIMEDOUT|ENETUNREACH|unreachable|ECONNREFUSED/i.test(msg);
-            estado = { ...estado, ok: false, detalle: bloqueado ? 'SMTP bloqueado por el hosting: configura BREVO_API_KEY' : msg.slice(0, 200) };
-            logger?.error?.(`[Email] Error enviando a ${to} (${proveedor}): ${msg}${bloqueado ? ' — Railway bloquea SMTP en el plan Hobby: usa BREVO_API_KEY' : ''}`);
+            estado = { ...estado, ok: false, detalle: bloqueado ? 'SMTP bloqueado por el hosting: configura RESEND_API_KEY' : msg.slice(0, 200) };
+            logger?.error?.(`[Email] Error enviando a ${to} (${proveedor}): ${msg}${bloqueado ? ' — Railway bloquea SMTP en el plan Hobby: usa RESEND_API_KEY' : ''}`);
             return false;
         }
     }
 
     /** Comprueba la configuración al arrancar (sin enviar ningún correo). */
     async function verificar() {
-        if (!proveedor) return (estado = { ok: false, proveedor: null, detalle: 'Sin proveedor: define BREVO_API_KEY y EMAIL_FROM' });
+        if (!proveedor) return (estado = { ok: false, proveedor: null, detalle: 'Sin proveedor: define RESEND_API_KEY y EMAIL_FROM' });
         try {
             if (proveedor === 'brevo') {
                 const r = await getJSON('api.brevo.com', '/v3/account', { 'api-key': limpio(env.BREVO_API_KEY) });
                 estado = r.status === 200 ? { ok: true, proveedor, detalle: '' } : { ok: false, proveedor, detalle: `Brevo rechazó BREVO_API_KEY (HTTP ${r.status})` };
+            } else if (proveedor === 'resend') {
+                // Una clave solo de envío no puede listar dominios: Resend responde 401 "restricted_api_key",
+                // lo que igual confirma que la clave existe. Cualquier otro 401/403 = clave inválida.
+                const r = await getJSON('api.resend.com', '/domains', { Authorization: `Bearer ${limpio(env.RESEND_API_KEY)}` });
+                const valida = r.status === 200 || r.data?.name === 'restricted_api_key';
+                const dominio = remitente().split('@')[1] || '';
+                const d = r.status === 200 && Array.isArray(r.data?.data) ? r.data.data.find(x => x.name === dominio) : null;
+                estado = !valida ? { ok: false, proveedor, detalle: `Resend rechazó RESEND_API_KEY (HTTP ${r.status})` }
+                    : d && d.status !== 'verified' ? { ok: false, proveedor, detalle: `El dominio ${dominio} aún no está verificado en Resend (${d.status})` }
+                    : { ok: true, proveedor, detalle: '' };
             } else if (proveedor === 'smtp' && smtp) {
                 await smtp.verify();
                 estado = { ok: true, proveedor, detalle: '' };
             } else estado = { ok: true, proveedor, detalle: '' };
         } catch (e) {
             const bloqueado = /timeout|ETIMEDOUT|ENETUNREACH|unreachable|ECONNREFUSED/i.test(e.message);
-            estado = { ok: false, proveedor, detalle: bloqueado ? 'El hosting bloquea SMTP (Railway Hobby). Configura BREVO_API_KEY.' : e.message.slice(0, 200) };
+            estado = { ok: false, proveedor, detalle: bloqueado ? 'El hosting bloquea SMTP (Railway Hobby). Configura RESEND_API_KEY.' : e.message.slice(0, 200) };
         }
         return estado;
     }
