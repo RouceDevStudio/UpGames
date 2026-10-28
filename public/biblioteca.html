@@ -28,9 +28,9 @@
 <link rel="dns-prefetch" href="https://upgames-production.up.railway.app">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="biblioteca.css?v=20261029a">
-<link rel="stylesheet" href="upgames-glass.css?v=20261029a">
-<link rel="stylesheet" href="upgames-estilo.css?v=20261029a">
+<link rel="stylesheet" href="biblioteca.css?v=20261029b">
+<link rel="stylesheet" href="upgames-glass.css?v=20261029b">
+<link rel="stylesheet" href="upgames-estilo.css?v=20261029b">
 <!-- Widget de subida: solo se usa al publicar → diferido (antes bloqueaba el primer render) -->
 <script src="https://upload-widget.cloudinary.com/global/all.js" defer></script>
 
@@ -41,7 +41,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="UpGames">
 <script src="./upgames-pwa.js" defer></script>
-<script src="./upgames-errores.js?v=20261029a"></script>
+<script src="./upgames-errores.js?v=20261029b"></script>
 </head>
 <body>
 
@@ -345,7 +345,12 @@
             <summary><span class="pfp-num">4</span><b>Descripción y detalles</b> <small>(opcional, pero ayuda a que te encuentren)</small></summary>
             <div class="pf-form-group" style="margin-top:12px">
               <label class="pf-label" for="pf-addDescription">Descripción</label>
-              <textarea id="pf-addDescription" class="pf-textarea" placeholder="Qué incluye, cómo se instala, requisitos…"></textarea>
+              <div class="pfp-desc-acc">
+                <button type="button" class="pfp-chip" onclick="pfpPlantilla()"><ion-icon name="document-text-outline"></ion-icon> Usar plantilla</button>
+                <button type="button" class="pfp-chip pfp-chip-nx" id="pfp-nexus-desc" onclick="pfpNexusDescribe()">✦ Que NEXUS la escriba</button>
+              </div>
+              <textarea id="pf-addDescription" class="pf-textarea" placeholder="Qué incluye, cómo se instala, requisitos…" maxlength="1000"></textarea>
+              <small class="pfp-ayuda">La plantilla trae los apartados que más buscan quienes descargan. NEXUS no inventa datos: donde no sabe, deja "(complétalo)".</small>
             </div>
             <div id="pf-extra-fields"></div>
           </details>
@@ -1790,11 +1795,11 @@
 <!-- ION ICONS -->
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
-<script src="script.js?v=20261029a"></script>
-<script src="upgames-extras.js?v=20261029a"></script>
-<script src="upgames-guia.js?v=20261029a"></script>
-<script src="upgames-autoinfo.js?v=20261029a"></script>
-<script src="upgames-motion.js?v=20261029a"></script>
+<script src="script.js?v=20261029b"></script>
+<script src="upgames-extras.js?v=20261029b"></script>
+<script src="upgames-guia.js?v=20261029b"></script>
+<script src="upgames-autoinfo.js?v=20261029b"></script>
+<script src="upgames-motion.js?v=20261029b"></script>
 
 <!-- ══════════════════════════════════════
   EXTENSIÓN DE PERFIL: Nombre / Email / Contraseña / Links

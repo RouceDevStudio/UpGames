@@ -190,6 +190,26 @@
   }
 
   // ── Tienda de estilo ─────────────────────────────────────────────────────
+  // ── Packs a juego: precio = lo que te falta con descuento (igual que el servidor) ──
+  function precioPack(p, mios) {
+    const arts = p.items.map(id => cfg.cosmeticos.find(c => c.id === id)).filter(Boolean), faltan = arts.filter(a => !mios.has(a.id));
+    const lleno = faltan.reduce((t, a) => t + a.precio, 0);
+    return { arts, faltan, lleno, precio: Math.max(1, Math.round(lleno * (1 - (cfg.precios.packDescuento || 0) / 100))), completo: !faltan.length };
+  }
+  function packsHTML(mios, est) {
+    const d = cfg.precios.packDescuento || 0;
+    return `<p class="ugx-sub">Marco, color y fondo que combinan${d ? `, con <b>${d} % de descuento</b>` : ''}. Solo pagas lo que aún no tienes.</p>
+      <div class="ugx-packs">${(cfg.packs || []).map(p => {
+        const pr = precioPack(p, mios), m = pr.arts.find(a => a.tipo === 'marco'), co = pr.arts.find(a => a.tipo === 'color'), f = pr.arts.find(a => a.tipo === 'fondo');
+        const enUso = pr.arts.every(a => a.tipo === 'insignia' ? (est.insignias || []).includes(a.id) : est[a.tipo] === a.id);
+        return `<div class="ugx-pack ${f ? 'ugs-f-' + esc(f.id) : ''}">
+          <div class="ugx-pack-top"><div class="ugx-prev ${m ? 'ugs-marco ugs-m-' + esc(m.id) : ''}">${esc(p.emoji)}</div>
+            <div><b class="${co ? 'ugs-c-' + esc(co.id) : ''}">${esc(p.nombre)}</b><small>${pr.arts.map(a => esc(a.emoji + ' ' + a.nombre)).join(' · ')}</small></div></div>
+          <div class="ugx-pack-pie">${pr.completo ? (enUso ? '<span class="ugx-pack-ok">✓ En uso</span>' : `<button type="button" class="ugx-btn" data-usar-pack="${esc(p.id)}">Usar pack</button>`)
+            : `<span class="ugx-pack-precio">${pr.lleno !== pr.precio ? `<s>${fmt(pr.lleno)}</s>` : ''}<b>🪙 ${fmt(pr.precio)}</b>${pr.faltan.length < pr.arts.length ? `<small>te faltan ${pr.faltan.length}</small>` : ''}</span><button type="button" class="ugx-btn oro" data-pack="${esc(p.id)}">Comprar pack</button>`}</div>
+        </div>`; }).join('')}</div>`;
+  }
+
   /** Tienda de estilo. destino = contenedor (Editar perfil → Estilo); sin él, se abre como hoja. */
   async function tienda(tab = 'marco', destino) {
     if (!tok()) return window.ugPedirSesion?.('personalizar tu perfil');
@@ -197,6 +217,7 @@
       window.switchTab?.('profile'); setTimeout(() => window.pfOpenSettings('estilo'), 250); return;
     }
     await cargarMio(); if (!mio) return aviso('No se pudo cargar tu estilo', 'error');
+    if (tab === 'pack' && !(cfg.packs || []).length) tab = 'marco';
     const mios = new Set(mio.cosmeticos), est = mio.estilo || {};
     const av = document.getElementById('pf-avatar-img')?.getAttribute('src') || '';
     const lista = cfg.cosmeticos.filter(c => c.tipo === tab && (!c.soloMision || mios.has(c.id)));
@@ -210,10 +231,25 @@
     const html = (destino ? '' : `<div class="ugx-preview ${est.fondo ? 'ugs-f-' + esc(est.fondo) : ''}"><div class="ugx-av ${est.marco ? 'ugs-marco ugs-m-' + esc(est.marco) : ''}" style="${av ? `background-image:url('${esc(av)}')` : ''}">${av ? '' : esc((yo()[0] || '?').toUpperCase())}</div>
         <div><b class="${est.color ? 'ugs-c-' + esc(est.color) : ''}" style="font-size:1.05rem">@${esc(yo())}</b><div style="margin-top:5px">${insigniasHTML(est.insignias)}</div></div><span class="ugx-saldo" style="margin-left:auto">🪙 ${fmt(mio.upcoins?.total)}</span></div>`) + `
       ${destino ? `<div class="pfx-saldo">Tu saldo: <b>🪙 ${fmt(mio.upcoins?.total)}</b> UpCoins <button type="button" class="ugx-btn sec" data-recargar>Recargar</button></div>` : ''}
-      <div class="ugx-tabs">${Object.entries(TIPO_TXT).map(([k, t]) => `<button type="button" class="ugx-tab ${k === tab ? 'on' : ''}" data-tab="${k}">${t}</button>`).join('')}</div>
+      <div class="ugx-tabs">${(cfg.packs || []).length ? `<button type="button" class="ugx-tab ${tab === 'pack' ? 'on' : ''}" data-tab="pack">🎁 Packs</button>` : ''}${Object.entries(TIPO_TXT).map(([k, t]) => `<button type="button" class="ugx-tab ${k === tab ? 'on' : ''}" data-tab="${k}">${t}</button>`).join('')}</div>
       ${tab === 'insignia' ? '<p class="ugx-sub">Muestra hasta 3 insignias junto a tu nombre. Algunas solo se ganan con misiones.</p>' : ''}
-      <div class="ugx-grid">${lista.map(c => `<div class="ugx-card ${equipado(c) ? 'eq' : ''}">${prev(c)}<b>${esc(c.nombre)}</b><small>${mios.has(c.id) ? (equipado(c) ? 'En uso' : 'Tuyo') : c.soloMision ? 'De misión' : `${fmt(c.precio)} UpCoins`}</small>${accion(c)}</div>`).join('') || '<p class="ugx-sub">Nada por aquí todavía.</p>'}</div>`;
+      ${tab === 'pack' ? packsHTML(mios, est) : `<div class="ugx-grid">${lista.map(c => `<div class="ugx-card ${equipado(c) ? 'eq' : ''}">${prev(c)}<b>${esc(c.nombre)}</b><small>${mios.has(c.id) ? (equipado(c) ? 'En uso' : 'Tuyo') : c.soloMision ? 'De misión' : `${fmt(c.precio)} UpCoins`}</small>${accion(c)}</div>`).join('') || '<p class="ugx-sub">Nada por aquí todavía.</p>'}</div>`}`;
     const enlazar = b => {
+      b.querySelectorAll('[data-pack]').forEach(x => x.onclick = async () => {
+        const p = (cfg.packs || []).find(y => y.id === x.dataset.pack), pr = precioPack(p, mios);
+        if (!confirm(`¿Comprar el pack "${p.nombre}" por ${fmt(pr.precio)} UpCoins? Ahorras ${fmt(pr.lleno - pr.precio)} UC y se equipa todo.`)) return;
+        const r = await pagar('/extras/pack', { id: p.id }, x);
+        if (r) { fiesta(p.emoji, `¡Pack ${p.nombre} es tuyo! Ahorraste ${fmt(r.ahorro)} UC`); mio = null; await cargarMio(); estiloPropio(); window.pfxVista?.(); tienda('pack', destino); }
+      });
+      b.querySelectorAll('[data-usar-pack]').forEach(x => x.onclick = async () => {
+        const p = (cfg.packs || []).find(y => y.id === x.dataset.usarPack), arts = p.items.map(id => cfg.cosmeticos.find(c => c.id === id)).filter(Boolean), cambio = {};
+        for (const a of arts) if (a.tipo !== 'insignia') cambio[a.tipo] = a.id;
+        const ins = [...(est.insignias || [])]; for (const a of arts) if (a.tipo === 'insignia' && !ins.includes(a.id) && ins.length < 3) ins.push(a.id);
+        cambio.insignias = ins; x.disabled = true;
+        const r = await api('/extras/estilo', { method: 'PUT', body: cambio }); x.disabled = false;
+        if (!r.ok) return aviso(r.d.error || 'No se pudo guardar', 'error');
+        mio.estilo = r.d.estilo; estiloPropio(); window.pfxVista?.(); tienda('pack', destino);
+      });
       const otra = t => { if (window.pfxGrupo) window.pfxGrupo.tipo = t; tienda(t, destino); };
       b.querySelector('[data-recargar]')?.addEventListener('click', () => { window.pfCloseSettings?.(); window.switchTab?.('economia'); setTimeout(() => window.ecoAbrirTienda?.(), 350); });
       b.querySelectorAll('[data-tab]').forEach(x => x.onclick = () => otra(x.dataset.tab));

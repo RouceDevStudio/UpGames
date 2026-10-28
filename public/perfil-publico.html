@@ -24,7 +24,7 @@
     <meta name="theme-color" content="#0A0B0F">
     <title>Perfil de Usuario — UpGames</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="stylesheet" href="./upgames-estilo.css?v=20261029a">
+    <link rel="stylesheet" href="./upgames-estilo.css?v=20261029b">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="preconnect" href="https://unpkg.com">
     <style>
@@ -738,8 +738,8 @@ display:block;
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="UpGames">
 <script src="./upgames-pwa.js" defer></script>
-<script src="./upgames-extras.js?v=20261029a"></script>
-<script src="./upgames-errores.js?v=20261029a"></script>
+<script src="./upgames-extras.js?v=20261029b"></script>
+<script src="./upgames-errores.js?v=20261029b"></script>
 </head>
 <body>
 
@@ -984,6 +984,22 @@ display:block;
                     window.UGX.aplicarEstilo(user.estilo || {}, { avatar: document.querySelector('.hero-avatar-wrap'), nombre: document.getElementById('user-name-display'),
                         fondo: cover.classList.contains('has-banner') ? null : cover, insignias: ins });
                     if (user.premium && !document.getElementById('pp-premium')) document.getElementById('verificado-badge')?.insertAdjacentHTML('afterend', '<span id="pp-premium" title="Premium" style="margin-left:4px;color:#ffcc4d">⭐</span>');
+                    const est = user.estilo || {};
+                    // Fondo a pantalla completa: el fondo comprado tiñe toda la página (con un degradado para que se lea el contenido)
+                    let fp = document.getElementById('pp-fondo');
+                    if (est.fondo) { if (!fp) { fp = document.createElement('div'); fp.id = 'pp-fondo'; fp.setAttribute('aria-hidden', 'true'); document.body.prepend(fp); } fp.className = 'pp-fondo ugs-f-' + est.fondo; document.body.classList.add('pp-con-fondo'); }
+                    document.querySelector('.hero-avatar-wrap')?.classList.toggle('pp-marco-xl', !!est.marco);
+                    document.querySelector('.hero-username')?.classList.toggle('pp-nombre-xl', !!est.color);
+                    // Vitrina de insignias: todas las que tiene (equipadas primero)
+                    const col = user.coleccion || {}, todas = [...new Set([...(est.insignias || []), ...(col.insignias || [])])];
+                    const cat = window.UGX.cfg?.cosmeticos || [];
+                    let vit = document.getElementById('pp-vitrina');
+                    if (todas.length || col.total) {
+                        if (!vit) { vit = document.createElement('section'); vit.id = 'pp-vitrina'; vit.className = 'pp-vitrina'; document.getElementById('hero-info')?.after(vit); }
+                        vit.innerHTML = `<div class="pp-vitrina-h"><b>🏅 Vitrina</b><small>${col.total || todas.length} artículo${(col.total || todas.length) === 1 ? '' : 's'} de colección</small></div>
+                          <div class="pp-vitrina-l">${todas.map(id => { const c = cat.find(x => x.id === id); if (!c) return ''; const eq = (est.insignias || []).includes(id);
+                            return `<div class="pp-ins${eq ? ' eq' : ''}${c.soloMision ? ' unica' : ''}" title="${c.soloMision ? 'Exclusiva: no se vende' : 'Insignia de colección'}"><span>${c.emoji}</span><b>${String(c.nombre).replace(/[<>&"]/g, '')}</b>${c.soloMision ? '<small>Exclusiva</small>' : ''}</div>`; }).join('')}</div>`;
+                    }
                 };
                 window.UGX?.cargarCfg().then(pintarEstilo);
                 // Regalar Premium a este creador (con UpCoins)

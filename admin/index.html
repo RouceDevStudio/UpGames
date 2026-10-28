@@ -384,7 +384,7 @@ body:not(.is-owner) .owner-only{display:none!important}
 .dash-nx p{margin:4px 0 8px;font-size:.88rem;line-height:1.5}
 @media (max-width:900px){ .nx-fab{bottom:calc(86px + var(--safe-b));right:14px;padding:10px}.nx-fab .nx-lbl{display:none} .nx-dock{width:100vw;border-left:none} .dash-nx .nx-av{display:none} }
 </style>
-<script src="../public/upgames-errores.js?v=20261029a"></script>
+<script src="../public/upgames-errores.js?v=20261029b"></script>
 </head>
 <body>
 
@@ -1545,8 +1545,8 @@ function rEcon() {
 
 // ─────────── Extras UC ───────────
 let XT = null;   // { config, tiposMision, stats }
-const X_FUN = { cosmeticos: ['✨', 'Estilo del perfil'], superchat: ['💬', 'Super Chat en lives'], apoyar: ['🪙', 'Apoyar publicaciones'], prioridad: ['⚡', 'Revisión prioritaria'], regalarPremium: ['🎁', 'Regalar Premium'], nombre: ['✏️', 'Cambio de nombre inmediato'], misiones: ['🎯', 'Misiones semanales'], referidos: ['🤝', 'Referidos (invita y gana)'], promoLive: ['🚀', 'Promover lives con UpCoins'] };
-const X_VENTA = { cosmetico: 'Estilo', superchat: 'Super Chat', apoyo: 'Apoyos', prioridad: 'Prioridad', regalo_premium: 'Premium regalado', nombre: 'Nombre', mision: 'Misiones y referidos (regalo)', promolive: 'Promoción de lives' };
+const X_FUN = { cosmeticos: ['✨', 'Estilo del perfil'], packs: ['🎁', 'Packs de estilo con descuento'], superchat: ['💬', 'Super Chat en lives'], apoyar: ['🪙', 'Apoyar publicaciones'], prioridad: ['⚡', 'Revisión prioritaria'], regalarPremium: ['🎁', 'Regalar Premium'], nombre: ['✏️', 'Cambio de nombre inmediato'], misiones: ['🎯', 'Misiones semanales'], referidos: ['🤝', 'Referidos (invita y gana)'], promoLive: ['🚀', 'Promover lives con UpCoins'] };
+const X_VENTA = { cosmetico: 'Estilo', pack: 'Packs de estilo', superchat: 'Super Chat', apoyo: 'Apoyos', prioridad: 'Prioridad', regalo_premium: 'Premium regalado', nombre: 'Nombre', mision: 'Misiones y referidos (regalo)', promolive: 'Promoción de lives' };
 let MD = null, mdF = '';
 async function loadModer() {
   try { const { ok, d } = await api('/admin/moderacion' + (mdF ? '?tipo=' + mdF : '')); if (!ok || !d.success) return toast(d.error || 'No se pudo cargar', 'err'); MD = d; rModer(); } catch (_) {}
@@ -1583,6 +1583,7 @@ function rExtras() {
   $('xPrecios').innerHTML = pin('superchat', '💬 Montos de Super Chat', c.precios.superchat.join(', '), 'Separados por coma (hasta 6). 20 → fijado 30 s · 50 → 1 min · 100 → 2 min · 200+ → 5 min')
     + pin('apoyo', '🪙 Montos para apoyar', c.precios.apoyo.join(', '), 'Separados por coma (hasta 6)')
     + pin('prioridad', '⚡ Revisión prioritaria', c.precios.prioridad) + pin('nombre', '✏️ Cambio de nombre inmediato', c.precios.nombre)
+    + pin('packDescuento', '🎁 Descuento de los packs de estilo (%)', c.precios.packDescuento ?? 25, 'Se cobra solo lo que le falta a cada persona, con este descuento (0 a 60 %)')
     + pin('promoLive', '🚀 Paquetes para promover un live', (c.precios.promoLive || []).join(', '), 'Separados por coma. Suman un plus al puesto del live (lo orgánico pesa más: espectadores, seguidores, descargas)')
     + pin('refInvitador', '🤝 Referidos · UC para quien invita', c.precios.refInvitador, 'Se paga cuando el invitado verifica su email (UC de regalo, no retirables). 0 = nada')
     + pin('refInvitado', '🎁 Referidos · UC de bienvenida al invitado', c.precios.refInvitado)

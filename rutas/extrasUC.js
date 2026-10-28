@@ -54,6 +54,7 @@ function registrar(app, deps) {
         cosmeticos: c.cosmeticos.filter(x => x.activo || x.soloMision).map(({ id, tipo, nombre, emoji, precio, soloMision }) => ({ id, tipo, nombre, emoji, precio, soloMision: !!soloMision })),
         misiones: c.activo.misiones ? c.misiones.filter(m => m.activa).map(({ id, titulo, objetivo, uc, insignia }) => ({ id, titulo, objetivo, uc, insignia })) : [],
         prioridadHoras: HORAS_PRIORIDAD, fundadorHasta: X.FUNDADOR_HASTA.toISOString(),
+        packs: c.activo.cosmeticos && c.activo.packs ? X.PACKS.filter(p => X.precioPack(c, p)) : [],
     });
     app.get('/extras/catalogo', async (req, res) => {
         try { res.set('Cache-Control', 'public, max-age=60'); ok(res, publicoCfg(await X.config())); }
@@ -107,6 +108,34 @@ function registrar(app, deps) {
             });
             code === 200 ? ok(res, body) : err(res, code, body.error, { monedas: body.monedas, faltan: body.faltan });
         } catch (e) { logger.error(`[extras] cosmético: ${e.message}`); err(res, 500, 'No se pudo completar la compra'); }
+    });
+
+    // Pack a juego: se cobra solo lo que falta (con descuento), todo en una sola compra, y se equipa
+    app.post('/extras/pack', verificarToken, async (req, res) => {
+        try {
+            const c = await X.config();
+            if (!c.activo.cosmeticos || !c.activo.packs) return err(res, 409, 'Los packs no están disponibles por ahora');
+            const pack = X.PACKS.find(p => p.id === req.body?.id);
+            if (!pack || !X.precioPack(c, pack)) return err(res, 404, 'Ese pack no está a la venta');
+            if (!claveOk(req.body?.clave)) return err(res, 400, 'Falta la clave del pago');
+            const [code, body] = await unaVez(`${req.usuario}:${pack.id}`, async () => {
+                const yo = await Usuario.findOne({ usuario: req.usuario }).select('cosmeticos estilo').lean();
+                const pr = X.precioPack(c, pack, yo?.cosmeticos || []);
+                if (pr.completo) return [409, { error: 'Ya tienes todo este pack' }];
+                const [st, b] = await cobrarConRegistro(req.usuario, pr.precio, `pack:${req.usuario}:${pack.id}:${req.body.clave}`, { tipo: 'compra', planId: `pack:${pack.id}` });
+                if (st !== 200 || b.repetido) return [st, b];
+                const arts = pack.items.map(id => c.cosmeticos.find(x => x.id === id)), set = {};
+                for (const a of arts) if (a.tipo !== 'insignia') set[`estilo.${a.tipo}`] = a.id;
+                const ins = [...(yo?.estilo?.insignias || [])];
+                for (const a of arts) if (a.tipo === 'insignia' && !ins.includes(a.id) && ins.length < 3) ins.push(a.id);
+                set['estilo.insignias'] = ins;
+                await Usuario.updateOne({ usuario: req.usuario }, { $addToSet: { cosmeticos: { $each: pack.items } }, $set: set });
+                deps.olvidarPerfil?.(req.usuario);
+                logger.info(`[extras] @${req.usuario} compró el pack ${pack.id} (${pr.precio} UC, ahorro ${pr.lleno - pr.precio})`);
+                return [200, { comprado: pack.id, pagado: pr.precio, ahorro: pr.lleno - pr.precio, upcoins: await totalUC(req.usuario) }];
+            });
+            code === 200 ? ok(res, body) : err(res, code, body.error, { monedas: body.monedas, faltan: body.faltan });
+        } catch (e) { logger.error(`[extras] pack: ${e.message}`); err(res, 500, 'No se pudo completar la compra'); }
     });
 
     app.put('/extras/estilo', verificarToken, async (req, res) => {
@@ -314,7 +343,7 @@ function registrar(app, deps) {
             const c = await X.config();
             const desde = new Date(Date.now() - 30 * 864e5);
             const [ventas, prioridadPend, misionesSem] = await Promise.all([
-                LiveTx.aggregate([{ $match: { fecha: { $gte: desde }, estado: { $ne: 'revertida' }, $or: [{ regaloId: { $in: ['superchat', 'apoyo'] } }, { planId: /^(cosmetico:|prioridad:|promolive:|nombre$)/ }, { tipo: 'mision' }, { tipo: 'plan', destinatario: { $nin: ['', null] } }] } },
+                LiveTx.aggregate([{ $match: { fecha: { $gte: desde }, estado: { $ne: 'revertida' }, $or: [{ regaloId: { $in: ['superchat', 'apoyo'] } }, { planId: /^(cosmetico:|pack:|prioridad:|promolive:|nombre$)/ }, { tipo: 'mision' }, { tipo: 'plan', destinatario: { $nin: ['', null] } }] } },
                     { $group: { _id: { $switch: { branches: [
                         { case: { $in: ['$regaloId', ['superchat', 'apoyo']] }, then: '$regaloId' },
                         { case: { $eq: ['$tipo', 'mision'] }, then: 'mision' },

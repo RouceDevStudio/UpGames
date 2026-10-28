@@ -2016,6 +2016,35 @@ function pfpRender() {
   const ul = document.getElementById('pfp-check');
   if (ul) ul.innerHTML = items.map(([ok, txt], i) => `<li class="${ok ? 'ok' : i === 3 ? 'opc' : 'falta'}">${ok ? '✓' : i === 3 ? '○' : '•'} ${ugEsc(txt)}</li>`).join('');
 }
+// Plantillas de descripción por categoría (modulos/plantillas.js) y "Que NEXUS la escriba"
+let _pfpPlantillas = null;
+async function pfpPlantilla() {
+  const ta = document.getElementById('pf-addDescription'); if (!ta) return;
+  try { if (!_pfpPlantillas) _pfpPlantillas = (await (await fetch(`${API_URL}/items/plantillas`)).json()).plantillas || {}; } catch (_) { return toast('⚠️ No se pudo cargar la plantilla'); }
+  const cat = document.getElementById('pf-addCategory')?.value || 'Juego', tpl = _pfpPlantillas[cat] || _pfpPlantillas.Juego || '';
+  if (ta.value.trim() && !confirm('¿Reemplazar lo que ya escribiste por la plantilla?')) return;
+  ta.value = tpl; ta.dispatchEvent(new Event('input', { bubbles: true })); ta.focus();
+  const i = tpl.indexOf('• \n'); if (i >= 0) ta.setSelectionRange(i + 2, i + 2);   // cursor en el primer espacio por llenar
+}
+async function pfpNexusDescribe() {
+  const ta = document.getElementById('pf-addDescription'), b = document.getElementById('pfp-nexus-desc'); if (!ta || !b) return;
+  const title = (document.getElementById('pf-addTitle')?.value || '').trim();
+  if (title.length < 3) return toast('✏️ Escribe primero el título');
+  const tk = LS.get('token'); if (!tk) return ugPedirSesion('usar NEXUS');
+  if (ta.value.trim() && !confirm('NEXUS reemplazará lo que escribiste. ¿Continuar?')) return;
+  const extras = {}; document.querySelectorAll('#pf-extra-fields [id]').forEach(x => { if (x.value) extras[x.id.replace(/^pf-extra-?/, '')] = x.value; });
+  b.disabled = true; const txt = b.textContent; b.textContent = '✦ Escribiendo…';
+  try {
+    const r = await fetch(`${API_URL}/items/describir`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tk}` },
+      body: JSON.stringify({ title, category: document.getElementById('pf-addCategory')?.value || 'Juego', extras }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.success) return toast('⚠️ ' + (d.error || 'NEXUS no pudo escribirla ahora'));
+    ta.value = d.descripcion; ta.dispatchEvent(new Event('input', { bubbles: true }));
+    toast(d.fuente === 'nexus' ? '✦ Lista. Revísala y completa lo que diga "(complétalo)"' : '📋 Te dejamos la plantilla con lo que sabemos del título');
+  } catch (_) { toast('⚠️ Error de conexión'); }
+  finally { b.disabled = false; b.textContent = txt; }
+}
+
 // Los campos que llenan la nube o NEXUS cambian sin evento "input": se revisa cada 700 ms solo con el formulario abierto
 function pfpVigilar(on) { clearInterval(_pfpTimer); _pfpTimer = on ? setInterval(() => { if (!document.hidden) pfpRender(); }, 700) : null; if (on) { _pfpSnap = ''; pfpRender(); } }
 document.getElementById('pf-tab-publicar')?.addEventListener('input', () => pfpRender());
@@ -3840,7 +3869,7 @@ function pfCloseSettings() {
 function pfxGrupo(g) {
   document.querySelectorAll('#pf-settingsModal .pfx-tabs [data-g]').forEach(b => { const on = b.dataset.g === g; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
   document.querySelectorAll('#pf-settingsModal .pfx-grupo').forEach(x => x.classList.toggle('on', x.dataset.g === g));
-  if (g === 'estilo') window.UGX?.tienda?.(pfxGrupo.tipo || 'marco', document.getElementById('pfx-estilo'));
+  if (g === 'estilo') window.UGX?.tienda?.(pfxGrupo.tipo || 'pack', document.getElementById('pfx-estilo'));   // abre en Packs (si no hay, en Marcos)
 }
 function pfSwitchSettings(type, el) {
   const g = PFX_GRUPO[type] || 'perfil';

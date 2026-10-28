@@ -422,7 +422,7 @@ function emailAvisoTemplate(usuario, mensajeHtml) {
     </div>`;
 }
 
-function emailResetTemplate(usuario, link) {
+function emailResetTemplate(usuario, link, codigo) {
     return `
     <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;background:#0a0a0f;color:#f0f0f8;border-radius:12px;overflow:hidden">
       <div style="background:linear-gradient(135deg,#1a1a24,#0f0f18);padding:32px 28px;text-align:center;border-bottom:1px solid rgba(94,255,67,.15)">
@@ -434,8 +434,11 @@ function emailResetTemplate(usuario, link) {
       <div style="padding:32px 28px">
         <h2 style="font-size:20px;margin:0 0 12px;font-weight:700">Hola, @${usuario} 🔐</h2>
         <p style="color:#a0a0b8;line-height:1.6;margin:0 0 24px">
-          Recibimos una solicitud para restablecer tu contraseña. Haz clic en el botón de abajo para crear una nueva.
+          Recibimos una solicitud para restablecer tu contraseña. ${codigo ? 'Escribe este código en la página de UpGames:' : 'Haz clic en el botón de abajo para crear una nueva.'}
         </p>
+        ${codigo ? `<div style="text-align:center;margin:8px 0 22px"><div style="display:inline-block;padding:16px 26px;background:#12121c;border:1px solid rgba(94,255,67,.35);border-radius:12px;font-size:34px;font-weight:900;letter-spacing:10px;color:#5EFF43;font-family:'Courier New',monospace">${codigo}</div>
+          <p style="color:#60607a;font-size:12px;margin:10px 0 0">El código vence en <strong>15 minutos</strong>. Nunca lo compartas: nadie de UpGames te lo pedirá.</p></div>
+        <p style="color:#a0a0b8;line-height:1.6;margin:0 0 8px;text-align:center;font-size:13px">¿Prefieres un clic? También puedes usar el botón:</p>` : ''}
         <div style="text-align:center;margin:28px 0">
           <a href="${link}" style="display:inline-block;padding:14px 32px;background:#5EFF43;color:#000;font-weight:800;font-size:15px;border-radius:8px;text-decoration:none;letter-spacing:.02em">
             🔑 Restablecer contraseña
@@ -612,6 +615,10 @@ const UsuarioSchema = new mongoose.Schema({
     emailVerifExpires:   { type: Date, default: null },
     resetPasswordToken:  { type: String, default: null },
     resetPasswordExpires:{ type: Date, default: null },
+    // Recuperación con código de 6 dígitos (se guarda solo su hash; 15 min y 5 intentos)
+    resetCodigoHash:    { type: String, default: null },
+    resetCodigoExpires: { type: Date, default: null },
+    resetCodigoIntentos:{ type: Number, default: 0 },
     bloqueados:  { type: [String], default: [] },   // usuarios bloqueados en el chat
     // Panel admin: '' = usuario normal. El dueño se reconoce por OWNER_EMAIL (rutas/adminPanel.js)
     adminRol:      { type: String, default: '', index: true },   // clave de ROLES en rutas/adminPanel.js
@@ -913,13 +920,42 @@ app.post('/auth/forgot-password', [body('email').isEmail().normalizeEmail(EMAIL_
         if (!usuario || !(await correoPermitido('reset', email)))
             return res.json({ success: true, mensaje: 'Si el email está registrado, recibirás un link para restablecer tu contraseña.' });
         const resetToken = crypto.randomBytes(32).toString('hex');
-        await Usuario.updateOne({ _id: usuario._id }, { $set: { resetPasswordToken: resetToken, resetPasswordExpires: new Date(Date.now() + 60 * 60 * 1000) } });
+        const codigo = String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+        await Usuario.updateOne({ _id: usuario._id }, { $set: { resetPasswordToken: resetToken, resetPasswordExpires: new Date(Date.now() + 60 * 60 * 1000),
+            resetCodigoHash: hashCodigo(usuario._id, codigo), resetCodigoExpires: new Date(Date.now() + 15 * 60 * 1000), resetCodigoIntentos: 0 } });
         const resetLink = `${APP_URL}?reset_token=${resetToken}`;
-        await sendEmail({ to: email, subject: '🔑 Restablece tu contraseña de UpGames', html: emailResetTemplate(usuario.usuario, resetLink) });
+        await sendEmail({ to: email, subject: `🔑 ${codigo} es tu código para restablecer la contraseña de UpGames`, html: emailResetTemplate(usuario.usuario, resetLink, codigo) });
         logger.info(`Reset de contraseña solicitado: @${usuario.usuario}`);
         res.json({ success: true, mensaje: 'Si el email está registrado, recibirás un link para restablecer tu contraseña.' });
     } catch (err) {
         logger.error(`Error en forgot-password: ${err.message}`);
+        res.status(500).json({ success: false, error: 'Error interno' });
+    }
+});
+
+// Código de 6 dígitos: se compara su hash (nunca se guarda el código); 5 intentos por código y 20 por IP/hora
+const hashCodigo = (id, codigo) => crypto.createHash('sha256').update(`${id}:${codigo}:${JWT_SECRET}`).digest('hex');
+app.post('/auth/reset-codigo', [body('email').isEmail().normalizeEmail(EMAIL_NORMALIZE_OPTS), body('codigo').isString()], async (req, res) => {
+    try {
+        const errors = validationResult(req);
+        const codigo = String(req.body.codigo || '').replace(/\D/g, '');
+        if (!errors.isEmpty() || codigo.length !== 6) return res.status(400).json({ success: false, error: 'Escribe el código de 6 dígitos que te enviamos' });
+        if (!(await Limites.permitir(`reset-codigo:${req.ip || ''}`, [[Limites.HORA, 20]]))) return res.status(429).json({ success: false, error: 'Demasiados intentos. Espera un rato y pide un código nuevo.' });
+        const malo = { success: false, error: 'El código no es correcto o ya venció. Revisa tu correo o pide uno nuevo.' };
+        const u = await Usuario.findOne({ email: req.body.email.toLowerCase() }).select('_id usuario resetCodigoHash resetCodigoExpires resetCodigoIntentos resetPasswordToken resetPasswordExpires').lean();
+        if (!u || !u.resetCodigoHash || !u.resetCodigoExpires || u.resetCodigoExpires < new Date() || !u.resetPasswordToken || u.resetPasswordExpires < new Date()) return res.status(400).json(malo);
+        if ((u.resetCodigoIntentos || 0) >= 5) return res.status(400).json({ success: false, error: 'Superaste los intentos para este código. Pide uno nuevo.' });
+        const a = Buffer.from(hashCodigo(u._id, codigo)), b = Buffer.from(u.resetCodigoHash);
+        if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+            await Usuario.updateOne({ _id: u._id }, { $inc: { resetCodigoIntentos: 1 } });
+            const quedan = Math.max(0, 4 - (u.resetCodigoIntentos || 0));
+            return res.status(400).json({ ...malo, quedan, error: quedan ? `El código no es correcto. Te quedan ${quedan} intento${quedan === 1 ? '' : 's'}.` : 'Superaste los intentos para este código. Pide uno nuevo.' });
+        }
+        // Un solo uso: el código se borra y se entrega el permiso para elegir la contraseña nueva
+        await Usuario.updateOne({ _id: u._id }, { $set: { resetCodigoHash: null, resetCodigoExpires: null, resetCodigoIntentos: 0 } });
+        res.json({ success: true, token: u.resetPasswordToken, usuario: u.usuario });
+    } catch (err) {
+        logger.error(`Error en reset-codigo: ${err.message}`);
         res.status(500).json({ success: false, error: 'Error interno' });
     }
 });
@@ -932,7 +968,7 @@ app.post('/auth/reset-password', [body('token').notEmpty(), body('password').isL
         const usuario = await Usuario.findOne({ resetPasswordToken: token, resetPasswordExpires: { $gt: new Date() } });
         if (!usuario) return res.status(400).json({ success: false, error: 'El link es inválido o ya expiró. Solicita uno nuevo.' });
         // updateOne (no save): una cuenta antigua que no cumpla alguna validación actual no debe quedar sin poder recuperar su contraseña
-        await Usuario.updateOne({ _id: usuario._id }, { $set: { password: await bcrypt.hash(password, 10), resetPasswordToken: null, resetPasswordExpires: null }, $inc: { sesionVer: 1 } });   // cierra todas las sesiones abiertas
+        await Usuario.updateOne({ _id: usuario._id }, { $set: { password: await bcrypt.hash(password, 10), resetPasswordToken: null, resetPasswordExpires: null, resetCodigoHash: null, resetCodigoExpires: null, resetCodigoIntentos: 0 }, $inc: { sesionVer: 1 } });   // cierra todas las sesiones abiertas
         versionSesion.delete(usuario.usuario);
         logger.info(`Contraseña restablecida: @${usuario.usuario}`);
         res.json({ success: true, mensaje: 'Contraseña actualizada correctamente. Ya puedes iniciar sesión.' });
@@ -1673,7 +1709,7 @@ app.put('/admin/users/ajustar-saldo/:id', verificarAdmin, [param('id').isMongoId
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: "Datos inválidos" });
         const { saldo, motivo } = req.body;
-        const user = await Usuario.findByIdAndUpdate(req.params.id, { $set: { saldo: parseFloat(saldo) } }, { new: true }).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires -cobro.cifrado');
+        const user = await Usuario.findByIdAndUpdate(req.params.id, { $set: { saldo: parseFloat(saldo) } }, { new: true }).select('-password -resetPasswordToken -resetPasswordExpires -resetCodigoHash -emailVerifToken -emailVerifExpires -cobro.cifrado');
         if (!user) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
         logger.info(`ADMIN: Saldo ajustado @${user.usuario} → $${saldo} (${motivo || 'Sin motivo'})`);
         res.json({ success: true, usuario: user.usuario, nuevoSaldo: user.saldo });
@@ -2260,6 +2296,30 @@ app.get('/items/autoinfo', async (req, res) => {
     }
 });
 
+// Plantillas de descripción y "Que NEXUS la escriba": llena la plantilla con lo que se sabe del título,
+// sin inventar datos (deja "(complétalo)" donde no hay certeza). 10 por usuario y hora.
+const Plantillas = require('./modulos/plantillas');
+app.get('/items/plantillas', (req, res) => res.set('Cache-Control', 'public, max-age=3600').json({ success: true, plantillas: Plantillas.PLANTILLAS }));
+app.post('/items/describir', verificarToken, async (req, res) => {
+    try {
+        const title = String(req.body?.title || '').trim().slice(0, 120), cat = String(req.body?.category || 'Juego').slice(0, 30);
+        if (title.length < 3) return res.status(400).json({ success: false, error: 'Escribe primero el título' });
+        if (!(await Limites.permitir(`describir:${req.usuario}`, [[Limites.HORA, 10]]))) return res.status(429).json({ success: false, error: 'Ya pediste varias descripciones. Intenta en un rato.' });
+        const base = Plantillas.plantilla(cat);
+        const info = await autoInfo.lookup(title, cat).catch(() => null);
+        const extras = Object.entries(req.body?.extras || {}).filter(([k, v]) => typeof v === 'string' && v.trim()).slice(0, 8).map(([k, v]) => `${k}: ${v.slice(0, 80)}`).join('\n');
+        const r = await nexusLLM.json(`Eres NEXUS, el asistente de UpGames. Escribe la descripción de una publicación de la categoría "${cat}" en español neutro, clara y útil.
+Usa EXACTAMENTE esta estructura (mismos títulos con emoji y viñetas) y llénala:
+${base}
+Reglas: no inventes requisitos, versiones, tamaños ni datos técnicos que no conozcas con certeza: en esos casos escribe "(complétalo)". No prometas nada ilegal ni "gratis/full/crack". Máximo 900 caracteres.
+Responde SOLO JSON: {"descripcion":"..."}`, `Título: ${title}\n${info?.description ? 'Lo que se sabe: ' + String(info.description).slice(0, 500) + '\n' : ''}${extras ? 'Datos del creador:\n' + extras : ''}`, { rapido: true, maxTokens: 700, timeout: 20000 }).catch(() => null);
+        const desc = String(r?.descripcion || '').replace(/\r/g, '').trim().slice(0, 1000);
+        if (desc.length >= 40) return res.json({ success: true, descripcion: desc, fuente: 'nexus' });
+        // Sin IA: la plantilla con lo que se sabe del título al inicio
+        res.json({ success: true, descripcion: (info?.description ? String(info.description).slice(0, 300) + '\n\n' : '') + base, fuente: 'plantilla' });
+    } catch (e) { logger.error(`[describir] ${e.message}`); res.status(500).json({ success: false, error: 'No se pudo generar la descripción' }); }
+});
+
 // GET /items/:id/serie — todas las partes de la serie de esta publicación, en orden
 app.get('/items/:id/serie', async (req, res) => {
     try {
@@ -2317,7 +2377,7 @@ app.get('/auth/users', verificarAdmin, async (req, res) => {
         const [total, users] = await Promise.all([
             Usuario.countDocuments(q),
             // Nunca exponer hashes ni tokens de reset/verificación (un sub-admin podría secuestrar cuentas)
-            Usuario.find(q).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires -cobro.cifrado').sort({ fecha: -1 }).skip(skip).limit(limit).lean()
+            Usuario.find(q).select('-password -resetPasswordToken -resetPasswordExpires -resetCodigoHash -emailVerifToken -emailVerifExpires -cobro.cifrado').sort({ fecha: -1 }).skip(skip).limit(limit).lean()
         ]);
         users.forEach(u => { u.esDueno = adminPanel.esOwnerEmail(u.email); });
         res.json({ users, total, page, limit, pages: Math.ceil(total / limit) });
@@ -2328,7 +2388,7 @@ app.get('/auth/users', verificarAdmin, async (req, res) => {
 
 app.get('/admin/users/detalle/:id', verificarAdmin, async (req, res) => {
     try {
-        const user = await Usuario.findById(req.params.id).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires -cobro.cifrado').lean();
+        const user = await Usuario.findById(req.params.id).select('-password -resetPasswordToken -resetPasswordExpires -resetCodigoHash -emailVerifToken -emailVerifExpires -cobro.cifrado').lean();
         if (!user) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
         const juegos = await Juego.find({ usuario: user.usuario }).select('title status descargasEfectivas likesCount linkStatus createdAt').lean();
         res.json({ success: true, user, juegos });
@@ -2342,7 +2402,7 @@ app.put('/admin/users/lista-negra/:id', verificarAdmin, [body('listaNegraAdmin')
         const { listaNegraAdmin, notasAdmin } = req.body;
         const updates = { listaNegraAdmin: !!listaNegraAdmin, fechaListaNegra: listaNegraAdmin ? new Date() : null };
         if (notasAdmin !== undefined) updates.notasAdmin = notasAdmin;
-        const user = await Usuario.findByIdAndUpdate(req.params.id, { $set: updates }, { new: true }).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires -cobro.cifrado');
+        const user = await Usuario.findByIdAndUpdate(req.params.id, { $set: updates }, { new: true }).select('-password -resetPasswordToken -resetPasswordExpires -resetCodigoHash -emailVerifToken -emailVerifExpires -cobro.cifrado');
         if (!user) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
         logger.warn(`Lista negra actualizada: @${user.usuario} → ${listaNegraAdmin}`);
         res.json({ success: true, user });
@@ -2353,7 +2413,7 @@ app.put('/admin/users/lista-negra/:id', verificarAdmin, [body('listaNegraAdmin')
 
 app.put('/admin/users/notas/:id', verificarAdmin, [body('notasAdmin').trim().isLength({ max: 500 })], async (req, res) => {
     try {
-        const user = await Usuario.findByIdAndUpdate(req.params.id, { $set: { notasAdmin: req.body.notasAdmin } }, { new: true }).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires -cobro.cifrado');
+        const user = await Usuario.findByIdAndUpdate(req.params.id, { $set: { notasAdmin: req.body.notasAdmin } }, { new: true }).select('-password -resetPasswordToken -resetPasswordExpires -resetCodigoHash -emailVerifToken -emailVerifExpires -cobro.cifrado');
         if (!user) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
         res.json({ success: true, mensaje: "Notas actualizadas" });
     } catch (error) {
@@ -2363,7 +2423,7 @@ app.put('/admin/users/notas/:id', verificarAdmin, [body('notasAdmin').trim().isL
 
 app.get('/admin/users/lista-negra', verificarAdmin, async (req, res) => {
     try {
-        const users = await Usuario.find({ listaNegraAdmin: true }).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires -cobro.cifrado').sort({ fechaListaNegra: -1 }).lean();
+        const users = await Usuario.find({ listaNegraAdmin: true }).select('-password -resetPasswordToken -resetPasswordExpires -resetCodigoHash -emailVerifToken -emailVerifExpires -cobro.cifrado').sort({ fechaListaNegra: -1 }).lean();
         res.json({ success: true, users, total: users.length });
     } catch (error) {
         res.status(500).json({ success: false, error: "Error al obtener lista negra" });
@@ -2386,7 +2446,7 @@ app.put('/auth/admin/verificacion/:username', verificarAdmin, [body('nivel').isI
     try {
         const { username } = req.params;
         const { nivel } = req.body;
-        const user = await Usuario.findOneAndUpdate({ usuario: username.toLowerCase() }, { $set: { verificadoNivel: nivel } }, { new: true }).select('-password -resetPasswordToken -resetPasswordExpires -emailVerifToken -emailVerifExpires -cobro.cifrado');
+        const user = await Usuario.findOneAndUpdate({ usuario: username.toLowerCase() }, { $set: { verificadoNivel: nivel } }, { new: true }).select('-password -resetPasswordToken -resetPasswordExpires -resetCodigoHash -emailVerifToken -emailVerifExpires -cobro.cifrado');
         if (!user) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
         logger.info(`Verificación actualizada: @${username} → Nivel ${nivel}`);
         // ⭐ Recalcular scores al cambiar nivel
@@ -2444,13 +2504,16 @@ app.get('/usuarios/perfil-publico/:usuario', async (req, res) => {
             // LISTA BLANCA: antes se devolvía el documento entero (menos password y
             // paypalEmail) — incluía resetPasswordToken, email, IP, saldo y tarjetas.
             Usuario.findOne({ usuario: username })
-                .select('usuario avatar banner bio verificadoNivel isVerificado socialLinks ultimoLogin createdAt fecha listaSeguidores siguiendo estilo planHasta')
+                .select('usuario avatar banner bio verificadoNivel isVerificado socialLinks ultimoLogin createdAt fecha listaSeguidores siguiendo estilo planHasta cosmeticos')
                 .lean(),
             Juego.countDocuments({ usuario: username, status: 'aprobado' })
         ]);
         if (!user) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
-        const { listaSeguidores, siguiendo, _id, planHasta, ...publico } = user;
-        res.json({ success: true, usuario: { ...publico, premium: !!(planHasta && new Date(planHasta) > new Date()), publicaciones, seguidores: listaSeguidores?.length || 0, siguiendo: siguiendo?.length || 0 } });
+        const { listaSeguidores, siguiendo, _id, planHasta, cosmeticos, ...publico } = user;
+        // Vitrina: insignias que tiene (todas, no solo las 3 que muestra) y cuántos artículos de estilo coleccionó
+        const ids = new Set(require('./modulos/extras').COSMETICOS.map(c => c.id)), suyos = (cosmeticos || []).filter(c => ids.has(c));
+        const coleccion = { total: suyos.length, insignias: suyos.filter(c => c.startsWith('ins_')) };
+        res.json({ success: true, usuario: { ...publico, coleccion, premium: !!(planHasta && new Date(planHasta) > new Date()), publicaciones, seguidores: listaSeguidores?.length || 0, siguiendo: siguiendo?.length || 0 } });
     } catch (err) {
         res.status(500).json({ success: false, error: "Error al cargar perfil" });
     }

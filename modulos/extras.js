@@ -68,6 +68,17 @@ const COSMETICOS = [
     { id: 'ins_fundador', tipo: 'insignia', nombre: 'Fundador', emoji: '🏛️', precio: 0, soloMision: true },
 ];
 
+// Packs a juego: marco + color + fondo (+ insignia). Se cobran solo los artículos que te faltan, con descuento.
+const PACKS = [
+    { id: 'pack_hielo', nombre: 'Glaciar', emoji: '❄️', items: ['marco_hielo', 'color_hielo', 'fondo_oceano'] },
+    { id: 'pack_fuego', nombre: 'Infierno', emoji: '🔥', items: ['marco_fuego', 'color_fuego', 'fondo_lava'] },
+    { id: 'pack_ciber', nombre: 'Ciberpunk', emoji: '👾', items: ['marco_glitch', 'color_rosa', 'fondo_neon'] },
+    { id: 'pack_matrix', nombre: 'Hacker', emoji: '💾', items: ['marco_toxico', 'color_verde', 'fondo_matrix'] },
+    { id: 'pack_galaxia', nombre: 'Cósmico', emoji: '🌌', items: ['marco_galaxia', 'color_arcoiris', 'fondo_espacio'] },
+    { id: 'pack_dragon', nombre: 'Dragón legendario', emoji: '🐉', items: ['marco_dragon', 'color_fuego', 'fondo_lava', 'ins_leyenda'] },
+    { id: 'pack_realeza', nombre: 'Realeza', emoji: '👑', items: ['marco_diamante', 'color_oro', 'fondo_atardecer', 'ins_realeza'] },
+];
+
 // Tipos de misión que el servidor sabe contar (el admin elige objetivo y recompensa)
 const TIPOS_MISION = {
     comentar: 'Comenta publicaciones distintas',
@@ -79,10 +90,10 @@ const TIPOS_MISION = {
 };
 
 const DEFECTO = {
-    activo: { cosmeticos: true, superchat: true, apoyar: true, prioridad: true, regalarPremium: true, nombre: true, misiones: true, referidos: true, promoLive: true },
+    activo: { cosmeticos: true, packs: true, superchat: true, apoyar: true, prioridad: true, regalarPremium: true, nombre: true, misiones: true, referidos: true, promoLive: true },
     // refInvitador/refInvitado: UC de regalo al verificar el email · refMaxMes: invitaciones pagadas por mes
     // promoLive: paquetes para promover un live (suman al puntaje del directorio mientras dure el live)
-    precios: { superchat: [20, 50, 100, 200], apoyo: [10, 50, 100], prioridad: 30, nombre: 100, refInvitador: 20, refInvitado: 10, refMaxMes: 20, promoLive: [30, 60, 150, 300] },
+    precios: { superchat: [20, 50, 100, 200], apoyo: [10, 50, 100], prioridad: 30, nombre: 100, refInvitador: 20, refInvitado: 10, refMaxMes: 20, promoLive: [30, 60, 150, 300], packDescuento: 25 },
     cosmeticos: {},   // { id: { precio, activo } } — cambios del admin sobre el catálogo base
     misiones: [
         { id: 'm_comentar', tipo: 'comentar', titulo: 'Comenta 5 publicaciones', objetivo: 5, uc: 5, insignia: '', activa: true },
@@ -134,7 +145,7 @@ async function guardar(cambios = {}) {
             p[k] = l.sort((a, b) => a - b);
         }
         for (const k of ['prioridad', 'nombre']) if (c[k] != null) { const n = entero(c[k], 1, 100000); if (n == null) malo(`Precio de ${k} no válido`); p[k] = n; }
-        for (const [k, max] of [['refInvitador', 500], ['refInvitado', 500], ['refMaxMes', 1000]]) if (c[k] != null) { const n = entero(c[k], 0, max); if (n == null) malo(`Valor de ${k} no válido (0 a ${max})`); p[k] = n; }
+        for (const [k, max] of [['refInvitador', 500], ['refInvitado', 500], ['refMaxMes', 1000], ['packDescuento', 60]]) if (c[k] != null) { const n = entero(c[k], 0, max); if (n == null) malo(`Valor de ${k} no válido (0 a ${max})`); p[k] = n; }
         set.precios = p;
     }
     if (cambios.cosmeticos) {
@@ -254,4 +265,13 @@ async function reclamar(Usuario, usuario, misionId) {
     return { status: 200, uc: m.uc, insignia: m.insignia || null };
 }
 
-module.exports = { COSMETICOS, TIPOS_MISION, DEFECTO, SUPERCHAT_SEG, FUNDADOR_HASTA, config, guardar, semana, finSemana, evento, estado, reclamar };
+/** Precio de un pack para quien ya tiene `mios`: suma de lo que falta, con descuento. null si no está disponible. */
+function precioPack(c, pack, mios = []) {
+    const tiene = new Set(mios), arts = pack.items.map(id => c.cosmeticos.find(x => x.id === id));
+    if (arts.some(a => !a || !a.activo || a.soloMision)) return null;
+    const faltan = arts.filter(a => !tiene.has(a.id));
+    const lleno = faltan.reduce((t, a) => t + a.precio, 0);
+    return { faltan: faltan.map(a => a.id), lleno, precio: Math.max(1, Math.round(lleno * (1 - (c.precios.packDescuento || 0) / 100))), completo: !faltan.length };
+}
+
+module.exports = { PACKS, precioPack, COSMETICOS, TIPOS_MISION, DEFECTO, SUPERCHAT_SEG, FUNDADOR_HASTA, config, guardar, semana, finSemana, evento, estado, reclamar };

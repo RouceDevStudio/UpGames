@@ -29,7 +29,7 @@ function clasificar(tx) {
     else if (tx.tipo === 'acceso') producto = tx.metodo === 'pase' ? 'apertura_premium' : 'acceso';
     else if (/^ia/.test(tx.planId || '')) producto = 'nexus';
     else if (/^impulso/.test(tx.planId || '')) producto = 'destacar';
-    else if (/^cosmetico:/.test(tx.planId || '')) producto = 'estilo';
+    else if (/^(cosmetico|pack):/.test(tx.planId || '')) producto = 'estilo';
     else if (/^prioridad:/.test(tx.planId || '')) producto = 'prioridad';
     else if (tx.planId === 'nombre') producto = 'nombre';
     else if (/^promolive:/.test(tx.planId || '')) producto = 'promolive';
@@ -47,7 +47,7 @@ const EXPR_PRODUCTO = { $switch: { branches: [
     { case: { $eq: ['$tipo', 'acceso'] }, then: 'acceso' },
     { case: { $regexMatch: { input: { $ifNull: ['$planId', ''] }, regex: /^ia/ } }, then: 'nexus' },
     { case: { $regexMatch: { input: { $ifNull: ['$planId', ''] }, regex: /^impulso/ } }, then: 'destacar' },
-    { case: { $regexMatch: { input: { $ifNull: ['$planId', ''] }, regex: /^cosmetico:/ } }, then: 'estilo' },
+    { case: { $regexMatch: { input: { $ifNull: ['$planId', ''] }, regex: /^(cosmetico|pack):/ } }, then: 'estilo' },
     { case: { $regexMatch: { input: { $ifNull: ['$planId', ''] }, regex: /^prioridad:/ } }, then: 'prioridad' },
     { case: { $eq: ['$planId', 'nombre'] }, then: 'nombre' },
     { case: { $regexMatch: { input: { $ifNull: ['$planId', ''] }, regex: /^promolive:/ } }, then: 'promolive' },

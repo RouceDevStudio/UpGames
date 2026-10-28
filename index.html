@@ -502,7 +502,7 @@
 <script src="./public/upgames-pwa.js" defer></script>
 <link rel="apple-touch-icon" href="./public/icons/apple-touch-icon.png?v=2">
 <link rel="icon" type="image/png" sizes="192x192" href="./public/icons/icon-192.png?v=2">
-<script src="./public/upgames-errores.js?v=20261029a"></script>
+<script src="./public/upgames-errores.js?v=20261029b"></script>
 </head>
 <body>
 
@@ -560,7 +560,17 @@
                 <label for="forgot-email"><ion-icon name="mail-outline"></ion-icon> TU EMAIL REGISTRADO</label>
                 <input id="forgot-email" type="email" placeholder="tucorreo@ejemplo.com" autocomplete="email">
             </div>
-            <button id="forgot-btn" style="width:100%;padding:12px;background:rgba(50,213,131,.12);border:1px solid rgba(50,213,131,.3);border-radius:8px;color:#32D583;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;letter-spacing:.05em;margin-bottom:8px">ENVIAR LINK DE RECUPERACIÓN</button>
+            <button id="forgot-btn" style="width:100%;padding:12px;background:rgba(50,213,131,.12);border:1px solid rgba(50,213,131,.3);border-radius:8px;color:#32D583;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;letter-spacing:.05em;margin-bottom:8px">ENVIARME UN CÓDIGO</button>
+            <!-- Paso 2: el código de 6 dígitos que llega al correo -->
+            <div id="forgot-code-step" style="display:none;margin:6px 0 10px">
+                <div class="input-group">
+                    <label for="forgot-code"><ion-icon name="keypad-outline"></ion-icon> CÓDIGO DE 6 DÍGITOS</label>
+                    <input id="forgot-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••"
+                           style="text-align:center;font-size:26px;letter-spacing:12px;font-weight:800" oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)">
+                </div>
+                <button id="forgot-code-btn" style="width:100%;padding:12px;background:#32D583;border:0;border-radius:8px;color:#06210f;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;letter-spacing:.05em;margin-bottom:8px">VERIFICAR CÓDIGO</button>
+                <p style="text-align:center;font-size:12px;color:#a0a0b8;margin:4px 0">Revisa tu bandeja y la carpeta de spam. ¿No llegó? <a href="#" id="forgot-resend" style="color:#32D583">Enviar otro</a></p>
+            </div>
             <p style="text-align:center"><a href="#" id="back-to-login" style="font-size:12px;color:#a0a0b8;text-decoration:none">← Volver al login</a></p>
         </div>
 
@@ -681,7 +691,7 @@
 
         // ── Leer parámetros de URL ─────────────────────────
         const _urlP       = new URLSearchParams(window.location.search);
-        const _resetToken = _urlP.get('reset_token');
+        let _resetToken = _urlP.get('reset_token');   // del enlace del correo o del código de 6 dígitos
         const _verifStatus= _urlP.get('verif');
         // Motivo de un cierre de sesión forzado (contraseña cambiada en otro dispositivo, token vencido)
         try { const m = sessionStorage.getItem('ug_sesion_msg'); if (m) { sessionStorage.removeItem('ug_sesion_msg'); setTimeout(() => showMsg('🔒 ' + m, '#ffcc00'), 300); } } catch (_) {}
@@ -736,6 +746,7 @@
                 _forgotPanel.style.display = 'none';
                 els.msg.innerText = '';
             };
+            const codeStep = document.getElementById('forgot-code-step'), codeIn = document.getElementById('forgot-code'), codeBtn = document.getElementById('forgot-code-btn');
             if (forgotBtn) forgotBtn.onclick = async () => {
                 const email = document.getElementById('forgot-email').value.trim();
                 if (!email) { showMsg('⚠️ Ingresa tu email', '#ff4343'); return; }
@@ -747,9 +758,30 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ email })
                     });
-                    showMsg('📧 Si el email está registrado, recibirás el link en tu correo.', '#32D583');
+                    showMsg('📧 Si el email está registrado, te llegó un código de 6 dígitos (y un enlace). Escríbelo aquí.', '#32D583');
+                    codeStep.style.display = 'block'; forgotBtn.style.display = 'none'; setTimeout(() => codeIn.focus(), 100);
+                    // Solo se puede pedir otro código cada 2 minutos (el servidor ignora los anteriores)
+                    const rs = document.getElementById('forgot-resend'); let seg = 120; clearInterval(rs._t);
+                    const tick = () => { if (seg <= 0) { clearInterval(rs._t); rs.textContent = 'Enviar otro'; rs.style.pointerEvents = ''; rs.style.opacity = ''; return; } rs.textContent = `Enviar otro en ${seg--} s`; rs.style.pointerEvents = 'none'; rs.style.opacity = '.6'; };
+                    tick(); rs._t = setInterval(tick, 1000);
                 } catch (_) { showMsg('⚠️ Error de conexión. Intenta nuevamente.', '#ff4343'); }
-                forgotBtn.disabled = false; forgotBtn.innerText = 'ENVIAR LINK DE RECUPERACIÓN';
+                forgotBtn.disabled = false; forgotBtn.innerText = 'ENVIARME UN CÓDIGO';
+            };
+            document.getElementById('forgot-resend').onclick = e => { e.preventDefault(); codeStep.style.display = 'none'; forgotBtn.style.display = ''; forgotBtn.click(); };
+            codeIn.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); codeBtn.click(); } });
+            codeIn.addEventListener('input', () => { if (codeIn.value.length === 6) codeBtn.click(); });
+            codeBtn.onclick = async () => {
+                const email = document.getElementById('forgot-email').value.trim(), codigo = codeIn.value.trim();
+                if (codigo.length !== 6) { showMsg('⚠️ El código tiene 6 dígitos', '#ff4343'); return; }
+                if (codeBtn.disabled) return;
+                codeBtn.disabled = true; codeBtn.innerText = 'VERIFICANDO...';
+                try {
+                    const r = await fetch(`${API_URL}/auth/reset-codigo`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, codigo }) });
+                    const d = await r.json().catch(() => ({}));
+                    if (d.success && d.token) { _resetToken = d.token; showMsg('✅ Código correcto' + (d.usuario ? ` · cuenta @${String(d.usuario).replace(/[<>&"']/g, '')}` : '') + '. Crea tu nueva contraseña.', '#32D583'); _showResetPanel(); setTimeout(() => document.getElementById('new-pass').focus(), 100); }
+                    else { showMsg('❌ ' + (d.error || 'Código incorrecto'), '#ff4343'); codeIn.value = ''; codeIn.focus(); }
+                } catch (_) { showMsg('⚠️ Error de conexión. Intenta nuevamente.', '#ff4343'); }
+                codeBtn.disabled = false; codeBtn.innerText = 'VERIFICAR CÓDIGO';
             };
             if (resetBtn) resetBtn.onclick = async () => {
                 const p1 = document.getElementById('new-pass').value.trim();
@@ -985,7 +1017,7 @@
             if (e.key === "Enter") {
                 const fp = document.getElementById('forgot-panel');
                 const rp = document.getElementById('reset-panel');
-                if (fp && fp.style.display !== 'none') { document.getElementById('forgot-btn').click(); }
+                if (fp && fp.style.display !== 'none') { const cs = document.getElementById('forgot-code-step'); document.getElementById(cs && cs.style.display !== 'none' ? 'forgot-code-btn' : 'forgot-btn').click(); }
                 else if (rp && rp.style.display !== 'none') { document.getElementById('reset-btn').click(); }
                 else { els.btn.click(); }
             }

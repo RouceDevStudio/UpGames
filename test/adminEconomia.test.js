@@ -44,4 +44,8 @@ test('usos extra: Super Chat y apoyos son consumo de UC; misiones no son ingreso
     assert.strictEqual(clasificar({ tipo: 'compra', metodo: 'upcoins', planId: 'nombre' }).producto, 'nombre');
 });
 
+test('packs de estilo cuentan como estilo (consumo de UpCoins)', () => {
+    assert.deepStrictEqual(clasificar({ tipo: 'compra', metodo: 'upcoins', planId: 'pack:pack_hielo', monedas: 218 }), { producto: 'estilo', conDinero: false });
+});
+
 console.log(`\n${passed} pruebas OK`);
