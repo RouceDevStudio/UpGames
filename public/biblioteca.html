@@ -28,9 +28,9 @@
 <link rel="dns-prefetch" href="https://upgames-production.up.railway.app">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="biblioteca.css?v=20261028f">
-<link rel="stylesheet" href="upgames-glass.css?v=20261028f">
-<link rel="stylesheet" href="upgames-estilo.css?v=20261028f">
+<link rel="stylesheet" href="biblioteca.css?v=20261028g">
+<link rel="stylesheet" href="upgames-glass.css?v=20261028g">
+<link rel="stylesheet" href="upgames-estilo.css?v=20261028g">
 <!-- Widget de subida: solo se usa al publicar → diferido (antes bloqueaba el primer render) -->
 <script src="https://upload-widget.cloudinary.com/global/all.js" defer></script>
 
@@ -1499,11 +1499,12 @@
   TERMS MODAL
 ══════════════════════════════════ -->
 <!-- ══════════════════════════════════════════════════════
-  ONBOARDING — 5 SLIDES + TÉRMINOS
-  Se muestra automáticamente una vez por semana (upgames_terms_seen_ts)
-  Reemplaza al modal de terms anterior.
+  BIENVENIDA — 3 pantallas, UNA vez por versión de los términos
+  (script.js → TERMINOS_VERSION). Si los términos cambian, solo se
+  muestra un aviso pequeño, no esta bienvenida otra vez.
 ══════════════════════════════════════════════════════ -->
 <div id="onboarding-modal" aria-modal="true" role="dialog" aria-label="Bienvenida a UpGames">
+  <button type="button" class="ob-saltar" id="ob-saltar" aria-label="Saltar la bienvenida">Saltar</button>
 
   <!-- ── TRACK DE SLIDES ── -->
   <div class="ob-track" id="ob-track">
@@ -1579,253 +1580,51 @@
     </div>
 
     <!-- SLIDE 1 — Biblioteca + Videos -->
+    <!-- SLIDE 1 — Gana y usa tus UpCoins -->
     <div class="ob-slide" data-slide="1">
       <div class="ob-slide-inner">
-        <div class="ob-icon-wrap ob-icon-money">
-          <svg viewBox="0 0 48 48" fill="none" class="ob-svg">
-            <rect x="6" y="8" width="36" height="32" rx="4" stroke="url(#og1)" stroke-width="1.5" fill="none" opacity=".4"/>
-            <line x1="12" y1="18" x2="36" y2="18" stroke="#32D583" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="12" y1="24" x2="30" y2="24" stroke="#32D583" stroke-width="1.5" stroke-linecap="round" opacity=".7"/>
-            <line x1="12" y1="30" x2="24" y2="30" stroke="#32D583" stroke-width="1.5" stroke-linecap="round" opacity=".4"/>
-            <circle cx="38" cy="34" r="7" fill="rgba(90,200,250,.15)" stroke="#5AC8FA" stroke-width="1"/>
-            <polygon points="36,31 36,37 41,34" fill="#5AC8FA"/>
-            <defs>
-              <linearGradient id="og1" x1="6" y1="8" x2="42" y2="40">
-                <stop stop-color="#32D583"/><stop offset="1" stop-color="#5AC8FA"/>
-              </linearGradient>
-            </defs>
-          </svg>
+        <div class="ob-kicker ob-kicker-cy">Crea, gana y disfruta</div>
+        <h2 class="ob-title-sm">Publica una vez.<br><span class="ob-accent-g">Gana UpCoins para siempre.</span></h2>
+        <div class="ob-cpm-card">
+          <div class="ob-cpm-row"><span class="ob-cpm-label">Por cada 1.000 descargas verificadas</span><span class="ob-cpm-val">🪙 50 UpCoins</span></div>
+          <div class="ob-cpm-row ob-cpm-row-sub"><span class="ob-cpm-label">Regalos, Super Chats y apoyos de tus fans</span><span class="ob-cpm-val-sm">25 % para ti</span></div>
+          <div class="ob-cpm-row ob-cpm-row-sub"><span class="ob-cpm-label">Retira lo ganado · PayPal, Nequi, Daviplata, banco o Mercado Pago</span><span class="ob-cpm-val-sm">desde 500 UC</span></div>
         </div>
-        <div class="ob-kicker ob-kicker-cy">Biblioteca + Canal de Video</div>
-        <h2 class="ob-title-sm">Indexa todo.<br><span class="ob-accent-g">Sube tus videos.</span></h2>
-        <p class="ob-desc">
-          UpGames opera con <strong style="color:var(--g)">dos tipos de contenido legalmente distintos</strong>. La <strong style="color:var(--g)">Biblioteca</strong> indexa metadatos (links, textos, portadas) de juegos, mods, apps y software — <em>UpGames no almacena esos archivos</em>, solo la referencia. El <strong style="color:var(--cy)">Canal de Video</strong> funciona como YouTube: cada usuario publica y es responsable de su propio video, el cual sí se aloja en los servidores de UpGames vía Cloudinary.
-        </p>
         <div class="ob-nexus-feats">
-          <div class="ob-nfeat"><ion-icon name="link-outline"></ion-icon> <strong>Biblioteca (metadatos):</strong> Juegos · ROMs · Mods · Apps · Software · Herramientas — solo referencias indexadas por la comunidad</div>
-          <div class="ob-nfeat"><ion-icon name="sparkles-outline"></ion-icon> <strong>Reconocimiento automático:</strong> escribe el nombre (ej. "GTA V") y UpGames propone portada y descripción oficial al instante</div>
-          <div class="ob-nfeat"><ion-icon name="videocam-outline"></ion-icon> <strong>Canal de Video (contenido propio):</strong> Tutoriales · Gameplay · Reviews · Showcase — almacenados directamente en UpGames</div>
-          <div class="ob-nfeat"><ion-icon name="hardware-chip-outline"></ion-icon> NEXUS IA te recomienda contenido según lo que buscas, ves y guardas</div>
-          <div class="ob-nfeat"><ion-icon name="shield-checkmark-outline"></ion-icon> Distinción legal clara: los videos son contenido propio del usuario — cada creador asume su responsabilidad</div>
+          <div class="ob-nfeat"><ion-icon name="star-outline"></ion-icon> <strong>Premium</strong>: sin anuncios, NEXUS ilimitado y más visibilidad</div>
+          <div class="ob-nfeat"><ion-icon name="sparkles-outline"></ion-icon> Personaliza tu perfil y gana UpCoins con <strong>misiones semanales</strong></div>
+          <div class="ob-nfeat"><ion-icon name="hardware-chip-outline"></ion-icon> <strong>NEXUS IA</strong> te recomienda, resuelve dudas y te guía (10 mensajes gratis al día)</div>
         </div>
+        <p class="ob-note">1 UpCoin = US$0,02. Lo que ganas como creador se retira como dinero; lo que compras se usa dentro de UpGames.</p>
       </div>
     </div>
 
-    <!-- SLIDE 2 — Monetización real -->
+    <!-- SLIDE 2 — Reglas claras + aceptar -->
     <div class="ob-slide" data-slide="2">
       <div class="ob-slide-inner">
-        <div class="ob-icon-wrap ob-icon-nexus">
-          <svg viewBox="0 0 48 48" fill="none" class="ob-svg">
-            <circle cx="24" cy="24" r="18" stroke="url(#og2)" stroke-width="1.5" fill="none" opacity=".4"/>
-            <text x="24" y="30" text-anchor="middle" font-size="20" font-weight="900" fill="#32D583" font-family="sans-serif">$</text>
-            <circle cx="24" cy="24" r="10" stroke="#32D583" stroke-width=".8" fill="none" opacity=".5"/>
-            <defs>
-              <linearGradient id="og2" x1="6" y1="6" x2="42" y2="42">
-                <stop stop-color="#32D583"/><stop offset="1" stop-color="#5AC8FA"/>
-              </linearGradient>
-            </defs>
-          </svg>
-        </div>
-        <div class="ob-kicker ob-kicker-cy">Monetización real · 4 fuentes de ingreso</div>
-        <h2 class="ob-title-sm">Publica una vez.<br><span class="ob-accent-g">Gana para siempre.</span></h2>
-        <p class="ob-desc">
-          Ganas dinero por cada descarga efectiva <strong style="color:var(--g)">independientemente del tipo de contenido</strong> publicado. El sistema usa un acortador de publicidad propio integrado — los anuncios se muestran automáticamente, tú solo publicas.
-        </p>
-        <div class="ob-cpm-card">
-          <div class="ob-cpm-row">
-            <span class="ob-cpm-label">Por cada 1.000 descargas verificadas</span>
-            <span class="ob-cpm-val">🪙 50 UpCoins</span>
-          </div>
-          <div class="ob-cpm-row ob-cpm-row-sub">
-            <span class="ob-cpm-label">Retira tus UpCoins ganados · PayPal, Nequi, Daviplata, banco o Mercado Pago</span>
-            <span class="ob-cpm-val-sm">desde 500 UC (US$10)</span>
-          </div>
-          <div class="ob-cpm-row ob-cpm-row-sub">
-            <span class="ob-cpm-label">Regalos en tus lives 🔴</span>
-            <span class="ob-cpm-val-sm">25% para ti</span>
-          </div>
-          <div class="ob-cpm-row ob-cpm-row-sub">
-            <span class="ob-cpm-label">Acceso directo a tus enlaces (US$1) ⚡</span>
-            <span class="ob-cpm-val-sm">25% para ti</span>
-          </div>
-          <div class="ob-cpm-row ob-cpm-row-sub">
-            <span class="ob-cpm-label">Cuando alguien Premium abre tu publicación ⭐</span>
-            <span class="ob-cpm-val-sm">0,5 UC</span>
-          </div>
-          <div class="ob-cpm-row ob-cpm-row-sub">
-            <span class="ob-cpm-label">Empiezas a ganar desde</span>
-            <span class="ob-cpm-val-sm">La primera descarga</span>
-          </div>
-        </div>
-        <p class="ob-note">UpGames conserva el resto (mínimo 70%) para pagar pasarelas, servidores y operación · Para retirar necesitas nivel Bronce (100 seguidores) y email verificado · 1 UpCoin = US$0,02: gasta tus UpCoins en regalos, NEXUS IA, Premium o para destacar tus publicaciones 🪙</p>
-      </div>
-    </div>
-
-    <!-- SLIDE 3 — NEXUS IA -->
-    <div class="ob-slide" data-slide="3">
-      <div class="ob-slide-inner">
-        <div class="ob-icon-wrap ob-icon-nexus">
-          <svg viewBox="0 0 48 48" fill="none" class="ob-svg">
-            <polygon points="24,3 44,13 44,35 24,45 4,35 4,13" stroke="url(#og3)" stroke-width="1.5" fill="none" opacity=".35"/>
-            <polygon points="24,11 37,18 37,30 24,37 11,30 11,18" stroke="url(#og3)" stroke-width="1" fill="none" opacity=".6"/>
-            <line x1="24" y1="16" x2="24" y2="32" stroke="#5AC8FA" stroke-width="2" stroke-linecap="round"/>
-            <line x1="16" y1="24" x2="32" y2="24" stroke="#5AC8FA" stroke-width="2" stroke-linecap="round"/>
-            <circle cx="24" cy="24" r="3.5" fill="url(#og3)"/>
-            <defs>
-              <linearGradient id="og3" x1="4" y1="4" x2="44" y2="44">
-                <stop stop-color="#32D583"/><stop offset="1" stop-color="#5AC8FA"/>
-              </linearGradient>
-            </defs>
-          </svg>
-        </div>
-        <div class="ob-kicker ob-kicker-cy">NEXUS IA — tu asistente dentro de UpGames</div>
-        <h2 class="ob-title-sm">Pregunta lo que sea<br><span class="ob-accent-cy">sobre UpGames.</span></h2>
-        <p class="ob-desc">
-          NEXUS es el asistente de IA de UpGames. Conoce las reglas de la plataforma y consulta el catálogo real, así que sus respuestas se basan en datos de verdad, no en suposiciones. Está siempre disponible desde el botón NEXUS de la barra inferior.
-        </p>
-        <div class="ob-nexus-feats">
-          <div class="ob-nfeat"><ion-icon name="game-controller-outline"></ion-icon> Te recomienda contenido real de la biblioteca y lo abres con un toque</div>
-          <div class="ob-nfeat"><ion-icon name="help-circle-outline"></ion-icon> Resuelve dudas: cómo publicar, verificarte, reportar o retirar tus ganancias</div>
-          <div class="ob-nfeat"><ion-icon name="wallet-outline"></ion-icon> Con sesión iniciada, revisa tus UpCoins y te dice qué te falta para retirar</div>
-          <div class="ob-nfeat"><ion-icon name="trending-up-outline"></ion-icon> Personaliza tus recomendaciones según lo que buscas y guardas</div>
-          <div class="ob-nfeat"><ion-icon name="flash-outline"></ion-icon> 10 mensajes gratis al día · más con UpCoins · ilimitado y con el modelo más potente con Premium ⭐</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- SLIDE 4 — Todo lo que NEXUS puede hacer -->
-    <div class="ob-slide" data-slide="4">
-      <div class="ob-slide-inner">
-        <div class="ob-icon-wrap ob-icon-identity">
-          <svg viewBox="0 0 48 48" fill="none" class="ob-svg">
-            <rect x="8" y="10" width="32" height="28" rx="4" stroke="url(#og4)" stroke-width="1.5" fill="none" opacity=".4"/>
-            <line x1="14" y1="20" x2="22" y2="20" stroke="#32D583" stroke-width="2" stroke-linecap="round"/>
-            <line x1="14" y1="26" x2="34" y2="26" stroke="#32D583" stroke-width="1.5" stroke-linecap="round" opacity=".6"/>
-            <line x1="14" y1="32" x2="28" y2="32" stroke="#32D583" stroke-width="1.5" stroke-linecap="round" opacity=".4"/>
-            <polyline points="26,16 30,20 26,24" stroke="#5AC8FA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-            <defs>
-              <linearGradient id="og4" x1="8" y1="10" x2="40" y2="38">
-                <stop stop-color="#32D583"/><stop offset="1" stop-color="#5AC8FA"/>
-              </linearGradient>
-            </defs>
-          </svg>
-        </div>
-        <div class="ob-kicker ob-kicker-cy">NEXUS — qué hace de verdad</div>
-        <h2 class="ob-title-sm">Busca, explica<br><span class="ob-accent-g">y te lleva donde necesitas</span></h2>
-        <p class="ob-desc">
-          NEXUS usa modelos de lenguaje de Groq (con Claude de Anthropic como respaldo) conectados a los datos de UpGames. Además de responder, actúa sobre la página: abre fichas, filtra categorías y te lleva a Publicar o a tu Economía.
-        </p>
-        <div class="ob-nexus-feats">
-          <div class="ob-nfeat"><ion-icon name="search-outline"></ion-icon> Busca en todo el catálogo — "¿hay mods de Minecraft?" y te muestra las fichas</div>
-          <div class="ob-nfeat"><ion-icon name="cash-outline"></ion-icon> Explica tus ganancias con tus datos reales y los requisitos de retiro</div>
-          <div class="ob-nfeat"><ion-icon name="shield-checkmark-outline"></ion-icon> Honesto: si no sabe algo, te lo dice — y nunca inventa títulos</div>
-          <div class="ob-nfeat"><ion-icon name="rocket-outline"></ion-icon> Te lleva a donde necesitas: abre fichas, filtra categorías, te guía al publicar y revisa tu publicación antes de enviarla</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- SLIDE 5 — Red social + Verificación -->
-    <div class="ob-slide" data-slide="5">
-      <div class="ob-slide-inner">
-        <div class="ob-icon-wrap ob-icon-community">
-          <svg viewBox="0 0 48 48" fill="none" class="ob-svg">
-            <circle cx="16" cy="20" r="7" stroke="url(#og5)" stroke-width="1.3" fill="none"/>
-            <circle cx="32" cy="20" r="7" stroke="url(#og5)" stroke-width="1.3" fill="none"/>
-            <circle cx="24" cy="32" r="7" stroke="#32D583" stroke-width="1.3" fill="none"/>
-            <line x1="16" y1="27" x2="24" y2="32" stroke="#32D583" stroke-width="1" opacity=".5"/>
-            <line x1="32" y1="27" x2="24" y2="32" stroke="#32D583" stroke-width="1" opacity=".5"/>
-            <circle cx="24" cy="24" r="2.5" fill="#32D583"/>
-            <defs>
-              <linearGradient id="og5" x1="6" y1="6" x2="42" y2="42">
-                <stop stop-color="#32D583"/><stop offset="1" stop-color="#5AC8FA"/>
-              </linearGradient>
-            </defs>
-          </svg>
-        </div>
-        <div class="ob-kicker ob-kicker-cy">Red social de creadores</div>
-        <h2 class="ob-title-sm">Publica, crece<br><span class="ob-accent-g">y monetiza tu audiencia</span></h2>
-        <p class="ob-desc">
-          UpGames también es una red social. Sigue a tus publicadores favoritos, visita su perfil y ve todo su contenido en su feed personal. Cada seguidor recibe una notificación real cuando publicas algo nuevo.
-        </p>
-        <div class="ob-nexus-feats">
-          <div class="ob-nfeat"><ion-icon name="notifications-outline"></ion-icon> Tus seguidores reciben una notificación en la app cada vez que publicas</div>
-          <div class="ob-nfeat"><ion-icon name="person-outline"></ion-icon> Perfil público con feed propio, estadísticas y seguidores</div>
-          <div class="ob-nfeat"><ion-icon name="chatbubble-ellipses-outline"></ion-icon> Chat privado entre usuarios, con imágenes y emojis</div>
-          <div class="ob-nfeat"><ion-icon name="radio-outline"></ion-icon> Lives de gameplay: comparte tu pantalla, chatea en tiempo real y recibe regalos</div>
-          <div class="ob-nfeat"><ion-icon name="shield-checkmark-outline"></ion-icon> Verificación por niveles: Bronce (100 seg.) · Oro (500) · Elite (1,000)</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- SLIDE 6 — Safe Harbor / Somos el puente -->
-    <div class="ob-slide" data-slide="6">
-      <div class="ob-slide-inner">
-        <div class="ob-icon-wrap ob-icon-legal">
-          <svg viewBox="0 0 48 48" fill="none" class="ob-svg">
-            <path d="M24 4 L40 12 L40 28 C40 36 24 44 24 44 C24 44 8 36 8 28 L8 12 Z"
-              stroke="url(#og6)" stroke-width="1.5" fill="none" opacity=".5"/>
-            <polyline points="17,24 22,29 31,19"
-              stroke="#32D583" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-            <defs>
-              <linearGradient id="og6" x1="8" y1="4" x2="40" y2="44">
-                <stop stop-color="#32D583"/><stop offset="1" stop-color="#5AC8FA"/>
-              </linearGradient>
-            </defs>
-          </svg>
-        </div>
-        <div class="ob-kicker">Transparencia total</div>
-        <h2 class="ob-title-sm">Dos tipos de contenido.<br><span class="ob-accent-g">Una sola plataforma.</span></h2>
-        <p class="ob-desc">
-          UpGames opera con <strong style="color:var(--g)">dos modelos de contenido distintos</strong>.
-          Los <strong style="color:var(--g)">juegos, ROMs, mods, apps, herramientas y software</strong> son
-          <em>solo metadatos</em> indexados por la comunidad — UpGames no almacena esos archivos,
-          actúa como un motor de indexación. Los <strong style="color:var(--cy)">videos</strong>
-          sí se alojan directamente en nuestros servidores — cada creador publica y es
-          legalmente responsable de su propio video, igual que en YouTube.
-        </p>
+        <div class="ob-kicker">Reglas claras</div>
+        <h2 class="ob-title-sm">Lo esencial,<br><span class="ob-accent-g">en 30 segundos.</span></h2>
         <div class="ob-rules">
-          <div class="ob-rule">
-            <span class="ob-rule-num" style="background:rgba(90,200,250,.1);border-color:rgba(90,200,250,.3);color:var(--cy)">📚</span>
-            <div><strong>Biblioteca = solo metadatos.</strong> Juegos, ROMs, mods, apps y software son referencias indexadas voluntariamente — UpGames no almacena ni distribuye esos archivos.</div>
-          </div>
-          <div class="ob-rule">
-            <span class="ob-rule-num" style="background:rgba(255,200,0,.1);border-color:rgba(255,200,0,.3);color:#ffc800">▶</span>
-            <div><strong>Videos = contenido propio del creador.</strong> Cada video es publicado y responsabilidad exclusiva de su autor. UpGames actúa como plataforma de alojamiento, no como editor del contenido.</div>
-          </div>
-          <div class="ob-rule">
-            <span class="ob-rule-num" style="background:rgba(90,200,250,.1);border-color:rgba(90,200,250,.3);color:var(--cy)">🛡</span>
-            <div><strong>Safe Harbor activo.</strong> Operamos bajo DMCA 512(c), Ley colombiana 1915/2018 y Directiva 2000/31/CE. Notice &amp; Takedown en 24-72h.</div>
-          </div>
-          <div class="ob-rule">
-            <span class="ob-rule-num" style="background:rgba(50,213,131,.1);border-color:rgba(50,213,131,.3);color:var(--g)">🚫</span>
-            <div><strong>Filtros automáticos activos.</strong> Bots, palabras clave prohibidas y validación de plataformas de hosting bloquean contenido ilegal antes de publicarse.</div>
-          </div>
-          <div class="ob-rule">
-            <span class="ob-rule-num" style="background:rgba(50,213,131,.1);border-color:rgba(50,213,131,.3);color:var(--g)">⚖</span>
-            <div><strong>Responsabilidad del publicador.</strong> Quien indexa o sube contenido asume total responsabilidad legal sobre lo publicado. UpGames es intermediario de metadatos y plataforma de video — no editor ni distribuidor de contenido de terceros.</div>
-          </div>
+          <div class="ob-rule"><span class="ob-rule-num" style="background:rgba(90,200,250,.1);border-color:rgba(90,200,250,.3);color:var(--cy)">📚</span>
+            <div><strong>La biblioteca son referencias.</strong> Juegos, ROMs, mods y apps los indexa la comunidad: UpGames no almacena esos archivos. Nada de piratería de juegos de pago ni malware.</div></div>
+          <div class="ob-rule"><span class="ob-rule-num" style="background:rgba(255,200,0,.1);border-color:rgba(255,200,0,.3);color:#ffc800">▶</span>
+            <div><strong>Cada creador responde por lo que publica</strong> (enlaces, videos y lives). Todo pasa por revisión y puedes reportar lo que incumpla.</div></div>
+          <div class="ob-rule"><span class="ob-rule-num" style="background:rgba(50,213,131,.1);border-color:rgba(50,213,131,.3);color:var(--g)">🛡</span>
+            <div><strong>Tus datos y pagos, protegidos.</strong> Mercado Pago y PayPal procesan las tarjetas (no vemos sus datos). Retiro de contenido en 24-72 h (DMCA · Ley 1915/2018).</div></div>
         </div>
-        <div class="ob-cert">
-          <ion-icon name="ribbon-outline"></ion-icon>
-          <div>Software registrado ante la <strong>Dirección Nacional de Derecho de Autor</strong> de Colombia · Libro-Tomo-Partida 13-109-81 (18-jun-2026).
-            <a href="https://apps.derechodeautor.gov.co/Certificados-API/api/v1/dnda/certificates/registrations/filing/QzY3NDJGQkVFQThCRUY3QkQ3MTVGMTA0QUIzN0NGMkU" target="_blank" rel="noopener">Ver certificado</a></div>
-        </div>
+        <div class="ob-cert"><ion-icon name="ribbon-outline"></ion-icon>
+          <div>Software registrado ante la <strong>Dirección Nacional de Derecho de Autor</strong> de Colombia · 13-109-81.
+            <a href="https://apps.derechodeautor.gov.co/Certificados-API/api/v1/dnda/certificates/registrations/filing/QzY3NDJGQkVFQThCRUY3QkQ3MTVGMTA0QUIzN0NGMkU" target="_blank" rel="noopener">Ver certificado</a></div></div>
         <div class="ob-legal-link" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
           <a href="./terminos_condiciones.html" target="_blank" style="color:inherit">Términos v6.1</a> ·
           <a href="./politica-privacidad.html" target="_blank" style="color:inherit">Privacidad v3.5</a> ·
           <a href="./terminos_condiciones.html#pagos" target="_blank" style="color:inherit">Pagos</a> ·
-          <a href="./terminos_condiciones.html#ia" target="_blank" style="color:inherit">IA</a> ·
           <a href="./terminos_condiciones.html#derechos-autor" target="_blank" style="color:inherit">Derechos de autor</a>
         </div>
-        <button id="btn-accept-terms" class="ob-btn-accept">
-          ✓ Entendido — Entrar a UpGames
-        </button>
-        <button onclick="window.location.href='https://google.com'" class="ob-btn-reject">
-          No acepto, salir
-        </button>
+        <button id="btn-accept-terms" class="ob-btn-accept">✓ Acepto — Entrar a UpGames</button>
+        <button onclick="window.location.href='https://google.com'" class="ob-btn-reject">No acepto, salir</button>
       </div>
     </div>
-
   </div><!-- /.ob-track -->
 
   <!-- ── FOOTER FIJO: dots + botón siguiente ── -->
@@ -1834,12 +1633,8 @@
       <span class="ob-dot active" data-i="0"></span>
       <span class="ob-dot" data-i="1"></span>
       <span class="ob-dot" data-i="2"></span>
-      <span class="ob-dot" data-i="3"></span>
-      <span class="ob-dot" data-i="4"></span>
-      <span class="ob-dot" data-i="5"></span>
-      <span class="ob-dot" data-i="6"></span>
     </div>
-    <button class="ob-btn-next" id="ob-btn-next" aria-label="Siguiente slide">
+    <button class="ob-btn-next" id="ob-btn-next" aria-label="Siguiente">
       Siguiente <ion-icon name="arrow-forward-outline"></ion-icon>
     </button>
   </div>
@@ -1962,7 +1757,7 @@
 <!-- ══════════════════════════════════
   TUTORIAL FAB
 ══════════════════════════════════ -->
-<button id="tut-fab" onclick="startTutorial()" title="Tutorial">?</button>
+<button id="tut-fab" onclick="window.UGG ? UGG.ayuda() : startTutorial()" title="Ayuda" aria-label="Ayuda y guía de inicio">?</button>
 
 <!-- Tutorial overlay elements -->
 <div id="btut-lock"></div>
@@ -2001,10 +1796,11 @@
 <!-- ION ICONS -->
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
-<script src="script.js?v=20261028f"></script>
-<script src="upgames-extras.js?v=20261028f"></script>
-<script src="upgames-autoinfo.js?v=20261028f"></script>
-<script src="upgames-motion.js?v=20261028f"></script>
+<script src="script.js?v=20261028g"></script>
+<script src="upgames-extras.js?v=20261028g"></script>
+<script src="upgames-guia.js?v=20261028g"></script>
+<script src="upgames-autoinfo.js?v=20261028g"></script>
+<script src="upgames-motion.js?v=20261028g"></script>
 
 <!-- ══════════════════════════════════════
   EXTENSIÓN DE PERFIL: Nombre / Email / Contraseña / Links

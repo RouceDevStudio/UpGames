@@ -152,3 +152,52 @@
 /* Fondo comprado en la portada del perfil público: sin las capas decorativas que lo taparían */
 .hero-cover[class*="ugs-f-"] .hero-cover-scan, .hero-cover[class*="ugs-f-"] .hero-cover-glow, .hero-cover[class*="ugs-f-"] .hero-cover-line { display: none; }
 .hero-cover[class*="ugs-f-"] .hero-cover-gradient { background: linear-gradient(180deg, transparent 45%, rgba(10,11,15,.55) 100%) !important; }
+
+/* ═════════ Guía de inicio, pistas y ayuda (upgames-guia.js) ═════════ */
+#tut-fab.ugg-pendiente { width: 44px !important; height: 44px !important; color: #32D583 !important; border-color: rgba(50,213,131,.5) !important; background: #10141b !important; box-shadow: 0 8px 24px -10px rgba(50,213,131,.7); }
+#tut-fab .ugg-anillo { position: absolute; inset: -3px; width: calc(100% + 6px); height: calc(100% + 6px); transform: rotate(-90deg); }
+#tut-fab .ugg-anillo circle { fill: none; stroke: rgba(255,255,255,.08); stroke-width: 3; }
+#tut-fab .ugg-anillo circle.v { stroke: #32D583; stroke-linecap: round; transition: stroke-dasharray .6s; }
+#tut-fab .ugg-faltan { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px; background: #ffcc4d; color: #2b1a00; font-size: .62rem; font-weight: 900; line-height: 18px; text-align: center; }
+.ugg-ring { position: fixed; z-index: 1250; border-radius: 14px; pointer-events: none; box-shadow: 0 0 0 3px #32D583, 0 0 0 9999px rgba(0,0,0,.28); animation: uggRing 1.6s ease-in-out infinite; }
+@keyframes uggRing { 50% { box-shadow: 0 0 0 6px rgba(50,213,131,.55), 0 0 0 9999px rgba(0,0,0,.28); } }
+.ugg-pista { position: fixed; z-index: 1260; box-sizing: border-box; padding: 12px 14px; border-radius: 16px; background: #12151c; color: #f4f5f7; border: 1px solid rgba(50,213,131,.5);
+  box-shadow: 0 18px 40px -14px rgba(0,0,0,.9); font: 600 .84rem/1.45 'Manrope', -apple-system, sans-serif; animation: uggEntra .35s cubic-bezier(.34,1.56,.64,1); }
+.ugg-pista p { margin: 0 0 10px; }
+.ugg-pista button { border: 0; border-radius: 10px; padding: 7px 14px; background: linear-gradient(135deg, #32D583, #5AC8FA); color: #06210f; font: inherit; font-weight: 800; cursor: pointer; }
+.ugg-pista::after { content: ""; position: absolute; left: calc(var(--fx, 50%) - 7px); width: 12px; height: 12px; background: #12151c; border: 1px solid rgba(50,213,131,.5); transform: rotate(45deg); }
+.ugg-pista.abajo::after { top: -7px; border-right: 0; border-bottom: 0; }
+.ugg-pista.arriba::after { bottom: -7px; border-left: 0; border-top: 0; }
+@keyframes uggEntra { from { opacity: 0; transform: translateY(8px) scale(.96); } }
+.ugg-guia { padding: 14px; border-radius: 18px; background: linear-gradient(145deg, rgba(50,213,131,.1), rgba(90,200,250,.05)); border: 1px solid rgba(50,213,131,.3); }
+.ugg-guia-h { display: flex; justify-content: space-between; align-items: center; font-size: .92rem; }
+.ugg-guia-h span { color: #32D583; font-weight: 900; font-size: .8rem; }
+.ugg-pasos { display: grid; gap: 8px; margin-top: 12px; }
+.ugg-paso { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 13px; background: rgba(10,11,15,.55); border: 1px solid rgba(255,255,255,.07); }
+.ugg-paso.ok { opacity: .6; }
+.ugg-paso.ok .ugg-ic { background: rgba(50,213,131,.2); color: #32D583; font-weight: 900; }
+.ugg-ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; background: rgba(255,255,255,.06); font-size: 1rem; }
+.ugg-paso > div { flex: 1; min-width: 0; }
+.ugg-paso b { display: block; font-size: .84rem; }
+.ugg-paso small { color: #a3a8b6; font-size: .72rem; line-height: 1.35; display: block; }
+.ugg-paso .ugx-btn { padding: 7px 11px; font-size: .74rem; border-radius: 10px; flex-shrink: 0; }
+.ugg-tema { border-radius: 13px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); margin-bottom: 8px; }
+.ugg-tema summary { padding: 12px 14px; cursor: pointer; font-weight: 800; font-size: .88rem; list-style: none; }
+.ugg-tema summary::-webkit-details-marker { display: none; }
+.ugg-tema summary::after { content: "▾"; float: right; color: #6c7180; transition: transform .2s; }
+.ugg-tema[open] summary::after { transform: rotate(180deg); }
+.ugg-tema ul { margin: 0; padding: 0 14px 12px 30px; color: #cfd4de; font-size: .82rem; line-height: 1.5; }
+.ugg-tema li { margin-bottom: 5px; }
+.ugg-acc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.ugg-acc .ugx-btn { flex: 1 1 140px; }
+
+/* Bienvenida: botón Saltar y aviso de términos actualizados */
+.ob-saltar { position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); right: 16px; z-index: 5; padding: 7px 14px; border-radius: 999px; border: 1px solid rgba(255,255,255,.18); background: rgba(10,11,15,.5); color: #cfd4de; font: 700 .8rem 'Manrope', sans-serif; cursor: pointer; }
+.ob-saltar[hidden] { display: none; }
+.ug-terminos-aviso { position: fixed; left: 50%; bottom: calc(var(--nav-h, 64px) + 16px); transform: translateX(-50%); z-index: 1100; width: min(520px, calc(100vw - 24px)); box-sizing: border-box;
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: #12151c; border: 1px solid rgba(90,200,250,.4); color: #e9ecf2; font: 600 .8rem/1.4 'Manrope', sans-serif;
+  box-shadow: 0 18px 40px -14px rgba(0,0,0,.9); animation: uggEntra .35s ease; }
+.ug-terminos-aviso a { color: #5AC8FA; }
+.ug-terminos-aviso button { flex-shrink: 0; border: 0; border-radius: 10px; padding: 8px 12px; background: rgba(90,200,250,.15); color: #5AC8FA; font: inherit; font-weight: 800; cursor: pointer; }
+@media (prefers-reduced-motion: reduce) { .ugg-ring { animation: none; } }
+#onboarding-modal .ob-slide[data-slide="0"] .ob-eco-logo { margin-top: 34px; }

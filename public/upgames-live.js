@@ -464,7 +464,7 @@ async function vistaEspectador(usuario) {
     if (!r?.ok) { finDelLive(r?.error || 'Este live terminó'); return; }
     $('v-n').textContent = fmt(r.espectadores); likes = r.likes; $('v-likes').textContent = fmt(likes);
     chat.pintarTop(r.top);
-    if (!unirse.hecho) { r.chat.forEach(chat.add); r.chat.slice(-4).forEach(ov.add); chat.sys('Bienvenido al chat. Sé respetuoso 💚'); unirse.hecho = true; }
+    if (!unirse.hecho) { try { const g = JSON.parse(localStorage.getItem('ug_guia') || '{}'); if (!g.live) { g.live = Date.now(); localStorage.setItem('ug_guia', JSON.stringify(g)); } } catch (_) {}   /* guía de inicio */ r.chat.forEach(chat.add); r.chat.slice(-4).forEach(ov.add); chat.sys('Bienvenido al chat. Sé respetuoso 💚'); unirse.hecho = true; }
     if (!reproductor) {
       if (r.live.modo === 'mediamtx' && CFG.proveedor.hls) reproductor = await reproductorHLS(video, CFG.proveedor.hls.replace('{u}', encodeURIComponent(c.usuario)), estado);
       else reproductor = reproductorP2P(video, liveId, estado);

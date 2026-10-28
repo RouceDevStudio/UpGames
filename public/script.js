@@ -197,11 +197,9 @@ let currentObserver = null;
   setTimeout(() => { if(!closed) fill.style.width='55%'; }, 300);
   setTimeout(() => { if(!closed) fill.style.width='75%'; }, 700);
 
-  function afterPreloader() {
-    if(LS.getJSON('upgames_terms_seen_ts') && !LS.get('upgames_onboarding_done')) {
-      setTimeout(startTutorial, 600);
-    }
-  }
+  // Antes arrancaba solo un tutorial de 54 pasos que bloqueaba la pantalla. Ahora la
+  // ayuda es la Guía de inicio y pistas puntuales (upgames-guia.js), sin bloquear nada.
+  function afterPreloader() {}
 
   window.closePreloader = function() {
     if(closed) return;
@@ -848,6 +846,7 @@ function invalidateCache() {
 // ── SEARCH (con debounce 280ms para no filtrar en cada keystroke) ──────────
 let _searchTimer = null;
 document.getElementById('buscador').addEventListener('input', function(e) {
+  if (this.value.trim().length >= 3) window.dispatchEvent(new CustomEvent('ug:guia', { detail: 'explorar' }));
   clearTimeout(_searchTimer);
   _searchTimer = setTimeout(() => {
     const q = e.target.value.toLowerCase().trim();
@@ -874,6 +873,7 @@ document.querySelectorAll('.chip').forEach(c=>{
     document.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));
     this.classList.add('active');
     activeCategory = this.dataset.cat;
+    window.dispatchEvent(new CustomEvent('ug:guia', { detail: 'explorar' }));
     // Limpiar buscador al cambiar categoría para evitar doble filtro silencioso
     const buscEl = document.getElementById('buscador');
     buscEl.value = '';
@@ -1286,6 +1286,7 @@ function openDetail(item) {
   document.getElementById('detail-sheet').classList.add('open');
   document.body.style.overflow='hidden';
   window.UGX?.alAbrirDetalle(item);   // botón "Apoyar" (usos extra de los UpCoins)
+  window.dispatchEvent(new CustomEvent('ug:detalle', { detail: item._id }));   // guía de inicio
 
   // Registrar vista si es un video (usa ruta dedicada /items/vistas/:id con dedup IP)
   if(isVideoItem) {
@@ -1480,6 +1481,7 @@ async function fav(id) {
         body:JSON.stringify({itemId:id})
       });
       toast('❤️ Añadido a favoritos');
+      window.dispatchEvent(new CustomEvent('ug:guia', { detail: 'favorito' }));
       let local=LS.getJSON('favoritos', []);
       if(!local.includes(id)){local.push(id); LS.setJSON('favoritos', local);}
       // La notificación al autor ahora la crea el backend en /favoritos/add
@@ -1609,6 +1611,7 @@ function switchTab(t) {
   if(t==='upload') t='profile';
   if(abrirPublicar) setTimeout(() => pfOpenPublish && pfOpenPublish(true), 150);
   currentTab=t;
+  window.dispatchEvent(new CustomEvent('ug:tab', { detail: t }));   // pistas de la guía (upgames-guia.js)
   document.querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active'));
   const navBtn = document.querySelector(`.nav-tab[data-tab="${t}"]`);
   if(navBtn) navBtn.classList.add('active');
@@ -2437,6 +2440,7 @@ async function pfSubirVideo() {
     });
     if(res.ok) {
       LS.set('ultima_publicacion', Date.now().toString());
+      window.dispatchEvent(new CustomEvent('ug:guia', { detail: 'publicar' }));
       toast('✅ Video publicado. Esperando aprobación.');
       // Reset form
       document.getElementById('pf-vid-title').value = '';
@@ -2582,6 +2586,7 @@ async function pfSubirJuego() {
     });
     if(res.ok) {
       LS.set('ultima_publicacion', Date.now().toString());
+      window.dispatchEvent(new CustomEvent('ug:guia', { detail: 'publicar' }));
       toast('✅ Publicado. Aparecerá como "En revisión" hasta verificar el enlace.');
       document.getElementById('pf-addTitle').value='';
       document.getElementById('pf-addDescription').value='';
@@ -4088,12 +4093,21 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// ── ONBOARDING MODAL — 5 slides + términos ───────────────
+// ── BIENVENIDA — 3 pantallas + términos ───────────────────
 (function initOnboarding() {
-  const WEEK_MS = 7 * 24 * 60 * 60 * 1000; // 1 semana en ms
+  const TERMINOS_VERSION = '6.1';   // súbela al cambiar los Términos o la Privacidad
+  function avisoTerminosNuevos() {
+    const a = document.createElement('div'); a.className = 'ug-terminos-aviso'; a.setAttribute('role', 'status');
+    a.innerHTML = `<span>📜 Actualizamos los <a href="./terminos_condiciones.html#usos-uc" target="_blank" rel="noopener">Términos (v${TERMINOS_VERSION})</a> y la <a href="./politica-privacidad.html" target="_blank" rel="noopener">Privacidad</a>: nuevos usos de los UpCoins y misiones.</span><button type="button">Entendido</button>`;
+    a.querySelector('button').onclick = () => { LS.set('upgames_terms_v', TERMINOS_VERSION); a.remove(); };
+    setTimeout(() => document.body.appendChild(a), 2500);
+  }
   if (window.UG_INVITADO) return;   // invitados: sin pantalla completa (los términos se aceptan al crear la cuenta)
-  const lastSeen = LS.getJSON('upgames_terms_seen_ts');
-  if (lastSeen && (Date.now() - lastSeen) < WEEK_MS) return; // visto hace menos de 1 semana
+  // Bienvenida UNA vez por versión de los términos (antes volvía cada semana).
+  // Quien ya la había aceptado antes solo ve un aviso pequeño de "términos actualizados".
+  const aceptada = LS.get('upgames_terms_v');
+  if (aceptada === TERMINOS_VERSION) return;
+  if (aceptada || LS.getJSON('upgames_terms_seen_ts')) { avisoTerminosNuevos(); return; }
 
   const modal   = document.getElementById('onboarding-modal');
   const track   = document.getElementById('ob-track');
@@ -4138,8 +4152,9 @@ document.addEventListener('keydown', e => {
     footer.classList.toggle('is-last', isLast);
 
     // Texto del botón
+    const saltar = document.getElementById('ob-saltar'); if (saltar) saltar.hidden = isLast;
     if (idx === TOTAL - 2) {
-      btnNext.innerHTML = 'Ver términos <ion-icon name="arrow-forward-outline"></ion-icon>';
+      btnNext.innerHTML = 'Ver reglas <ion-icon name="arrow-forward-outline"></ion-icon>';
     } else {
       btnNext.innerHTML = 'Siguiente <ion-icon name="arrow-forward-outline"></ion-icon>';
     }
@@ -4150,8 +4165,9 @@ document.addEventListener('keydown', e => {
     d.addEventListener('click', () => { if (i > current) _goTo(i); });
   });
 
-  // Botón Siguiente
+  // Botón Siguiente / Saltar (va directo a las reglas: aceptar sigue siendo obligatorio)
   btnNext.addEventListener('click', () => _goTo(current + 1));
+  document.getElementById('ob-saltar')?.addEventListener('click', () => _goTo(TOTAL - 1));
 
   // Swipe horizontal (touch)
   let _tx = 0;
@@ -4174,9 +4190,10 @@ document.addEventListener('keydown', e => {
   // Botón Aceptar (slide 5)
   btnAccept.addEventListener('click', () => {
     LS.setJSON('upgames_terms_seen_ts', Date.now());
+    LS.set('upgames_terms_v', TERMINOS_VERSION);
     modal.classList.remove('show');
     document.body.style.overflow = '';
-    if (!LS.get('upgames_onboarding_done')) setTimeout(startTutorial, 600);
+    setTimeout(() => window.UGG?.bienvenida(), 700);   // presenta la Guía de inicio (no bloquea)
   });
 })();
 
@@ -4298,6 +4315,7 @@ async function nxEnviar(texto, extra) {
   texto = String(texto || '').trim().slice(0, 1500);
   if (!texto || NX.enviando) return;
   NX.enviando = true;
+  window.dispatchEvent(new CustomEvent('ug:guia', { detail: 'nexus' }));
   const historialInv = nxToken() ? undefined : NX.msgs.filter(m => !m.error).slice(-10).map(m => ({ rol:m.rol, texto:m.texto }));
   NX.msgs.push({ rol:'user', texto });
   nxPintar(true);
@@ -4423,316 +4441,17 @@ document.querySelectorAll('.nav-nexus, #nxFab').forEach(b => b.addEventListener(
 //   onExit   → función que se ejecuta al salir de este paso
 //   scrollEl → selector del contenedor a hacer scroll (para elementos dentro del sheet)
 
+// Recorrido rápido (opcional, desde Ayuda → "Recorrido de 1 min"). Antes eran 54 pasos que
+// arrancaban solos y bloqueaban la pantalla; lo demás se aprende con la Guía de inicio y
+// pistas puntuales (upgames-guia.js).
 const TUT_STEPS = [
-  // ── PANTALLA PRINCIPAL ──────────────────────────────────
-  {
-    sel: null,
-    title: '👋 Bienvenido a UpGames',
-    body: 'Esta es <strong>La Nube de Contenido</strong>: una biblioteca donde encontrarás juegos, mods, apps y mucho más subido por la comunidad.<br><br>Te voy a mostrar <strong>absolutamente todo</strong> lo que puedes hacer aquí, paso a paso. ¡Vamos!'
-  },
-  {
-    sel: '#app-header',
-    title: '📌 La Barra Superior',
-    body: 'En la parte de arriba tienes todo lo esencial: el <strong>logo de UpGames</strong>, un <strong>buscador</strong>, tu contador de <strong>UpCoins</strong> y el <strong>menú rápido</strong>. Ahora los explico uno por uno.'
-  },
-  {
-    sel: '#buscador',
-    title: '🔍 Buscador en Tiempo Real',
-    body: 'Escribe aquí para buscar <strong>cualquier cosa al instante</strong>: el nombre de un juego, el usuario que lo subió, la categoría, o una etiqueta. Los resultados se filtran <em>mientras escribes</em>, sin necesidad de pulsar Enter.'
-  },
-  {
-    sel: '#hdr-orb',
-    title: '✨ Menú rápido',
-    body: 'Toca este botón y las opciones se despliegan <strong>en círculo</strong>: <strong>Avisos</strong> (notificaciones), <strong>En vivo</strong>, <strong>Subir</strong> contenido, <strong>Premium</strong> y <strong>Soporte</strong>. El número sobre el botón son tus avisos sin leer y el punto rojo indica que alguien está en vivo.'
-  },
-  {
-    sel: '#category-row',
-    title: '🏷️ Filtros por Categoría',
-    body: 'Esta fila de botones te permite filtrar el contenido por tipo. Toca <strong>Juegos</strong> para ver solo juegos, <strong>ROMs</strong> para clásicos retro y homebrew, <strong>Mod</strong> para modificaciones, <strong>Apps</strong> para aplicaciones, etc. Desliza hacia la derecha para ver más categorías. Toca <strong>"Todos"</strong> para quitar el filtro.'
-  },
-  {
-    sel: '.featured-tile',
-    title: '⭐ Tarjeta Destacada',
-    body: 'La primera tarjeta grande (formato ancho 21:9) es el <strong>contenido más destacado</strong> del momento. Muestra la portada a tamaño completo, el título, el creador con su badge de verificación y el contador de descargas. Tócala para abrirla.'
-  },
-  {
-    sel: '.game-tile .tile-status',
-    title: '🟢 Badge de Estado del Link',
-    body: 'Cada tarjeta tiene este badge en la esquina superior derecha que indica si el enlace funciona:<br>• <strong style="color:#32D583">● Online</strong> — funciona perfectamente<br>• <strong style="color:#ffcc00">● Revisión</strong> — se está verificando (3+ reportes)<br>• <strong style="color:#ff4343">● Caído</strong> — el link no funciona<br><br>Evita los que están en "Caído" o repórtalos.'
-  },
-  {
-    sel: '.tile-fav-quick',
-    title: '❤️ Corazón de Favoritos',
-    body: 'El corazón en la esquina superior <em>izquierda</em> de cada tarjeta te permite guardar ese contenido en tu lista de favoritos <strong>sin necesidad de abrirlo</strong>. Se pone rojo cuando ya está guardado. Para quitarlo, tócalo de nuevo.'
-  },
-  {
-    sel: '.game-tile .tile-title',
-    title: '📝 Título del Contenido',
-    body: 'El nombre del contenido. Si es muy largo se corta con "…" para que no ocupe demasiado espacio. Para ver el título completo abre la tarjeta tocándola.'
-  },
-  {
-    sel: '.game-tile .tile-meta',
-    title: '👤 Autor y Descargas',
-    body: 'Debajo del título verás el <strong>avatar y nombre de usuario</strong> del creador, y el <strong>contador de descargas</strong> (el ícono de nube). Más descargas = más confianza en el contenido.'
-  },
-
-  // ── DETALLE DE CARD ─────────────────────────────────────
-  {
-    sel: '.game-tile',
-    title: '👆 Abriendo una Tarjeta…',
-    body: 'Ahora voy a <strong>abrir una tarjeta</strong> automáticamente para mostrarte todo lo que hay dentro. En tu día a día, simplemente toca cualquier tarjeta para abrirla.',
-    onEnter: function() {
-      const card = document.querySelector('.game-tile');
-      if(card && todosLosItems.length > 0) {
-        const item = todosLosItems[1] || todosLosItems[0];
-        setTimeout(() => { openDetail(item); }, 500);
-      }
-    }
-  },
-  {
-    sel: '.sheet-media',
-    title: '🖼️ Imagen / Video de Portada',
-    body: 'La parte superior del detalle muestra la <strong>imagen o video de portada</strong> del contenido. Si el creador subió un video (.mp4), se reproducirá automáticamente en silencio como preview. La imagen tiene un degradado abajo para que el texto sea legible.'
-  },
-  {
-    sel: '.sheet-header',
-    title: '📋 Título, Categoría y Botón Cerrar',
-    body: 'Aquí ves:<br>• El <strong>texto azul</strong> = categoría del contenido<br>• El <strong>título grande</strong> = nombre completo<br>• La <strong>X</strong> de la esquina = cierra esta pantalla y te devuelve a la lista principal'
-  },
-  {
-    sel: '#ds-author',
-    title: '👤 Fila del Creador',
-    body: 'Esta fila muestra quién subió el contenido. Incluye su <strong>inicial en avatar</strong>, nombre de usuario y badge de verificación (✓ bronce/plata/oro según su nivel).<br><br>Toca esta fila para ir a su <strong>perfil público</strong> y ver todos sus aportes.'
-  },
-  {
-    sel: '.sheet-stats',
-    title: '📊 Estadísticas del Contenido',
-    body: 'Tres números importantes de un vistazo:<br>• <strong>Descargas</strong> — cuántas veces se ha accedido al link<br>• <strong>Reportes</strong> — si tiene 3+, puede estar caído o ser problemático<br>• <strong>Favs</strong> — cuánta gente lo tiene guardado en su lista'
-  },
-  {
-    sel: '#ds-status',
-    title: '🔗 Barra de Estado del Enlace',
-    body: 'Barra verde/amarilla/roja que confirma si el <strong>link de descarga está activo en este momento</strong>.<br>• 🟢 <strong>Link Activo</strong> — funciona, puedes descargar<br>• 🟡 <strong>En Revisión</strong> — se está revisando<br>• 🔴 <strong>Link Caído</strong> — usa el botón Reportar para notificarlo'
-  },
-  {
-    sel: '#ds-desc',
-    title: '📝 Descripción Completa',
-    body: 'El creador escribe aquí toda la <strong>información que necesitas saber</strong>: de qué trata el contenido, instrucciones de instalación, versiones compatibles, requisitos del sistema, advertencias, etc.<br><br>⚠️ <strong>Siempre léela antes de descargar.</strong>'
-  },
-  {
-    sel: '.sheet-actions',
-    title: '⚡ Botones de Acción',
-    body: 'Tres acciones rápidas:<br>• <strong>❤️ Favorito</strong> — guarda este ítem en tu lista personal<br>• <strong>📤 Compartir</strong> — copia el link o comparte por app. El link incluye el ID del ítem para que otros lo abran directamente<br>• <strong>🚩 Reportar</strong> — reporta link caído, contenido viejo o malware'
-  },
-  {
-    sel: '#ds-download',
-    title: '⬇️ Botón Principal: Acceder al Contenido',
-    body: 'Este botón verde es el <strong>acceso al archivo</strong>. Al tocarlo te lleva a una página puente que registra la descarga y luego te redirige al link del creador (Google Drive, MediaFire, MEGA, etc.).<br><br>UpGames no almacena archivos, solo indexa los metadatos.'
-  },
-  {
-    sel: '.comment-input-area',
-    title: '💬 Área de Comentarios',
-    body: 'Escribe aquí tu <strong>opinión, pregunta o consejo</strong> sobre el contenido. Puedes:<br>• Avisar si el link funciona o no<br>• Compartir instrucciones que descubriste<br>• Agradecer al creador<br>• Pedir ayuda a la comunidad<br><br>Necesitas iniciar sesión para comentar.',
-    scrollEl: '.sheet-scroll'
-  },
-
-  // ── NAVEGACIÓN ──────────────────────────────────────────
-  {
-    sel: '#bottom-nav',
-    title: '🧭 Barra de Navegación Principal',
-    body: 'La barra fija de abajo te permite moverte entre las 4 grandes secciones de UpGames. El punto verde indica en qué sección estás. Vamos a ver cada una.',
-    onEnter: function() { closeDetail(); }
-  },
-  {
-    sel: '[data-tab="main"]',
-    title: '🔲 Explorar — Pantalla Principal',
-    body: 'El ícono de cuadrícula te devuelve a la <strong>pantalla principal</strong> donde ves todo el contenido de la nube. Es el "inicio" de UpGames. Desde aquí puedes buscar y filtrar.'
-  },
-  {
-    sel: '[data-tab="favs"]',
-    title: '❤️ Mis Favoritos',
-    body: 'El ícono de corazón abre tu <strong>lista personal de favoritos</strong>. Aquí aparecen todos los ítems que guardaste tocando el ❤️. Se guardan localmente en tu dispositivo, siempre disponibles sin necesidad de buscarlos.'
-  },
-  {
-    sel: '[data-tab="upload"]',
-    title: '➕ Subir Contenido (Acceso Rápido)',
-    body: 'El ícono + lleva directamente al <strong>formulario de publicación</strong> en tu perfil. ¿Tienes un juego, mod o app que compartir? Tócalo y sube tu aporte. Puedes ganar <strong>🪙 50 UpCoins (US$1) por cada 1.000 descargas</strong>.'
-  },
-  {
-    sel: '[data-tab="profile"]',
-    title: '👤 Mi Perfil — Centro de Control',
-    body: 'El ícono de persona abre tu perfil completo. Ahora te voy a mostrar <strong>todo lo que hay dentro</strong>. Es el corazón de UpGames para creadores.',
-    onEnter: function() { switchTab('profile'); }
-  },
-
-  // ── PERFIL: SECCIÓN SUPERIOR ─────────────────────────────
-  {
-    sel: '.pf2-hero',
-    title: '🪪 Tu Perfil',
-    body: 'Así te ven los demás: <strong>portada, foto, nombre, verificación y bio</strong>, como en cualquier red social.<br><br>Toca <strong>Editar portada</strong> para poner una imagen detrás de tu foto.'
-  },
-  {
-    sel: '.pf2-avatar-wrap',
-    title: '🖼️ Tu Foto de Perfil',
-    body: 'Toca tu foto para cambiarla: puedes <strong>subirla desde el móvil</strong> (con recorte) o pegar una URL.'
-  },
-  {
-    sel: '.pf2-stats',
-    title: '📊 Tus Estadísticas Personales',
-    body: 'Tres números que resumen tu actividad:<br>• <strong>Publicaciones</strong> — cuántos aportes aprobados tienes<br>• <strong>Seguidores</strong> — usuarios que te siguen<br>• <strong>Siguiendo</strong> — usuarios que sigues tú'
-  },
-  {
-    sel: '.pf2-actions',
-    title: '⚙️ Acciones del Perfil',
-    body: '• <strong>Editar perfil</strong> — foto, portada, bio, links, nombre, email y contraseña<br>• <strong>Compartir perfil</strong> — copia el enlace a tu perfil público<br>• 💬 <strong>Chats</strong> · 🚪 <strong>Cerrar sesión</strong>'
-  },
-
-  // ── PERFIL: TABS INTERNAS ────────────────────────────────
-  {
-    sel: '#pf-tabs',
-    title: '📑 Las Pestañas de Tu Perfil',
-    body: 'Al entrar ves tus <strong>Publicaciones</strong>, como en Instagram o TikTok:<br>• ▦ <strong>Publicaciones</strong> y ▶ <strong>Videos</strong> — toca una para ver, editar o borrar<br>• 💵 <strong>Pagos</strong> · 🏆 <strong>Logros</strong> · 🚩 <strong>Reportes</strong>'
-  },
-
-  // ── TAB: PUBLICAR ────────────────────────────────────────
-  {
-    sel: '#pf-create-btn',
-    title: '➕ Crear publicación',
-    body: 'Este botón <strong>despliega el formulario</strong> para subir contenido a la nube. Vamos a ver cada campo.',
-    onEnter: function() { pfOpenPublish(true); }
-  },
-  {
-    sel: '#pf-addTitle',
-    title: '✏️ Campo: Título del Proyecto',
-    body: 'Escribe aquí el <strong>nombre de tu contenido</strong>. Importante:<br>• Máximo 80 caracteres<br>• <strong style="color:#ff4343">Palabras prohibidas</strong>: crack, pirata, gratis, free, full, completo, premium, descargar, download<br>• El campo se pone rojo si detecta una palabra prohibida<br>• Toca el <strong>?</strong> junto a la etiqueta para ver la lista completa'
-  },
-  {
-    sel: '#pf-addDescription',
-    title: '📝 Campo: Descripción',
-    body: 'Descripción <strong>opcional</strong> de tu contenido (máx. 500 caracteres). Aquí puedes explicar:<br>• Qué incluye el archivo<br>• Instrucciones de instalación<br>• Versión y compatibilidad<br>• Requisitos especiales<br><br>Una buena descripción atrae más descargas.'
-  },
-  {
-    sel: '#pf-addLink',
-    title: '🔗 Campo: Link de Descarga',
-    body: 'Pega aquí el enlace directo al archivo. <strong>Solo se aceptan estas plataformas:</strong><br>MediaFire · MEGA · Google Drive · OneDrive · Dropbox · GitHub · GoFile · PixelDrain · Krakenfiles · Proton Drive · iCloud · pCloud<br><br><strong style="color:#ff4343">❌ Prohibido:</strong> acortadores (bit.ly, t.co…), links directos a .exe o .msi<br><br>Toca el <strong>?</strong> para ver la lista completa de plataformas.'
-  },
-  {
-    sel: '#pf-addImage',
-    title: '🖼️ Campo: Imagen de Portada',
-    body: 'URL de la imagen o video de portada. Se aceptan imágenes (.jpg, .png, .webp, .gif), videos (.mp4, .webm) y URLs de servicios como Imgur, Google Drive, Discord CDN y otros.<br><br>¿Cómo obtener una imagen de Google?<br>1. Busca en Google Imágenes<br>2. <strong>Móvil:</strong> Mantén presionada → "Abrir en otra pestaña"<br>3. <strong>PC:</strong> Clic derecho → "Abrir imagen en pestaña nueva"<br>4. Copia la URL y pégala aquí'
-  },
-  {
-    sel: '#pf-addCategory',
-    title: '🏷️ Campo: Categoría',
-    body: 'Elige la categoría que mejor describe tu contenido:<br>• <strong>Juego</strong> — solo si eres el desarrollador original o tienes permiso<br>• <strong>ROM</strong> — juegos retro para emulador (homebrew, dominio público o con permiso)<br>• <strong>Mod</strong> — modificaciones de juegos existentes<br>• <strong>Optimización</strong> — mejoras de rendimiento, parches FPS<br>• <strong>Ajustes</strong> — utilidades y herramientas<br>• <strong>Apps</strong> — aplicaciones móviles o de escritorio<br>• <strong>Software</strong> — código abierto y herramientas libres<br><br>Toca el badge "VER INFO" para ver la guía completa.'
-  },
-  {
-    sel: '.pf-preview-card',
-    title: '👁️ Vista Previa en Tiempo Real',
-    body: 'Esta tarjeta muestra <strong>exactamente cómo se verá tu publicación</strong> en la biblioteca mientras la rellenas. Se actualiza automáticamente con el título, categoría e imagen que escribes. Así sabes qué verán los demás antes de publicar.'
-  },
-  {
-    sel: '#pf-subirBtn',
-    title: '🚀 Botón Enviar a Revisión',
-    body: 'Al tocar este botón tu publicación se envía al <strong>sistema de revisión</strong>. Un moderador o bot la revisa antes de que aparezca en la biblioteca.<br><br>• Si está todo correcto → aparece en 24-48h<br>• Si tiene algo prohibido → se rechaza con motivo<br>• Hay un <strong>cooldown de 30 segundos</strong> entre publicaciones para evitar spam'
-  },
-
-  // ── TAB: HISTORIAL ───────────────────────────────────────
-  {
-    sel: '[data-pftab="historial"]',
-    title: '🕒 Pestaña: Historial de Publicaciones',
-    body: 'Aquí ves <strong>todo lo que has publicado</strong>, con su estado actual. Si aún no has publicado nada verás un mensaje vacío. Cuando tengas publicaciones, cada una aparece como una tarjeta con sus estadísticas y opciones.',
-    onEnter: function() {
-      pfSwitchTab('historial', document.querySelector('[data-pftab="historial"]'));
-    }
-  },
-  {
-    sel: '#pf-showContent',
-    title: '📦 Tus Publicaciones (Tarjetas)',
-    body: 'Cada tarjeta de publicación muestra:<br>• Badge <strong style="color:#ffcc00">Pendiente</strong> (en revisión) o <strong style="color:#32D583">Aprobado</strong> (visible en la nube)<br>• Imagen de portada<br>• Título y categoría<br>• <strong>DL</strong> = descargas efectivas acumuladas<br>• <strong>LINK</strong> = estado del enlace en tiempo real<br>• <strong>REP</strong> = reportes recibidos (rojo si son 3 o más)<br>• Botones Editar y Borrar'
-  },
-  {
-    sel: '#pf-showContent',
-    title: '✏️ Editar y 🗑️ Borrar tus Publicaciones',
-    body: 'En cada tarjeta del historial encontrarás:<br><br>• Botón <strong style="color:var(--cy)">✏️ Editar</strong> — abre un modal donde puedes actualizar el título, descripción, enlace, imagen y categoría. Las mismas reglas de palabras prohibidas y plataformas permitidas aplican exactamente igual que al publicar.<br><br>• Botón <strong style="color:#ff4343">🗑️ Borrar</strong> — elimina la publicación permanentemente (pide confirmación). No se puede deshacer.'
-  },
-
-  // ── TAB: BÓVEDA ─────────────────────────────────────────
-  {
-    sel: '[data-pftab="boveda"]',
-    title: '🛡️ Pestaña: Bóveda (Favoritos)',
-    body: 'Tu <strong>biblioteca personal</strong> de contenido guardado. Aquí aparecen todos los ítems que marcaste con ❤️ desde la biblioteca principal.',
-    onEnter: function() { pfSwitchTab('boveda', document.querySelector('[data-pftab="boveda"]')); }
-  },
-  {
-    sel: '#pf-vaultContent',
-    title: '💎 Contenido de tu Bóveda',
-    body: 'Cada ítem guardado muestra imagen, título y usuario creador. Tienes dos botones:<br>• <strong>Acceder</strong> (verde) — te lleva directamente al link de descarga<br>• <strong>Quitar</strong> (rojo) — elimina el ítem de tu bóveda<br><br>Los favoritos se sincronizan con el servidor, así que están disponibles en cualquier dispositivo donde inicies sesión.'
-  },
-
-  // ── TAB: REPORTES ────────────────────────────────────────
-  {
-    sel: '[data-pftab="reportes"]',
-    title: '🚩 Pestaña: Mis Publicaciones Reportadas',
-    body: 'Aquí verás las publicaciones tuyas que la comunidad ha reportado. Es importante atenderlas para mantener tu reputación.',
-    onEnter: function() { pfSwitchTab('reportes', document.querySelector('[data-pftab="reportes"]')); }
-  },
-  {
-    sel: '#pf-reportesContent',
-    title: '⚠️ Detalle de los Reportes',
-    body: 'Cada tarjeta de reporte muestra:<br>• Nombre de la publicación<br>• Total de reportes y desglose: <strong style="color:#ff4343">Link caído</strong> · <strong style="color:#ffaa00">Obsoleto</strong> · <strong style="color:#ff00ff">Malware</strong><br>• Estado actual del link (Online / Revisión / Caído)<br><br>Si tienes reportes, actualiza el link desde <strong>Historial → Editar</strong>. Más de 3 reportes ponen el contenido en revisión automáticamente.'
-  },
-
-  // ── TAB: ECONOMÍA ────────────────────────────────────────
-  {
-    sel: '[data-pftab="economia"]',
-    title: '💰 Pestaña: Economía (Ganancias)',
-    body: 'Aquí gestionas tus <strong>ganancias en UpGames</strong>. Por cada 1.000 descargas efectivas de tus aportes ganas 🪙 50 UpCoins (US$1), que puedes gastar o retirar.',
-    onEnter: function() { pfSwitchTab('economia', document.querySelector('[data-pftab="economia"]')); }
-  },
-  {
-    sel: '.pf-saldo-box',
-    title: '🪙 Tus UpCoins',
-    body: 'Muestra tus <strong>UpCoins</strong>: los ganados (retirables) y los comprados (para usar en la app). 1 UpCoin = US$0,02.<br><br>Fórmula de descargas: Descargas ÷ 1000 × 50 UC'
-  },
-  {
-    sel: '.pf-eco-stats',
-    title: '📈 Estadísticas de Ganancias',
-    body: 'Dos métricas clave:<br>• <strong>Descargas Totales</strong> — suma de todas las descargas en todos tus aportes<br>• <strong>Juegos con Ganancias</strong> — aportes que han generado al menos una descarga efectiva'
-  },
-  {
-    sel: '.pf-paypal-row',
-    title: '💳 Email de PayPal',
-    body: 'Aquí configuras la <strong>cuenta PayPal donde recibirás tus pagos</strong>. Escribe tu email de PayPal y toca Guardar.<br><br>⚠️ Asegúrate de que el email sea el correcto. Los pagos van directamente a esa cuenta y no se pueden redirigir una vez enviados.'
-  },
-  {
-    sel: '#pf-btn-solicitar-pago',
-    title: '💸 Solicitar Pago',
-    body: 'Cuando cumplas los requisitos, este botón se activará (se pone verde). Para cobrar necesitas:<br>• Saldo mínimo de <strong>$10 USD</strong><br>• Verificación nivel 1 o superior<br>• Al menos 1 aporte con descargas efectivas<br>• Email de PayPal configurado<br><br>Al solicitarlo, el equipo lo revisa en 24-72h y procesa el pago.'
-  },
-  {
-    sel: '.pf-eco-info',
-    title: '📋 Resumen de Requisitos',
-    body: 'Este recuadro resume todo lo que necesitas para cobrar. Léelo si el botón de solicitar pago aún está desactivado.<br><br>¿Aún no tienes verificación? Sube contenido de calidad, mantén los links activos y evita reportes. El equipo otorga verificaciones automáticamente.'
-  },
-
-  // ── NEXUS Y TUTORIAL ────────────────────────────────────
-  {
-    sel: null,
-    title: '🤖 NEXUS IA — Tu Asistente',
-    body: 'El <strong>botón NEXUS</strong> abre el asistente de IA de UpGames. Usa el catálogo real y las reglas de la plataforma, así que puedes preguntarle:<br>• "¿Qué mods hay para Minecraft?"<br>• "Recomiéndame un juego de terror"<br>• "¿Cuánto me falta para retirar mis ganancias?"<br>• "¿Cómo publico mi contenido?"<br><br>Cuando recomienda algo, toca la tarjeta y se abre aquí mismo.',
-    onEnter: function() { switchTab('main'); }
-  },
-  {
-    sel: '#nxFab',
-    title: '🔮 Botón de NEXUS IA',
-    body: 'Este es el botón de NEXUS. Tócalo para abrir el chat; puedes expandirlo a pantalla completa con el botón de la esquina del panel. Si sales a mitad de una respuesta, verás un punto verde cuando NEXUS termine.',
-  },
-  {
-    sel: '#tut-fab',
-    title: '🎉 ¡Tutorial Completado!',
-    body: 'Este botón <strong>?</strong> en la esquina inferior izquierda te permite <strong>volver a ver este tutorial</strong> en cualquier momento si necesitas repasar algo.<br><br>Ya conoces <strong>absolutamente todo</strong> lo que puedes hacer en UpGames. ¡Bienvenido a la comunidad! 🚀<br><br>Explora, descarga, sube tu contenido y ¡empieza a ganar!'
-  }
+  { sel: '#buscador', title: '🔍 Busca lo que quieras', body: 'Escribe el nombre de un juego, mod, app o creador: los resultados aparecen mientras escribes.' },
+  { sel: '#category-row', title: '🏷️ Filtra por categoría', body: 'Juegos, ROMs, mods, apps, software y videos. Desliza para ver más.' },
+  { sel: '.game-tile', title: '📦 Abre una publicación', body: 'Toca una tarjeta para ver su detalle: portada, descripción, comentarios y el botón para <strong>descargar</strong>.' },
+  { sel: '#hdr-uc, #hdr-entrar', title: '🪙 Tus UpCoins', body: 'La moneda de UpGames. Tócala para recargar y úsala en lives, NEXUS, Premium y el estilo de tu perfil. Si aún no tienes cuenta, aquí entras.' },
+  { sel: '#hdr-orb', title: '✨ Menú rápido', body: 'Avisos, lives, subir contenido, Premium y soporte, desplegados en círculo.' },
+  { sel: '#bottom-nav', title: '🧭 Navegación', body: '<strong>Explorar</strong>, <strong>Favoritos</strong>, <strong>NEXUS</strong> (tu asistente de IA), <strong>Economía</strong> (ganancias, misiones y UpCoins) y tu <strong>Perfil</strong> (publicar y ajustes).' },
+  { sel: '#tut-fab', title: '❔ Ayuda y guía de inicio', body: 'Aquí tienes tu lista de primeros pasos, guías cortas con buscador y acceso a NEXUS y soporte. ¡Listo! 🚀' },
 ];
 
 let tutIdx=0, tutActive=false, tutLastEl=null;
