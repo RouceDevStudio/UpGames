@@ -17,12 +17,28 @@
   const tok = () => { try { return localStorage.getItem('token'); } catch (_) { return null; } };
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+  // ── Métricas anónimas (admin → "dónde se atascan"): un evento por paso y dispositivo ──
+  const modo = () => tok() ? 'usr' : 'inv';
+  function enviar(paso, accion) {
+    const env = LSx.get('ug_guia_env', {}), k = `${modo()}:${paso}:${accion}`;
+    if (env[k]) return; env[k] = 1; LSx.set('ug_guia_env', env);
+    try { fetch(`${API}/guia/evento`, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paso, accion, modo: modo() }) }).catch(() => {}); } catch (_) {}
+  }
+  /** Reporta lo completado que aún no se envió (pasos marcados en el perfil público o en un live). */
+  function reportar() {
+    if (!document.getElementById('tut-fab')) return;   // solo desde la biblioteca, donde vive la guía
+    enviar('_inicio', 'completo');
+    const g = hecho(), p = pasos();
+    p.forEach(x => { if (g[x.id]) enviar(x.id, 'completo'); });
+    if (p.every(x => g[x.id])) enviar('_fin', 'completo');
+  }
+
   // ── Progreso ─────────────────────────────────────────────────────────────
   const hecho = () => LSx.get('ug_guia', {});
   function marcar(k) {
     const g = hecho(); if (g[k]) return;
     g[k] = Date.now(); LSx.set('ug_guia', g);
-    pintarFab();
+    pintarFab(); reportar();
     const p = pasos(), n = p.filter(x => g[x.id]).length;
     if (n === p.length && !g._fin) { g._fin = 1; LSx.set('ug_guia', g); setTimeout(() => window.UGX?.fiesta?.('🎉', '¡Guía de inicio completa!'), 400); }
   }
@@ -79,14 +95,15 @@
   const bloqueado = () => document.getElementById('onboarding-modal')?.classList.contains('show') || document.querySelector('.ugx-ov') || document.getElementById('btut-lock')?.classList.contains('on');
   function cerrarPista() { if (!pistaActual) return; pistaActual.b.remove(); pistaActual.r.remove(); pistaActual = null; removeEventListener('scroll', cerrarPista, true); removeEventListener('resize', cerrarPista); }
   /** Muestra una pista junto a `sel`. `id` evita repetirla (salvo 'guia', que es a pedido). */
-  function pista(sel, texto, id) {
+  function pista(sel, texto, id, opts = {}) {
     if (bloqueado()) return false;
     if (id !== 'guia') { if (vistas()[id] || Date.now() - ultimaPista < 25000) return false; }
     // Visible = tiene caja en pantalla (offsetParent es null en elementos position:fixed como el botón de ayuda)
     const el = typeof sel === 'string' ? [...document.querySelectorAll(sel)].find(e => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; }) : sel;
     if (!el) return false;
+    if (opts.sinScroll) { const r0 = el.getBoundingClientRect(); if (r0.top < 0 || r0.bottom > innerHeight) return false; }   // p. ej. en un live: no mover el video
     cerrarPista();
-    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (!opts.sinScroll) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
     setTimeout(() => {
       const r = el.getBoundingClientRect(), PAD = 6;
       const ring = document.createElement('div'); ring.className = 'ugg-ring';
@@ -152,10 +169,10 @@
       <input class="ugx-in" id="ugg-buscar" placeholder="Busca: retirar, publicar, Premium, live…" autocomplete="off" style="margin:14px 0 10px">
       <div id="ugg-temas">${GUIAS.map(([ic, t, l], i) => `<details class="ugg-tema" data-txt="${esc((t + ' ' + l.join(' ')).toLowerCase())}"${i ? '' : ''}><summary>${ic} ${esc(t)}</summary><ul>${l.map(x => `<li>${esc(x)}</li>`).join('')}</ul></details>`).join('')}</div>
       <p class="ugx-sub" id="ugg-nada" hidden>No encontramos eso en las guías. Pregúntale a NEXUS 👇</p>
-      <div class="ugg-acc"><button type="button" class="ugx-btn" id="ugg-nexus">✦ Preguntar a NEXUS</button><button type="button" class="ugx-btn sec" id="ugg-tour">⏱ Recorrido de 1 min</button><button type="button" class="ugx-btn sec" id="ugg-soporte">✉️ Soporte</button></div>`;
+      <div class="ugg-acc"><button type="button" class="ugx-btn" id="ugg-nexus">✦ Preguntar a NEXUS</button><button type="button" class="ugx-btn sec" id="ugg-tour">⏱ Recorrido de 1 min</button><button type="button" class="ugx-btn sec" id="ugg-soporte">✉️ Soporte</button>${window.ugAbrirBienvenida ? '<button type="button" class="ugx-btn sec" id="ugg-descubre">✦ Descubre UpGames</button>' : ''}</div>`;
     const b = window.UGX?.hoja ? window.UGX.hoja('❔ Ayuda', html) : null;
     if (!b) return;
-    b.querySelectorAll('[data-ir]').forEach(x => x.onclick = () => { window.UGX.cerrarHoja(); setTimeout(() => p.find(y => y.id === x.dataset.ir)?.ir(), 260); });
+    b.querySelectorAll('[data-ir]').forEach(x => x.onclick = () => { enviar(x.dataset.ir, 'llevame'); window.UGX.cerrarHoja(); setTimeout(() => p.find(y => y.id === x.dataset.ir)?.ir(), 260); });
     const q = b.querySelector('#ugg-buscar');
     q.oninput = () => {
       const v = q.value.trim().toLowerCase(); let vis = 0;
@@ -165,11 +182,13 @@
     b.querySelector('#ugg-nexus').onclick = () => { const v = q.value.trim(); window.UGX.cerrarHoja(); irInicio(); setTimeout(() => window.nexusPreguntar ? window.nexusPreguntar(v || '¿Cómo funciona UpGames?') : window.nxToggle?.(), 260); };
     b.querySelector('#ugg-tour').onclick = () => { window.UGX.cerrarHoja(); setTimeout(() => window.startTutorial?.(), 260); };
     b.querySelector('#ugg-soporte').onclick = () => window.handleMail?.();
+    const d = b.querySelector('#ugg-descubre'); if (d) d.onclick = () => { window.UGX.cerrarHoja(); setTimeout(() => window.ugAbrirBienvenida(), 260); };
     sincronizar();
   }
 
   function iniciar() {
-    pintarFab(); sincronizar();
+    if (!document.getElementById('tut-fab')) return;   // otras páginas (live) solo usan las pistas
+    pintarFab(); sincronizar(); reportar();
     // Quien ya aceptó la bienvenida pero nunca vio la guía: preséntala una vez, sin bloquear
     if (localStorage.getItem('upgames_terms_v') && !vistas()['guia-fab']) setTimeout(() => pista('#tut-fab', 'Nuevo: tu guía de inicio y la ayuda están aquí. Tócala cuando quieras', 'guia-fab'), 6000);
   }

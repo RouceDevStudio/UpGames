@@ -459,6 +459,11 @@ body:not(.is-owner) .owner-only{display:none!important}
         <div class="card"><p class="ct">🏆 Top creadores</p><p class="cs">Por descargas efectivas</p><div id="dTop"></div></div>
         <div class="card"><p class="ct">🔥 Más descargados</p><p class="cs">Publicaciones con más descargas</p><div id="dMas"></div></div>
       </div>
+      <div class="card" style="margin-top:14px">
+        <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><div><p class="ct">🚀 Guía de inicio · dónde se atascan</p><p class="cs" style="margin:0">Qué % de quienes vieron la guía completó cada paso (últimos 30 días, anónimo). "Llévame" = cuántos pidieron ayuda en ese paso</p></div>
+          <div class="chips" id="gF"><button class="chip on" data-f="usr">Con cuenta</button><button class="chip" data-f="inv">Invitados</button></div></div>
+        <div id="dGuia" style="margin-top:10px"><div class="skel"></div></div>
+      </div>
     </section>
 
     <!-- REVISIÓN -->
@@ -1044,9 +1049,31 @@ function rDash() {
   $('dMas').innerHTML = tbl((d.itemsMasDescargados || []).map((j, i) => `<tr><td class="muted">${i + 1}</td><td class="ell">${esc(j.title)}</td><td class="muted">@${esc(j.usuario)}</td><td class="num">${num(j.descargasEfectivas)}</td></tr>`).join(''), '<th>#</th><th>Título</th><th>Por</th><th class="num">Descargas</th>');
 }
 
+// ── Guía de inicio: embudo anónimo (rutas/extrasUC.js → /admin/stats/guia) ──
+let guiaD = null, gModo = 'usr';
+const G_PASOS = { usr: [['email', '✉️ Verificar email'], ['abrir', '📦 Abrir una publicación'], ['favorito', '❤️ Guardar un favorito'], ['seguir', '👥 Seguir a un creador'], ['nexus', '✦ Preguntar a NEXUS'], ['live', '🔴 Mirar un live'], ['upcoins', '🪙 Conocer sus UpCoins'], ['publicar', '☁️ Publicar contenido']],
+  inv: [['explorar', '🔎 Explorar el catálogo'], ['abrir', '📦 Abrir una publicación'], ['cuenta', '👤 Crear su cuenta']] };
+chips('gF', f => { gModo = f; rGuia(); });
+async function loadGuia() { try { const { ok, d } = await api('/admin/stats/guia?dias=30'); if (ok && d.success) { guiaD = d.guia; rGuia(); } } catch (_) {} }
+function rGuia() {
+  const el = $('dGuia'); if (!el || !guiaD) return;
+  const g = guiaD[gModo] || {}, ini = g._inicio?.completo || 0;
+  if (!ini) { el.innerHTML = '<div class="empty" style="padding:20px">Aún no hay datos: se cuentan desde que la guía nueva está publicada</div>'; return; }
+  const filas = G_PASOS[gModo].map(([id, t]) => ({ id, t, n: g[id]?.completo || 0, ll: g[id]?.llevame || 0 })).map(x => ({ ...x, pct: Math.min(100, Math.round(x.n / ini * 100)) }));
+  const peor = ini >= 5 ? filas.reduce((a, b) => (b.pct < a.pct ? b : a), filas[0]) : null;
+  const fin = g._fin?.completo || 0;
+  el.innerHTML = `<p class="small muted" style="margin:0 0 10px"><b>${num(ini)}</b> ${gModo === 'usr' ? 'usuarios' : 'visitantes'} vieron la guía · <b>${num(fin)}</b> la completaron (${Math.round(fin / ini * 100)} %)</p>`
+    + filas.map(x => `<div style="display:grid;grid-template-columns:minmax(150px,1.2fr) 3fr auto;gap:10px;align-items:center;margin:7px 0">
+      <span class="small" style="${x === peor ? 'color:var(--warn);font-weight:800' : ''}">${x.t}${x === peor ? ' ⚠️' : ''}</span>
+      <div style="height:10px;border-radius:99px;background:var(--bg3);overflow:hidden"><div style="height:100%;width:${x.pct}%;border-radius:inherit;background:${x === peor ? 'var(--warn)' : 'linear-gradient(90deg,#32D583,#5AC8FA)'}"></div></div>
+      <span class="small mono" style="white-space:nowrap"><b>${x.pct} %</b> <span class="muted">· ${num(x.ll)} llévame</span></span></div>`).join('')
+    + (peor ? `<p class="small" style="margin:10px 0 0;color:var(--warn)">⚠️ Donde más se atascan: <b>${peor.t.replace(/^\S+\s/, '')}</b> (${peor.pct} %). Conviene explicarlo mejor o hacerlo más visible.</p>` : '<p class="small muted" style="margin:10px 0 0">Con 5 o más personas se señala el paso donde más se atascan.</p>');
+}
+
 let chartsAt = 0;
 async function loadCharts() {
   if (Date.now() - chartsAt < 5 * 60e3 && $('chU').innerHTML) return; chartsAt = Date.now();
+  loadGuia();
   try {
     const [u, i] = await Promise.all([api('/analytics/admin/users-timeseries?dias=14'), api('/analytics/admin/items-timeseries?dias=14')]);
     drawBars('chU', Array.isArray(u.d) ? u.d.map(x => [x.fecha, x.count]) : [], '', 'usuarios');

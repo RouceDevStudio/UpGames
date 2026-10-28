@@ -28,9 +28,9 @@
 <link rel="dns-prefetch" href="https://upgames-production.up.railway.app">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="biblioteca.css?v=20261028g">
-<link rel="stylesheet" href="upgames-glass.css?v=20261028g">
-<link rel="stylesheet" href="upgames-estilo.css?v=20261028g">
+<link rel="stylesheet" href="biblioteca.css?v=20261028h">
+<link rel="stylesheet" href="upgames-glass.css?v=20261028h">
+<link rel="stylesheet" href="upgames-estilo.css?v=20261028h">
 <!-- Widget de subida: solo se usa al publicar → diferido (antes bloqueaba el primer render) -->
 <script src="https://upload-widget.cloudinary.com/global/all.js" defer></script>
 
@@ -1509,77 +1509,34 @@
   <!-- ── TRACK DE SLIDES ── -->
   <div class="ob-track" id="ob-track">
 
-    <!-- SLIDE 0 — El ecosistema (único en su clase) -->
-    <div class="ob-slide" data-slide="0">
-      <div class="ob-slide-inner">
+    <!-- SLIDE 0 — Impacto: un ecosistema que no existe en otro lugar + exclusividad Fundador -->
+    <div class="ob-slide obh" data-slide="0">
+      <div class="obh-fondo" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="ob-slide-inner obh-in">
+        <div class="obh-pill"><span class="obh-dot"></span> ACCESO FUNDADOR · ERES DE LOS PRIMEROS</div>
+        <div class="obh-logo"><span>UP</span>GAMES</div>
+        <h2 class="obh-titulo">No es otra app.<br><span>Es un ecosistema que no existe en ningún otro lugar.</span></h2>
+        <p class="obh-sub">Lo que hoy haces en <b>seis apps distintas</b>, aquí está unido, conectado… <b>y te paga.</b></p>
 
-        <!-- Logo animado -->
-        <div class="ob-eco-logo">
-          <span class="ob-eco-up">UP</span><span class="ob-eco-gm">GAMES</span>
+        <div class="obh-fusion" role="list">
+          <div class="obh-app" role="listitem" style="--i:0"><span>📚</span><b>Descargas</b><small>Juegos, mods, ROMs y apps</small></div>
+          <div class="obh-app" role="listitem" style="--i:1"><span>▶️</span><b>Videos</b><small>De creadores reales</small></div>
+          <div class="obh-app" role="listitem" style="--i:2"><span>🔴</span><b>Lives</b><small>Con chat, regalos y Super Chat</small></div>
+          <div class="obh-app" role="listitem" style="--i:3"><span>👥</span><b>Red social</b><small>Perfiles, seguidores y chat</small></div>
+          <div class="obh-app" role="listitem" style="--i:4"><span>✦</span><b>NEXUS IA</b><small>Te conoce y te guía</small></div>
+          <div class="obh-app" role="listitem" style="--i:5"><span>🪙</span><b>UpCoins</b><small>Una moneda para todo</small></div>
+        </div>
+        <div class="obh-igual"><span>6 apps</span><i>→</i><b>1 UpGames</b></div>
+
+        <div class="obh-props">
+          <div><b>Gratis</b><small>mira y descarga, incluso sin cuenta</small></div>
+          <div><b>Te paga</b><small>ganas desde la primera descarga</small></div>
+          <div><b>Tuyo</b><small>tu perfil, tu estilo, tu comunidad</small></div>
         </div>
 
-        <div class="ob-kicker">Bienvenido a UpGames · un ecosistema, no una sola app</div>
-        <h2 class="ob-title-sm" style="font-size:1.5rem;line-height:1.2">
-          Biblioteca, videos, lives, red social,<br>
-          <span class="ob-accent-g">monetización e IA en un solo lugar.</span>
-        </h2>
-        <div class="ob-cats">
-          <span>🎮 Juegos</span><span>💾 ROMs</span><span>🧩 Mods</span><span>📱 Apps</span>
-          <span>🛠 Herramientas</span><span>💻 Software</span><span>▶ Videos</span><span>🔴 En vivo</span><span>👥 Comunidad</span>
-        </div>
-
-        <!-- Ciclo visual: 6 nodos conectados en círculo -->
-        <div class="ob-cycle">
-          <div class="ob-cycle-ring">
-            <div class="ob-node ob-node-top">
-              <span class="ob-node-icon">💰</span>
-              <span class="ob-node-lbl">Monetiza</span>
-            </div>
-            <div class="ob-node ob-node-tr">
-              <span class="ob-node-icon">🧠</span>
-              <span class="ob-node-lbl">NEXUS IA</span>
-            </div>
-            <div class="ob-node ob-node-br">
-              <span class="ob-node-icon">▶</span>
-              <span class="ob-node-lbl">Videos</span>
-            </div>
-            <div class="ob-node ob-node-bot">
-              <span class="ob-node-icon">🔔</span>
-              <span class="ob-node-lbl">Red Social</span>
-            </div>
-            <div class="ob-node ob-node-bl">
-              <span class="ob-node-icon">📚</span>
-              <span class="ob-node-lbl">Biblioteca</span>
-            </div>
-            <div class="ob-node ob-node-tl">
-              <span class="ob-node-icon">🔴</span>
-              <span class="ob-node-lbl">En vivo</span>
-            </div>
-            <!-- Centro -->
-            <div class="ob-cycle-center">
-              <svg viewBox="0 0 32 32" width="28" height="28">
-                <polygon points="16,2 29,8 29,24 16,30 3,24 3,8"
-                  stroke="#32D583" stroke-width="1.2" fill="none" opacity=".6"/>
-                <line x1="16" y1="10" x2="16" y2="22" stroke="#32D583" stroke-width="2" stroke-linecap="round"/>
-                <line x1="10" y1="16" x2="22" y2="16" stroke="#32D583" stroke-width="2" stroke-linecap="round"/>
-                <circle cx="16" cy="16" r="2.5" fill="#32D583"/>
-              </svg>
-            </div>
-          </div>
-        </div>
-
-        <p class="ob-eco-caption">
-          📚 <b>Biblioteca</b> de juegos, ROMs, mods, apps y software indexada por la comunidad ·
-          ▶ <b>Videos</b> de creadores · 🔴 <b>Streaming</b> de gameplay con chat y regalos ·
-          👥 <b>Red social</b> con perfiles, seguidores y chat · 💰 <b>Monetización real</b> por descargas, regalos y accesos ·
-          🧠 <b>NEXUS IA</b>, tu asistente · 🪙 <b>UpCoins</b>, la moneda de todo el ecosistema · ⭐ <b>Premium</b> sin anuncios y con IA ilimitada.<br>
-          <strong style="color:var(--g)">Mira y descarga gratis, incluso sin cuenta. Crea una cuenta para publicar, interactuar y ganar.</strong>
-        </p>
-
+        <div class="obh-fundador"><span class="obh-medalla">🏛️</span><div><b>Insignia Fundador</b><small id="obh-fundador-txt">Solo para las cuentas creadas en esta etapa. No se vende y no vuelve a salir.</small></div></div>
       </div>
     </div>
-
-    <!-- SLIDE 1 — Biblioteca + Videos -->
     <!-- SLIDE 1 — Gana y usa tus UpCoins -->
     <div class="ob-slide" data-slide="1">
       <div class="ob-slide-inner">
@@ -1796,11 +1753,11 @@
 <!-- ION ICONS -->
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
-<script src="script.js?v=20261028g"></script>
-<script src="upgames-extras.js?v=20261028g"></script>
-<script src="upgames-guia.js?v=20261028g"></script>
-<script src="upgames-autoinfo.js?v=20261028g"></script>
-<script src="upgames-motion.js?v=20261028g"></script>
+<script src="script.js?v=20261028h"></script>
+<script src="upgames-extras.js?v=20261028h"></script>
+<script src="upgames-guia.js?v=20261028h"></script>
+<script src="upgames-autoinfo.js?v=20261028h"></script>
+<script src="upgames-motion.js?v=20261028h"></script>
 
 <!-- ══════════════════════════════════════
   EXTENSIÓN DE PERFIL: Nombre / Email / Contraseña / Links

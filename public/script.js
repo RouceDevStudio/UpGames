@@ -4102,13 +4102,29 @@ document.addEventListener('keydown', e => {
     a.querySelector('button').onclick = () => { LS.set('upgames_terms_v', TERMINOS_VERSION); a.remove(); };
     setTimeout(() => document.body.appendChild(a), 2500);
   }
-  if (window.UG_INVITADO) return;   // invitados: sin pantalla completa (los términos se aceptan al crear la cuenta)
+  // Invitados: nada a pantalla completa al entrar (Google penaliza los intersticiales en
+  // móvil). Una barra elegante, que no tapa nada, abre la bienvenida con "Crear cuenta".
+  if (window.UG_INVITADO) {
+    window.ugAbrirBienvenida = () => abrir(true);
+    if (!LS.get('ug_bienv_inv')) setTimeout(() => {
+      if (!window.UG_INVITADO || document.getElementById('obh-teaser')) return;
+      const t = document.createElement('div'); t.id = 'obh-teaser'; t.className = 'obh-teaser'; t.setAttribute('role', 'region'); t.setAttribute('aria-label', 'Bienvenida');
+      t.innerHTML = `<span class="obh-teaser-ic">✦</span><span><b>Acabas de entrar a algo que no existe en otro lugar.</b><small>Descargas, videos, lives, red social e IA que te paga, en un solo ecosistema.</small></span><button type="button" data-a="ver">Descúbrelo</button><button type="button" data-a="x" aria-label="Cerrar">✕</button>`;
+      t.onclick = e => { const a = e.target.closest('button')?.dataset.a; if (!a) return; LS.set('ug_bienv_inv', '1'); t.remove(); if (a === 'ver') abrir(true); };
+      document.body.appendChild(t);
+    }, 3500);
+    return;
+  }
   // Bienvenida UNA vez por versión de los términos (antes volvía cada semana).
   // Quien ya la había aceptado antes solo ve un aviso pequeño de "términos actualizados".
   const aceptada = LS.get('upgames_terms_v');
   if (aceptada === TERMINOS_VERSION) return;
   if (aceptada || LS.getJSON('upgames_terms_seen_ts')) { avisoTerminosNuevos(); return; }
+  abrir(false);
 
+  function abrir(invitado) {
+  if (abrir.listo) { document.getElementById('onboarding-modal').classList.add('show'); document.body.style.overflow = 'hidden'; return; }
+  abrir.listo = true;
   const modal   = document.getElementById('onboarding-modal');
   const track   = document.getElementById('ob-track');
   const footer  = document.getElementById('ob-footer');
@@ -4116,7 +4132,25 @@ document.addEventListener('keydown', e => {
   const btnAccept = document.getElementById('btn-accept-terms');
   const dots    = document.querySelectorAll('.ob-dot');
   const slides  = document.querySelectorAll('.ob-slide');
-  const TOTAL   = slides.length;   // 5
+  const TOTAL   = slides.length;   // 3
+  // Invitado: en la última pantalla, crear cuenta (los términos se aceptan al registrarse) o seguir mirando
+  if (invitado) {
+    modal.classList.add('modo-inv');
+    btnAccept.innerHTML = '✨ Crear mi cuenta gratis';
+    const salir = modal.querySelector('.ob-btn-reject');
+    if (salir) { salir.textContent = 'Seguir explorando sin cuenta'; salir.onclick = () => { modal.classList.remove('show'); document.body.style.overflow = ''; }; }
+  }
+
+  // Fecha real del cierre de la etapa Fundador (y si tu cuenta ya tiene la insignia)
+  (async () => {
+    if (document.readyState === 'loading') await new Promise(r => document.addEventListener('DOMContentLoaded', r, { once: true }));   // upgames-extras.js carga después
+    const txt = document.getElementById('obh-fundador-txt'); if (!txt || !window.UGX) return;
+    const m = invitado ? null : await UGX.cargarMio().catch(() => null);
+    const c = m?.catalogo || await UGX.cargarCfg().catch(() => null);
+    const f = c?.fundadorHasta ? new Date(c.fundadorHasta).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Bogota' }) : '';
+    if (m?.fundador) txt.textContent = 'Tu cuenta ya la tiene: llegaste en la etapa fundadora. No se vende y no vuelve a salir.';
+    else if (f) txt.textContent = `Solo para las cuentas creadas hasta el ${f}. No se vende y no vuelve a salir.`;
+  })();
 
   let current = 0;
 
@@ -4187,14 +4221,16 @@ document.addEventListener('keydown', e => {
     if (e.key === 'ArrowLeft'  && current > 0)         _goTo(current - 1);
   });
 
-  // Botón Aceptar (slide 5)
+  // Botón Aceptar (última pantalla)
   btnAccept.addEventListener('click', () => {
+    if (invitado) { location.href = ugUrlLogin(true); return; }
     LS.setJSON('upgames_terms_seen_ts', Date.now());
     LS.set('upgames_terms_v', TERMINOS_VERSION);
     modal.classList.remove('show');
     document.body.style.overflow = '';
     setTimeout(() => window.UGG?.bienvenida(), 700);   // presenta la Guía de inicio (no bloquea)
   });
+  }   // fin abrir()
 })();
 
 // ── NEXUS IA (nativa) ────────────────────────────────────

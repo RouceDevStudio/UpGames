@@ -41,6 +41,8 @@ const COSMETICOS = [
     // Solo se ganan con misiones (no se venden)
     { id: 'ins_mecenas', tipo: 'insignia', nombre: 'Mecenas', emoji: '🎁', precio: 0, soloMision: true },
     { id: 'ins_activo', tipo: 'insignia', nombre: 'Siempre activo', emoji: '⚡', precio: 0, soloMision: true },
+    // Exclusiva: cuentas creadas antes de FUNDADOR_HASTA. No se vende ni se gana después.
+    { id: 'ins_fundador', tipo: 'insignia', nombre: 'Fundador', emoji: '🏛️', precio: 0, soloMision: true },
 ];
 
 // Tipos de misión que el servidor sabe contar (el admin elige objetivo y recompensa)
@@ -66,6 +68,8 @@ const DEFECTO = {
         { id: 'm_regalo', tipo: 'regalo_live', titulo: 'Envía un regalo en un live', objetivo: 1, uc: 0, insignia: 'ins_mecenas', activa: true },
     ],
 };
+// Insignia Fundador: para las cuentas creadas antes de esta fecha (hora Colombia, fin del día)
+const FUNDADOR_HASTA = (() => { const d = new Date(`${process.env.FUNDADOR_HASTA || '2027-01-31'}T23:59:59-05:00`); return isNaN(d) ? new Date('2027-01-31T23:59:59-05:00') : d; })();
 // Duración del Super Chat fijado según el monto (segundos)
 const SUPERCHAT_SEG = m => m >= 200 ? 300 : m >= 100 ? 120 : m >= 50 ? 60 : 30;
 
@@ -224,4 +228,4 @@ async function reclamar(Usuario, usuario, misionId) {
     return { status: 200, uc: m.uc, insignia: m.insignia || null };
 }
 
-module.exports = { COSMETICOS, TIPOS_MISION, DEFECTO, SUPERCHAT_SEG, config, guardar, semana, finSemana, evento, estado, reclamar };
+module.exports = { COSMETICOS, TIPOS_MISION, DEFECTO, SUPERCHAT_SEG, FUNDADOR_HASTA, config, guardar, semana, finSemana, evento, estado, reclamar };

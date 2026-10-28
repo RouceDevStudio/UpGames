@@ -52,7 +52,7 @@ function registrar(app, deps) {
         activo: c.activo, precios: c.precios,
         cosmeticos: c.cosmeticos.filter(x => x.activo || x.soloMision).map(({ id, tipo, nombre, emoji, precio, soloMision }) => ({ id, tipo, nombre, emoji, precio, soloMision: !!soloMision })),
         misiones: c.activo.misiones ? c.misiones.filter(m => m.activa).map(({ id, titulo, objetivo, uc, insignia }) => ({ id, titulo, objetivo, uc, insignia })) : [],
-        prioridadHoras: HORAS_PRIORIDAD,
+        prioridadHoras: HORAS_PRIORIDAD, fundadorHasta: X.FUNDADOR_HASTA.toISOString(),
     });
     app.get('/extras/catalogo', async (req, res) => {
         try { res.set('Cache-Control', 'public, max-age=60'); ok(res, publicoCfg(await X.config())); }
@@ -61,10 +61,19 @@ function registrar(app, deps) {
     app.get('/extras/mio', verificarToken, async (req, res) => {
         try {
             const [u, c, mis] = await Promise.all([
-                Usuario.findOne({ usuario: req.usuario }).select('cosmeticos estilo lastUsernameChange monedas saldo solicitudPagoPendiente').lean(),
+                Usuario.findOne({ usuario: req.usuario }).select('cosmeticos estilo lastUsernameChange monedas saldo solicitudPagoPendiente fecha createdAt').lean(),
                 X.config(), X.estado(req.usuario)]);
+            // Insignia Fundador: se entrega sola (y se muestra si hay espacio) a las cuentas creadas a tiempo
+            const alta = u?.fecha || u?.createdAt;
+            if (u && alta && new Date(alta) <= X.FUNDADOR_HASTA && !(u.cosmeticos || []).includes('ins_fundador')) {
+                const ins = u.estilo?.insignias || [];
+                await Usuario.updateOne({ usuario: req.usuario }, { $addToSet: { cosmeticos: 'ins_fundador' }, ...(ins.length < 3 ? { $set: { 'estilo.insignias': ['ins_fundador', ...ins] } } : {}) });
+                u.cosmeticos = [...(u.cosmeticos || []), 'ins_fundador'];
+                if (ins.length < 3) u.estilo = { ...(u.estilo || {}), insignias: ['ins_fundador', ...ins] };
+                deps.olvidarPerfil?.(req.usuario);
+            }
             const espera = u?.lastUsernameChange ? Math.max(0, Math.ceil(30 - (Date.now() - new Date(u.lastUsernameChange)) / 864e5)) : 0;
-            ok(res, { catalogo: publicoCfg(c), cosmeticos: u?.cosmeticos || [], estilo: u?.estilo || {}, misiones: mis, nombreEsperaDias: espera, upcoins: UC.saldoUC(u || {}) });
+            ok(res, { catalogo: publicoCfg(c), cosmeticos: u?.cosmeticos || [], estilo: u?.estilo || {}, misiones: mis, nombreEsperaDias: espera, upcoins: UC.saldoUC(u || {}), fundador: (u?.cosmeticos || []).includes('ins_fundador') });
         } catch (e) { logger.error(`[extras] mio: ${e.message}`); err(res, 500, 'No se pudo cargar'); }
     });
 
@@ -215,6 +224,35 @@ function registrar(app, deps) {
             if (r.insignia) deps.olvidarPerfil?.(req.usuario);
             ok(res, { uc: r.uc, insignia: r.insignia, upcoins: await totalUC(req.usuario), misiones: await X.estado(req.usuario) });
         } catch (e) { logger.error(`[extras] reclamar: ${e.message}`); err(res, 500, 'No se pudo reclamar'); }
+    });
+
+    // ── Guía de inicio: métricas ANÓNIMAS (contadores por día y paso, sin usuario ni IP) ──
+    const PASOS_GUIA = new Set(['_inicio', '_fin', 'explorar', 'abrir', 'cuenta', 'email', 'favorito', 'seguir', 'nexus', 'live', 'upcoins', 'publicar']);
+    const statsGuia = () => require('mongoose').connection.collection('guia_stats');
+    let idxGuia = false;
+    const limGuia = new Map();   // ip → [ts] (máx. 40 eventos por hora; evita inflar los números)
+    app.post('/guia/evento', async (req, res) => {
+        try {
+            const { paso, accion, modo } = req.body || {};
+            if (!PASOS_GUIA.has(paso) || !['completo', 'llevame'].includes(accion) || !['inv', 'usr'].includes(modo)) return err(res, 400, 'Evento no válido');
+            const ip = req.ip || '', ahora = Date.now(), l = (limGuia.get(ip) || []).filter(t => t > ahora - 3600e3);
+            if (l.length >= 40) return ok(res, { contado: false });
+            l.push(ahora); limGuia.set(ip, l); if (limGuia.size > 20000) limGuia.clear();
+            if (!idxGuia) { idxGuia = true; statsGuia().createIndex({ fecha: 1 }, { expireAfterSeconds: 400 * 86400 }).catch(() => {}); }
+            const dia = new Date(ahora - 5 * 3600e3).toISOString().slice(0, 10);
+            await statsGuia().updateOne({ _id: `${dia}:${modo}:${paso}:${accion}` }, { $inc: { n: 1 }, $setOnInsert: { dia, modo, paso, accion, fecha: new Date() } }, { upsert: true });
+            ok(res, { contado: true });
+        } catch (e) { err(res, 500, 'Error'); }
+    });
+    app.get('/admin/stats/guia', verificarAdmin, async (req, res) => {
+        try {
+            const dias = Math.min(365, Math.max(1, parseInt(req.query.dias, 10) || 30));
+            const desde = new Date(Date.now() - 5 * 3600e3 - (dias - 1) * 864e5).toISOString().slice(0, 10);
+            const filas = await statsGuia().aggregate([{ $match: { dia: { $gte: desde } } }, { $group: { _id: { modo: '$modo', paso: '$paso', accion: '$accion' }, n: { $sum: '$n' } } }]).toArray();
+            const r = { inv: {}, usr: {} };
+            for (const f of filas) { const m = r[f._id.modo]; (m[f._id.paso] ||= { completo: 0, llevame: 0 })[f._id.accion] += f.n; }
+            ok(res, { dias, guia: r });
+        } catch (e) { err(res, 500, 'No se pudo cargar'); }
     });
 
     // ── Panel admin ─────────────────────────────────────────────────────────

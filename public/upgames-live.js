@@ -518,6 +518,12 @@ async function vistaEspectador(usuario) {
   window.UGX?.cargarCfg().then(cfgX => {
     if (!cfgX?.activo?.superchat || !TOKEN) return;
     document.querySelectorAll('[data-superchat]').forEach(b => { b.hidden = false; b.onclick = () => superChat(cfgX.precios.superchat); });
+    // Pista (una sola vez en la vida): en pantalla completa señala 🎁; si no, el botón de Super Chat
+    const tPista = setTimeout(() => {
+      const inm = document.body.classList.contains('inm-on');
+      window.UGG?.pista(inm ? '#ov-gift' : '.gifts [data-superchat]', inm ? 'Toca 🎁 para enviar regalos o un Super Chat: tu mensaje sale destacado y fijado arriba del chat' : 'Envía un Super Chat para destacar tu mensaje: queda fijado arriba del chat y apoyas al creador', 'superchat', { sinScroll: true });
+    }, 9000);
+    cleanup.push(() => clearTimeout(tPista));
   });
   function superChat(montos) {
     let monto = montos[0];
