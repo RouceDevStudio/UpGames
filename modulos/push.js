@@ -61,7 +61,7 @@ async function iniciar(opts = {}) {
 const decodificar = s => String(s || '').replace(/<[^>]*>/g, '')
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&').trim();
 const recorta = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
-const BASE = (process.env.APP_URL || 'https://roucedevstudio.github.io/UpGames').replace(/\/+$/, '') + '/public/';
+const BASE = (process.env.APP_URL || 'https://upgames.games').replace(/\/+$/, '') + '/public/';
 
 /** Categoría de preferencias a la que pertenece una notificación (null = no se envía push). */
 function categoria(n) {

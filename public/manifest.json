@@ -2,8 +2,8 @@
   "name": "UpGames — La Nube de Contenido",
   "short_name": "UpGames",
   "description": "Biblioteca de juegos, mods, apps y software indexada por la comunidad. Publica, comparte y gana con tus descargas.",
-  "start_url": "/UpGames/public/biblioteca.html",
-  "scope": "/UpGames/",
+  "start_url": "/public/biblioteca.html",
+  "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#0A0B0F",
@@ -71,7 +71,7 @@
       "name": "Biblioteca",
       "short_name": "Biblioteca",
       "description": "Explorar contenido gaming",
-      "url": "/UpGames/public/biblioteca.html",
+      "url": "/public/biblioteca.html",
       "icons": [
         {
           "src": "icons/icon-96.png?v=2",
@@ -84,7 +84,7 @@
       "name": "Mi Perfil",
       "short_name": "Perfil",
       "description": "Gestionar mi contenido",
-      "url": "/UpGames/public/biblioteca.html?tab=perfil",
+      "url": "/public/biblioteca.html?tab=perfil",
       "icons": [
         {
           "src": "icons/icon-96.png?v=2",
@@ -97,7 +97,7 @@
       "name": "Mensajes",
       "short_name": "Mensajes",
       "description": "Ver mis mensajes",
-      "url": "/UpGames/public/chats.html",
+      "url": "/public/chats.html",
       "icons": [
         {
           "src": "icons/icon-96.png?v=2",
@@ -107,5 +107,5 @@
       ]
     }
   ],
-  "id": "/UpGames/public/biblioteca.html"
+  "id": "/public/biblioteca.html"
 }

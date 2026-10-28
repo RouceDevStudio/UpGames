@@ -329,7 +329,7 @@ if (process.env.NODE_ENV === 'production' && (!JWT_REFRESH_SECRET || JWT_REFRESH
     process.exit(1);
 }
 
-const APP_URL = process.env.APP_URL || 'https://roucedevstudio.github.io/UpGames';
+const APP_URL = process.env.APP_URL || 'https://upgames.games';
 const API_URL_SELF = process.env.RAILWAY_PUBLIC_DOMAIN
     ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
     : `http://localhost:${process.env.PORT || 10000}`;
@@ -2811,7 +2811,7 @@ app.put('/push/prefs', verificarToken, async (req, res) => {
     res.json({ success: true });
 });
 app.post('/push/prueba', verificarToken, async (req, res) => {
-    const n = await push.enviarA([req.usuario], () => ({ title: '🔔 ¡Listo!', body: 'Así te llegarán los avisos de UpGames aunque no estés en la app.', url: (process.env.APP_URL || 'https://roucedevstudio.github.io/UpGames') + '/public/biblioteca.html', tag: 'prueba', icon: './icons/icon-192.png?v=2', badge: './icons/icon-96.png?v=2' }));
+    const n = await push.enviarA([req.usuario], () => ({ title: '🔔 ¡Listo!', body: 'Así te llegarán los avisos de UpGames aunque no estés en la app.', url: (process.env.APP_URL || 'https://upgames.games') + '/public/biblioteca.html', tag: 'prueba', icon: './icons/icon-192.png?v=2', badge: './icons/icon-96.png?v=2' }));
     res.json({ success: true, enviados: n });
 });
 
@@ -3641,7 +3641,7 @@ const cobros = require('./rutas/cobros').registrar(app, { verificarToken, verifi
 // Lista pública de todo lo indexable (publicaciones aprobadas y perfiles con aportes).
 // Una acción de GitHub la copia a diario a public/sitemap.xml del sitio (mismo dominio
 // que las páginas, como exige Google).
-const SITIO = 'https://roucedevstudio.github.io/UpGames/public';
+const SITIO = 'https://upgames.games/public';
 const xmlEsc = v => String(v).replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' }[c]));
 app.get('/seo/sitemap.xml', async (req, res) => {
     try {

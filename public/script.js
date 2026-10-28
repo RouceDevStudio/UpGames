@@ -871,7 +871,7 @@ function registrarVista(item) {
 
 // ── OPEN DETAIL SHEET ─────────────────────────────────────
 // ── SEO por publicación: título, descripción, imagen y datos estructurados ──
-const UG_SEO_BASE = { title: document.title, url: 'https://roucedevstudio.github.io/UpGames/public/biblioteca.html' };
+const UG_SEO_BASE = { title: document.title, url: 'https://upgames.games/public/biblioteca.html' };
 function ugMeta(attr, key, val) {
   let m = document.head.querySelector(`meta[${attr}="${key}"]`);
   if (!m) { m = document.createElement('meta'); m.setAttribute(attr, key); document.head.appendChild(m); }
@@ -888,7 +888,7 @@ function ugSeo(item) {
     }
     const url = `${UG_SEO_BASE.url}?id=${item._id}`;
     const desc = String(item.description || `${item.category || 'Contenido'} compartido por @${item.usuario} en UpGames.`).replace(/\s+/g, ' ').slice(0, 160);
-    const img = /^https:\/\//.test(item.image || '') ? item.image : 'https://roucedevstudio.github.io/UpGames/public/og-cover.png';
+    const img = /^https:\/\//.test(item.image || '') ? item.image : 'https://upgames.games/public/og-cover.png';
     document.title = `${item.title} — ${item.category || 'Descargar'} | UpGames`;
     canon.href = url;
     ugMeta('name', 'description', desc);
@@ -897,7 +897,7 @@ function ugSeo(item) {
     ugMeta('name', 'twitter:card', 'summary_large_image');
     const tipo = item.category === 'Video' ? 'VideoObject' : (['Juego', 'ROMs'].includes(item.category) ? 'VideoGame' : 'SoftwareApplication');
     const datos = { '@context': 'https://schema.org', '@type': tipo, name: item.title, description: desc, image: img, url,
-      author: { '@type': 'Person', name: item.usuario, url: `https://roucedevstudio.github.io/UpGames/public/perfil-publico.html?usuario=${encodeURIComponent(item.usuario)}` },
+      author: { '@type': 'Person', name: item.usuario, url: `https://upgames.games/public/perfil-publico.html?usuario=${encodeURIComponent(item.usuario)}` },
       ...(item.createdAt ? { datePublished: item.createdAt } : {}),
       ...(tipo === 'VideoObject' ? { thumbnailUrl: img, uploadDate: item.createdAt || undefined, contentUrl: item.link } : { applicationCategory: tipo === 'VideoGame' ? 'Game' : 'Utilities', operatingSystem: 'Windows, Android', offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' } }),
       interactionStatistic: { '@type': 'InteractionCounter', interactionType: 'https://schema.org/DownloadAction', userInteractionCount: item.descargasEfectivas || 0 } };

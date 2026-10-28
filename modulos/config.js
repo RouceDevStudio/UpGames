@@ -34,13 +34,19 @@ const config = {
     JWT_REFRESH_SECRET: process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET + '_refresh',
     
     // ========== CORS ==========
-    ALLOWED_ORIGINS: [
+    // Dominios del frontend. Además se permiten el de APP_URL y los de CORS_ORIGINS
+    // (separados por comas), para que un cambio de dominio no deje la web sin API.
+    ALLOWED_ORIGINS: [...new Set([
+        'https://upgames.games',
+        'https://www.upgames.games',
         'https://roucedevstudio.github.io',
         'http://localhost:3000',
         'http://localhost:5500',
         'http://127.0.0.1:5500',
-        'http://localhost:7700'
-    ],
+        'http://localhost:7700',
+        ...[process.env.APP_URL, ...String(process.env.CORS_ORIGINS || '').split(',')]
+            .map(u => { try { return new URL(String(u).trim()).origin; } catch (_) { return null; } }).filter(Boolean),
+    ])],
     
     // ========== ECONOMÍA CPM ==========
     // Lo que gana el creador por cada 1.000 descargas verificadas por la página puente.

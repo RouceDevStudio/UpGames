@@ -16,7 +16,7 @@
 // Uso:
 //   UpGamesShare.agregarBoton({
 //       contenedor: '#share-buttons',
-//       url:    'https://roucedevstudio.github.io/UpGames/?item=abc123',
+//       url:    'https://upgames.games/?item=abc123',
 //       titulo: 'GTA San Andreas Mobile',
 //       texto:  'Descárgalo gratis en UpGames'
 //   });

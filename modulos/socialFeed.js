@@ -269,7 +269,7 @@ async function obtenerMiCodigoReferral(usuario) {
 
     return {
         codigoReferral: ref.codigoReferral,
-        linkReferral:   `https://roucedevstudio.github.io/UpGames/public/biblioteca.html?ref=${ref.codigoReferral}`,
+        linkReferral:   `https://upgames.games/public/biblioteca.html?ref=${ref.codigoReferral}`,
         totalReferidos: ref.totalReferidos,
         bonusGanado:    ref.bonusGanado,
         referidosActivos: (ref.referidos || []).filter(r => r.activo).length

@@ -6,11 +6,9 @@
 
 User-agent: *
 Allow: /
-Allow: /UpGames/
-Allow: /UpGames/public/
+Allow: /public/
 
 # Bloquear áreas privadas/admin
-Disallow: /UpGames/admin/
 Disallow: /admin/
 Disallow: /public/admin/
 
@@ -38,4 +36,4 @@ User-agent: DotBot
 Disallow: /
 
 # Sitemap
-Sitemap: https://roucedevstudio.github.io/UpGames/public/sitemap.xml
+Sitemap: https://upgames.games/public/sitemap.xml
