@@ -15,15 +15,15 @@ function test(name, fn) {
 }
 
 console.log('reparto');
-test('100 monedas = $1: 70% creador, 30% plataforma', () =>
-    assert.deepStrictEqual(L.reparto(100, 0.30), { bruto: 1, creador: 0.7, plataforma: 0.3 }));
+test('50 UpCoins = US$1: 25% creador, 75% plataforma (comisión por defecto)', () =>
+    assert.deepStrictEqual(L.reparto(50), { bruto: 1, creador: 0.25, plataforma: 0.75 }));
 test('las partes siempre suman el bruto (sin deriva de centavos)', () => {
     for (const m of [10, 50, 300, 999, 5000, 123457]) {
         const r = L.reparto(m, 0.3);
         assert.ok(Math.abs(r.creador + r.plataforma - r.bruto) < 1e-9, `${m}`);
     }
 });
-test('comisión 0 → todo para el creador', () => assert.strictEqual(L.reparto(500, 0).creador, 5));
+test('comisión 0 → todo para el creador', () => assert.strictEqual(L.reparto(500, 0).creador, 10));
 
 console.log('catálogo');
 test('cada paquete cuesta al menos su valor nominal (cubre la comisión de PayPal)', () => {

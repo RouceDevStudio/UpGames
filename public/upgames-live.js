@@ -511,7 +511,7 @@ async function vistaEspectador(usuario) {
       if (typeof d.monedas === 'number') { monedas = d.monedas; $('coins-n').textContent = fmt(monedas); if ($('sheet-coins')) $('sheet-coins').textContent = fmt(monedas); }
       if (hoja?.contains(b)) abrirHoja(false);
     } catch (e) {
-      if (e.status === 402) { toast('No tienes monedas suficientes'); recargar(); }
+      if (e.status === 402) { toast('No tienes UpCoins suficientes'); recargar(); }
       else toast(e.message);
     } finally { b.classList.remove('sending'); }
   });
@@ -953,13 +953,13 @@ async function vistaEstudio() {
     socket.on('regalo', g => {
       capa.regalo(g); chat.regalo(g); ov.regalo(g);
       ganado += g.total * CFG.monedaUsd * (1 - CFG.comision);
-      $('k-g').textContent = usd(ganado);
+      $('k-g').textContent = `🪙 ${(ganado / CFG.monedaUsd).toLocaleString('es-CO', { maximumFractionDigits: 1 })}`;   // ganado en UpCoins
     });
     socket.on('reemplazado', () => { toast('Abriste el estudio en otra pestaña. Esta se desconectó.', 6000); enVivo = false; window.onbeforeunload = null; detenerCaptura(); peers.forEach((_, p) => cerrarPeer(p)); socket.disconnect(); });
     socket.on('fin', ({ motivo }) => terminar(motivo, true));
     timers.push(setInterval(() => socket.emit('latido', { liveId }), 25000));
     timers.push(setInterval(() => { const t = $('s-t'); if (t) t.textContent = dur(Date.now() - inicio); }, 1000));
-    $('earn-note').innerHTML = `Recibes el <b>${Math.round((1 - CFG.comision) * 100)}%</b> del valor de cada regalo. ${CFG.retencionDias ? `Las ganancias quedan retenidas ${CFG.retencionDias} días (protección contra fraudes y contracargos) y luego pasan a tu saldo retirable.` : ''}`;
+    $('earn-note').innerHTML = `Recibes el <b>${Math.round((1 - CFG.comision) * 100)}%</b> del valor de cada regalo. ${CFG.retencionDias ? `Las ganancias (en UpCoins) quedan retenidas ${CFG.retencionDias} días (protección contra fraudes y contracargos) y luego pasan a tus UpCoins retirables.` : ''}`;
   }
 
   $('b-tit').onclick = async () => { try { await api('/live/titulo', { method: 'PUT', body: { titulo: $('l-tit').value } }); $('ov-title').textContent = $('l-tit').value; toast('Título actualizado'); } catch (e) { toast(e.message); } };
@@ -1010,7 +1010,7 @@ async function vistaEstudio() {
         <div class="kpi glass"><b>${dur((r.fin ? new Date(r.fin) : Date.now()) - inicio)}</b><small>Duración</small></div>
         <div class="kpi glass"><b>${fmt(r.pico ?? pico)}</b><small>Pico</small></div>
         <div class="kpi glass"><b>${fmt(r.likes ?? 0)}</b><small>Me gusta</small></div>
-        <div class="kpi glass money"><b>${usd(ganado)}</b><small>Ganado</small></div>
+        <div class="kpi glass money"><b>🪙 ${(ganado / (CFG?.monedaUsd || 0.02)).toLocaleString('es-CO', { maximumFractionDigits: 1 })}</b><small>UpCoins ganados</small></div>
       </div>
       <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><a class="btn btn-ghost" href="./biblioteca.html">Volver a UpGames</a><a class="btn btn-live" href="./live.html?estudio=1">Nuevo live</a></div></div>`;
   }
@@ -1036,10 +1036,10 @@ async function abrirMonedas() {
   const saldo = await refrescarMonedas() || {};
   document.querySelector('.modal-bg')?.remove();
   const bg = document.createElement('div'); bg.className = 'modal-bg';
-  bg.innerHTML = `<div class="modal glass" role="dialog" aria-modal="true" aria-label="Comprar monedas">
-    <div class="modal-head"><h2>🪙 Comprar monedas</h2><button class="ico-btn" id="m-x" aria-label="Cerrar"><ion-icon name="close"></ion-icon></button></div>
+  bg.innerHTML = `<div class="modal glass" role="dialog" aria-modal="true" aria-label="Conseguir UpCoins">
+    <div class="modal-head"><h2>🪙 Conseguir UpCoins</h2><button class="ico-btn" id="m-x" aria-label="Cerrar"><ion-icon name="close"></ion-icon></button></div>
     <div id="m-tienda"></div>
-    <p class="fine">El creador recibe el ${Math.round((1 - (CFG?.comision ?? 0.3)) * 100)}% del valor de cada regalo.${saldo.saldoRetenido ? ` Tus ganancias en retención: <b>${usd(saldo.saldoRetenido)}</b>.` : ''}</p>
+    <p class="fine">El creador recibe el ${Math.round((1 - (CFG?.comision ?? 0.3)) * 100)}% del valor de cada regalo.${saldo.saldoRetenido ? ` Tus ganancias en retención: <b>🪙 ${(saldo.saldoRetenido / 0.02).toLocaleString('es-CO', { maximumFractionDigits: 2 })} UC</b>.` : ''}</p>
   </div>`;
   document.body.appendChild(bg);
   const cerrar = () => { bg.remove(); document.removeEventListener('keydown', esc_); };

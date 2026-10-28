@@ -6,8 +6,8 @@
  * y la operación). Los porcentajes se pueden ajustar con variables de entorno,
  * pero nunca por encima del tope.
  *
- *   Regalos en lives ........ 25 % del valor de las monedas regaladas
- *                             (peor caso: paquete de 6.000 + bono del pase = 30 % de lo pagado)
+ *   Regalos en lives ........ 25 % del valor de los UpCoins regalados
+ *                             (peor caso: paquete de 3.000 UC + bono Premium = 30 % de lo pagado)
  *   Acceso directo (US$1) ... 25 %
  *   Pases sin anuncios ...... fondo para creadores = 25 % del precio menos lo que
  *                             cuestan las monedas de regalo del pase; se reparte a
@@ -21,7 +21,7 @@ const num = (v, d) => { const n = parseFloat(v); return Number.isFinite(n) ? n :
 const TOPE_CREADOR = 0.30;
 const parte = (v, d) => Math.min(TOPE_CREADOR, Math.max(0, num(v, d)));
 
-const MONEDA_USD = 0.01;
+const MONEDA_USD = 0.02;   // 1 UpCoin
 
 // Compatibilidad: LIVE_COMISION era la parte de UpGames en los regalos
 const REGALO_CREADOR = process.env.LIVE_PARTE_CREADOR != null ? parte(process.env.LIVE_PARTE_CREADOR, 0.25)
@@ -31,7 +31,7 @@ const PASE_CREADOR = parte(process.env.PASE_PARTE_CREADOR, 0.25);
 const PASE_POR_APERTURA = Math.max(0, Math.min(0.05, num(process.env.PASE_CREADOR_USD, 0.01)));
 
 /** Lo mínimo que UpGames cobra por una moneda (paquete más grande + 10 % del pase). */
-const VALOR_MONEDA_MIN = 54.99 / 6600;
+const VALOR_MONEDA_MIN = 54.99 / 3300;
 
 
 /**
@@ -40,7 +40,7 @@ const VALOR_MONEDA_MIN = 54.99 / 6600;
  * valora al precio más bajo de la moneda.
  */
 function fondoPase({ usd = 0, monedas = 0, metodo, monedasRegalo = 0 }) {
-    const pagado = metodo === 'monedas' ? monedas * VALOR_MONEDA_MIN : usd;
+    const pagado = (metodo === 'monedas' || metodo === 'upcoins') ? monedas * VALOR_MONEDA_MIN : usd;
     return Math.floor(Math.max(0, pagado * PASE_CREADOR - monedasRegalo * MONEDA_USD * REGALO_CREADOR) * 10000) / 10000;   // hacia abajo: nunca pasar del tope
 }
 

@@ -15,6 +15,7 @@ const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const { Server } = require('socket.io');
 const L = require('../modulos/live');
+const UC = require('../modulos/upcoins');
 const PayPal = require('../modulos/paypal');
 
 // ── Modelos ──────────────────────────────────────────────────────────────────
@@ -470,9 +471,11 @@ function registrar(app, server, deps) {
 
     // ── HTTP: monedas y regalos ─────────────────────────────────────────────
     app.get('/monedas/saldo', verificarToken, async (req, res) => {
-        const u = await Usuario.findOne({ usuario: req.usuario }).select('monedas saldo saldoRetenido').lean().catch(() => null);
+        const u = await Usuario.findOne({ usuario: req.usuario }).select('monedas saldo saldoRetenido solicitudPagoPendiente planHasta').lean().catch(() => null);
         if (!u) return err(res, 404, 'Usuario no encontrado');
-        ok(res, { monedas: u.monedas || 0, saldo: u.saldo || 0, saldoRetenido: u.saldoRetenido || 0, retencionDias: L.RETENCION_DIAS });
+        const uc = UC.saldoUC(u);
+        // `monedas` = total de UpCoins que puede gastar (comprados + ganados); el desglose va en `upcoins`
+        ok(res, { monedas: Math.floor(uc.total), upcoins: uc, premium: !!(u.planHasta && new Date(u.planHasta) > new Date()), saldo: u.saldo || 0, saldoRetenido: u.saldoRetenido || 0, retencionDias: L.RETENCION_DIAS });
     });
 
     app.get('/monedas/movimientos', verificarToken, async (req, res) => {
@@ -589,13 +592,13 @@ function registrar(app, server, deps) {
             if (repetido) return ok(res, { repetido: true });
 
             const costo = g.monedas * cantidad;
-            const pagador = await Usuario.findOneAndUpdate(
-                { usuario: req.usuario, monedas: { $gte: costo }, listaNegraAdmin: { $ne: true } },
-                { $inc: { monedas: -costo } }, { new: true }).select('monedas').lean();
-            if (!pagador) {
-                const u = await Usuario.findOne({ usuario: req.usuario }).select('monedas listaNegraAdmin').lean();
-                if (u?.listaNegraAdmin) return err(res, 403, 'Tu cuenta no puede enviar regalos');
-                return err(res, 402, 'No tienes monedas suficientes', { monedas: u?.monedas || 0, faltan: costo - (u?.monedas || 0) });
+            const cobro = await UC.cobrar(Usuario, req.usuario, costo);   // UpCoins comprados primero, luego ganados
+            const totalUC = async () => Math.floor(UC.saldoUC(await Usuario.findOne({ usuario: req.usuario }).select('monedas saldo solicitudPagoPendiente').lean() || {}).total);
+            if (!cobro) {
+                const motivo = await UC.motivoSinSaldo(Usuario, req.usuario, costo);
+                if (/cuenta no puede/.test(motivo)) return err(res, 403, 'Tu cuenta no puede enviar regalos');
+                const tengo = await totalUC();
+                return err(res, 402, motivo, { monedas: tengo, faltan: Math.max(0, costo - tengo) });
             }
             const rep = L.reparto(costo);
             const retener = L.RETENCION_DIAS > 0;
@@ -606,8 +609,8 @@ function registrar(app, server, deps) {
                     estado: retener ? 'retenida' : 'liberada', liberarEn: retener ? new Date(Date.now() + L.RETENCION_DIAS * 864e5) : null,
                 });
             } catch (e) {
-                await Usuario.updateOne({ usuario: req.usuario }, { $inc: { monedas: costo } });   // devolver: no se registró
-                if (e.code === 11000) return ok(res, { repetido: true, monedas: pagador.monedas + costo });
+                await UC.devolver(Usuario, req.usuario, cobro);   // devolver: no se registró
+                if (e.code === 11000) return ok(res, { repetido: true, monedas: await totalUC() });
                 throw e;
             }
             await Usuario.updateOne({ usuario: creador }, { $inc: retener ? { saldoRetenido: rep.creador } : { saldo: rep.creador } });
@@ -617,7 +620,7 @@ function registrar(app, server, deps) {
             const pf = await perfil(req.usuario);
             io.to(rid(id)).emit('regalo', { de: req.usuario, av: pf.avatar, regalo: { id: g.id, nombre: g.nombre, emoji: g.emoji, monedas: g.monedas }, cantidad, total: costo, ts: Date.now() });
             topDonantes(id).then(top => io.to(rid(id)).emit('top', { top })).catch(() => {});
-            ok(res, { monedas: pagador.monedas });
+            ok(res, { monedas: await totalUC() });
         } catch (e) { logger.error(`[live] regalo: ${e.message}`); err(res, 500, 'No se pudo enviar el regalo'); }
     });
 

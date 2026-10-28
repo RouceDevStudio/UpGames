@@ -58,7 +58,7 @@ async function test(name, fn) {
     await test('las reglas usan los valores reales de config', async () => {
         const { ejecutores: e } = H.crear({ config: { CPM_VALUE: 1, AUTHOR_PERCENTAGE: 1, MIN_WITHDRAWAL: 10, MAX_DOWNLOADS_PER_IP_PER_DAY: 2 }, LINKS_PERMITIDOS: ['mediafire.com'] }, ctx());
         const r = await e.reglas_upgames({ tema: 'retiros' });
-        assert.ok(r.texto.includes('10 USD'));
+        assert.ok(r.texto.includes('US$10') && r.texto.includes('500 UpCoins'), r.texto.slice(0, 120));
     });
 
     console.log('cerebro');

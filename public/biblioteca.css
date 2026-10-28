@@ -5343,3 +5343,23 @@ button.pf2-stat { cursor: pointer; }
 .eco-cobro-2{display:grid;grid-template-columns:90px 1fr;gap:8px}
 .eco-cobro-nota{font-size:.72rem;color:#9aa3b5;line-height:1.5;margin:4px 0 10px}
 .eco-cobro-acc{display:flex;gap:8px;justify-content:flex-end}
+
+/* ── NEXUS: cuota y desbloqueo ───────────────────── */
+.nx-cuota{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 14px;font-size:.74rem;color:#9aa3b5;border-top:1px solid rgba(255,255,255,.06)}
+.nx-cuota b{color:#e9ecf3}.nx-cuota.prem b{color:#ffcc4d}
+.nx-cuota button{border:1px solid rgba(255,204,77,.35);background:rgba(255,204,77,.08);color:#ffcc4d;border-radius:999px;padding:4px 10px;font-size:.72rem;font-weight:800;cursor:pointer;font-family:inherit}
+.nx-upsell{margin-top:8px;padding:10px;border-radius:14px;border:1px solid rgba(255,204,77,.3);background:rgba(255,204,77,.05)}
+.nx-upsell-acc{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.nx-upsell-acc button{flex:1;min-width:130px;border:0;border-radius:10px;padding:10px;font-weight:800;font-size:.8rem;cursor:pointer;font-family:inherit}
+.nx-upsell-acc .uc{background:#ffcc4d;color:#2a1d00}.nx-upsell-acc .pr{background:#32D583;color:#04110a}
+
+.tile-promo{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:5px;background:rgba(255,204,77,.15);color:#ffcc4d;font-size:.6rem;font-weight:800;letter-spacing:.04em;vertical-align:1px}
+.pf2-destacar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,204,77,.3);background:rgba(255,204,77,.06);font-size:.8rem;color:#e9e2c8}
+.pf2-destacar .pf2-btn{flex:0 0 auto}
+
+/* Contador de UpCoins compacto en móvil (la cabecera no debe desbordar) */
+@media (max-width: 480px) {
+  #hdr-uc { height: 34px !important; padding: 0 8px !important; gap: 3px !important; font-size: .76rem !important; }
+  .hdr-actions { gap: 4px; }
+}
+@media (max-width: 380px) { #hdr-uc { padding: 0 6px !important; font-size: .7rem !important; } }

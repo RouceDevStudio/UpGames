@@ -4,14 +4,13 @@
      1. 💳 Tarjeta de crédito o débito — Mercado Pago (Card Payment Brick);
         si Mercado Pago no está activo, el botón de tarjeta de PayPal.
      2. PayPal.
-     3. Saldo de UpGames (lo que ganas por descargas, lives…).
-     4. Monedas (solo para pases).
+     3. UpCoins (los comprados y los ganados como creador: una sola moneda).
    Los formularios de tarjeta los dibujan Mercado Pago / PayPal: los datos de la
    tarjeta nunca pasan por UpGames.
    Uso:
      UGPagos.pagar(el, { producto: 'plan:pase30', alExito })
-     UGPagos.tienda(el, { alComprar })        // paquetes de monedas
-     UGPagos.planes(el, { alComprar })        // pases sin anuncios
+     UGPagos.tienda(el, { alComprar })        // paquetes de UpCoins
+     UGPagos.planes(el, { alComprar })        // Premium
    ══════════════════════════════════════════════════════════════════ */
 'use strict';
 (() => {
@@ -72,12 +71,19 @@
   .ugp-bal{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-radius:14px;background:rgba(255,204,77,.08);border:1px solid rgba(255,204,77,.22)}
   .ugp-bal b{font-size:1.4rem;color:#ffcc4d}
   .ugp-bal small{color:#A3A8B6;font-size:.75rem}
-  .ugp-mp{min-height:60px}`;
+  .ugp-mp{min-height:60px}
+  .ugp-uc{border-color:rgba(255,204,77,.35)!important;background:rgba(255,204,77,.07)!important}
+  .ugp-fiesta{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.65);backdrop-filter:blur(5px);padding:16px}
+  .ugp-fiesta-c{width:min(380px,100%);text-align:center;background:linear-gradient(160deg,#16202a,#0e1117);border:1px solid rgba(255,204,77,.4);border-radius:22px;padding:26px 20px;color:#eef1f6;animation:ugpPop .35s cubic-bezier(.2,1.4,.4,1)}
+  .ugp-fiesta-ic{font-size:3.2rem;animation:ugpBrillo 1.6s ease-in-out infinite}
+  .ugp-fiesta-c b{display:block;font-size:1.25rem;margin:8px 0 6px}.ugp-fiesta-c p{margin:0 0 16px;color:#b9c0cd;font-size:.9rem;line-height:1.5}
+  .ugp-fiesta-c button{border:0;border-radius:12px;padding:12px 26px;background:#32D583;color:#04110a;font-weight:800;font-size:.95rem;cursor:pointer;font-family:inherit}
+  @keyframes ugpPop{from{transform:scale(.6);opacity:0}}@keyframes ugpBrillo{50%{transform:scale(1.15);filter:drop-shadow(0 0 14px rgba(255,204,77,.8))}}`;
   function estilos() { if (document.getElementById('ugp-css')) return; const s = document.createElement('style'); s.id = 'ugp-css'; s.textContent = css; document.head.appendChild(s); }
 
   const MOTIVOS = {
     sin_configurar: 'Los pagos con tarjeta se están activando. Vuelve en unos minutos.',
-    credenciales_invalidas: 'Los pagos con tarjeta están en mantenimiento en este momento. Puedes pagar con tu saldo o tus monedas.',
+    credenciales_invalidas: 'Los pagos con tarjeta están en mantenimiento en este momento. Puedes pagar con tus UpCoins.',
     no_disponible: 'El procesador de pagos no responde en este momento. Inténtalo de nuevo en unos minutos.',
   };
 
@@ -99,11 +105,39 @@
   const cargarMP = () => cargarScript('https://sdk.mercadopago.com/js/v2', 'MercadoPago');
 
   /** Precio en USD del producto según el catálogo (el servidor vuelve a calcularlo al cobrar). */
-  function usdDe(c, producto, metodo) {
+  function usdDe(c, producto) {
     const [t, id] = producto.split(':');
-    if (t === 'monedas') { const p = c.paquetes.find(x => x.id === id); return metodo === 'saldo' ? p.monedas * c.monedaUsd : p.usd; }
+    if (t === 'monedas') return c.paquetes.find(x => x.id === id).usd;
     if (t === 'plan') return c.planes.find(x => x.id === id).usd;
-    return c.acceso.usd;
+    if (t === 'acceso') return c.acceso.usd;
+    return (ucDe(c, producto) || 0) * c.monedaUsd;
+  }
+  /** Precio en UpCoins (null: se compra con dinero, p. ej. un paquete de UpCoins). */
+  function ucDe(c, producto) {
+    const [t, id] = producto.split(':');
+    if (t === 'plan') return c.planes.find(x => x.id === id).monedas;
+    if (t === 'acceso') return c.acceso.monedas;
+    if (t === 'ia') return c.ia?.find(x => x.id === id)?.monedas ?? null;
+    if (t === 'impulso') return c.impulso?.monedas ?? null;
+    return null;
+  }
+  const soloUC = producto => /^(ia|impulso):/.test(producto);
+
+  /** Celebración al terminar una compra (la notificación queda además en la campana). */
+  function celebrar(d, producto) {
+    const t = producto.split(':')[0];
+    const [ic, titulo, sub] = t === 'plan' ? ['⭐', '¡Has desbloqueado Premium!', `Activo hasta el ${new Date(d.hasta).toLocaleDateString('es-CO')}: sin anuncios, NEXUS ilimitado y más visibilidad.${d.monedasRegalo ? ` + 🪙 ${fmt(d.monedasRegalo)} UpCoins de regalo.` : ''}`]
+      : t === 'monedas' ? ['🪙', `¡Has adquirido ${fmt(d.acreditadas || 0)} UpCoins!`, `${d.bono ? `Incluye ${fmt(d.bono)} extra por ser Premium. ` : ''}Úsalos en lives, NEXUS IA, Premium o para destacar tus publicaciones.`]
+      : t === 'ia' ? ['🧠', `+${d.mensajes} mensajes de NEXUS`, 'Ya puedes seguir conversando.']
+      : t === 'impulso' ? ['🚀', '¡Publicación destacada!', `Aparece arriba en el inicio hasta el ${new Date(d.destacadoHasta).toLocaleString('es-CO')}.`]
+      : ['⚡', '¡Acceso directo desbloqueado!', 'El enlace se abre al instante, sin espera ni anuncios.'];
+    const o = document.createElement('div');
+    o.className = 'ugp-fiesta'; o.setAttribute('role', 'dialog');
+    o.innerHTML = `<div class="ugp-fiesta-c"><div class="ugp-fiesta-ic">${ic}</div><b>${esc(titulo)}</b><p>${esc(sub)}</p><button type="button">¡Genial!</button></div>`;
+    o.onclick = e => { if (e.target === o || e.target.tagName === 'BUTTON') o.remove(); };
+    document.body.appendChild(o);
+    setTimeout(() => o.remove(), 9000);
+    try { window.dispatchEvent(new CustomEvent('ug:upcoins')); } catch (_) {}   // refrescar contadores
   }
   const localDe = (c, producto) => c.local ? c.local[producto] ?? (producto.startsWith('acceso:') ? c.local.acceso : null) : null;
 
@@ -117,50 +151,55 @@
     let c, est = opts.estado;
     try { [c, est] = await Promise.all([catalogo(), est ? Promise.resolve(est) : (token() ? api('/tienda/mi-plan').catch(() => null) : null)]); }
     catch (e) { el.innerHTML = `<p class="ugp-msg warn">${esc(e.message)}</p>`; return; }
-    const m = c.metodos, producto = opts.producto, usd = usdDe(c, producto, 'tarjeta');
+    const m = c.metodos, producto = opts.producto;
     const aviso = msg => { el.querySelector('[data-ugp="aviso"]').innerHTML = msg ? `<p class="ugp-msg warn">${esc(msg)}</p>` : ''; (opts.alError || (() => {}))(msg); };
     const exito = d => { if (d?.hasta) try { localStorage.setItem('ug_pase_hasta', localStorage.getItem('user_admin') + '|' + (+new Date(d.hasta))); } catch (_) {}
-      const extra = d?.monedasRegalo ? ` Recibiste 🪙 ${fmt(d.monedasRegalo)} de regalo.` : d?.bono ? ` Incluye 🪙 ${fmt(d.bono)} extra por tu pase.` : '';
-      el.querySelector('[data-ugp="aviso"]').innerHTML = `<p class="ugp-msg ok">✅ ¡Pago confirmado!${extra}</p>`; opts.alExito?.(d); };
-    const costoSaldo = usdDe(c, producto, 'saldo');
+      el.querySelector('[data-ugp="aviso"]').innerHTML = '<p class="ugp-msg ok">✅ ¡Pago confirmado!</p>';
+      celebrar(d, producto); opts.alExito?.(d); };
     const plan = producto.startsWith('plan:') ? c.planes.find(x => `plan:${x.id}` === producto) : null;
-    const puedeSaldo = opts.saldo !== false && est && !producto.startsWith('acceso:x');
-    const puedeMonedas = plan && opts.monedas !== false && est;
+    const precioUC = ucDe(c, producto);
+    const ucs = est?.upcoins || { total: est?.monedas || 0, bloqueadas: false };
+    const puedeUC = precioUC != null && opts.monedas !== false && est;
+    const conDinero = !soloUC(producto);
 
     // Lo que recibe, dicho antes de pagar (Ley 1480: información clara y previa)
     const paq = producto.startsWith('monedas:') ? c.paquetes.find(x => `monedas:${x.id}` === producto) : null;
-    const recibes = plan ? `<b>${esc(plan.nombre)}</b>: enlaces directos y sin anuncios durante ${plan.dias} días + 🪙 ${fmt(plan.monedasRegalo || 0)} de regalo, +10% de monedas en cada paquete e insignia ⭐ en los lives. Los días se suman si ya tienes un pase.`
-      : paq ? `<b>🪙 ${fmt(paq.monedas)} monedas</b>${est?.plan ? ` + ${fmt(paq.bonoPase ?? Math.floor(paq.monedas * (c.bonoPaquete || 0.1)))} extra por tu pase` : ''}, para regalos en los lives, pases o accesos directos. No vencen.`
+    const pIA = producto.startsWith('ia:') ? c.ia?.find(x => `ia:${x.id}` === producto) : null;
+    const recibes = plan ? `<b>${esc(plan.nombre)}</b> durante ${plan.dias} días: sin anuncios y enlaces directos, NEXUS IA ilimitado, más visibilidad para tus publicaciones, +10% de UpCoins en cada paquete e insignia ⭐ en los lives. <b>Pagando con dinero</b> recibes además 🪙 ${fmt(plan.monedasRegalo || 0)} UpCoins de regalo. Los días se suman si ya eres Premium.`
+      : paq ? `<b>🪙 ${fmt(paq.monedas)} UpCoins</b>${est?.plan ? ` + ${fmt(paq.bonoPase ?? Math.floor(paq.monedas * (c.bonoPaquete || 0.1)))} extra por ser Premium` : ''}, para regalos en lives, NEXUS IA, Premium, accesos directos o destacar tus publicaciones. No vencen.`
+      : pIA ? `<b>${pIA.mensajes} mensajes de NEXUS IA</b> para usar cuando se acaben tus mensajes gratis del día. No vencen.`
+      : producto.startsWith('impulso:') ? `<b>Destacar tu publicación ${c.impulso.horas} horas</b>: aparece arriba en el inicio, marcada como "Promocionado".`
       : `<b>Acceso directo</b> a esta publicación: se abre al instante, sin espera ni anuncios, y queda desbloqueada en tu cuenta.`;
     const resumen = `<div class="ugp-resumen"><div>${recibes}</div><small>Pago único · <b>sin renovación automática</b> · retracto en 5 días hábiles si no lo has usado · <a href="./terminos_condiciones.html#pagos" target="_blank" rel="noopener">Términos</a></small></div>`;
+    const usd = conDinero ? usdDe(c, producto) : 0;
 
     el.innerHTML = `<div class="ugp">
       ${resumen}
       <div data-ugp="aviso"></div>
-      ${m.tarjeta ? `<div class="ugp-card">
+      ${puedeUC ? `<button type="button" class="ugp-alt ugp-uc" data-ugp="upcoins" ${ucs.total < precioUC ? 'disabled' : ''}>
+        <span class="e">🪙</span><span>Pagar con UpCoins<small>${ucs.total < precioUC ? `Tienes ${fmt(Math.floor(ucs.total))} · te faltan ${fmt(Math.ceil(precioUC - ucs.total))}` : `Tienes ${fmt(Math.floor(ucs.total))}`}${ucs.bloqueadas ? ' · los ganados están reservados por un retiro pendiente' : ''}</small></span><span class="p">${fmt(precioUC)} UC</span></button>` : ''}
+      ${conDinero ? (m.tarjeta ? `<div class="ugp-card">
         <span class="ugp-tag">RECOMENDADO</span>
         <div class="ugp-card-h"><div class="ugp-ic">💳</div><div><b>Tarjeta de crédito o débito</b><small>${m.tarjeta === 'mercadopago' ? 'Visa, Mastercard, Amex, débito · Mercado Pago' : 'Sin cuenta de PayPal · en segundos'}</small></div>
           <div class="ugp-precio">US$${usd.toFixed(2)}${m.mercadopago && localDe(c, producto) ? `<small>${esc(local(localDe(c, producto), m.mercadopago.moneda))}</small>` : ''}</div></div>
         <div class="ugp-brands"><span>VISA</span><span>MASTERCARD</span><span>AMEX</span><span>DÉBITO</span></div>
         <div data-ugp="tarjeta" class="ugp-mp"><div class="ugp-load"></div></div>
-      </div>` : `<p class="ugp-msg warn">${esc(MOTIVOS[c.pagos] || MOTIVOS.sin_configurar)}</p>`}
-      ${m.paypal && m.tarjeta === 'mercadopago' ? '<div class="ugp-or">o</div><div data-ugp="paypal"></div>' : ''}
-      ${puedeSaldo ? `<button type="button" class="ugp-alt" data-ugp="saldo" ${est.saldoBloqueado || est.saldo < costoSaldo ? 'disabled' : ''}>
-        <span class="e">💼</span><span>Pagar con mi saldo de UpGames<small>${est.saldoBloqueado ? 'Bloqueado mientras tengas un retiro pendiente' : `Disponible: US$${(est.saldo || 0).toFixed(2)}`}</small></span><span class="p">US$${costoSaldo.toFixed(2)}</span></button>` : ''}
-      ${puedeMonedas ? `<button type="button" class="ugp-alt" data-ugp="monedas" ${est.monedas < plan.monedas ? 'disabled' : ''}>
-        <span class="e">🪙</span><span>Pagar con monedas<small>Tienes ${fmt(est.monedas || 0)}</small></span><span class="p">${fmt(plan.monedas)}</span></button>` : ''}
-      ${m.tarjeta ? `<p class="ugp-safe">🔒 Pago cifrado. ${m.tarjeta === 'mercadopago' ? 'Mercado Pago' : 'PayPal'} procesa tu tarjeta: UpGames nunca ve ni guarda sus datos.</p>` : ''}
+      </div>` : `<p class="ugp-msg warn">${esc(MOTIVOS[c.pagos] || MOTIVOS.sin_configurar)}</p>`) : ''}
+      ${conDinero && m.paypal && m.tarjeta === 'mercadopago' ? '<div class="ugp-or">o</div><div data-ugp="paypal"></div>' : ''}
+      ${conDinero && m.tarjeta ? `<p class="ugp-safe">🔒 Pago cifrado. ${m.tarjeta === 'mercadopago' ? 'Mercado Pago' : 'PayPal'} procesa tu tarjeta: UpGames nunca ve ni guarda sus datos.</p>` : ''}
+      ${!conDinero && ucs.total < precioUC ? `<button type="button" class="ugp-alt" data-ugp="recargar"><span class="e">➕</span><span>Conseguir UpCoins<small>Desde US$1,29 con tarjeta o PayPal</small></span></button>` : ''}
     </div>`;
 
-    // Saldo / monedas (instantáneo)
-    for (const metodo of ['saldo', 'monedas']) {
-      const b = el.querySelector(`[data-ugp="${metodo}"]`);
-      if (b) b.onclick = async () => {
-        b.disabled = true;
-        try { exito(await api('/tienda/pagar', { method: 'POST', body: { producto, metodo, clave: uid() } })); }
-        catch (e) { aviso(e.message); b.disabled = false; }
-      };
-    }
+    // UpCoins (instantáneo): primero los comprados, luego los ganados
+    const bUC = el.querySelector('[data-ugp="upcoins"]');
+    if (bUC) bUC.onclick = async () => {
+      bUC.disabled = true;
+      try { exito(await api('/tienda/pagar', { method: 'POST', body: { producto, metodo: 'upcoins', clave: uid() } })); }
+      catch (e) { aviso(e.message); bUC.disabled = false; }
+    };
+    const bRec = el.querySelector('[data-ugp="recargar"]');
+    if (bRec) bRec.onclick = () => tienda(el, { alComprar: () => pagar(el, opts) });
+    if (!conDinero) return;
 
     // Tarjeta con Mercado Pago (Card Payment Brick)
     const caja = el.querySelector('[data-ugp="tarjeta"]');
@@ -218,27 +257,27 @@
   /** Tienda de monedas: saldo + paquetes + pago. */
   async function tienda(el, { alComprar, aviso } = {}) {
     estilos();
-    if (!token()) { el.innerHTML = '<p class="ugp-msg">Inicia sesión para comprar monedas.</p>'; return; }
+    if (!token()) { el.innerHTML = '<p class="ugp-msg">Inicia sesión para conseguir UpCoins.</p>'; return; }
     el.innerHTML = '<div class="ugp"><div class="ugp-load"></div></div>';
     let c, est;
     try { [c, est] = await Promise.all([catalogo(), api('/tienda/mi-plan')]); }
     catch (e) { el.innerHTML = `<p class="ugp-msg warn">${esc(e.message)}</p>`; return; }
     el.innerHTML = `<div class="ugp">
-      <div class="ugp-bal"><div><small>Tus monedas</small><br><b data-ugp="bal">🪙 ${fmt(est.monedas)}</b></div><small style="text-align:right">${aviso || `Saldo de UpGames: US$${(est.saldo || 0).toFixed(2)}<br>también sirve para comprar`}</small></div>
+      <div class="ugp-bal"><div><small>Tus UpCoins</small><br><b data-ugp="bal">🪙 ${fmt(Math.floor(est.upcoins?.total ?? est.monedas))}</b></div><small style="text-align:right">${aviso || `1 UpCoin = US$0,02<br>úsalos en lives, NEXUS, Premium y más`}</small></div>
       <div class="ugp-packs">${c.paquetes.map(p => `<button type="button" class="ugp-pack" data-p="${esc(p.id)}">${p.extra ? `<span class="x">${esc(p.extra)}</span>` : ''}<div class="m">🪙 ${fmt(p.monedas)}</div><div class="u">US$${p.usd.toFixed(2)}</div></button>`).join('')}</div>
-      <div data-ugp="pago"><p class="ugp-msg">Elige un paquete para pagar con tarjeta, PayPal o tu saldo.${est.plan ? ` <b style="color:#FFC83D">Tu pase te da +${Math.round((c.bonoPaquete || 0.1) * 100)}% de monedas extra.</b>` : ''}</p></div>
-      <p class="ugp-safe">Las monedas no se cambian por dinero. Si no las usas, puedes retractarte en 5 días hábiles. <a href="./terminos_condiciones.html#pagos" target="_blank" style="color:#32D583">Términos</a></p>
+      <div data-ugp="pago"><p class="ugp-msg">Elige un paquete para pagar con tarjeta o PayPal.${est.plan ? ` <b style="color:#FFC83D">Por ser Premium recibes +${Math.round((c.bonoPaquete || 0.1) * 100)}% de UpCoins extra.</b>` : ''}</p></div>
+      <p class="ugp-safe">Los UpCoins comprados se usan dentro de UpGames y no se cambian por dinero (los que ganas como creador sí se pueden retirar). Si no los usas, puedes retractarte en 5 días hábiles. <a href="./terminos_condiciones.html#pagos" target="_blank" style="color:#32D583">Términos</a></p>
     </div>`;
     el.querySelectorAll('.ugp-pack').forEach(b => b.onclick = () => {
       el.querySelectorAll('.ugp-pack').forEach(x => x.classList.toggle('on', x === b));
       pagar(el.querySelector('[data-ugp="pago"]'), {
         producto: `monedas:${b.dataset.p}`, estado: est, monedas: false,
-        alExito: d => { const bal = el.querySelector('[data-ugp="bal"]'); if (bal && d.monedas != null) bal.textContent = `🪙 ${fmt(d.monedas)}`; alComprar?.(d); },
+        alExito: async d => { try { const e2 = await api('/tienda/mi-plan'); const bal = el.querySelector('[data-ugp="bal"]'); if (bal) bal.textContent = `🪙 ${fmt(Math.floor(e2.upcoins?.total ?? e2.monedas))}`; } catch (_) {} alComprar?.(d); },
       });
     });
   }
 
-  /** Pases sin anuncios: elegir plan y pagarlo. */
+  /** Premium: elegir plan y pagarlo (con dinero o con UpCoins). */
   async function planes(el, { alComprar, estado } = {}) {
     estilos();
     el.innerHTML = '<div class="ugp"><div class="ugp-load"></div></div>';
@@ -246,8 +285,8 @@
     try { [c, est] = await Promise.all([catalogo(), est ? Promise.resolve(est) : api('/tienda/mi-plan')]); }
     catch (e) { el.innerHTML = `<p class="ugp-msg warn">${esc(e.message)}</p>`; return; }
     el.innerHTML = `<div class="ugp">
-      <div class="ugp-packs">${c.planes.map(p => `<button type="button" class="ugp-pack ugp-plan" data-p="${esc(p.id)}">${p.destacado ? '<span class="x">POPULAR</span>' : ''}<div class="m">${esc(p.nombre)}</div><div class="u">US$${p.usd.toFixed(2)}</div><div class="u" style="font-weight:700;font-size:.72rem;color:#FFC83D">+🪙 ${fmt(p.monedasRegalo || 0)} de regalo</div><div class="u" style="font-weight:500;font-size:.7rem">${esc(p.dias)} días · ${esc(p.resumen)}</div></button>`).join('')}</div>
-      <div data-ugp="pago"><p class="ugp-msg">Elige un pase. ${est.plan ? 'Los días se suman a tu pase actual.' : 'Sin cobros automáticos: pagas solo cuando quieras renovar.'}</p></div>
+      <div class="ugp-packs">${c.planes.map(p => `<button type="button" class="ugp-pack ugp-plan" data-p="${esc(p.id)}">${p.destacado ? '<span class="x">POPULAR</span>' : ''}<div class="m">${esc(p.nombre)}</div><div class="u">US$${p.usd.toFixed(2)} · 🪙 ${fmt(p.monedas)}</div><div class="u" style="font-weight:700;font-size:.72rem;color:#FFC83D">+🪙 ${fmt(p.monedasRegalo || 0)} de regalo pagando con dinero</div><div class="u" style="font-weight:500;font-size:.7rem">${esc(p.dias)} días · ${esc(p.resumen)}</div></button>`).join('')}</div>
+      <div data-ugp="pago"><p class="ugp-msg">Elige tu Premium. ${est.plan ? 'Los días se suman a tu Premium actual.' : 'Sin cobros automáticos: pagas solo cuando quieras renovar.'}</p></div>
     </div>`;
     el.querySelectorAll('.ugp-pack').forEach(b => b.onclick = () => {
       el.querySelectorAll('.ugp-pack').forEach(x => x.classList.toggle('on', x === b));
@@ -255,5 +294,17 @@
     });
   }
 
-  window.UGPagos = { api, config, catalogo, pagar, botones, tienda, planes, fmt, uid };
+  /** Créditos de NEXUS: elegir paquete y pagarlo con UpCoins. */
+  async function creditosIA(el, { alComprar } = {}) {
+    estilos();
+    el.innerHTML = '<div class="ugp"><div class="ugp-load"></div></div>';
+    let c; try { c = await catalogo(); } catch (e) { el.innerHTML = `<p class="ugp-msg warn">${esc(e.message)}</p>`; return; }
+    el.innerHTML = `<div class="ugp"><div class="ugp-packs">${(c.ia || []).map(p => `<button type="button" class="ugp-pack" data-p="${esc(p.id)}">${p.extra ? `<span class="x">${esc(p.extra)}</span>` : ''}<div class="m">🧠 ${p.mensajes} mensajes</div><div class="u">🪙 ${fmt(p.monedas)} UC</div></button>`).join('')}</div><div data-ugp="pago"></div></div>`;
+    el.querySelectorAll('.ugp-pack').forEach(b => b.onclick = () => {
+      el.querySelectorAll('.ugp-pack').forEach(x => x.classList.toggle('on', x === b));
+      pagar(el.querySelector('[data-ugp="pago"]'), { producto: `ia:${b.dataset.p}`, alExito: d => alComprar?.(d) });
+    });
+  }
+
+  window.UGPagos = { api, config, catalogo, pagar, botones, tienda, planes, creditosIA, fmt, uid };
 })();

@@ -19,23 +19,36 @@ const mongoose = require('mongoose');
 const L = require('../modulos/live');
 const MP = require('../modulos/mercadopago');
 const REPARTO = require('../modulos/reparto');
+const UC = require('../modulos/upcoins');
 
+// Premium. `monedas` = precio en UpCoins; `monedasRegalo` = UpCoins de regalo, SOLO si se paga con dinero
 const PLANES = [
-    { id: 'pase7',   nombre: 'Pase 7 días',  dias: 7,   usd: 1.99,  monedas: 199,  monedasRegalo: 50,   resumen: 'Ideal para probar' },
-    { id: 'pase30',  nombre: 'Pase 30 días', dias: 30,  usd: 4.99,  monedas: 499,  monedasRegalo: 200,  resumen: 'El más elegido', destacado: true },
-    { id: 'pase365', nombre: 'Pase 1 año',   dias: 365, usd: 39.99, monedas: 3999, monedasRegalo: 2500, resumen: 'Ahorra 33%' },
+    { id: 'pase7',   nombre: 'Premium 7 días',  dias: 7,   usd: 1.99,  monedas: 100,  monedasRegalo: 25,   resumen: 'Ideal para probar' },
+    { id: 'pase30',  nombre: 'Premium 30 días', dias: 30,  usd: 4.99,  monedas: 250,  monedasRegalo: 100,  resumen: 'El más elegido', destacado: true },
+    { id: 'pase365', nombre: 'Premium 1 año',   dias: 365, usd: 39.99, monedas: 2000, monedasRegalo: 1250, resumen: 'Ahorra 33%' },
 ];
-// Beneficios que todos los pases tienen mientras están vigentes (se muestran en la tienda y en "Mi plan")
+// Beneficios de Premium mientras está vigente (se muestran en la tienda y en "Mi plan")
 const BENEFICIOS_PASE = [
     'Enlaces directos: sin los 30 s de espera',
     'Sin publicidad en la página puente',
-    'Monedas de regalo al comprar o renovar',
-    '+10% de monedas extra en cada paquete que compres',
+    'NEXUS IA ilimitado y con el modelo más potente',
+    'Más visibilidad para tus publicaciones en el inicio',
+    'UpCoins de regalo al pagar con dinero',
+    '+10% de UpCoins extra en cada paquete que compres',
     'Insignia ⭐ junto a tu nombre en el chat de los lives',
 ];
 const BONO_PAQUETE = 0.10;
+// Créditos de NEXUS (mensajes extra cuando se acaban los gratis del día)
+const PAQUETES_IA = [
+    { id: 'ia5',  mensajes: 5,  monedas: 5 },
+    { id: 'ia25', mensajes: 25, monedas: 20, extra: 'Ahorra 20%' },
+];
+// Destacar una publicación (aparece arriba en el inicio, marcada como "Promocionado")
+const IMPULSO = { horas: 24, monedas: 50 };
 const plan = id => PLANES.find(p => p.id === id) || null;
+const paqueteIA = id => PAQUETES_IA.find(p => p.id === id) || null;
 const r2 = n => Math.round(n * 100) / 100;
+const SOLO_UC = ['ia', 'impulso'];   // productos que solo se pagan con UpCoins
 
 /** Producto → descripción interna (null si no existe). */
 function parsear(producto) {
@@ -44,18 +57,32 @@ function parsear(producto) {
     if ((m = /^monedas:(p\d+)$/.exec(s)) && L.paquete(m[1])) return { tipo: 'monedas', paquete: L.paquete(m[1]), id: s };
     if ((m = /^acceso:([a-f\d]{24})$/i.exec(s))) return { tipo: 'acceso', juegoId: m[1].toLowerCase(), id: s };
     if ((m = /^plan:(\w+)$/.exec(s)) && plan(m[1])) return { tipo: 'plan', plan: plan(m[1]), id: s };
+    if ((m = /^ia:(\w+)$/.exec(s)) && paqueteIA(m[1])) return { tipo: 'ia', paquete: paqueteIA(m[1]), id: s };
+    if ((m = /^impulso:([a-f\d]{24})$/i.exec(s))) return { tipo: 'impulso', juegoId: m[1].toLowerCase(), id: s };
     return null;
 }
-/** Precio en USD según el método: con saldo/monedas las monedas valen su valor nominal (sin comisión de pasarela). */
-function precioUsd(p, metodo) {
-    if (p.tipo === 'monedas') return metodo === 'saldo' ? r2(p.paquete.monedas * L.MONEDA_USD) : p.paquete.usd;
-    if (p.tipo === 'acceso') return 1;
-    return p.plan.usd;
+/** Precio en UpCoins (null si ese producto no se puede pagar con UpCoins). */
+function precioUC(p) {
+    if (p.tipo === 'acceso') return Math.round(1 / L.MONEDA_USD);
+    if (p.tipo === 'plan') return p.plan.monedas;
+    if (p.tipo === 'ia') return p.paquete.monedas;
+    if (p.tipo === 'impulso') return IMPULSO.monedas;
+    return null;   // los paquetes de UpCoins se compran con dinero
 }
-const descripcion = p => p.tipo === 'monedas' ? `${p.paquete.monedas} monedas UpGames` : p.tipo === 'acceso' ? 'Acceso directo UpGames (sin anuncios)' : `${p.plan.nombre} UpGames (sin anuncios)`;
+/** Precio en USD al pagar con dinero (tarjeta o PayPal). */
+function precioUsd(p) {
+    if (p.tipo === 'monedas') return p.paquete.usd;
+    if (p.tipo === 'acceso') return 1;
+    if (p.tipo === 'plan') return p.plan.usd;
+    return r2((precioUC(p) || 0) * L.MONEDA_USD);
+}
+const descripcion = p => p.tipo === 'monedas' ? `${p.paquete.monedas} UpCoins` : p.tipo === 'acceso' ? 'Acceso directo UpGames (sin anuncios)'
+    : p.tipo === 'plan' ? `${p.plan.nombre} UpGames` : p.tipo === 'ia' ? `${p.paquete.mensajes} mensajes de NEXUS IA` : `Destacar publicación ${IMPULSO.horas} h`;
 
 function registrar(app, deps) {
-    const { verificarToken, Usuario, LiveTx, Notificacion, paypal, acceso, logger, apiUrlSelf } = deps;
+    const { verificarToken, Usuario, LiveTx, Notificacion, paypal, acceso, logger, apiUrlSelf, Juego } = deps;
+    const limpiarCache = deps.limpiarCache;
+    const avisar = (destinatario, itemTitle, mensaje) => Notificacion?.create?.({ destinatario, tipo: 'sistema', emisor: 'UpGames', itemTitle, mensaje, leida: false, fecha: new Date() }).catch(() => {});
     const olvidarPerfil = deps.olvidarPerfil || (() => {});
     const mp = deps.mp || MP.crear();
     const ok = (res, d) => res.json({ success: true, ...d });
@@ -86,16 +113,34 @@ function registrar(app, deps) {
             try { await LiveTx.create({ tipo: 'compra', usuario, monedas: total, bonoMonedas: bono, usd, ref, captureId, metodo, estado: 'completada' }); }
             catch (e) { if (e.code !== 11000) throw e; const u = await Usuario.findOne({ usuario }).select('monedas').lean(); return { monedas: u?.monedas || 0, repetida: true }; }
             const u = await Usuario.findOneAndUpdate({ usuario }, { $inc: { monedas: total } }, { new: true }).select('monedas').lean();
-            logger.info(`[tienda] @${usuario}: +${total} monedas${bono ? ` (incluye ${bono} de bono del pase)` : ''} (${metodo}, US$${usd})`);
+            logger.info(`[tienda] @${usuario}: +${total} UpCoins${bono ? ` (incluye ${bono} de bono Premium)` : ''} (${metodo}, US$${usd})`);
+            avisar(usuario, 'Compra', `🪙 ¡Has adquirido ${total.toLocaleString('es-CO')} UpCoins!${bono ? ` (incluye ${bono} extra por ser Premium)` : ''} Úsalos en lives, NEXUS IA, Premium o para destacar tus publicaciones.`);
             return { monedas: u?.monedas || 0, acreditadas: total, bono };
         }
         if (p.tipo === 'acceso') {
-            const via = { paypal: 'tarjeta_paypal', tarjeta_mp: 'tarjeta_mp', saldo: 'saldo' }[metodo] || 'tarjeta_mp';
+            const via = { paypal: 'tarjeta_paypal', tarjeta_mp: 'tarjeta_mp', upcoins: 'monedas' }[metodo] || 'tarjeta_mp';
             return acceso.entregarPagado({ usuario, juegoId: p.juegoId, ref, captureId, via, metodo });
         }
-        // Pase: suma días desde el vencimiento actual (o desde ahora si ya venció)
-        const regalo = p.plan.monedasRegalo || 0;
-        const monedasPagadas = metodo === 'monedas' ? p.plan.monedas : 0;
+        if (p.tipo === 'ia') {
+            try { await LiveTx.create({ tipo: 'compra', usuario, monedas: p.paquete.monedas, usd, ref, captureId, metodo, planId: p.id, estado: 'completada' }); }
+            catch (e) { if (e.code !== 11000) throw e; return { repetida: true }; }
+            const u = await Usuario.findOneAndUpdate({ usuario }, { $inc: { iaCreditos: p.paquete.mensajes } }, { new: true }).select('iaCreditos').lean();
+            avisar(usuario, 'Compra', `🧠 Desbloqueaste ${p.paquete.mensajes} mensajes extra de NEXUS IA.`);
+            return { iaCreditos: u?.iaCreditos || 0, mensajes: p.paquete.mensajes };
+        }
+        if (p.tipo === 'impulso') {
+            try { await LiveTx.create({ tipo: 'compra', usuario, monedas: IMPULSO.monedas, usd, ref, captureId, metodo, juegoId: p.juegoId, planId: p.id, estado: 'completada' }); }
+            catch (e) { if (e.code !== 11000) throw e; return { repetida: true }; }
+            const j = await Juego.findOneAndUpdate({ _id: p.juegoId }, [{ $set: { destacadoHasta: { $add: [{ $max: ['$$NOW', { $ifNull: ['$destacadoHasta', '$$NOW'] }] }, IMPULSO.horas * 3600e3] } } }], { new: true }).select('title destacadoHasta').lean();
+            limpiarCache?.();
+            avisar(usuario, 'Compra', `🚀 "${String(j?.title || 'Tu publicación').slice(0, 60)}" está destacada hasta el ${new Date(j?.destacadoHasta).toLocaleString('es-CO')}.`);
+            return { destacadoHasta: j?.destacadoHasta };
+        }
+        // Premium: suma días desde el vencimiento actual (o desde ahora si ya venció).
+        // UpCoins de regalo solo si se pagó con dinero (pagado con UpCoins no regala UpCoins).
+        const conUC = metodo === 'upcoins';
+        const regalo = conUC ? 0 : (p.plan.monedasRegalo || 0);
+        const monedasPagadas = conUC ? p.plan.monedas : 0;
         const fondo = REPARTO.fondoPase({ usd, monedas: monedasPagadas, metodo, monedasRegalo: regalo });   // para los creadores que abra con el pase
         try { await LiveTx.create({ tipo: 'plan', usuario, monedas: monedasPagadas, bonoMonedas: regalo, creadorUsd: fondo, plataformaUsd: Math.max(0, usd - fondo), usd, planId: p.plan.id, ref, captureId, metodo, estado: 'completada' }); }
         catch (e) { if (e.code !== 11000) throw e; const u = await Usuario.findOne({ usuario }).select('planId planHasta monedas').lean(); return { plan: u?.planId, hasta: u?.planHasta, monedas: u?.monedas || 0, repetida: true }; }
@@ -107,7 +152,10 @@ function registrar(app, deps) {
             paseFondoUsd: { $add: [{ $ifNull: ['$paseFondoUsd', 0] }, fondo] },
         } }], { new: true }).select('planId planHasta monedas').lean();
         olvidarPerfil(usuario);   // la insignia ⭐ del chat aparece al instante
-        logger.info(`[tienda] @${usuario}: ${p.plan.nombre} (${metodo}) +${regalo} monedas de regalo → vence ${u?.planHasta?.toISOString?.().slice(0, 10)}`);
+        // Más visibilidad: sus publicaciones suben en el inicio mientras dure Premium
+        if (Juego && u?.planHasta) { Juego.updateMany({ usuario }, { $set: { impulsoHasta: u.planHasta } }).then(() => limpiarCache?.()).catch(() => {}); }
+        logger.info(`[tienda] @${usuario}: ${p.plan.nombre} (${metodo}) +${regalo} UpCoins de regalo → vence ${u?.planHasta?.toISOString?.().slice(0, 10)}`);
+        avisar(usuario, 'Premium', `⭐ ¡Has desbloqueado ${p.plan.nombre}! Activo hasta el ${new Date(u?.planHasta).toLocaleDateString('es-CO')}: sin anuncios, NEXUS ilimitado y más visibilidad.${regalo ? ` Además recibiste ${regalo.toLocaleString('es-CO')} UpCoins de regalo.` : ''}`);
         return { plan: u?.planId, hasta: u?.planHasta, monedas: u?.monedas || 0, monedasRegalo: regalo };
     }
 
@@ -125,14 +173,22 @@ function registrar(app, deps) {
                 monedas: { $max: [0, { $subtract: [{ $ifNull: ['$monedas', 0] }, tx.bonoMonedas || 0] }] },
                 paseFondoUsd: { $max: [0, { $subtract: [{ $ifNull: ['$paseFondoUsd', 0] }, tx.creadorUsd || 0] }] } } }]);
             olvidarPerfil(tx.usuario);
+            if (Juego) await Juego.updateMany({ usuario: tx.usuario }, { $set: { impulsoHasta: null } }).catch(() => {});
         }
         if (sancionar) await Usuario.updateOne({ usuario: tx.usuario }, { $set: { listaNegraAdmin: true, notasAdmin: `Contracargo (${motivo}) de ${tx.tipo}`, fechaListaNegra: new Date() } });
         logger.warn(`[tienda] ${motivo}: ${tx.tipo} de @${tx.usuario} revertido (${captureId})`);
         return true;
     }
 
-    async function validarCompra(usuario, p) {
+    async function validarCompra(usuario, p, metodo) {
         if (!p) return 'Producto no válido';
+        if (SOLO_UC.includes(p.tipo) && metodo !== 'upcoins') return 'Esto se paga con UpCoins';
+        if (p.tipo === 'monedas' && metodo === 'upcoins') return 'Los paquetes de UpCoins se compran con tarjeta o PayPal';
+        if (p.tipo === 'impulso') {
+            const j = await Juego.findById(p.juegoId).select('usuario status').lean();
+            if (!j || j.usuario !== usuario) return 'Solo puedes destacar tus propias publicaciones';
+            if (j.status !== 'aprobado') return 'La publicación debe estar aprobada para destacarla';
+        }
         if (p.tipo === 'acceso') {
             const j = await acceso.cargarJuego(p.juegoId);
             if (!j) return 'Publicación no disponible';
@@ -146,7 +202,7 @@ function registrar(app, deps) {
     app.get('/tienda/catalogo', (req, res) => {
         const m = metodos();
         ok(res, {
-            planes: PLANES, beneficios: BENEFICIOS_PASE, bonoPaquete: BONO_PAQUETE, reparto: REPARTO.publico(), paquetes: L.PAQUETES.map(p => ({ ...p, bonoPase: REPARTO.bonoPaquete(p.monedas, p.usd, BONO_PAQUETE) })), acceso: { usd: 1, monedas: 100 }, monedaUsd: L.MONEDA_USD,
+            planes: PLANES, beneficios: BENEFICIOS_PASE, bonoPaquete: BONO_PAQUETE, reparto: REPARTO.publico(), paquetes: L.PAQUETES.map(p => ({ ...p, bonoPase: REPARTO.bonoPaquete(p.monedas, p.usd, BONO_PAQUETE) })), acceso: { usd: 1, monedas: Math.round(1 / L.MONEDA_USD) }, ia: PAQUETES_IA, impulso: IMPULSO, monedaUsd: L.MONEDA_USD,
             metodos: m,
             pagos: m.tarjeta ? 'ok' : (paypal.estado().motivo === 'credenciales_invalidas' || mp.estado().motivo === 'credenciales_invalidas' ? 'credenciales_invalidas' : 'sin_configurar'),
             // Precios en moneda local para la tarjeta (Mercado Pago)
@@ -161,7 +217,7 @@ function registrar(app, deps) {
     // ── Mi plan ─────────────────────────────────────────────────────────────
     app.get('/tienda/mi-plan', verificarToken, async (req, res) => {
         try {
-            const u = await Usuario.findOne({ usuario: req.usuario }).select('planId planHasta planRecordatorio saldo monedas solicitudPagoPendiente').lean();
+            const u = await Usuario.findOne({ usuario: req.usuario }).select('planId planHasta planRecordatorio saldo saldoRetenido monedas solicitudPagoPendiente iaCreditos').lean();
             if (!u) return err(res, 404, 'Usuario no encontrado');
             const activo = !!(u.planHasta && new Date(u.planHasta) > new Date());
             const [historial, accesos, conPase] = await Promise.all([
@@ -174,7 +230,7 @@ function registrar(app, deps) {
                 plan: activo ? { ...plan(u.planId), hasta: u.planHasta, diasRestantes: Math.ceil((new Date(u.planHasta) - Date.now()) / 864e5) } : null,
                 vencido: !activo && u.planHasta ? { id: u.planId, nombre: plan(u.planId)?.nombre, hasta: u.planHasta } : null,
                 recordatorio: u.planRecordatorio !== false,
-                saldo: u.saldo || 0, saldoBloqueado: !!u.solicitudPagoPendiente, monedas: u.monedas || 0,
+                saldo: u.saldo || 0, saldoBloqueado: !!u.solicitudPagoPendiente, monedas: u.monedas || 0, upcoins: UC.saldoUC(u), iaCreditos: u.iaCreditos || 0,
                 accesosComprados: accesos, descargasConPase30d: conPase,
                 historial, planes: PLANES, beneficios: BENEFICIOS_PASE, metodos: metodos(),
             });
@@ -192,42 +248,32 @@ function registrar(app, deps) {
         const ref = `${metodo}:${usuario}:${clave}`;
         const previa = await LiveTx.findOne({ ref }).select('_id').lean();
         if (previa) return [200, { repetida: true }];
-        const problema = await validarCompra(usuario, p);
-        if (problema) return [409, { error: problema }];
-        let costo, filtro, cambio, devolver;
-        if (metodo === 'saldo') {
-            costo = precioUsd(p, 'saldo');
-            filtro = { usuario, saldo: { $gte: costo }, solicitudPagoPendiente: { $ne: true }, listaNegraAdmin: { $ne: true } };
-            cambio = { $inc: { saldo: -costo } }; devolver = { $inc: { saldo: costo } };
-        } else {
-            if (p.tipo !== 'plan') return [400, { error: 'Con monedas puedes pagar pases (el acceso directo se paga con monedas desde la página del enlace)' }];
-            costo = p.plan.monedas;
-            filtro = { usuario, monedas: { $gte: costo }, listaNegraAdmin: { $ne: true } };
-            cambio = { $inc: { monedas: -costo } }; devolver = { $inc: { monedas: costo } };
-        }
-        const pagador = await Usuario.findOneAndUpdate(filtro, cambio, { new: true }).select('saldo monedas').lean();
-        if (!pagador) {
-            const u = await Usuario.findOne({ usuario }).select('saldo monedas solicitudPagoPendiente listaNegraAdmin').lean();
-            if (u?.listaNegraAdmin) return [403, { error: 'Tu cuenta no puede hacer pagos' }];
-            if (metodo === 'saldo' && u?.solicitudPagoPendiente) return [409, { error: 'Tienes un retiro pendiente: tu saldo está reservado para ese pago hasta que se procese.' }];
-            return [402, { error: metodo === 'saldo' ? `Saldo insuficiente: necesitas US$${costo.toFixed(2)} y tienes US$${(u?.saldo || 0).toFixed(2)}` : `Necesitas ${costo} monedas y tienes ${u?.monedas || 0}` }];
+        const problema = await validarCompra(usuario, p, metodo);
+        if (problema) return [p.tipo === 'monedas' || problema === 'Esto se paga con UpCoins' ? 400 : 409, { error: problema }];
+        const costo = precioUC(p);
+        const cobro = await UC.cobrar(Usuario, usuario, costo);   // comprados primero, luego ganados
+        if (!cobro) {
+            const motivo = await UC.motivoSinSaldo(Usuario, usuario, costo);
+            return [/cuenta no puede/.test(motivo) ? 403 : /retiro pendiente/.test(motivo) ? 409 : 402, { error: motivo }];
         }
         try {
-            const entrega = await entregar(usuario, p, { ref, metodo, usd: metodo === 'saldo' ? costo : r2(costo * L.MONEDA_USD) });
-            if (entrega.repetida) { await Usuario.updateOne({ usuario }, devolver); return [200, entrega]; }
-            return [200, { ...entrega, saldo: pagador.saldo, monedas: entrega.monedas ?? pagador.monedas }];
+            const entrega = await entregar(usuario, p, { ref, metodo, usd: r2(costo * L.MONEDA_USD) });
+            if (entrega.repetida) await UC.devolver(Usuario, usuario, cobro);
+            const u = await Usuario.findOne({ usuario }).select('monedas saldo solicitudPagoPendiente').lean();
+            return [200, { ...entrega, cobradoUC: costo, upcoins: UC.saldoUC(u || {}), monedas: Math.floor(UC.saldoUC(u || {}).total) }];
         } catch (e) {
-            await Usuario.updateOne({ usuario }, devolver);   // no se entregó: devolver lo cobrado
+            await UC.devolver(Usuario, usuario, cobro);   // no se entregó: devolver lo cobrado
             throw e;
         }
     }
     app.post('/tienda/pagar', verificarToken, async (req, res) => {
         try {
             const p = parsear(req.body?.producto);
-            const metodo = req.body?.metodo;
+            // 'saldo' y 'monedas' son nombres antiguos: ahora todo es UpCoins (comprados + ganados)
+            const metodo = ['saldo', 'monedas', 'upcoins'].includes(req.body?.metodo) ? 'upcoins' : null;
             const clave = String(req.body?.clave || '');
             if (!p) return err(res, 400, 'Producto no válido');
-            if (!['saldo', 'monedas'].includes(metodo)) return err(res, 400, 'Método no válido');
+            if (!metodo) return err(res, 400, 'Método no válido');
             if (!/^[A-Za-z0-9_-]{8,64}$/.test(clave)) return err(res, 400, 'Falta la clave del pago');
             const k = `${req.usuario}:${clave}`;
             if (!enCurso.has(k)) enCurso.set(k, pagarInterno(req.usuario, p, metodo, clave).finally(() => enCurso.delete(k)));
@@ -241,7 +287,7 @@ function registrar(app, deps) {
         try {
             if (!paypal.activo()) return err(res, 503, 'PayPal no está disponible en este momento');
             const p = parsear(req.body?.producto);
-            const problema = await validarCompra(req.usuario, p);
+            const problema = await validarCompra(req.usuario, p, 'paypal');
             if (problema) return err(res, 409, problema);
             ok(res, { orderID: await paypal.crearOrden({ usuario: req.usuario, referencia: p.id, usd: precioUsd(p, 'paypal'), descripcion: descripcion(p) }) });
         } catch (e) { logger.error(`[tienda] paypal orden: ${e.message} ${e.detalle || ''}`); err(res, e.status || 500, e.status ? e.message : 'No se pudo crear la orden'); }
@@ -270,7 +316,7 @@ function registrar(app, deps) {
             const p = parsear(req.body?.producto);
             const clave = String(req.body?.clave || '');
             if (!/^[A-Za-z0-9_-]{8,64}$/.test(clave)) return err(res, 400, 'Falta la clave del pago');
-            const problema = await validarCompra(req.usuario, p);
+            const problema = await validarCompra(req.usuario, p, 'tarjeta_mp');
             if (problema) return err(res, 409, problema);
             const u = await Usuario.findOne({ usuario: req.usuario }).select('email listaNegraAdmin').lean();
             if (!u || u.listaNegraAdmin) return err(res, 403, 'Tu cuenta no puede hacer pagos');
@@ -339,4 +385,4 @@ function registrar(app, deps) {
     return { PLANES, parsear, precioUsd, entregar, revertir, mp, metodos };
 }
 
-module.exports = { registrar, PLANES, BENEFICIOS_PASE, BONO_PAQUETE, parsear, precioUsd };
+module.exports = { registrar, PLANES, BENEFICIOS_PASE, BONO_PAQUETE, PAQUETES_IA, IMPULSO, parsear, precioUsd, precioUC };

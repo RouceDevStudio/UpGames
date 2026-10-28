@@ -21,28 +21,29 @@ const crypto = require('crypto');
 
 const num = (v, d) => { const n = parseFloat(v); return Number.isFinite(n) ? n : d; };
 
-const MONEDA_USD     = 0.01;
+const MONEDA_USD     = 0.02;   // 1 UpCoin = US$0,02 (50 UpCoins = US$1)
 const REPARTO        = require('./reparto');
 const COMISION       = Math.round((1 - REPARTO.REGALO_CREADOR) * 10000) / 10000;   // parte de UpGames en cada regalo (75 %)
 const RETENCION_DIAS = Math.max(0, num(process.env.LIVE_RETENCION_DIAS, 7));
 const P2P_MAX        = Math.max(1, Math.round(num(process.env.LIVE_P2P_MAX_VIEWERS, 12)));
 
 const REGALOS = [
-    { id: 'corazon',  nombre: 'Corazón',  emoji: '❤️', monedas: 10 },
-    { id: 'gg',       nombre: 'GG',       emoji: '🎮', monedas: 50 },
-    { id: 'fuego',    nombre: 'Fuego',    emoji: '🔥', monedas: 100 },
-    { id: 'corona',   nombre: 'Corona',   emoji: '👑', monedas: 300 },
-    { id: 'trofeo',   nombre: 'Trofeo',   emoji: '🏆', monedas: 500 },
-    { id: 'diamante', nombre: 'Diamante', emoji: '💎', monedas: 1000 },
-    { id: 'cohete',   nombre: 'Cohete',   emoji: '🚀', monedas: 5000 },
+    { id: 'corazon',  nombre: 'Corazón',  emoji: '❤️', monedas: 5 },
+    { id: 'gg',       nombre: 'GG',       emoji: '🎮', monedas: 25 },
+    { id: 'fuego',    nombre: 'Fuego',    emoji: '🔥', monedas: 50 },
+    { id: 'corona',   nombre: 'Corona',   emoji: '👑', monedas: 150 },
+    { id: 'trofeo',   nombre: 'Trofeo',   emoji: '🏆', monedas: 250 },
+    { id: 'diamante', nombre: 'Diamante', emoji: '💎', monedas: 500 },
+    { id: 'cohete',   nombre: 'Cohete',   emoji: '🚀', monedas: 2500 },
 ];
 
 const PAQUETES = [
-    { id: 'p100',  monedas: 100,  usd: 1.29 },
-    { id: 'p500',  monedas: 500,  usd: 5.49 },
-    { id: 'p1100', monedas: 1100, usd: 10.99, extra: '+10%' },
-    { id: 'p2800', monedas: 2800, usd: 26.99, extra: '+12%' },
-    { id: 'p6000', monedas: 6000, usd: 54.99, extra: '+20%' },
+    // Los ids se conservan (los usan órdenes y webhooks); las cantidades están en UpCoins
+    { id: 'p100',  monedas: 50,   usd: 1.29 },
+    { id: 'p500',  monedas: 250,  usd: 5.49 },
+    { id: 'p1100', monedas: 550,  usd: 10.99, extra: '+10%' },
+    { id: 'p2800', monedas: 1400, usd: 26.99, extra: '+12%' },
+    { id: 'p6000', monedas: 3000, usd: 54.99, extra: '+20%' },
 ];
 
 const regalo  = id => REGALOS.find(r => r.id === id) || null;

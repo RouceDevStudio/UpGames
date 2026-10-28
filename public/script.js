@@ -82,6 +82,25 @@ function ugPedirSesion(accion = 'interactuar') {
   return false;
 }
 window.ugPedirSesion = ugPedirSesion;
+// ── Contador de UpCoins en la cabecera (comprados + ganados; toca para recargar) ──
+function ugContadorUC(total) {
+  if (!ugSesion()) return;
+  const acc = document.querySelector('.hdr-actions'); if (!acc) return;
+  let b = document.getElementById('hdr-uc');
+  if (!b) {
+    b = document.createElement('button'); b.id = 'hdr-uc'; b.type = 'button'; b.title = 'Tus UpCoins'; b.setAttribute('aria-label', 'Tus UpCoins');
+    b.style.cssText = 'display:inline-flex;align-items:center;gap:5px;height:38px;padding:0 12px;border-radius:999px;border:1px solid rgba(255,204,77,.35);background:rgba(255,204,77,.1);color:#ffcc4d;font-weight:800;font-size:.85rem;cursor:pointer;font-family:inherit;white-space:nowrap';
+    b.onclick = () => { switchTab('economia'); setTimeout(() => { document.getElementById('eco-tienda')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); ecoAbrirTienda(); }, 350); };
+    acc.insertBefore(b, acc.firstChild);
+  }
+  const pintar = t => { const n = Math.floor(t || 0); b.innerHTML = `🪙 <span>${n >= 1e4 ? (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'K' : n.toLocaleString('es-CO')}</span>`; };
+  if (typeof total === 'number') return pintar(total);
+  fetch(`${API_URL}/monedas/saldo`, { headers: { Authorization: `Bearer ${LS.get('token')}` } }).then(r => r.ok ? r.json() : null).then(d => d?.success && pintar(d.upcoins?.total ?? d.monedas)).catch(() => {});
+}
+window.ugContadorUC = ugContadorUC;
+document.addEventListener('DOMContentLoaded', () => ugContadorUC());
+window.addEventListener('ug:upcoins', () => ugContadorUC());
+
 // Invitados: botón "Entrar" en la cabecera (en lugar de pedir cuenta para mirar)
 document.addEventListener('DOMContentLoaded', () => {
   if (ugSesion()) return;
@@ -440,7 +459,7 @@ function createTile(item, isFeatured=false) {
 
       </div>
       <div class="tile-info">
-        <div class="tile-cat">${catLabel(cat)}</div>
+        <div class="tile-cat">${catLabel(cat)}${item.promocionado ? ' <span class="tile-promo" title="Su autor pagó para destacarla">Promocionado</span>' : ''}</div>
         ${extraBadges}
         <div class="tile-title">${escH(tituloT)}</div>
         <div class="tile-meta">
@@ -1600,7 +1619,7 @@ async function renderEconomia() {
       <div class="empty-state" style="padding:40px 20px">
         <ion-icon name="person-circle-outline"></ion-icon>
         <h3>Inicia sesión</h3>
-        <p>Con una cuenta ganas dinero por cada descarga de lo que publicas, recibes regalos en tus lives y puedes comprar un Pase sin anuncios (con monedas de regalo).</p><a href="${ugUrlLogin(true)}" class="btn-login-action" style="margin-top:14px;display:inline-flex">Crear cuenta gratis</a><p style="margin-top:10px;font-size:.82rem"><a href="${ugUrlLogin(false)}" style="color:#32D583">Ya tengo cuenta</a></p>
+        <p>Con una cuenta ganas dinero por cada descarga de lo que publicas, recibes regalos en tus lives y ganas UpCoins (la moneda de UpGames) que puedes gastar o retirar, y puedes hacerte Premium: sin anuncios y NEXUS ilimitado.</p><a href="${ugUrlLogin(true)}" class="btn-login-action" style="margin-top:14px;display:inline-flex">Crear cuenta gratis</a><p style="margin-top:10px;font-size:.82rem"><a href="${ugUrlLogin(false)}" style="color:#32D583">Ya tengo cuenta</a></p>
       </div>`;
     return;
   }
@@ -2630,6 +2649,9 @@ function pfOpenPostSheet(i) {
         ${isRejected ? `<div class="pf2-rechazo"><b>Motivo del rechazo:</b> ${ugEsc(item.motivoRechazo || 'No cumple las normas de publicación.')}<br><small>Corrígelo con Editar o publícalo de nuevo.</small></div>` : ''}
         ${mentorHTML}
         <button type="button" class="pf2-btn pf2-btn-nexus" onclick="pfClosePostSheet();nexusPreguntar(${ugEsc(JSON.stringify(`¿Cómo puedo mejorar mi publicación "${item.title}" para conseguir más descargas?`))})"><span class="pf2-nexus-ic">✦</span> Pedir consejo a Nexus</button>
+        ${!isPending && !isRejected ? `<div class="pf2-destacar" id="pf2-destacar">${item.destacadoHasta && new Date(item.destacadoHasta) > new Date()
+          ? `<span>🚀 Destacada hasta el ${new Date(item.destacadoHasta).toLocaleString('es-CO')}</span><button type="button" class="pf2-btn" onclick="pfDestacar('${item._id}')">Extender 24 h</button>`
+          : `<span>🚀 <b>Destácala 24 h</b> arriba en el inicio por 🪙 50 UC</span><button type="button" class="pf2-btn" onclick="pfDestacar('${item._id}')">Destacar</button>`}</div><div id="pf2-destacar-pago"></div>` : ''}
         <div class="pf2-sheet-actions">
           ${!isPending && !isRejected ? `<button type="button" class="pf2-btn pf2-btn-primary" onclick="pfVerPublicacion(${i})"><ion-icon name="open-outline"></ion-icon> Ver publicación</button>` : ''}
           <button type="button" class="pf2-btn" onclick="pfClosePostSheet();${isVideo ? `pfOpenEditVideoModal('${item._id}')` : `pfOpenEditModal('${item._id}')`}"><ion-icon name="create-outline"></ion-icon> Editar</button>
@@ -2639,6 +2661,13 @@ function pfOpenPostSheet(i) {
     </div>`;
   ov.classList.add('show');
   document.body.style.overflow = 'hidden';
+}
+// Destacar una publicación propia con UpCoins (sale arriba marcada como "Promocionado")
+async function pfDestacar(id) {
+  const caja = document.getElementById('pf2-destacar-pago'); if (!caja) return;
+  caja.innerHTML = '<div class="eco-spin"><ion-icon name="sync-outline"></ion-icon></div>';
+  try { await ugPagosListo(); window.UGPagos.pagar(caja, { producto: `impulso:${id}`, alExito: () => { pfClosePostSheet(); ugContadorUC(); pfLoadHistorial(); } }); }
+  catch (_) { caja.innerHTML = ''; toast('No se pudo cargar el pago'); }
 }
 function pfClosePostSheet() {
   const ov = document.getElementById('pf2-sheet');
@@ -2995,11 +3024,20 @@ async function pfLoadEconomia() {
     const d = await res.json();
     if(d.success) {
       // Saldo — 4 decimales con animacion
+      // Todo en UpCoins: total gastable + desglose (retirables = ganados como creador)
+      const uc = d.upcoins || { total: (d.monedas || 0) + (d.saldo || 0) / 0.02, ganadas: (d.saldo || 0) / 0.02, compradas: d.monedas || 0, retenidas: (d.saldoRetenido || 0) / 0.02 };
       const saldoEl = document.getElementById('pf-saldo-display');
       const prevSaldo = parseFloat(saldoEl.dataset.val || '0');
-      const newSaldo = d.saldo || 0;
+      const newSaldo = uc.compradas + uc.ganadas;
       saldoEl.dataset.val = newSaldo;
-      _animateValue(saldoEl, prevSaldo, newSaldo, 4, '$', 800);
+      _animateValue(saldoEl, prevSaldo, Math.floor(newSaldo * 100) / 100, newSaldo < 100 ? 2 : 0, '🪙 ', 800);
+      if (newSaldo >= 100) setTimeout(() => { saldoEl.textContent = '🪙 ' + Math.floor(newSaldo).toLocaleString('es-CO'); }, 850);   // igual que la cabecera (sin redondear hacia arriba)
+      const fx = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v; };
+      fx('eco-retirables', (uc.ganadas || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 }));
+      fx('eco-retirables-usd', `(≈ US$${(d.saldo || 0).toFixed(2)})`);
+      fx('eco-monedas', (uc.compradas || 0).toLocaleString('es-CO'));
+      fx('eco-retenido', (uc.retenidas || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 }));
+      window.ugContadorUC?.(uc.total);
 
       // Descargas totales con animacion
       const dlEl = document.getElementById('pf-descargas-totales');
@@ -3026,13 +3064,7 @@ async function pfLoadEconomia() {
       } else if(d.puedeRetirar) {
         btnP.disabled=false; btnP.classList.add('enabled');
       }
-      // Banner: lo retenido (regalos/accesos directos) y las monedas
-      const extra = document.getElementById('eco-hero-extra');
-      if (extra && (d.saldoRetenido > 0 || d.monedas > 0)) {
-        extra.hidden = false;
-        document.getElementById('eco-retenido').textContent = '$' + (d.saldoRetenido || 0).toFixed(2);
-        document.getElementById('eco-monedas').textContent = d.monedas || 0;
-      }
+
       // ── Dashboard update ──
       ecoUpdateDashboard(d);
     }
@@ -3091,7 +3123,7 @@ function ecoUpdateDashboard(d) {
 
   // ── RPM (revenue per download) ──
   const rpmEl = document.getElementById('eco-kpi-rpm');
-  if (rpmEl) rpmEl.textContent = totalDl > 0 ? '$' + (saldo / totalDl).toFixed(4) : '$0.0000';
+  if (rpmEl) rpmEl.textContent = totalDl > 0 ? (saldo / totalDl / 0.02).toFixed(3) + ' UC' : '0 UC';   // UpCoins por descarga
 
   // ── Content subtitle ──
   const ctEl = document.getElementById('eco-kpi-content-total');
@@ -3341,11 +3373,11 @@ function ecoRenderGoals(saldo, totalDl, totalContent, elegibles) {
   if (!el) return;
 
   const goals = [
-    { icon: '💰', label: 'Primera ganancia',        target: 0.01,  curr: saldo,        fmt: v => '$' + v.toFixed(2) },
+    { icon: '💰', label: 'Primer UpCoin ganado',    target: 0.02,  curr: saldo,        fmt: v => '🪙 ' + (v / 0.02).toFixed(1) },
     { icon: '📥', label: '50 descargas',             target: 50,    curr: totalDl,      fmt: v => pfFmt(v) },
     { icon: '📦', label: '5 publicaciones',          target: 5,     curr: totalContent, fmt: v => v },
     { icon: '🚀', label: '100 descargas',            target: 100,   curr: totalDl,      fmt: v => pfFmt(v) },
-    { icon: '💸', label: 'Retiro disponible ($10)',  target: 10,    curr: saldo,        fmt: v => '$' + v.toFixed(2) },
+    { icon: '💸', label: 'Retiro disponible (500 UC)', target: 10,  curr: saldo,        fmt: v => '🪙 ' + Math.floor(v / 0.02) },
     { icon: '🏆', label: '10 publicaciones',         target: 10,    curr: totalContent, fmt: v => v },
     { icon: '⭐', label: '500 descargas',            target: 500,   curr: totalDl,      fmt: v => pfFmt(v) },
     { icon: '🔥', label: '1 000 descargas',          target: 1000,  curr: totalDl,      fmt: v => pfFmt(v) },
@@ -4090,6 +4122,7 @@ const nxHeaders = () => { const h = { 'Content-Type':'application/json' }; const
 function nxToggle() {
   if (!nxOpen && !ugPedirSesion('usar NEXUS IA')) return;
   nxOpen=!nxOpen;
+  if (nxOpen) nxCargarCuota();
   document.getElementById('nxPanel').classList.toggle('open',nxOpen);
   document.body.style.overflow = nxOpen && innerWidth < 900 ? 'hidden' : '';   // en escritorio es una ventana flotante
   document.body.classList.toggle('nx-open', nxOpen);
@@ -4174,6 +4207,7 @@ function nxPintar(pensando = false) {
   }
   html += NX.msgs.map((m, i) => m.rol === 'user'
     ? `<div class="nx-msg nx-yo"><div class="nx-bub">${escH(m.texto).replace(/\n/g, '<br>')}</div></div>`
+    : m.upsell ? `<div class="nx-msg nx-ia" data-nx-i="${i}"><div class="nx-bub">${escH(m.texto)}<div class="nx-upsell"><div class="nx-upsell-acc"><button type="button" class="uc" onclick="nxDesbloquear(this)">🪙 Más mensajes con UpCoins</button><button type="button" class="pr" onclick="nxIrPremium()">⭐ Premium: NEXUS ilimitado</button></div><div class="nx-upsell-pago"></div></div></div></div>`
     : `<div class="nx-msg nx-ia${m.error ? ' nx-err' : ''}" data-nx-i="${i}"><div class="nx-bub">${nxFormato(m.texto)}</div>${nxTarjetas(m.items)}${nxBotones(m.acciones)}</div>`).join('');
   if (pensando) html += '<div class="nx-msg nx-ia"><div class="nx-bub nx-typing"><i></i><i></i><i></i></div></div>';
   box.innerHTML = html;
@@ -4201,6 +4235,8 @@ async function nxEnviar(texto, extra) {
   try {
     const r = await fetchTimeout(`${API_URL}/nexus/chat`, 60000, { method:'POST', headers:nxHeaders(), body: JSON.stringify({ mensaje:texto, historial:historialInv, contexto:{ ...nxContexto(), ...(extra || {}) } }) });
     const d = await r.json().catch(() => ({}));
+    if (d.cuota) nxPintarCuota(d.cuota);
+    if (r.status === 402 && d.code === 'IA_LIMITE') { NX.msgs.pop(); NX.msgs.push({ rol:'assistant', upsell:true, texto:d.error }); return; }
     if (!r.ok || !d.ok) throw new Error(d.error || 'Nexus no pudo responder ahora.');
     NX.msgs.push({ rol:'assistant', texto:d.texto, items:d.items || [], acciones:d.acciones || [] });
   } catch (e) {
@@ -4213,6 +4249,25 @@ async function nxEnviar(texto, extra) {
     if (!nxOpen) _showNxFabBadge();
   }
 }
+
+// ── Cuota de NEXUS: mensajes gratis del día, créditos y Premium ──
+function nxPintarCuota(c) {
+  const el = document.getElementById('nxCuota'); if (!el || !c) return;
+  el.hidden = false; el.classList.toggle('prem', !!c.premium);
+  el.innerHTML = c.premium ? '<span>⭐ <b>Premium</b>: NEXUS ilimitado con el modelo más potente</span>'
+    : `<span><b>${c.restantesHoy}</b> de ${c.gratisDia} mensajes gratis hoy${c.creditos ? ` · <b>${c.creditos}</b> extra` : ''}</span><button type="button" onclick="nxIrPremium()">Ilimitado</button>`;
+}
+function nxCargarCuota() {
+  if (!nxToken()) return;
+  fetch(`${API_URL}/nexus/cuota`, { headers: nxHeaders() }).then(r => r.ok ? r.json() : null).then(d => d?.ok && nxPintarCuota(d)).catch(() => {});
+}
+async function nxDesbloquear(btn) {
+  const caja = btn.closest('.nx-upsell')?.querySelector('.nx-upsell-pago'); if (!caja) return;
+  caja.innerHTML = '<div class="eco-spin"><ion-icon name="sync-outline"></ion-icon></div>';
+  try { await ugPagosListo(); window.UGPagos.creditosIA(caja, { alComprar: () => { nxCargarCuota(); ugContadorUC(); } }); }
+  catch (_) { caja.innerHTML = '<p style="font-size:.8rem">No se pudo cargar. Inténtalo de nuevo.</p>'; }
+}
+function nxIrPremium() { nxClose(); switchTab('economia'); setTimeout(() => ecoCargarPlan(true), 300); }
 
 async function nexusAbrirItem(itemId) {
   let item = todosLosItems.find(i => i._id === itemId);
@@ -4435,7 +4490,7 @@ const TUT_STEPS = [
   {
     sel: '[data-tab="upload"]',
     title: '➕ Subir Contenido (Acceso Rápido)',
-    body: 'El ícono + lleva directamente al <strong>formulario de publicación</strong> en tu perfil. ¿Tienes un juego, mod o app que compartir? Tócalo y sube tu aporte. Puedes ganar <strong>$1.00 USD por cada 1,000 descargas</strong>.'
+    body: 'El ícono + lleva directamente al <strong>formulario de publicación</strong> en tu perfil. ¿Tienes un juego, mod o app que compartir? Tócalo y sube tu aporte. Puedes ganar <strong>🪙 50 UpCoins (US$1) por cada 1.000 descargas</strong>.'
   },
   {
     sel: '[data-tab="profile"]',
@@ -4566,13 +4621,13 @@ const TUT_STEPS = [
   {
     sel: '[data-pftab="economia"]',
     title: '💰 Pestaña: Economía (Ganancias)',
-    body: 'Aquí gestionas tus <strong>ganancias en UpGames</strong>. Por cada 1,000 descargas efectivas de tus aportes ganas $1.00 USD.',
+    body: 'Aquí gestionas tus <strong>ganancias en UpGames</strong>. Por cada 1.000 descargas efectivas de tus aportes ganas 🪙 50 UpCoins (US$1), que puedes gastar o retirar.',
     onEnter: function() { pfSwitchTab('economia', document.querySelector('[data-pftab="economia"]')); }
   },
   {
     sel: '.pf-saldo-box',
     title: '💵 Tu Saldo Disponible',
-    body: 'Muestra tu <strong>saldo acumulado en USD</strong> listo para retirar. Se calcula automáticamente a partir de tus descargas efectivas.<br><br>Fórmula: Descargas ÷ 1000 × $1.00 USD'
+    body: 'Muestra tus <strong>UpCoins</strong>: los ganados (retirables) y los comprados (para usar en la app). 1 UpCoin = US$0,02.<br><br>Fórmula de descargas: Descargas ÷ 1000 × 50 UC'
   },
   {
     sel: '.pf-eco-stats',
@@ -5712,21 +5767,21 @@ async function pfLoadLogros() {
 })();
 
 
-// ── Economía: tienda de monedas con tarjeta (carga el procesador solo al abrirla) ──
+// ── Economía: tienda de UpCoins con tarjeta o PayPal (carga el procesador solo al abrirla) ──
 let _ugPagosJs = null;
 const ugPagosListo = () => (_ugPagosJs = _ugPagosJs || new Promise((ok, ko) => {
   if (window.UGPagos) return ok();
   const s = document.createElement('script');
-  s.src = './upgames-pagos.js?v=20261028b'; s.onload = ok; s.onerror = () => { _ugPagosJs = null; ko(); };
+  s.src = './upgames-pagos.js?v=20261028c'; s.onload = ok; s.onerror = () => { _ugPagosJs = null; ko(); };
   document.head.appendChild(s);
 }));
 function ecoAbrirTienda() {
   const box = document.getElementById('eco-tienda');
   if (!box) return;
-  if (!LS.get('token')) { ugPedirSesion('comprar monedas'); return; }
+  if (!LS.get('token')) { ugPedirSesion('conseguir UpCoins'); return; }
   box.innerHTML = '<div class="eco-spin"><ion-icon name="sync-outline"></ion-icon></div>';
   ugPagosListo().then(() => window.UGPagos.tienda(box, {
-    alComprar: d => { toast(`✅ +${d.acreditadas} monedas`); pfLoadEconomia(); },
+    alComprar: () => { pfLoadEconomia(); ugContadorUC(); },
   })).catch(() => { box.innerHTML = '<button type="button" class="eco-pay-open" onclick="ecoAbrirTienda()">Reintentar</button>'; });
 }
 
@@ -5764,8 +5819,8 @@ function ecoAbrirTienda() {
 })();
 
 
-// ── Mi plan: pase sin anuncios (ver, renovar, cambiar, recordatorio, historial) ──
-const ECO_METODO = { tarjeta_mp: 'Tarjeta', paypal: 'PayPal', saldo: 'Saldo', monedas: 'Monedas', '': '—' };
+// ── Mi Premium (ver, renovar, cambiar, recordatorio, historial) ──
+const ECO_METODO = { tarjeta_mp: 'Tarjeta', paypal: 'PayPal', saldo: 'UpCoins', monedas: 'UpCoins', upcoins: 'UpCoins', '': '—' };
 async function ecoCargarPlan(desplazar) {
   const box = document.getElementById('eco-plan');
   if (!box || !LS.get('token')) return;
@@ -5776,26 +5831,27 @@ async function ecoCargarPlan(desplazar) {
     const fecha = f => new Date(f).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' });
     const p = d.plan;
     try { p ? localStorage.setItem('ug_pase_hasta', localStorage.getItem('user_admin') + '|' + (+new Date(p.hasta))) : localStorage.removeItem('ug_pase_hasta'); } catch (_) {}   // la página puente no carga anuncios con pase
-    const concepto = h => h.tipo === 'plan' ? (d.planes.find(x => x.id === h.planId)?.nombre || 'Pase') : h.tipo === 'acceso' ? 'Acceso directo a un enlace' : `${h.monedas} monedas`;
-    const monto = h => h.metodo === 'monedas' ? `🪙 ${h.monedas}` : `US$${(h.usd || 0).toFixed(2)}`;
+    const concepto = h => h.tipo === 'plan' ? (d.planes.find(x => x.id === h.planId)?.nombre || 'Premium') : h.tipo === 'acceso' ? 'Acceso directo a un enlace'
+      : /^ia:/.test(h.planId || '') ? 'Mensajes de NEXUS IA' : /^impulso:/.test(h.planId || '') ? 'Publicación destacada' : `${h.monedas} UpCoins`;
+    const monto = h => ['monedas', 'saldo', 'upcoins'].includes(h.metodo) ? `🪙 ${h.monedas || Math.round((h.usd || 0) / 0.02)} UC` : `US$${(h.usd || 0).toFixed(2)}`;
     box.innerHTML = `
       <div class="eco-plan-h">
         <div class="eco-plan-ic">⭐</div>
-        <div><b>${p ? esc(p.nombre) : 'Sin pase activo'}</b><small>${p ? `Vence el ${fecha(p.hasta)} · ${p.diasRestantes} día${p.diasRestantes === 1 ? '' : 's'}` : (d.vencido ? `Tu ${esc(d.vencido.nombre || 'pase')} venció el ${fecha(d.vencido.hasta)}` : 'Navega sin anuncios y abre cada enlace al instante')}</small></div>
+        <div><b>${p ? esc(p.nombre) : 'No eres Premium'}</b><small>${p ? `Vence el ${fecha(p.hasta)} · ${p.diasRestantes} día${p.diasRestantes === 1 ? '' : 's'}` : (d.vencido ? `Tu ${esc(d.vencido.nombre || 'Premium')} venció el ${fecha(d.vencido.hasta)}` : 'Sin anuncios, NEXUS ilimitado y más visibilidad para tus publicaciones')}</small></div>
         <span class="eco-plan-estado ${p ? 'on' : 'off'}">${p ? 'ACTIVO' : 'INACTIVO'}</span>
       </div>
       ${p ? `<div class="eco-plan-bar"><i style="width:${Math.max(4, Math.min(100, p.diasRestantes / p.dias * 100))}%"></i></div>` : ''}
       ${`<ul class="eco-plan-ventajas">${(d.beneficios || []).map(x => `<li>✓ ${esc(x)}</li>`).join('')}<li>💚 Los creadores siguen cobrando por cada descarga</li></ul>`}
       <div class="eco-plan-acc">
-        ${p ? `<button class="p" data-a="renovar">Renovar (+${p.dias} días)</button><button class="s" data-a="cambiar">Cambiar de plan</button>` : `<button class="p" data-a="cambiar">${d.vencido ? 'Renovar mi pase' : 'Ver planes'}</button>`}
+        ${p ? `<button class="p" data-a="renovar">Renovar (+${p.dias} días)</button><button class="s" data-a="cambiar">Cambiar de plan</button>` : `<button class="p" data-a="cambiar">${d.vencido ? 'Renovar Premium' : 'Hazte Premium'}</button>`}
       </div>
       <div id="eco-plan-pago"></div>
-      ${p ? `<div class="eco-plan-stats"><div><b>${d.descargasConPase30d}</b><small>Enlaces abiertos con el pase (30 días)</small></div><div><b>${d.accesosComprados}</b><small>Accesos directos comprados</small></div></div>` : ''}
+      ${p ? `<div class="eco-plan-stats"><div><b>${d.descargasConPase30d}</b><small>Enlaces abiertos con Premium (30 días)</small></div><div><b>${d.accesosComprados}</b><small>Accesos directos comprados</small></div></div>` : ''}
       <label class="eco-plan-row"><span>Avisarme 2 días antes de que venza</span><input type="checkbox" id="eco-plan-rec" ${d.recordatorio ? 'checked' : ''}></label>
-      <p class="eco-plan-nota">🔁 <b>Sin cobros automáticos:</b> nunca te cobramos sin que lo pidas. Renovar o cambiar de plan suma los días al vencimiento actual; si no renuevas, el pase simplemente vence y vuelves a la página puente gratuita.</p>
+      <p class="eco-plan-nota">🔁 <b>Sin cobros automáticos:</b> nunca te cobramos sin que lo pidas. Renovar o cambiar de plan suma los días al vencimiento actual; si no renuevas, Premium simplemente vence y vuelves al modo gratuito.</p>
       ${d.historial.length ? `<details class="eco-plan-hist"><summary>Historial de compras (${d.historial.length})</summary><ul>${d.historial.map(h => `<li class="${h.estado === 'revertida' ? 'rev' : ''}"><span>${fecha(h.fecha)} · ${esc(concepto(h))} · ${esc(ECO_METODO[h.metodo] || h.metodo || '—')}</span><span>${monto(h)}</span></li>`).join('')}</ul></details>` : ''}`;
     const pago = document.getElementById('eco-plan-pago');
-    const alComprar = () => { toast('✅ ¡Tu pase está activo!'); ecoCargarPlan(); pfLoadEconomia(); };
+    const alComprar = () => { ecoCargarPlan(); pfLoadEconomia(); ugContadorUC(); };
     box.querySelectorAll('[data-a]').forEach(b => b.onclick = () => {
       box.querySelectorAll('[data-a]').forEach(x => x.classList.toggle('s', x !== b));
       if (b.dataset.a === 'renovar') window.UGPagos.pagar(pago, { producto: `plan:${p.id}`, estado: d, alExito: alComprar });

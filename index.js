@@ -437,7 +437,7 @@ function emailResetTemplate(usuario, link) {
 }
 
 mongoose.connect(MONGODB_URI, config.MONGODB_OPTIONS)
-.then(() => logger.info('MONGODB CONECTADO EXITOSAMENTE'))
+.then(() => { logger.info('MONGODB CONECTADO EXITOSAMENTE'); require('./modulos/upcoins').migrar(mongoose.model('Usuario'), logger).catch(e => logger.error(`[upcoins] migración: ${e.message}`)); })
 .catch(err => {
     logger.error(`ERROR CONEXIÓN MONGODB: ${err.message}`);
     process.exit(1);
@@ -522,6 +522,9 @@ JuegoSchema.post(['save', 'insertMany', 'updateOne', 'updateMany', 'findOneAndUp
     memCache.invalidate('items:*');
 });
 JuegoSchema.add({ imageOrigen: { type: String, default: '' }, portadaMigrada: { type: Boolean, default: false } });
+// Visibilidad: impulsoHasta = el autor tiene Premium (sube en el inicio); destacadoHasta = lo
+// destacó pagando UpCoins (aparece arriba marcado como "Promocionado")
+JuegoSchema.add({ impulsoHasta: { type: Date, default: null }, destacadoHasta: { type: Date, default: null } });
 const Juego = mongoose.model('Juego', JuegoSchema);
 
 // ── Caché de lecturas públicas calientes ──
@@ -548,6 +551,7 @@ const UsuarioSchema = new mongoose.Schema({
     saldo:      { type: Number, default: 0, min: 0 },
     // Live: monedas compradas (para regalar) y ganancias de regalos aún en retención
     monedas:       { type: Number, default: 0, min: 0 },
+    ucv:           { type: Number, default: 2 },   // versión de UpCoins de `monedas` (2 = 1 UC vale US$0,02)
     saldoRetenido: { type: Number, default: 0, min: 0 },
     liveKey:       { type: String, default: null, select: false },   // clave de transmisión (OBS)
     sesionVer:     { type: Number, default: 0 },
@@ -557,6 +561,9 @@ const UsuarioSchema = new mongoose.Schema({
     planHasta:        { type: Date, default: null },
     planRecordatorio: { type: Boolean, default: true },   // avisar 2 días antes de que venza
     paseFondoUsd:     { type: Number, default: 0 },
+    // NEXUS IA: mensajes gratis usados hoy y créditos comprados con UpCoins
+    iaUso:            { dia: { type: String, default: '' }, usados: { type: Number, default: 0 } },
+    iaCreditos:       { type: Number, default: 0, min: 0 },
     // Dónde recibe sus retiros (rutas/cobros.js). Los datos van cifrados; resumen = versión enmascarada
     cobro: { tipo: { type: String, default: '' }, cifrado: { type: String, default: '' }, resumen: { type: String, default: '' }, actualizado: Date, esperaHasta: Date },       // fondo para creadores de sus pases (≤ 25 % de lo pagado)
     planAvisadoHasta: { type: Date, default: null },      // vencimiento ya avisado (un aviso por periodo)   // +1 al cambiar/restablecer la contraseña → cierra las demás sesiones
@@ -1047,7 +1054,7 @@ app.post('/economia/solicitar-pago', verificarToken, async (req, res) => {
         if (!usuario) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
         if (!usuario.isVerificado || usuario.verificadoNivel < 1) return res.status(403).json({ success: false, error: "Debes ser verificado (nivel 1+) para solicitar pagos" });
         if (!usuario.emailVerificado) return res.status(403).json({ success: false, error: "Verifica tu email antes de retirar dinero (revisa tu correo o pide uno nuevo desde el aviso de la biblioteca)", code: 'EMAIL_NO_VERIFICADO' });
-        if (usuario.saldo < MIN_WITHDRAWAL) return res.status(400).json({ success: false, error: `Saldo mínimo para retiro: $${MIN_WITHDRAWAL} USD. Tu saldo: $${usuario.saldo.toFixed(2)}` });
+        if (usuario.saldo < MIN_WITHDRAWAL) return res.status(400).json({ success: false, error: `Necesitas al menos ${Math.round(MIN_WITHDRAWAL / 0.02)} UpCoins ganados (US$${MIN_WITHDRAWAL}) para retirar. Tienes ${Math.floor(usuario.saldo / 0.02)} UC retirables.` });
         const metodo = cobros.metodoDe(usuario);
         if (!metodo) return res.status(400).json({ success: false, error: "Configura primero dónde quieres recibir tu dinero (PayPal, Nequi, Daviplata, banco o Mercado Pago)" });
         const espera = cobros.esperaHasta(usuario);
@@ -1084,7 +1091,7 @@ app.get('/economia/mi-saldo', verificarToken, async (req, res) => {
         ]);
         const puedeRetirar = usuario.saldo >= MIN_WITHDRAWAL && usuario.isVerificado && usuario.verificadoNivel >= 1 && !!cobros.metodoDe(usuario) && !cobros.esperaHasta(usuario) && (juegosElegibles > 0 || ingresosLive) && !usuario.solicitudPagoPendiente && !!usuario.emailVerificado;
 
-        res.json({ success: true, saldo: usuario.saldo, saldoRetenido: usuario.saldoRetenido || 0, monedas: usuario.monedas || 0, emailVerificado: !!usuario.emailVerificado, descargasTotales: usuario.descargasTotales, paypalEmail: usuario.paypalEmail || '', metodoCobro: (m => m ? { tipo: m.tipo, resumen: m.resumen } : null)(cobros.metodoDe(usuario)), esperaCobroHasta: cobros.esperaHasta(usuario), isVerificado: usuario.isVerificado, verificadoNivel: usuario.verificadoNivel, solicitudPagoPendiente: usuario.solicitudPagoPendiente, juegosElegibles, puedeRetirar, minRetiro: MIN_WITHDRAWAL, requisitos: { saldoMinimo: MIN_WITHDRAWAL, verificacionNecesaria: 1 } });
+        res.json({ success: true, saldo: usuario.saldo, saldoRetenido: usuario.saldoRetenido || 0, monedas: usuario.monedas || 0, emailVerificado: !!usuario.emailVerificado, descargasTotales: usuario.descargasTotales, paypalEmail: usuario.paypalEmail || '', metodoCobro: (m => m ? { tipo: m.tipo, resumen: m.resumen } : null)(cobros.metodoDe(usuario)), upcoins: require('./modulos/upcoins').saldoUC(usuario), minRetiroUC: Math.round(MIN_WITHDRAWAL / require('./modulos/live').MONEDA_USD), esperaCobroHasta: cobros.esperaHasta(usuario), isVerificado: usuario.isVerificado, verificadoNivel: usuario.verificadoNivel, solicitudPagoPendiente: usuario.solicitudPagoPendiente, juegosElegibles, puedeRetirar, minRetiro: MIN_WITHDRAWAL, requisitos: { saldoMinimo: MIN_WITHDRAWAL, verificacionNecesaria: 1 } });
     } catch (error) {
         logger.error(`Error en mi-saldo: ${error.message}`);
         res.status(500).json({ success: false, error: "Error al obtener saldo" });
@@ -1858,7 +1865,18 @@ app.get("/items", async (req, res) => {
         const catalogo = await cacheado(`items:lista:${categoria}`, 30, async () => {
             const filtro = { status: 'aprobado', linkStatus: { $in: ['online', 'revision'] } };
             if (categoria && categoria !== 'Todo') filtro.category = categoria;
-            const items = await Juego.find(filtro).select('_id title description image images link category usuario reportes linkStatus descargasEfectivas likesCount extraData videoType featuredItemId scoreRecomendacion serie createdAt').sort({ scoreRecomendacion: -1, createdAt: -1 }).limit(100).lean();
+            // Orden: destacadas con UpCoins primero (marcadas "Promocionado"), luego el score,
+            // con +50 % para los autores Premium (más visibilidad mientras dure su plan)
+            const items = await Juego.aggregate([
+                { $match: filtro },
+                { $addFields: {
+                    promocionado: { $gt: [{ $ifNull: ['$destacadoHasta', new Date(0)] }, '$$NOW'] },
+                    _orden: { $multiply: [{ $ifNull: ['$scoreRecomendacion', 0] }, { $cond: [{ $gt: [{ $ifNull: ['$impulsoHasta', new Date(0)] }, '$$NOW'] }, 1.5, 1] }] },
+                } },
+                { $sort: { promocionado: -1, _orden: -1, createdAt: -1 } },
+                { $limit: 100 },
+                { $project: { _id: 1, title: 1, description: 1, image: 1, images: 1, link: 1, category: 1, usuario: 1, reportes: 1, linkStatus: 1, descargasEfectivas: 1, likesCount: 1, extraData: 1, videoType: 1, featuredItemId: 1, scoreRecomendacion: 1, serie: 1, createdAt: 1, promocionado: 1 } },
+            ]);
             // Series por partes: solo la primera parte aparece en el catálogo
             return series.colapsar(items, Juego, { status: 'aprobado', linkStatus: { $in: ['online', 'revision'] } });
         });
@@ -1878,7 +1896,7 @@ app.get("/items/user/:usuario", async (req, res) => {
         if (t && t.length > 20) { try { yo = jwt.verify(t, JWT_SECRET).usuario; } catch (_) {} }
         const propio = yo && yo === String(req.params.usuario).toLowerCase();
         const filtro = propio ? { usuario: req.params.usuario, status: { $ne: 'privado' } } : { usuario: req.params.usuario, status: 'aprobado' };
-        const aportes = await Juego.find(filtro).select('_id title description image images link category usuario reportes reportesDesglose linkStatus descargasEfectivas likesCount status createdAt scoreRecomendacion extraData videoType featuredItemId serie motivoRechazo nexusMentor').sort({ scoreRecomendacion: -1, createdAt: -1 }).lean();
+        const aportes = await Juego.find(filtro).select('_id title description image images link category usuario reportes reportesDesglose linkStatus descargasEfectivas likesCount status createdAt scoreRecomendacion extraData videoType featuredItemId serie motivoRechazo nexusMentor destacadoHasta').sort({ scoreRecomendacion: -1, createdAt: -1 }).lean();
         res.json(propio ? aportes : await series.colapsar(aportes, Juego, { usuario: req.params.usuario, status: 'aprobado' }));
     } catch (error) {
         res.status(500).json([]);
@@ -1970,6 +1988,9 @@ app.post("/items/add", [verificarToken, body('title').notEmpty().trim().isLength
         if (datos.tags !== undefined && !Array.isArray(datos.tags)) delete datos.tags;
         datos.serie = series.serieDe(datos.title, req.usuario);
         const nuevoJuego = new Juego({ ...datos, usuario: req.usuario, status: "aprobado", linkStatus: "revision" });
+        // Premium: sus publicaciones nuevas también tienen más visibilidad mientras dure
+        const premiumHasta = (await Usuario.findOne({ usuario: req.usuario }).select('planHasta').lean())?.planHasta;
+        if (premiumHasta && new Date(premiumHasta) > new Date()) nuevoJuego.impulsoHasta = premiumHasta;
 
         // ── Detección automática de juego conocido ──────────────────
         const deteccion = gameDetector.detectGame(nuevoJuego.title, nuevoJuego.description);
@@ -3638,7 +3659,7 @@ const mercadoPago = require('./modulos/mercadopago').crear();
 const accesoDirecto = require('./rutas/accesoDirecto').registrar(app, { verificarToken, Juego, Usuario, LiveTx: live.LiveTx, paypal: live.paypal, mp: mercadoPago, logger });
 // Tienda: pases sin anuncios, "Mi plan", tarjeta con Mercado Pago, PayPal, saldo y monedas
 const tienda = require('./rutas/tienda').registrar(app, {
-    verificarToken, Usuario, LiveTx: live.LiveTx, Notificacion, paypal: live.paypal, mp: mercadoPago,
+    verificarToken, Usuario, Juego, LiveTx: live.LiveTx, Notificacion, paypal: live.paypal, mp: mercadoPago,
     acceso: accesoDirecto, logger, apiUrlSelf: API_URL_SELF, olvidarPerfil: live.olvidarPerfil,
 });
 live.alRevertir((captureId, sancionar) => tienda.revertir(captureId, 'PayPal', sancionar));

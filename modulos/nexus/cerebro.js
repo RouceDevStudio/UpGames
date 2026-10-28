@@ -76,7 +76,8 @@ async function responder(p, deps) {
     let texto = '', fuente = null;
     if (llm.disponible()) {
         for (let ronda = 0; ronda <= MAX_RONDAS; ronda++) {
-            const r = await llm.completar({ mensajes, herramientas: ronda < MAX_RONDAS ? H.DEFINICIONES : undefined, maxTokens: 700, temperatura: 0.5 });
+            // Premium usa el modelo más potente y respuestas más largas; gratis, el modelo rápido
+            const r = await llm.completar({ mensajes, herramientas: ronda < MAX_RONDAS ? H.DEFINICIONES : undefined, maxTokens: p.premium ? 900 : 550, temperatura: 0.5, rapido: !p.premium });
             if (!r) break;
             fuente = `Nexus · ${r.modelo}`;
             const llamadas = r.mensaje.tool_calls || [];

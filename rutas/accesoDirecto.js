@@ -13,10 +13,11 @@
 
 const mongoose = require('mongoose');
 const L = require('../modulos/live');
+const UC = require('../modulos/upcoins');
 
 const num = (v, d) => { const n = parseFloat(v); return Number.isFinite(n) ? n : d; };
 const PRECIO_USD     = 1.00;
-const PRECIO_MONEDAS = Math.round(PRECIO_USD / L.MONEDA_USD);   // 100
+const PRECIO_MONEDAS = Math.round(PRECIO_USD / L.MONEDA_USD);   // 50 UpCoins
 const REPARTO        = require('../modulos/reparto');
 const PARTE_CREADOR  = REPARTO.ACCESO_CREADOR;   // 25 %
 // Con un pase activo, la primera vez que un usuario abre una publicación paga esto a su
@@ -77,7 +78,7 @@ function registrar(app, { verificarToken, Juego, Usuario, LiveTx, paypal, mp, lo
             const pase = u?.planHasta && new Date(u.planHasta) > new Date() ? { plan: u.planId, hasta: u.planHasta } : null;
             ok(res, {
                 desbloqueado: !!acc || propio, link: acc || propio ? juego.link : undefined,
-                precioUsd: PRECIO_USD, precioMonedas: PRECIO_MONEDAS, monedas: u?.monedas || 0,
+                precioUsd: PRECIO_USD, precioMonedas: PRECIO_MONEDAS, monedas: Math.floor(UC.saldoUC(u || {}).total),
                 saldo: u?.solicitudPagoPendiente ? 0 : (u?.saldo || 0),
                 pase, pagosActivos: tarjetaActiva(),
             });
@@ -92,26 +93,24 @@ function registrar(app, { verificarToken, Juego, Usuario, LiveTx, paypal, mp, lo
     async function pagarConMonedas(usuario, juego) {
         const juegoId = String(juego._id);
         if (juego.usuario === usuario || await Acceso.exists({ usuario, juegoId })) return [200, { link: juego.link, yaDesbloqueado: true }];
-        const pagador = await Usuario.findOneAndUpdate(
-            { usuario, monedas: { $gte: PRECIO_MONEDAS }, listaNegraAdmin: { $ne: true } },
-            { $inc: { monedas: -PRECIO_MONEDAS } }, { new: true }).select('monedas').lean();
-        if (!pagador) {
-            const u = await Usuario.findOne({ usuario }).select('monedas listaNegraAdmin').lean();
-            if (u?.listaNegraAdmin) return [403, { error: 'Tu cuenta no puede hacer pagos' }];
-            return [402, { error: 'No tienes monedas suficientes', monedas: u?.monedas || 0 }];
+        const cobro = await UC.cobrar(Usuario, usuario, PRECIO_MONEDAS);   // comprados primero, luego ganados
+        if (!cobro) {
+            const motivo = await UC.motivoSinSaldo(Usuario, usuario, PRECIO_MONEDAS);
+            return [/cuenta no puede/.test(motivo) ? 403 : 402, { error: motivo }];
         }
+        const totalUC = async () => UC.saldoUC(await Usuario.findOne({ usuario }).select('monedas saldo solicitudPagoPendiente').lean() || {}).total;
         let tx;
         try {
             tx = await LiveTx.create(datosTx(juego, usuario, { ref: `acceso:${usuario}:${juegoId}` }));
         } catch (e) {
-            await Usuario.updateOne({ usuario }, { $inc: { monedas: PRECIO_MONEDAS } });   // ya estaba pagado: devolver
-            if (e.code === 11000) { await desbloquear(usuario, juegoId, 'monedas'); return [200, { link: juego.link, yaDesbloqueado: true, monedas: pagador.monedas + PRECIO_MONEDAS }]; }
+            await UC.devolver(Usuario, usuario, cobro);   // ya estaba pagado: devolver
+            if (e.code === 11000) { await desbloquear(usuario, juegoId, 'monedas'); return [200, { link: juego.link, yaDesbloqueado: true, monedas: await totalUC() }]; }
             throw e;
         }
         await desbloquear(usuario, juegoId, 'monedas');
         await abonarCreador(juego, tx);
         logger.info(`[acceso] @${usuario} desbloqueó ${juegoId} con monedas`);
-        return [200, { link: juego.link, monedas: pagador.monedas }];
+        return [200, { link: juego.link, monedas: await totalUC() }];
     }
     app.post('/acceso-directo/:id/monedas', verificarToken, async (req, res) => {
         try {
@@ -222,7 +221,7 @@ function registrar(app, { verificarToken, Juego, Usuario, LiveTx, paypal, mp, lo
         } catch (e) { logger.error(`[acceso] pase: ${e.message}`); err(res, 500, 'No se pudo abrir el enlace'); }
     });
 
-    logger.info(`[acceso] Acceso directo activo · US$${PRECIO_USD} o ${PRECIO_MONEDAS} monedas · creador ${Math.round(PARTE_CREADOR * 100)}% · pase: US$${PASE_CREADOR_USD}/descarga al creador (máx. ${PASE_TOPE_DIA}/usuario/día)`);
+    logger.info(`[acceso] Acceso directo activo · US$${PRECIO_USD} o ${PRECIO_MONEDAS} UpCoins · creador ${Math.round(PARTE_CREADOR * 100)}% · pase: US$${PASE_CREADOR_USD}/descarga al creador (máx. ${PASE_TOPE_DIA}/usuario/día)`);
     return { Acceso, PRECIO_USD, PRECIO_MONEDAS, PARTE_CREADOR, entregarPagado, cargarJuego };
 }
 

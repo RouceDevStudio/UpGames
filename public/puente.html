@@ -55,7 +55,7 @@
         .serie-next { display: block; text-align: center; background: #5AC8FA; color: #001018; font-weight: 800; padding: 12px; border-radius: 12px; text-decoration: none; }
         .serie-hint { font-size: .72rem; color: #777; margin-top: 8px; text-align: center; }
         .serie-done { font-size: .85rem; color: #39FF14; text-align: center; }
-        /* ── ACCESO DIRECTO (US$1 / 100 monedas) ── */
+        /* ── ACCESO DIRECTO (US$1 / 50 UpCoins) ── */
         .ad-pass { margin: 16px 0 6px; padding: 16px; border-radius: 16px; text-align: left; background: linear-gradient(135deg, rgba(255,204,77,.14), rgba(57,255,20,.07)); border: 1.5px solid rgba(255,204,77,.55); box-shadow: 0 10px 30px -14px rgba(255,204,77,.55); }
         .ad-pass-h { display: flex; align-items: center; gap: 12px; }
         .ad-pass-ic { width: 44px; height: 44px; border-radius: 12px; background: #ffcc4d; color: #241a00; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; flex-shrink: 0; }
@@ -130,7 +130,7 @@
         <div id="debug-info" class="debug-info" style="display:none;"></div>
     </div>
 
-    <script src="./upgames-pagos.js?v=20261028b" defer></script>
+    <script src="./upgames-pagos.js?v=20261028c" defer></script>
     <script>
         // ⭐ CONFIGURACIÓN
         const API_URL   = "https://upgames-production.up.railway.app";
@@ -507,7 +507,7 @@
             timerEl.style.display = 'block';
         }
         
-        // ⚡ ACCESO DIRECTO — US$1 (tarjeta/PayPal) o 100 monedas: sin espera ni anuncios.
+        // ⚡ ACCESO DIRECTO — US$1 (tarjeta/PayPal) o 50 UpCoins: sin espera ni anuncios.
         // Se paga una vez por publicación; el creador recibe una parte.
         (function accesoDirecto() {
             const box = document.getElementById('ad-pass');
@@ -548,16 +548,15 @@
                 if (est.desbloqueado && est.link) return listo(est.link, '✅ Ya tienes acceso directo a esta publicación');
                 // Pase activo: enlace directo sin esperas (el creador igual cobra su parte)
                 if (est.pase) {
-                    box.innerHTML = cabecera() + '<div class="ad-pass-btns"><button class="ad-pass-btn card" disabled>Abriendo con tu Pase…</button></div>';
-                    try { const d = await api(`/acceso-directo/${encodeURIComponent(juegoId)}/pase`, { method: 'POST' }); return listo(d.link, `✅ Tu Pase está activo hasta el ${new Date(est.pase.hasta).toLocaleDateString()}: enlace directo`); }
+                    box.innerHTML = cabecera() + '<div class="ad-pass-btns"><button class="ad-pass-btn card" disabled>Abriendo con tu Premium…</button></div>';
+                    try { const d = await api(`/acceso-directo/${encodeURIComponent(juegoId)}/pase`, { method: 'POST' }); return listo(d.link, `✅ Tu Premium está activo hasta el ${new Date(est.pase.hasta).toLocaleDateString()}: enlace directo`); }
                     catch (_) { /* si falla, ofrecer las demás opciones */ }
                 }
                 const conMonedas = est.monedas >= est.precioMonedas;
-                const conSaldo = est.saldo >= est.precioUsd;
-                const lnkPase = `<a class="ad-pass-btn coins" style="display:block;text-align:center;text-decoration:none" href="./biblioteca.html?plan=1">⭐ Pase sin anuncios desde US$1.99 + monedas de regalo</a>`;
+                const lnkPase = `<a class="ad-pass-btn coins" style="display:block;text-align:center;text-decoration:none" href="./biblioteca.html?plan=1">⭐ Premium: sin anuncios, NEXUS ilimitado y más · desde US$1.99</a>`;
                 box.innerHTML = cabecera() + `<div class="ad-pass-btns">
-                    ${est.pagosActivos || conSaldo ? '<button class="ad-pass-btn card" id="ad-pay-card">💳 Pagar US$1 con tarjeta o saldo</button>' : ''}
-                    ${conMonedas ? `<button class="ad-pass-btn coins" id="ad-pay-coins">🪙 Usar ${est.precioMonedas} monedas (tienes ${est.monedas})</button>` : ''}
+                    ${est.pagosActivos ? '<button class="ad-pass-btn card" id="ad-pay-card">💳 Pagar US$1 con tarjeta o PayPal</button>' : ''}
+                    ${conMonedas ? `<button class="ad-pass-btn coins" id="ad-pay-coins">🪙 Usar ${est.precioMonedas} UpCoins (tienes ${est.monedas})</button>` : ''}
                     <div id="ad-pay-area"></div>${lnkPase}</div>` + nota;
                 if (document.getElementById('ad-pay-card')) document.getElementById('ad-pay-card').onclick = () => {
                     document.getElementById('ad-pay-card').style.display = 'none';
@@ -572,8 +571,8 @@
                 const bc = document.getElementById('ad-pay-coins');
                 if (bc) bc.onclick = async () => {
                     bc.disabled = true; bc.innerText = 'Procesando…';
-                    try { const d = await api(`/acceso-directo/${encodeURIComponent(juegoId)}/monedas`, { method: 'POST' }); listo(d.link, '✅ Enlace desbloqueado con monedas'); }
-                    catch (e) { showError('❌ ' + e.message); bc.disabled = false; bc.innerText = `🪙 Usar ${est.precioMonedas} monedas`; }
+                    try { const d = await api(`/acceso-directo/${encodeURIComponent(juegoId)}/monedas`, { method: 'POST' }); listo(d.link, '✅ Enlace desbloqueado con UpCoins'); }
+                    catch (e) { showError('❌ ' + e.message); bc.disabled = false; bc.innerText = `🪙 Usar ${est.precioMonedas} UpCoins`; }
                 };
             }).catch(e => {
                 if (e.status === 404) { box.style.display = 'none'; return; }   // publicación no disponible: el flujo normal informa
@@ -744,7 +743,7 @@ const STEPS = [
     },
     {
         ttl: "⏱️ El Contador de 30 Segundos",
-        bod: "Espera a que el contador llegue a 0: el sistema valida el enlace y aparece el botón de descarga. <strong>¿Prisa?</strong> Con el <strong>acceso directo</strong> (US$1 con tarjeta o 100 monedas) te saltas la espera y los anuncios, y la publicación queda desbloqueada en tu cuenta."
+        bod: "Espera a que el contador llegue a 0: el sistema valida el enlace y aparece el botón de descarga. <strong>¿Prisa?</strong> Con el <strong>acceso directo</strong> (US$1 con tarjeta o 50 UpCoins) te saltas la espera y los anuncios, y la publicación queda desbloqueada en tu cuenta."
     },
     {
         ttl: "🚀 El Botón \"Obtener Enlace\"",

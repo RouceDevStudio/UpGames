@@ -28,8 +28,8 @@
 <link rel="dns-prefetch" href="https://upgames-production.up.railway.app">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<link rel="stylesheet" href="biblioteca.css?v=20261028b">
-<link rel="stylesheet" href="upgames-glass.css?v=20261028b">
+<link rel="stylesheet" href="biblioteca.css?v=20261028c">
+<link rel="stylesheet" href="upgames-glass.css?v=20261028c">
 <!-- Widget de subida: solo se usa al publicar → diferido (antes bloqueaba el primer render) -->
 <script src="https://upload-widget.cloudinary.com/global/all.js" defer></script>
 
@@ -604,12 +604,13 @@
   <div class="eco-hero-card">
     <div class="eco-hero-glow"></div>
     <div class="eco-hero-left">
-      <div class="eco-hero-eyebrow"><ion-icon name="wallet-outline"></ion-icon> SALDO DISPONIBLE</div>
-      <div class="eco-hero-saldo" id="pf-saldo-display" data-val="0">$0.0000</div>
-      <div class="eco-hero-currency">USD &nbsp;·&nbsp; Descargas, lives y accesos directos</div>
-      <div class="eco-hero-extra" id="eco-hero-extra" hidden>
-        <span title="Ganancias de regalos y accesos directos: pasan al saldo tras el período de seguridad"><ion-icon name="lock-closed-outline"></ion-icon> <b id="eco-retenido">$0.00</b> en retención</span>
-        <span title="Monedas para regalos y acceso directo"><ion-icon name="ellipse"></ion-icon> <b id="eco-monedas">0</b> monedas</span>
+      <div class="eco-hero-eyebrow"><ion-icon name="wallet-outline"></ion-icon> MIS UPCOINS</div>
+      <div class="eco-hero-saldo" id="pf-saldo-display" data-val="0">🪙 0</div>
+      <div class="eco-hero-currency">1 UpCoin = US$0,02 &nbsp;·&nbsp; úsalos en lives, NEXUS, Premium o retíralos</div>
+      <div class="eco-hero-extra" id="eco-hero-extra">
+        <span title="UpCoins ganados como creador: se pueden retirar como dinero real"><ion-icon name="cash-outline"></ion-icon> <b id="eco-retirables">0</b> retirables <small id="eco-retirables-usd"></small></span>
+        <span title="UpCoins comprados o de regalo: se usan dentro de UpGames"><ion-icon name="ellipse"></ion-icon> <b id="eco-monedas">0</b> comprados</span>
+        <span title="Ganancias de regalos, accesos y Premium: se liberan tras 7 días"><ion-icon name="lock-closed-outline"></ion-icon> <b id="eco-retenido">0</b> en retención</span>
       </div>
       <div id="eco-trend-badge" class="eco-trend-chip eco-trend-up">
         <ion-icon name="trending-up"></ion-icon>
@@ -808,56 +809,59 @@
     <!-- Mi plan: pase sin anuncios (estado, renovar, cambiar, recordatorio, historial) -->
     <div class="pf-eco-divider">
       <ion-icon name="star"></ion-icon>
-      <span>MI PLAN SIN ANUNCIOS</span>
+      <span>MI PREMIUM</span>
     </div>
     <div class="eco-plan" id="eco-plan"><div class="eco-spin"><ion-icon name="sync-outline"></ion-icon></div></div>
 
-    <!-- Pagos con tarjeta: comprar monedas (regalos en lives y acceso directo a enlaces).
+    <!-- Conseguir UpCoins con tarjeta o PayPal (regalos, NEXUS, Premium, accesos, destacar).
          El formulario de la tarjeta lo dibuja PayPal: UpGames nunca recibe esos datos. -->
     <div class="pf-eco-divider">
       <ion-icon name="card"></ion-icon>
-      <span>PAGOS CON TARJETA</span>
+      <span>CONSEGUIR UPCOINS</span>
     </div>
     <div class="eco-pay-hero">
       <span class="eco-pay-badge">NUEVO</span>
       <div class="eco-pay-head">
         <div class="eco-pay-ic">💳</div>
         <div>
-          <b>Paga con tarjeta de crédito o débito</b>
+          <b>Recarga UpCoins con tarjeta o PayPal</b>
           <small>Visa, Mastercard, Amex o débito · Mercado Pago o PayPal</small>
         </div>
       </div>
       <ul class="eco-pay-uses">
-        <li>🪙 <b>Monedas</b> para enviar regalos en los <a href="./live.html">lives</a></li>
-        <li>⚡ <b>Acceso directo</b> a enlaces por US$1: sin esperas ni anuncios</li>
+        <li>🎁 <b>Regalos</b> en los <a href="./live.html">lives</a></li>
+        <li>🧠 <b>Más mensajes de NEXUS IA</b> cuando se acaben los gratis</li>
+        <li>⭐ <b>Premium</b> y ⚡ <b>accesos directos</b> sin anuncios</li>
+        <li>🚀 <b>Destacar tus publicaciones</b> en el inicio</li>
       </ul>
       <div id="eco-tienda">
-        <button type="button" class="eco-pay-open" onclick="ecoAbrirTienda()"><ion-icon name="card-outline"></ion-icon> Comprar monedas con tarjeta</button>
+        <button type="button" class="eco-pay-open" onclick="ecoAbrirTienda()"><ion-icon name="card-outline"></ion-icon> Conseguir UpCoins</button>
       </div>
       <p class="eco-pay-safe">🔒 Pago cifrado procesado por Mercado Pago o PayPal. Nunca vemos ni guardamos los datos de tu tarjeta.</p>
     </div>
 
     <!-- Request payment -->
     <button class="pf-solicitar-btn" id="pf-btn-solicitar-pago" disabled>
-      SOLICITAR PAGO (Mínimo $10 USD)
+      RETIRAR MIS UPCOINS (mín. 500 UC = US$10)
     </button>
     <div class="pf-eco-pending" id="pf-solicitud-pendiente" style="display:none">
       <ion-icon name="checkmark-circle"></ion-icon>
-      <span>Tienes una solicitud de pago pendiente de revisión</span>
+      <span>Tienes un retiro pendiente de revisión</span>
     </div>
     <div class="pf-eco-info">
-      <strong style="color:var(--g)">💡 Requisitos para cobrar:</strong><br>
-      • Saldo mínimo: $10 USD<br>
+      <strong style="color:var(--g)">💡 Requisitos para retirar:</strong><br>
+      • Mínimo 500 UpCoins ganados (US$10). Los UpCoins comprados no se retiran<br>
       • Verificación nivel 1+<br>
       • Al menos 1 descarga en tus aportes, o ingresos de lives / accesos directos ya liberados<br>
       • Método de cobro configurado: PayPal, Nequi, Daviplata, cuenta bancaria o Mercado Pago<br>
       • Email de tu cuenta verificado<br>
-      <strong style="color:var(--g)">💰 Tus fuentes de ingreso:</strong><br>
-      • Descargas por la página puente (CPM)<br>
+      <strong style="color:var(--g)">💰 Cómo ganas UpCoins:</strong><br>
+      • 50 UC por cada 1.000 descargas por la página puente<br>
       • 25% de cada regalo en tus <a href="./live.html?estudio=1" style="color:var(--cy)">lives</a><br>
-      • 25% de cada acceso directo (US$1) a tus enlaces<br>
-      • US$0,01 la primera vez que alguien con Pase abre tu publicación<br>
-      • Regalos y accesos quedan 7 días en retención antes de ser retirables
+      • 12,5 UC por cada acceso directo (50 UC) a tus enlaces<br>
+      • 0,5 UC la primera vez que alguien Premium abre tu publicación<br>
+      • Regalos, accesos y Premium quedan 7 días en retención antes de ser retirables<br>
+      <strong style="color:var(--g)">🪙 En qué gastarlos:</strong> regalos en lives, NEXUS IA, Premium, accesos directos y destacar tus publicaciones.
     </div>
   </div><!-- /.eco-payout-panel -->
 
@@ -1545,7 +1549,7 @@
           📚 <b>Biblioteca</b> de juegos, ROMs, mods, apps y software indexada por la comunidad ·
           ▶ <b>Videos</b> de creadores · 🔴 <b>Streaming</b> de gameplay con chat y regalos ·
           👥 <b>Red social</b> con perfiles, seguidores y chat · 💰 <b>Monetización real</b> por descargas, regalos y accesos ·
-          🧠 <b>NEXUS IA</b>, tu asistente · ⭐ <b>Pases</b> sin anuncios.<br>
+          🧠 <b>NEXUS IA</b>, tu asistente · 🪙 <b>UpCoins</b>, la moneda de todo el ecosistema · ⭐ <b>Premium</b> sin anuncios y con IA ilimitada.<br>
           <strong style="color:var(--g)">Mira y descarga gratis, incluso sin cuenta. Crea una cuenta para publicar, interactuar y ganar.</strong>
         </p>
 
@@ -1607,12 +1611,12 @@
         </p>
         <div class="ob-cpm-card">
           <div class="ob-cpm-row">
-            <span class="ob-cpm-label">CPM — por cada 1,000 descargas verificadas</span>
-            <span class="ob-cpm-val">$1.00 USD</span>
+            <span class="ob-cpm-label">Por cada 1.000 descargas verificadas</span>
+            <span class="ob-cpm-val">🪙 50 UpCoins</span>
           </div>
           <div class="ob-cpm-row ob-cpm-row-sub">
-            <span class="ob-cpm-label">Retiro mínimo · PayPal, Nequi, Daviplata, banco o Mercado Pago</span>
-            <span class="ob-cpm-val-sm">$10 USD</span>
+            <span class="ob-cpm-label">Retira tus UpCoins ganados · PayPal, Nequi, Daviplata, banco o Mercado Pago</span>
+            <span class="ob-cpm-val-sm">desde 500 UC (US$10)</span>
           </div>
           <div class="ob-cpm-row ob-cpm-row-sub">
             <span class="ob-cpm-label">Regalos en tus lives 🔴</span>
@@ -1623,15 +1627,15 @@
             <span class="ob-cpm-val-sm">25% para ti</span>
           </div>
           <div class="ob-cpm-row ob-cpm-row-sub">
-            <span class="ob-cpm-label">Cuando alguien con Pase abre tu publicación ⭐</span>
-            <span class="ob-cpm-val-sm">US$0,01</span>
+            <span class="ob-cpm-label">Cuando alguien Premium abre tu publicación ⭐</span>
+            <span class="ob-cpm-val-sm">0,5 UC</span>
           </div>
           <div class="ob-cpm-row ob-cpm-row-sub">
             <span class="ob-cpm-label">Empiezas a ganar desde</span>
             <span class="ob-cpm-val-sm">La primera descarga</span>
           </div>
         </div>
-        <p class="ob-note">UpGames conserva el resto (mínimo 70%) para pagar pasarelas, servidores y operación · Para retirar necesitas nivel Bronce (100 seguidores) y email verificado · Compra monedas o un Pase sin anuncios con tarjeta, PayPal o tu saldo 💳</p>
+        <p class="ob-note">UpGames conserva el resto (mínimo 70%) para pagar pasarelas, servidores y operación · Para retirar necesitas nivel Bronce (100 seguidores) y email verificado · 1 UpCoin = US$0,02: gasta tus UpCoins en regalos, NEXUS IA, Premium o para destacar tus publicaciones 🪙</p>
       </div>
     </div>
 
@@ -1784,8 +1788,8 @@
             <a href="https://apps.derechodeautor.gov.co/Certificados-API/api/v1/dnda/certificates/registrations/filing/QzY3NDJGQkVFQThCRUY3QkQ3MTVGMTA0QUIzN0NGMkU" target="_blank" rel="noopener">Ver certificado</a></div>
         </div>
         <div class="ob-legal-link" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-          <a href="./terminos_condiciones.html" target="_blank" style="color:inherit">Términos v5.3</a> ·
-          <a href="./politica-privacidad.html" target="_blank" style="color:inherit">Privacidad v3.3</a> ·
+          <a href="./terminos_condiciones.html" target="_blank" style="color:inherit">Términos v6.0</a> ·
+          <a href="./politica-privacidad.html" target="_blank" style="color:inherit">Privacidad v3.4</a> ·
           <a href="./terminos_condiciones.html#pagos" target="_blank" style="color:inherit">Pagos</a> ·
           <a href="./terminos_condiciones.html#ia" target="_blank" style="color:inherit">IA</a> ·
           <a href="./terminos_condiciones.html#derechos-autor" target="_blank" style="color:inherit">Derechos de autor</a>
@@ -1923,6 +1927,7 @@
   <div class="nx-body">
     <div id="nxMsgs" class="nx-msgs" aria-live="polite"></div>
   </div>
+  <div id="nxCuota" class="nx-cuota" hidden></div>
   <form id="nxForm" class="nx-form" autocomplete="off">
     <textarea id="nxInput" rows="1" maxlength="1500" placeholder="Pregúntale a Nexus…" aria-label="Mensaje para Nexus"></textarea>
     <button type="submit" id="nxSend" aria-label="Enviar">
@@ -1973,9 +1978,9 @@
 <!-- ION ICONS -->
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
-<script src="script.js?v=20261028b"></script>
-<script src="upgames-autoinfo.js?v=20261028b"></script>
-<script src="upgames-motion.js?v=20261028b"></script>
+<script src="script.js?v=20261028c"></script>
+<script src="upgames-autoinfo.js?v=20261028c"></script>
+<script src="upgames-motion.js?v=20261028c"></script>
 
 <!-- ══════════════════════════════════════
   EXTENSIÓN DE PERFIL: Nombre / Email / Contraseña / Links

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0A0B0F">
-<title>Política de Privacidad v3.3 | UpGames</title>
+<title>Política de Privacidad v3.4 | UpGames</title>
 <meta name="description" content="Cómo UpGames recopila, usa y protege tus datos. Cumple Ley 1581 de 2012 (Colombia), GDPR y CCPA. Incluye NEXUS IA y reconocimiento automático de títulos.">
 <link rel="icon" type="image/png" sizes="96x96" href="./icons/icon-96.png?v=2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -31,7 +31,7 @@
     <p>Recopilamos solo los datos necesarios para operar UpGames. <strong>Nunca vendemos tus datos personales.</strong>
       Esta política cumple la Ley 1581 de 2012 (Colombia), el GDPR (Unión Europea) y la CCPA (California).</p>
     <div class="lg-meta">
-      <span>Versión 3.3</span><span>Vigente desde octubre de 2026</span><span>Ley 1581 de 2012</span><span>GDPR · CCPA</span>
+      <span>Versión 3.4</span><span>Vigente desde octubre de 2026</span><span>Ley 1581 de 2012</span><span>GDPR · CCPA</span>
     </div>
   </section>
 
@@ -86,20 +86,22 @@
         al hacer tu transferencia (cada consulta queda registrada). Se comparten solo con la entidad que recibe el dinero (PayPal, Nequi,
         Daviplata, tu banco o Mercado Pago).</li>
       <li><strong>Retiros</strong> — monto, fecha, método (enmascarado), estado y número de comprobante de cada pago que te hacemos.</li>
+      <li><strong>UpCoins</strong> — cuántos tienes comprados, ganados y en retención, y el historial de en qué los gastaste (regalos, Premium,
+        accesos, mensajes de NEXUS, publicaciones destacadas).</li>
       <li><strong>Nivel de verificación</strong> — se asigna automáticamente según tus seguidores (100 / 500 / 1.000).</li>
       <li><strong>Tarjetas registradas antes de octubre de 2026</strong> — titular, alias, últimos 4 dígitos, vencimiento y marca. Ya no se registran
         tarjetas nuevas; puedes pedir el borrado de las existentes.</li>
     </ul>
-    <h3>2.2.1 Pagos con tarjeta, PayPal, saldo o monedas (pases, monedas y acceso directo)</h3>
+    <h3>2.2.1 Pagos con tarjeta, PayPal o UpCoins (Premium, UpCoins, accesos, NEXUS y destacar)</h3>
     <ul>
       <li><strong>Los datos de tu tarjeta los reciben y procesan exclusivamente Mercado Pago o PayPal</strong> en sus formularios seguros (PCI DSS).
         Para pagos con Mercado Pago, este puede pedirte tu documento de identidad y email, que se envían directamente a Mercado Pago.
         UpGames <strong>nunca</strong> ve, transmite ni guarda el número, la fecha de vencimiento ni el CVV.</li>
       <li>De cada pago guardamos: identificador de la orden y del cobro, monto, moneda, fecha, estado, qué compraste
-        (pase, paquete de monedas o enlace desbloqueado), las monedas de regalo incluidas y tu usuario.</li>
-      <li><strong>Pase</strong> — plan, fecha de vencimiento y si quieres el recordatorio antes de que venza. Mientras está vigente,
+        (Premium, paquete de UpCoins, enlace desbloqueado, mensajes de NEXUS o publicación destacada), los UpCoins de regalo incluidos y tu usuario.</li>
+      <li><strong>Premium</strong> — plan, fecha de vencimiento y si quieres el recordatorio antes de que venza. Mientras está vigente,
         se muestra una insignia ⭐ junto a tu nombre en el chat de los lives (visible para los demás espectadores).</li>
-      <li>Para no mostrar anuncios con un pase activo, la página puente guarda en tu navegador tu usuario y la fecha de vencimiento del pase.</li>
+      <li>Para no mostrar anuncios con Premium activo, la página puente guarda en tu navegador tu usuario y la fecha de vencimiento de Premium.</li>
       <li>Mercado Pago y PayPal nos notifican reembolsos y contracargos para anular lo comprado y prevenir fraude.</li>
     </ul>
     <h3>2.2.2 Transmisiones en vivo</h3>
@@ -110,7 +112,7 @@
         entre ellos</strong>. Si usas OBS, el video pasa por nuestro servidor de medios solo para retransmitirlo.</li>
       <li><strong>Chat del live</strong> — los últimos mensajes se mantienen solo en memoria mientras dura el directo; no se guardan en la base de datos.</li>
       <li><strong>Clave de transmisión</strong> — privada, solo visible para ti; puedes regenerarla cuando quieras.</li>
-      <li><strong>Regalos y monedas</strong> — saldo de monedas, regalos enviados y recibidos, y ganancias en retención.</li>
+      <li><strong>Regalos y UpCoins</strong> — UpCoins, regalos enviados y recibidos, y ganancias en retención.</li>
     </ul>
     <h3>2.3 Datos técnicos automáticos</h3>
     <ul>
@@ -140,6 +142,11 @@
 
   <section class="lg-sec lg-card" id="ia">
     <h2><span class="n">03</span>NEXUS IA y funciones automáticas</h2>
+    <h3>3.0 Uso de NEXUS</h3>
+    <ul>
+      <li>Para aplicar el límite diario guardamos cuántos mensajes gratis usaste <strong>hoy</strong> (se reinicia cada día) y cuántos mensajes extra
+        compraste con UpCoins. No se guarda el contenido para esto.</li>
+    </ul>
     <h3>3.1 Qué guarda NEXUS</h3>
     <div class="lg-scroll"><table class="lg-table">
       <tr><th>DATO</th><th>PARA QUÉ</th><th>DÓNDE / CUÁNTO</th></tr>
@@ -208,8 +215,9 @@
       <tr><td>Notificaciones</td><td>30 días</td><td>TTL automático</td></tr>
       <tr><td>Mensajes de chat</td><td>90 días</td><td>TTL automático</td></tr>
       <tr><td>Registros de actividad sospechosa</td><td>Mientras sean necesarios para la investigación</td><td>Módulo anti-fraude</td></tr>
-      <tr><td>Historial de pagos, compras de monedas, regalos y accesos directos</td><td>7 años</td><td>Obligación fiscal y prevención de fraude</td></tr>
-      <tr><td>Pase sin anuncios (plan, vencimiento, preferencias de recordatorio)</td><td>Mientras exista la cuenta</td><td>Eliminación a petición</td></tr>
+      <tr><td>Historial de pagos, compras de UpCoins, regalos, accesos directos y Premium</td><td>7 años</td><td>Obligación fiscal y prevención de fraude</td></tr>
+      <tr><td>Premium (plan, vencimiento, preferencias de recordatorio)</td><td>Mientras exista la cuenta</td><td>Eliminación a petición</td></tr>
+      <tr><td>Contador de mensajes de NEXUS</td><td>Solo el del día en curso</td><td>Se reinicia a diario</td></tr>
       <tr><td>Método de cobro (cifrado)</td><td>Mientras exista la cuenta o hasta que lo cambies</td><td>Se reemplaza al cambiarlo; se borra con la cuenta</td></tr>
       <tr><td>Datos de cobro usados en cada retiro (cifrados)</td><td>7 años</td><td>Soporte del pago ante reclamos y obligaciones fiscales</td></tr>
       <tr><td>Datos de cada live (sin video)</td><td>Mientras exista la cuenta</td><td>Eliminación a petición</td></tr>
@@ -253,12 +261,12 @@
       <li><strong>Caché de catálogo</strong> — carga instantánea (minutos).</li>
       <li><strong>Preferencias del estudio en vivo</strong> — título, categoría, calidad y fuente de tu último directo.</li>
       <li><strong>Preferencias</strong> — onboarding visto, favoritos locales y ajustes de vista.</li>
-      <li><strong>ug_pase_hasta</strong> — usuario y vencimiento de tu pase, para no cargar anuncios en la página puente.</li>
+      <li><strong>ug_pase_hasta</strong> — usuario y vencimiento de tu Premium, para no cargar anuncios en la página puente.</li>
       <li><strong>Service Worker</strong> — guarda archivos de la app para que funcione más rápido y sin conexión.</li>
     </ul>
     <h3>De terceros</h3>
     <p>Al pagar, Mercado Pago o PayPal cargan su propio script y pueden usar cookies para prevenir fraude.</p>
-    <p>Con un pase activo la página puente <strong>no carga</strong> las redes publicitarias.</p>
+    <p>Con Premium activo la página puente <strong>no carga</strong> las redes publicitarias.</p>
     <p>Las redes publicitarias de la página puente (highperformanceformat.com, effectivegatecpm.com y
       profitablecpmratenetwork.com) pueden instalar cookies propias. Puedes bloquearlas con extensiones como
       uBlock Origin o Privacy Badger sin afectar la funcionalidad principal.</p>
@@ -282,13 +290,13 @@
     <h2><span class="n">12</span>Cambios y contacto</h2>
     <ul>
       <li>Los cambios sustanciales se notificarán por email y con un aviso en la plataforma con al menos 15 días de antelación.</li>
-      <li>La versión y fecha de vigencia se actualizan en cada revisión (actualmente v3.3).</li>
+      <li>La versión y fecha de vigencia se actualizan en cada revisión (actualmente v3.4).</li>
       <li>Responsable de protección de datos: Jhonatan David Castro Galviz — <a href="mailto:mr.m0onster@protonmail.com">mr.m0onster@protonmail.com</a> — respuesta en 5–10 días hábiles.</li>
     </ul>
   </section>
 
   <footer class="lg-foot">
-    © 2026 UpGames · Política de Privacidad v3.3 · Vigente desde octubre de 2026<br><br>
+    © 2026 UpGames · Política de Privacidad v3.4 · Vigente desde octubre de 2026<br><br>
     <a href="./terminos_condiciones.html">Términos</a>·<a href="./politica-privacidad.html">Privacidad</a>·<a href="./biblioteca.html">Volver a UpGames</a>
   </footer>
 </main>
