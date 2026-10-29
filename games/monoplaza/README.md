@@ -11,6 +11,17 @@ Juego de carreras de monoplazas en 3D que corre en el navegador (WebGL con Three
 - **Multijugador**: duelos 1 vs 1 o salas abiertas de hasta 22 pilotos (Socket.IO, espacio `/apexgp` del backend). Salida sincronizada con el reloj del servidor, rivales interpolados y resultados validados en el servidor.
 - **Contrarreloj** con fantasma de tu mejor vuelta, delta en vivo y sectores de colores (morado, verde, amarillo).
 - **Práctica libre** para probar el reglaje.
+- **Campeonato**: tres Grandes Premios (Valle Andino, Puerto Real y Autódromo Veloz), cada uno con clasificación Q1-Q2-Q3 y carrera; puntos de pilotos y constructores (25-18-15-12-10-8-6-4-2-1, +1 por vuelta rápida). Con cuenta de UpGames, el podio da **15/10/5 UpCoins no retirables** (campo `monedas`, nunca `saldo`), validados en el servidor con una ficha firmada, duración mínima y máximo 3 premios al día.
+- **Rankings**: contrarreloj global y semanal por circuito con fantasma descargable del récord (premios semanales 15/10/5 UC no retirables al podio) y ELO del multijugador con partida rápida por nivel y región.
+
+## Circuitos, clima y reglas
+
+- Tres trazados (`js/track.js`, `CIRCUITOS`): técnico de montaña, urbano estrecho con guardarraíles, edificios y túnel, y rápido de rectas largas. El reglaje, los récords y el fantasma se guardan por circuito.
+- Clima seco, lluvia o variable (`js/clima.js`): el agua se acumula y se seca; neumáticos intermedios y de lluvia, agarre según el agua (`factorAgua`), spray, gotas, asfalto que brilla. La IA cambia de neumáticos con su propio criterio.
+- Banderas amarillas, coche de seguridad virtual (VSC) tras un abandono en pista, bandera azul, 3 avisos por límites de pista y +5 s desde el cuarto, +5 s por provocar un choque.
+- Radio del ingeniero y megafonía con la síntesis de voz del navegador, público y lluvia sintetizados. Sonidos grabados reales requerirían archivos de audio con licencia.
+- Repetición de los últimos 5 minutos con cámaras de TV, helicóptero y a bordo; modo foto (PNG). Telemetría de velocidad por vuelta contra la mejor.
+- Rendimiento: coches lejanos sin piezas pequeñas y sombras solo de los cercanos.
 
 ## Física (`js/physics/`)
 

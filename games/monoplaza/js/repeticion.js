@@ -82,10 +82,10 @@ export function crearProxy(c) {
   return {
     x: c.x, y: c.y, z: c.z, psi: c.psi, anguloVolante: 0, cabeceo: 0, balanceo: 0, rpm: 6000, marcha: 1, velocidad: 0,
     drsAbierto: false, danoAleron: 0, ersPotenciaActual: 0, ayF: 0, axF: 0, vibracion: 0,
-    alturaDel: c.alturaDel ?? 0.032, alturaTras: c.alturaTras ?? 0.075, mandos: { acelerador: 0 },
+    alturaDel: c.alturaDel ?? 0.032, alturaTras: c.alturaTras ?? 0.075, mandos: { acelerador: 0, ersModo: 1 },
     dano: { pinchazo: [false, false, false, false], suelta: [false, false, false, false], susp: [0, 0, 0, 0], aleronTras: 0 },
-    ruedas: c.ruedas.map(w => ({ angulo: 0, giro: 0, izquierda: w.izquierda })),
-    reglaje: c.reglaje, proj: { i: 0 },
+    ruedas: c.ruedas.map(w => ({ angulo: 0, giro: 0, izquierda: w.izquierda, neum: w.neum })),
+    reglaje: c.reglaje, proj: { i: 0 }, combustible: c.combustible, ers: c.ers, drsPermitido: false, limitador: false, limitadorPit: false,
   };
 }
 

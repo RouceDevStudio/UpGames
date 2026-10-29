@@ -1600,7 +1600,7 @@ function abrirTelemetria() {
   mostrar('telePantalla');
   const t = telemetria;
   $('#teleInfo').innerHTML = t?.ultima ? 'Velocidad de tu última vuelta (cian) contra tu mejor vuelta (morado). Abajo: frenada (rojo), acelerador (verde) y diferencia de tiempo acumulada (amarillo: por encima pierdes).' : '';
-  t?.dibujar($('#teleGrafico'), fmt, circuito.curvas) ?? (() => { const x = $('#teleGrafico').getContext('2d'); x.clearRect(0, 0, 1400, 520); })();
+  (t || new Telemetria(circuito.largo)).dibujar($('#teleGrafico'), fmt, circuito.curvas);
 }
 
 function volverMenuSinSesion() {
