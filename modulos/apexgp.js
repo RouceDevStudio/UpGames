@@ -113,7 +113,7 @@ function nivelesMejoras(perfil) {
 const MAX_JUGADORES = 22;
 const LETRAS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const ESTADO_LARGO = 18;               // números por paquete de estado
-const VUELTA_MIN_S = 50;               // ninguna vuelta del circuito baja de esto
+const VUELTA_MIN_S = 45;               // ninguna vuelta de ningún circuito baja de esto
 const ESPERA_FIN_MS = 90000;           // tras el primero en meta
 
 function limpiarNombre(n) {
@@ -155,6 +155,10 @@ class Salas {
             vueltas: Math.max(1, Math.min(30, Math.floor(+opc.vueltas) || 3)),
             publica: opc.publica !== false,
             mejoras: !!opc.mejoras,            // ¿cuentan las mejoras compradas?
+            circuito: circuitoOk(opc.circuito),
+            clima: CLIMAS.includes(opc.clima) ? opc.clima : 'seco',
+            semilla: Math.floor(this.azar() * 1e9),   // mismo tiempo variable para todos
+            rapida: !!opc.rapida,
             nombre: limpiarNombre(opc.nombre || `Sala de ${limpiarNombre(jugador?.nombre)}`).slice(0, 24),
             host: id, estado: 'espera', jugadores: new Map(), parrilla: [], tSalida: 0, tPrimero: 0, creada: this.ahora(),
         };
@@ -256,7 +260,7 @@ class Salas {
         const j = sala?.jugadores.get(id);
         if (!j || sala.estado !== 'carrera' || j.terminado) return null;
         const t = (this.ahora() - sala.tSalida) / 1000;
-        if (t < sala.vueltas * VUELTA_MIN_S) return null;
+        if (t < sala.vueltas * Math.max(VUELTA_MIN_S, CIRCUITOS[sala.circuito]?.minVuelta || 0)) return null;
         j.terminado = true; j.tiempo = Math.round(t * 1000) / 1000;
         if (!sala.tPrimero) sala.tPrimero = this.ahora();
         this._quizasTerminar(sala);
@@ -299,12 +303,13 @@ class Salas {
         const js = [...sala.jugadores.values()];
         const fin = js.filter(j => j.terminado).sort((a, b) => a.tiempo - b.tiempo);
         const resto = js.filter(j => !j.terminado);
-        return [...fin, ...resto].map((j, i) => ({ pos: i + 1, id: j.id, nombre: j.nombre, usuario: j.usuario, tiempo: j.tiempo, mejor: j.mejor, abandono: !j.terminado }));
+        return [...fin, ...resto].map((j, i) => ({ pos: i + 1, id: j.id, nombre: j.nombre, usuario: j.usuario, tiempo: j.tiempo, mejor: j.mejor, abandono: !j.terminado, desconectado: !!j.desconectado }));
     }
 
     publico(sala) {
         return {
             codigo: sala.codigo, tipo: sala.tipo, max: sala.max, vueltas: sala.vueltas, publica: sala.publica, mejoras: sala.mejoras,
+            circuito: sala.circuito, clima: sala.clima, semilla: sala.semilla, rapida: sala.rapida,
             nombre: sala.nombre, host: sala.host, estado: sala.estado, parrilla: sala.parrilla, tSalida: sala.tSalida,
             jugadores: [...sala.jugadores.values()].map(j => ({ id: j.id, nombre: j.nombre, usuario: j.usuario, equipado: j.equipado,
                 mejoras: sala.mejoras ? j.mejoras : {}, listo: j.listo, terminado: j.terminado, abandono: j.abandono })),
@@ -314,7 +319,7 @@ class Salas {
     listaPublica() {
         return [...this.salas.values()].filter(s => s.publica && s.estado === 'espera' && s.jugadores.size < s.max)
             .sort((a, b) => b.jugadores.size - a.jugadores.size).slice(0, 30)
-            .map(s => ({ codigo: s.codigo, nombre: s.nombre, tipo: s.tipo, jugadores: s.jugadores.size, max: s.max, vueltas: s.vueltas, mejoras: s.mejoras }));
+            .map(s => ({ codigo: s.codigo, nombre: s.nombre, tipo: s.tipo, jugadores: s.jugadores.size, max: s.max, vueltas: s.vueltas, mejoras: s.mejoras, circuito: s.circuito, clima: s.clima }));
     }
 
     /** Paquete con los estados de todos los coches de la sala. */
@@ -325,7 +330,138 @@ class Salas {
     }
 }
 
+
+// ─── Circuitos, premios, contrarreloj y ELO ───────────────────────────────
+// Vuelta mínima plausible por circuito (s): el mejor tiempo posible con todas
+// las mejoras, con margen. Por debajo, el tiempo se rechaza.
+const CIRCUITOS = {
+    valle:  { nombre: 'Valle Andino',      minVuelta: 62 },
+    puerto: { nombre: 'Puerto Real',       minVuelta: 48 },
+    veloz:  { nombre: 'Autódromo Veloz',   minVuelta: 50 },
+};
+const CLIMAS = ['seco', 'lluvia', 'variable'];
+const circuitoOk = c => Object.prototype.hasOwnProperty.call(CIRCUITOS, c) ? c : 'valle';
+
+// Premios del campeonato y de la contrarreloj semanal: UpCoins NO retirables
+// (van al campo de monedas, como las compradas), de 5 en 5.
+const PREMIOS = { 1: 15, 2: 10, 3: 5 };
+const PREMIOS_DIA = 3;                 // carreras premiadas por día y piloto
+const premioPosicion = pos => PREMIOS[pos] || 0;
+
+/** ¿Una carrera de campeonato puede dar premio? (mínimos contra el abuso) */
+function carreraPremiable(c) {
+    return !!c && CIRCUITOS[c.circuito] && c.vueltas >= 3 && c.rivales >= 7 && ['normal', 'dificil', 'extremo'].includes(c.dificultad);
+}
+
+/** Valida el resultado de una carrera de campeonato contra su ficha (emitida por el servidor). */
+function validarResultado(ficha, res, ahoraMs) {
+    if (!carreraPremiable(ficha)) return { ok: false, error: 'Esta carrera no da premio (mínimo 3 vueltas, 7 rivales y dificultad normal)' };
+    const pos = Math.floor(+res?.pos), tiempo = +res?.tiempo;
+    if (!(pos >= 1 && pos <= ficha.rivales + 1)) return { ok: false, error: 'Posición no válida' };
+    const minimo = ficha.vueltas * CIRCUITOS[ficha.circuito].minVuelta;
+    if (!(tiempo >= minimo && tiempo < 4 * 3600)) return { ok: false, error: 'Tiempo imposible' };
+    // la carrera tiene que haber durado de verdad (con 20 s de margen por la salida y la red)
+    const real = (ahoraMs - ficha.t0) / 1000;
+    if (real + 20 < tiempo || real < minimo) return { ok: false, error: 'La carrera terminó demasiado pronto' };
+    if (real > 6 * 3600) return { ok: false, error: 'La ficha de la carrera caducó' };
+    return { ok: true, pos, tiempo, premio: premioPosicion(pos) };
+}
+
+/** Semana ISO 'AAAA-Www' (lunes 00:00 UTC) de una fecha. */
+function semanaDe(fecha = new Date()) {
+    const d = new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate()));
+    const dia = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dia);
+    const ini = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const n = Math.ceil(((d - ini) / 86400000 + 1) / 7);
+    return `${d.getUTCFullYear()}-W${String(n).padStart(2, '0')}`;
+}
+function semanaAnterior(fecha = new Date()) { return semanaDe(new Date(fecha.getTime() - 7 * 86400000)); }
+
+const FANTASMA_HZ = 10;
+const FANTASMA_MAX = 60000;            // caracteres del fantasma comprimido
+/**
+ * Fantasma: muestras a 10 Hz [x, z, rumbo, velocidad] codificadas como enteros.
+ * Comprueba que su duración cuadre con el tiempo y que nada se teletransporte.
+ */
+function validarVuelta(circuito, tiempo, fantasma) {
+    const c = CIRCUITOS[circuito];
+    if (!c) return { ok: false, error: 'Circuito desconocido' };
+    const t = +tiempo;
+    if (!(t >= c.minVuelta && t < 600)) return { ok: false, error: 'Tiempo imposible' };
+    if (typeof fantasma !== 'string' || fantasma.length > FANTASMA_MAX) return { ok: false, error: 'Fantasma no válido' };
+    let m;
+    try { m = JSON.parse(fantasma); } catch (_) { return { ok: false, error: 'Fantasma no válido' }; }
+    if (!Array.isArray(m) || !m.every(v => Array.isArray(v) && v.length === 4 && v.every(Number.isFinite))) return { ok: false, error: 'Fantasma no válido' };
+    const esperadas = t * FANTASMA_HZ;
+    if (Math.abs(m.length - esperadas) > 3) return { ok: false, error: 'El fantasma no cuadra con el tiempo' };
+    for (let i = 1; i < m.length; i++) {
+        const d = Math.hypot(m[i][0] - m[i - 1][0], m[i][1] - m[i - 1][1]) / 10;   // decímetros → m
+        if (d > 110 / FANTASMA_HZ) return { ok: false, error: 'El fantasma se teletransporta' };
+    }
+    return { ok: true, tiempo: Math.round(t * 1000) / 1000 };
+}
+
+// ELO multijugador: todos contra todos dentro de la carrera
+const ELO_INICIAL = 1200;
+function eloTras(jugadores) {
+    // jugadores: [{ usuario, elo, pos }] (pos 1 = mejor). Devuelve { usuario: nuevoElo }
+    const n = jugadores.length, out = {};
+    if (n < 2) return out;
+    const K = 32 / (n - 1);
+    for (const a of jugadores) {
+        let d = 0;
+        for (const b of jugadores) {
+            if (a === b) continue;
+            const esperado = 1 / (1 + 10 ** ((b.elo - a.elo) / 400));
+            const real = a.pos < b.pos ? 1 : a.pos > b.pos ? 0 : 0.5;
+            d += K * (real - esperado);
+        }
+        out[a.usuario] = Math.max(100, Math.round(a.elo + d));
+    }
+    return out;
+}
+const nivelElo = e => e >= 1800 ? 'Leyenda' : e >= 1550 ? 'Diamante' : e >= 1400 ? 'Oro' : e >= 1250 ? 'Plata' : 'Bronce';
+const REGIONES = ['america', 'europa', 'asia', 'otra'];
+const regionOk = r => (REGIONES.includes(r) ? r : 'otra');
+
+/**
+ * Cola de partida rápida: agrupa por región y ELO parecido. El margen de ELO
+ * crece con la espera; tras 20 s se acepta cualquier región.
+ */
+class Emparejador {
+    constructor({ ahora = () => Date.now(), maximo = 8, espera = 12000 } = {}) {
+        this.cola = new Map();   // id → { id, elo, region, t, jugador }
+        this.ahora = ahora; this.maximo = maximo; this.espera = espera;
+    }
+    entrar(id, jugador, elo, region) { this.cola.set(id, { id, jugador, elo: +elo || ELO_INICIAL, region: regionOk(region), t: this.ahora() }); return this.cola.size; }
+    salir(id) { return this.cola.delete(id); }
+    _compatibles(a, b, ahora) {
+        const espera = Math.min(ahora - a.t, ahora - b.t) / 1000;
+        const margen = 150 + 25 * espera;
+        return Math.abs(a.elo - b.elo) <= margen && (a.region === b.region || espera >= 20);
+    }
+    /** Grupos listos para correr (se sacan de la cola). */
+    emparejar() {
+        const ahora = this.ahora(), grupos = [];
+        const lista = [...this.cola.values()].sort((a, b) => a.t - b.t);
+        const usados = new Set();
+        for (const a of lista) {
+            if (usados.has(a.id)) continue;
+            const g = [a];
+            for (const b of lista) if (b !== a && !usados.has(b.id) && g.length < this.maximo && g.every(x => this._compatibles(x, b, ahora))) g.push(b);
+            if (g.length >= 2 && (g.length >= this.maximo || ahora - a.t >= this.espera)) {
+                for (const x of g) { usados.add(x.id); this.cola.delete(x.id); }
+                grupos.push(g);
+            }
+        }
+        return grupos;
+    }
+}
+
 module.exports = {
+    CIRCUITOS, CLIMAS, circuitoOk, PREMIOS, PREMIOS_DIA, premioPosicion, carreraPremiable, validarResultado,
+    semanaDe, semanaAnterior, FANTASMA_HZ, FANTASMA_MAX, validarVuelta, ELO_INICIAL, eloTras, nivelElo, REGIONES, regionOk, Emparejador,
     NIVELES, PRECIO_NIVEL, MEJORAS, COSMETICOS, EQUIPADO_DEF, MAX_JUGADORES, ESTADO_LARGO,
     catalogo, precioCompra, tieneCosmetico, validarEquipado, nivelesMejoras, limpiarNombre, Salas,
 };

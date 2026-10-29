@@ -169,7 +169,8 @@ export function construirEscenario(scene, renderer, c, calidad) {
   }
   scene.add(luzSol); scene.add(luzSol.target);
   res.luzSol = luzSol;
-  scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x55603f, 0.55));
+  res.hemi = new THREE.HemisphereLight(0xcfe3ff, 0x55603f, 0.55);
+  scene.add(res.hemi);
 
   // --- Materiales ---------------------------------------------------------
   const asf = TX.texturasAsfalto(calidad >= 2 ? 512 : 256);
@@ -179,6 +180,7 @@ export function construirEscenario(scene, renderer, c, calidad) {
     roughness: 1, metalness: 0, color: 0x6c6d72, normalScale: new THREE.Vector2(0.6, 0.6),
   });
   const matEscape = matAsfalto.clone(); matEscape.color = new THREE.Color(0x85878d);
+  res.matAsfalto = matAsfalto;
   const texH = TX.texturaHierba(calidad >= 2 ? 512 : 256); texH.anisotropy = anis;
   const matHierba = new THREE.MeshStandardMaterial({ map: texH, roughness: 0.95, color: 0xdde8d0 });
   const texT = TX.texturaTerreno(256); texT.anisotropy = anis;
@@ -195,6 +197,9 @@ export function construirEscenario(scene, renderer, c, calidad) {
   const matHormigon = new THREE.MeshStandardMaterial({ color: 0xc9cbc8, roughness: 0.9 });
 
   const hw = (i) => c.semiAncho[i];
+  const urbano = !!c.def.urbano;
+  // en la ciudad, la escapatoria y lo que hay tras los muros es acera
+  const matSuelo = urbano ? new THREE.MeshStandardMaterial({ map: asf.mapa, roughness: 0.9, color: 0x9a9890 }) : matHierba;
 
   // --- Terreno -------------------------------------------------------------
   const terreno = new Terreno(c, calidad);
@@ -244,7 +249,7 @@ export function construirEscenario(scene, renderer, c, calidad) {
       return out;
     };
     const noPit = (i) => !(lado === 1 && c.enZonaPit[i]);
-    const hierba = new THREE.Mesh(cinta(c, perfilExt, { filtro: (i) => !c.grava[lado][i] && noPit(i), uDe: (j, d) => d / 12, escalaV: 12 }), matHierba);
+    const hierba = new THREE.Mesh(cinta(c, perfilExt, { filtro: (i) => !c.grava[lado][i] && noPit(i), uDe: (j, d) => d / 12, escalaV: 12 }), matSuelo);
     hierba.receiveShadow = true; scene.add(hierba);
     const grava = new THREE.Mesh(cinta(c, perfilExt, { filtro: (i) => c.grava[lado][i] && noPit(i), uDe: (j, d) => d / 5, escalaV: 5, yBase: 0.03 }), matGrava);
     grava.receiveShadow = true; scene.add(grava);
@@ -252,7 +257,7 @@ export function construirEscenario(scene, renderer, c, calidad) {
     const fuera = new THREE.Mesh(cinta(c, (i) => {
       const w = c.muro[lado][i];
       return [[sg * (w + 0.2), c.caida(i, sg * (w + 0.2))], [sg * (w + 14), -0.6]];
-    }, { filtro: noPit, uDe: (j, d) => d / 12, escalaV: 12 }), matHierba);
+    }, { filtro: noPit, uDe: (j, d) => d / 12, escalaV: 12 }), matSuelo);
     fuera.receiveShadow = true; scene.add(fuera);
     // muro: hormigón con publicidad o barrera de neumáticos en zonas de grava
     const muro = (filtro, mat, alto) => {
@@ -315,15 +320,17 @@ export function construirEscenario(scene, renderer, c, calidad) {
       grada(scene, c, cv.s - 60, 110, lado, matGrada, matTecho, matHormigon);
     }
   }
-  // puente publicitario en la Recta del Río
-  const rr = c.curvas.find(x => x.nombre.startsWith('T5'));
-  if (rr) puente(scene, c, rr.s - 330, matHormigon);
+  // puente publicitario sobre una recta larga de cada circuito
+  const recta = { valle: 'Recta del Río', veloz: 'Recta del Serraglio', puerto: 'Subida del Casino' }[c.id];
+  const rr = recta && c._sDeSegmento(recta);
+  if (rr) puente(scene, c, (rr.s0 + rr.s1) / 2, matHormigon);
   carteles(scene, c);
 
   res.actualizables.push(...publicidad(scene, c, terreno, calidad));
 
-  // --- Vegetación -----------------------------------------------------------
-  arboles(scene, c, terreno, calidad);
+  // --- Vegetación o ciudad ---------------------------------------------------
+  if (urbano) ciudad(scene, c, terreno, calidad, matHormigon);
+  arboles(scene, c, terreno, calidad, urbano ? 140 : 48);
   montanas(scene, terreno);
 
   return res;
@@ -473,7 +480,7 @@ function carteles(scene, c) {
   }
 }
 
-function arboles(scene, c, terreno, calidad) {
+function arboles(scene, c, terreno, calidad, distMin = 48) {
   const rnd = TX.aleatorio(99);
   const n = calidad >= 2 ? 1400 : 600;
   const tronco = new THREE.CylinderGeometry(0.18, 0.28, 3, 6); tronco.translate(0, 1.5, 0);
@@ -493,7 +500,7 @@ function arboles(scene, c, terreno, calidad) {
     intentos++;
     const x = terreno.x0 + rnd() * terreno.ancho, z = terreno.z0 + rnd() * terreno.alto;
     const dist = terreno.distancia(x, z);
-    if (dist < 48 || dist > 650) continue;
+    if (dist < distMin || dist > 650) continue;
     // más densidad cerca de la pista (bosquetes)
     if (rnd() > 1.15 - dist / 700) continue;
     const y = terreno.altura(x, z);
@@ -507,6 +514,59 @@ function arboles(scene, c, terreno, calidad) {
   }
   it.count = nt; ip.count = np; ifr.count = nf;
   for (const im of [it, ip, ifr]) { im.castShadow = calidad >= 2; im.receiveShadow = false; im.frustumCulled = false; scene.add(im); }
+}
+
+// Circuito urbano: manzanas de edificios tras los guardarraíles, túnel y mar
+function ciudad(scene, c, terreno, calidad, matHormigon) {
+  const rnd = TX.aleatorio(31);
+  const mats = [1, 2, 3, 4].map(k => new THREE.MeshStandardMaterial({ map: TX.texturaFachada(k * 17), roughness: 0.75 }));
+  const caja = new THREE.BoxGeometry(1, 1, 1); caja.translate(0, 0.5, 0);
+  const max = calidad >= 2 ? 520 : 300;
+  const inst = mats.map(m => new THREE.InstancedMesh(caja, m, max));
+  const cuenta = [0, 0, 0, 0];
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sc = new THREE.Vector3(), p = new THREE.Vector3();
+  const tunel = c._sDeSegmento('Túnel');
+  const enTunel = s => tunel && s > tunel.s0 - 10 && s < tunel.s1 + 10;
+  for (let s = 0; s < c.largo; s += 26 + rnd() * 10) {
+    const i = Math.floor(s / c.paso) % c.n;
+    for (const sg of [-1, 1]) {
+      const lado = sg > 0 ? 1 : 0;
+      if (lado === 1 && c.enZonaPit[i]) continue;
+      for (const fila of [0, 1]) {
+        const fondo = 14 + rnd() * 10, frente = 20 + rnd() * 12;
+        const d = sg * (c.muro[lado][i] + 5 + fondo / 2 + fila * (fondo + 6));
+        const mm = c.muestra(s);
+        const x = mm.x - mm.tz * d, z = mm.z + mm.tx * d;
+        if (terreno.distancia(x, z) < fondo / 2 + 8) continue;     // no invadir otra parte de la pista
+        const k = Math.floor(rnd() * 4);
+        if (cuenta[k] >= max) continue;
+        const alto = (enTunel(s) ? 30 : 12) + rnd() * (fila ? 40 : 24);
+        e.set(0, -Math.atan2(mm.tz, mm.tx), 0); q.setFromEuler(e);
+        sc.set(frente, alto, fondo); p.set(x, terreno.altura(x, z) - 0.5, z);
+        m4.compose(p, q, sc);
+        inst[k].setMatrixAt(cuenta[k]++, m4);
+      }
+    }
+  }
+  inst.forEach((im, k) => { im.count = cuenta[k]; im.castShadow = calidad >= 2; im.receiveShadow = true; scene.add(im); });
+  // túnel: techo y paredes sobre la recta, con luces
+  if (tunel) {
+    const dentro = i => enTunel(i * c.paso) && c.envolver(i * c.paso - tunel.s0 + 10) < tunel.s1 - tunel.s0 + 20;
+    const matT = new THREE.MeshStandardMaterial({ color: 0x8d8c88, roughness: 0.9, side: THREE.DoubleSide });
+    scene.add(new THREE.Mesh(cinta(c, i => [[-c.muro[0][i], 0], [-c.muro[0][i], 7.2], [c.muro[1][i], 7.2], [c.muro[1][i], 0]], { filtro: dentro, escalaV: 6 }), matT));
+    const matLuz = new THREE.MeshBasicMaterial({ color: 0xffd9a0 });
+    const luces = new THREE.InstancedMesh(new THREE.BoxGeometry(2.2, 0.08, 0.4), matLuz, 200);
+    let n = 0;
+    for (let s = tunel.s0; s < tunel.s1 && n < 200; s += 9) {
+      const mm = c.muestra(s);
+      for (const d of [-3, 3]) {
+        e.set(0, -Math.atan2(mm.tz, mm.tx), 0); q.setFromEuler(e); sc.set(1, 1, 1);
+        p.set(mm.x - mm.tz * d, mm.y + 7.1, mm.z + mm.tx * d); m4.compose(p, q, sc); luces.setMatrixAt(n++, m4);
+      }
+    }
+    luces.count = n; scene.add(luces);
+  }
+  void matHormigon;
 }
 
 function montanas(scene, terreno) {

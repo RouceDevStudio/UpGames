@@ -8,7 +8,11 @@ import { COCHE, G, RHO_AIRE } from './config.js';
 // Las longitudes marcadas con `ajusta` y el ángulo con `cierra` se recalculan
 // para que el circuito cierre exactamente.
 const TRAZADO_VALLE = {
+  id: 'valle',
   nombre: 'Autódromo Valle del Cóndor',
+  corto: 'Valle Andino',
+  tipo: 'montaña',
+  ritmoIA: 79.8,           // vuelta de la IA con habilidad 1,0 en seco (para la clasificación simulada)
   pais: 'Colombia',
   ancho: 14,
   segmentos: [
@@ -41,9 +45,86 @@ const TRAZADO_VALLE = {
   ],
   // relieve: suma de senos periódicos (amplitud m, armónico, fase)
   relieve: [[11, 1, 0.6], [5, 2, 2.1], [2.2, 5, 0.3], [1.2, 9, 1.4]],
-  // zonas DRS: [inicio, fin] en metros desde la meta (negativo = antes de la meta)
-  drs: [[-280, 560], 'Recta del Río'],
+  // zonas DRS: en metros desde la meta (negativo = antes de la meta) o relativas a una recta con nombre
+  drs: [{ ini: -280, fin: 560, det: -420 }, { recta: 'Recta del Río', ini: 90, fin: -40, det: -300 }],
 };
+
+// Urbano tipo Mónaco: estrecho, muros pegados, horquilla lenta y túnel junto al puerto
+const TRAZADO_PUERTO = {
+  id: 'puerto',
+  nombre: 'Circuito Urbano Puerto Real',
+  corto: 'Puerto Real',
+  pais: 'Costa Caribe',
+  tipo: 'urbano',
+  ritmoIA: 58.8,
+  ancho: 11,
+  urbano: true,            // muros a pocos metros, sin grava ni hierba
+  rectaAncha: [500, 260],
+  segmentos: [
+    { t: 'S', l: 540, nombre: 'Recta del Puerto' },
+    { t: 'A', r: 22, a: 90, nombre: 'T1 Santa Bárbara' },
+    { t: 'S', l: 230, nombre: 'Subida del Casino' },
+    { t: 'A', r: 45, a: -50, nombre: 'T2 Plaza' },
+    { t: 'A', r: 40, a: 50, nombre: 'T3 Casino' },
+    { t: 'S', l: 100, ajusta: true },
+    { t: 'A', r: 12, a: 135, nombre: 'T4 Horquilla del Hotel' },
+    { t: 'S', l: 70 },
+    { t: 'A', r: 16, a: -45, nombre: 'T5 Portier' },
+    { t: 'S', l: 330, nombre: 'Túnel' },
+    { t: 'A', r: 500, a: 16, nombre: 'Curva del Túnel' },
+    { t: 'S', l: 120 },
+    { t: 'A', r: 18, a: -50, nombre: 'T6 Chicane del Puerto' },
+    { t: 'A', r: 18, a: 50, nombre: 'T7 Chicane' },
+    { t: 'S', l: 240 },
+    { t: 'A', r: 30, a: 74, nombre: 'T8 Tabaco' },
+    { t: 'S', l: 260, nombre: 'Muelle' },
+    { t: 'A', r: 14, a: -45, nombre: 'T9 Piscina' },
+    { t: 'A', r: 14, a: 45, nombre: 'T10 Piscina' },
+    { t: 'S', l: 120 },
+    { t: 'A', r: 15, a: 0, cierra: true, nombre: 'T11 Rascasse' },
+    { t: 'S', l: 240, ajusta: true, nombre: 'Recta del Puerto' },
+  ],
+  relieve: [[4, 1, 1.2], [2, 2, 0.4], [0.8, 4, 2.0]],
+  drs: [{ ini: -200, fin: 500, det: -320 }],
+};
+
+// Rápido tipo Monza: rectas larguísimas, chicanes y curvas rápidas, poca carga
+const TRAZADO_VELOZ = {
+  id: 'veloz',
+  nombre: 'Autódromo Veloz del Parque',
+  corto: 'Autódromo Veloz',
+  pais: 'Llanura del Norte',
+  tipo: 'parque',
+  ritmoIA: 64.6,
+  ancho: 14,
+  rectaAncha: [600, 320],
+  segmentos: [
+    { t: 'S', l: 700, nombre: 'Rettifilo' },
+    { t: 'A', r: 20, a: 75, nombre: 'T1 Variante Prima' },
+    { t: 'A', r: 20, a: -75, nombre: 'T2 Variante Prima' },
+    { t: 'S', l: 200 },
+    { t: 'A', r: 300, a: 45, nombre: 'T3 Curva Grande' },
+    { t: 'S', l: 100, ajusta: true },
+    { t: 'A', r: 24, a: -55, nombre: 'T4 Roggia' },
+    { t: 'A', r: 24, a: 55, nombre: 'T5 Roggia' },
+    { t: 'S', l: 120 },
+    { t: 'A', r: 75, a: 55, nombre: 'T6 Lesmo 1' },
+    { t: 'S', l: 80 },
+    { t: 'A', r: 60, a: 80, nombre: 'T7 Lesmo 2' },
+    { t: 'S', l: 900, nombre: 'Recta del Serraglio' },
+    { t: 'A', r: 28, a: -45, nombre: 'T8 Ascari' },
+    { t: 'A', r: 70, a: 80, nombre: 'T9 Ascari' },
+    { t: 'A', r: 120, a: -15, nombre: 'T10 Ascari' },
+    { t: 'S', l: 700, nombre: 'Recta de la Parabólica' },
+    { t: 'A', r: 110, a: 0, cierra: true, nombre: 'T11 Parabolica' },
+    { t: 'S', l: 360, ajusta: true, nombre: 'Rettifilo' },
+  ],
+  relieve: [[2.5, 1, 0.2], [1.2, 3, 1.1]],
+  drs: [{ ini: -300, fin: 900, det: -460 }, { recta: 'Recta del Serraglio', ini: 120, fin: -60, det: -260 }],
+};
+
+export const CIRCUITOS = { valle: TRAZADO_VALLE, puerto: TRAZADO_PUERTO, veloz: TRAZADO_VELOZ };
+export const circuitoDe = id => CIRCUITOS[id] || TRAZADO_VALLE;
 
 function construirPolilinea(segs, paso) {
   const pts = [];
@@ -118,7 +199,9 @@ function suavizarCircular(arr, radio, veces = 1) {
 
 export class Circuito {
   constructor(def = TRAZADO_VALLE) {
+    if (typeof def === 'string') def = circuitoDe(def);
     this.def = def;
+    this.id = def.id;
     this.nombre = def.nombre;
     this.paso = 2;
     const segs = cerrarTrazado(def);
@@ -166,13 +249,33 @@ export class Circuito {
       if (sg.t === 'A' && sg.nombre) this.curvas.push({ s: s + largo / 2, nombre: sg.nombre, r: sg.r });
       s += largo;
     }
-    this.drs = [
-      { ini: this.envolver(-280), fin: 560, deteccion: this.envolver(-420) },
-    ];
-    const rr = this._sDeSegmento('Recta del Río');
-    if (rr) this.drs.push({ ini: rr.s0 + 90, fin: rr.s1 - 40, deteccion: rr.s0 - 300 });
+    this.drs = [];
+    for (const z of def.drs) {
+      if (z.recta) {
+        const rr = this._sDeSegmento(z.recta);
+        if (rr) this.drs.push({ ini: rr.s0 + z.ini, fin: rr.s1 + z.fin, deteccion: this.envolver(rr.s0 + z.det) });
+      } else this.drs.push({ ini: this.envolver(z.ini), fin: z.fin, deteccion: this.envolver(z.det) });
+    }
     this.sectores = [this.largo / 3, 2 * this.largo / 3];
     this._calleBoxes();
+  }
+
+  // Perfil con el agarre multiplicado por f (pista mojada). Se calcula al pedirlo y se guarda
+  // cuantizado: con carga aerodinámica la velocidad en curva rápida cae mucho más que √f.
+  perfilAgarre(f) {
+    const q = Math.max(0.3, Math.min(1, Math.round(f * 20) / 20));
+    if (q >= 1) return this.perfil;
+    this._perfiles ??= new Map();
+    if (!this._perfiles.has(q)) this._perfiles.set(q, this._perfilVelocidad(this.trazada, { mu: 1.55 * q }));
+    return this._perfiles.get(q);
+  }
+
+  // Tiempo de vuelta teórico con un agarre relativo f (1 = seco)
+  vueltaTeorica(f = 1) {
+    const v = this.perfilAgarre(f);
+    let t = 0;
+    for (let i = 0; i < this.n; i++) t += this.trazada.ds[i] / v[i];
+    return t;
   }
 
   _sDeSegmento(nombre) {
@@ -239,9 +342,10 @@ export class Circuito {
     const n = this.n, hw = this.def.ancho / 2;
     this.semiAncho = new Float64Array(n).fill(hw);
     // recta principal más ancha
+    const [ra, rb] = this.def.rectaAncha || [560, 300];
     for (let i = 0; i < n; i++) {
       const s = i * this.paso;
-      if (s < 560 || s > this.largo - 300) this.semiAncho[i] = hw + 1.5;
+      if (s < ra || s > this.largo - rb) this.semiAncho[i] = hw + 1.5;
     }
     this.semiAncho = Float64Array.from(suavizarCircular(Array.from(this.semiAncho), 10, 2));
     const k = this.curvSuave;
@@ -251,16 +355,19 @@ export class Circuito {
       for (let i = 0; i < n; i++) if (src[i]) for (let j = -r; j <= r; j++) out[(i + j + n) % n] = 1;
       return out;
     };
+    const urbano = !!this.def.urbano;
     for (let i = 0; i < n; i++) {
       if (Math.abs(k[i]) > 1 / 260) bordillo[i] = 1;
-      // grava en el exterior de curvas lentas y medias
+      // grava en el exterior de curvas lentas y medias (en la ciudad no hay)
+      if (urbano) continue;
       if (k[i] > 1 / 200) gravaI[i] = 1;   // curva a la derecha: exterior izquierdo
       if (k[i] < -1 / 200) gravaD[i] = 1;
     }
-    this.bordillo = dil(bordillo, 8);
+    this.bordillo = dil(bordillo, urbano ? 4 : 8);
     this.grava = [dil(gravaI, 30), dil(gravaD, 30)];
     // muros: distancia deseada limitada por la cercanía de otras partes del trazado
-    const deseado = 26;
+    // (en la ciudad, guardarraíles a 3 m del asfalto y un poco más en las frenadas)
+    const deseado = urbano ? hw + 3.2 : 26;
     this.muro = [new Float64Array(n).fill(deseado), new Float64Array(n).fill(deseado)];
     const cell = 40, grid = new Map();
     const key = (cx, cz) => cx * 100003 + cz;
@@ -282,15 +389,17 @@ export class Circuito {
           const dist = Math.hypot(dx, dz);
           if (dist > 2 * deseado + 20) continue;
           const lado = (dx * nx + dz * nz) >= 0 ? 1 : 0; // 1 = derecha
-          const lim = Math.max(this.semiAncho[i] + 4, dist / 2 - 3);
+          const lim = Math.max(this.semiAncho[i] + (urbano ? 2.2 : 4), dist / 2 - 3);
           if (lim < this.muro[lado][i]) this.muro[lado][i] = lim;
         }
       }
+      if (urbano && this.muro[0][i] > hw + 3.2) { this.muro[0][i] = hw + 3.2; }
+      if (urbano && this.muro[1][i] > hw + 3.2) { this.muro[1][i] = hw + 3.2; }
       // en el interior de curvas cerradas el muro no puede pasar del centro de giro
       const kk = k[i];
       if (Math.abs(kk) > 1e-4) {
         const lado = kk > 0 ? 1 : 0;
-        const lim = Math.max(this.semiAncho[i] + 3, 0.75 / Math.abs(kk));
+        const lim = Math.max(this.semiAncho[i] + (urbano ? 2 : 3), 0.75 / Math.abs(kk));
         if (lim < this.muro[lado][i]) this.muro[lado][i] = lim;
       }
     }
@@ -572,4 +681,4 @@ export const SUPERFICIES = [
   { nombre: 'grava', mu: 0.45, rod: 0.32, vib: 0.8 },
 ];
 
-export { TRAZADO_VALLE };
+export { TRAZADO_VALLE, TRAZADO_PUERTO, TRAZADO_VELOZ };

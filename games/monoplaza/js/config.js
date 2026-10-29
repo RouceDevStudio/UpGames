@@ -81,7 +81,28 @@ export const COMPUESTOS = {
   blando: { nombre: 'Blando', color: '#e8202a', mu: 1.80, tOpt: 88, ancho: 28, calor: 1.15, desgaste: 1.6 },
   medio:  { nombre: 'Medio',  color: '#f5c518', mu: 1.75, tOpt: 93, ancho: 30, calor: 1.0,  desgaste: 1.0 },
   duro:   { nombre: 'Duro',   color: '#f2f2f2', mu: 1.70, tOpt: 100, ancho: 32, calor: 0.85, desgaste: 0.6 },
+  // de lluvia: más dibujo evacua agua, pero en seco se recalientan y se destrozan
+  inter:  { nombre: 'Intermedio', color: '#2fbf4a', mu: 1.60, tOpt: 64, ancho: 32, calor: 1.25, desgaste: 1.4, lluvia: true },
+  lluvia: { nombre: 'Lluvia', color: '#1f6fff', mu: 1.50, tOpt: 52, ancho: 34, calor: 1.4, desgaste: 1.6, lluvia: true },
 };
+export const SECOS = ['blando', 'medio', 'duro'];
+
+// Agarre relativo según el agua en la pista (0 seco .. 1 encharcada), por tipo de neumático
+const TABLA_AGUA = {
+  slick:  [1.00, 0.74, 0.55, 0.45, 0.38],
+  inter:  [1.00, 0.97, 0.88, 0.72, 0.60],
+  lluvia: [1.00, 1.00, 0.97, 0.90, 0.83],
+};
+export function factorAgua(compuesto, agua) {
+  if (!(agua > 0)) return 1;
+  const t = TABLA_AGUA[compuesto.lluvia ? (compuesto.nombre === 'Lluvia' ? 'lluvia' : 'inter') : 'slick'];
+  const f = Math.min(1, agua) * 4, i = Math.min(3, Math.floor(f));
+  return t[i] + (t[i + 1] - t[i]) * (f - i);
+}
+/** Mejor neumático para el agua que hay (lo que haría un ingeniero). */
+export function compuestoParaAgua(agua, seco = 'medio') {
+  return agua > 0.48 ? 'lluvia' : agua > 0.13 ? 'inter' : seco;
+}
 
 // Equipos ficticios: 11 escuderías con dos pilotos (22 coches como en la parrilla real)
 export const EQUIPOS = [

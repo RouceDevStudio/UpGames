@@ -5,7 +5,7 @@ import { Monoplaza } from '../js/physics/monoplaza.js';
 import { PilotoIA } from '../js/ai.js';
 
 const vueltas = +(process.argv[2] || 3), hab = +(process.argv[3] || 1);
-const c = new Circuito();
+const c = new Circuito(process.env.CIRCUITO || "valle");
 const car = new Monoplaza(c, { ia: true, ayudas: { tc: 2, abs: true } });
 car.colocar(c.largo - 20, 0);
 const ia = new PilotoIA(car, c, hab, 0.5);

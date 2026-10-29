@@ -146,6 +146,25 @@ export function texturaEdificio() {
   return aTextura(c);
 }
 
+// Fachada de edificio urbano: ventanas en rejilla y bajos con tiendas (algunas con UPGAMES)
+export function texturaFachada(semilla = 5) {
+  const rnd = aleatorio(semilla);
+  const c = lienzo(256, 512), ctx = c.getContext('2d');
+  const tonos = ['#e9dcc4', '#d9c3a5', '#f1ece2', '#c9b79c', '#e6d2b5', '#b8a48a'];
+  ctx.fillStyle = tonos[Math.floor(rnd() * tonos.length)]; ctx.fillRect(0, 0, 256, 512);
+  for (let y = 16; y < 440; y += 40) for (let x = 12; x < 256; x += 40) {
+    const luz = rnd();
+    ctx.fillStyle = luz > 0.85 ? '#f6e7b0' : luz > 0.4 ? '#3a4e63' : '#5e7c96';
+    ctx.fillRect(x, y, 22, 28);
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillRect(x - 2, y + 28, 26, 3);
+  }
+  ctx.fillStyle = '#2a2d33'; ctx.fillRect(0, 452, 256, 60);
+  ctx.fillStyle = rnd() < 0.5 ? '#0d47ff' : '#b3122e'; ctx.fillRect(0, 446, 256, 14);
+  ctx.fillStyle = '#fff'; ctx.font = '900 italic 13px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(rnd() < 0.5 ? 'UPGAMES' : 'CAFÉ · HOTEL', 128, 453);
+  return aTextura(c);
+}
+
 export function texturaHierba(tam = 512) {
   const rnd = aleatorio(11);
   const base = fbm(tam, rnd, 6, 4);

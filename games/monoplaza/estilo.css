@@ -287,3 +287,82 @@ body.tactil-on .tabla div { min-width: 118px; padding: 1px 6px; }
 /* Garaje: tarjetas de monoplaza */
 .ficha.coche { padding-top: 6px; }
 .ficha .muestra { display: block; height: 26px; border-radius: 6px; margin-bottom: 5px; border: 1px solid rgba(255,255,255,.15); }
+
+/* Selector de circuito en el menú */
+.segm.circuitos { justify-content: center; }
+.segm.circuitos b { display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+.segm.circuitos b small { font-size: 10px; color: var(--tenue); font-weight: 500; }
+.compuestos b[data-v=inter].sel { box-shadow: inset 0 -3px 0 #2fbf4a; }
+.compuestos b[data-v=lluvia].sel { box-shadow: inset 0 -3px 0 #1f6fff; }
+.panel-box button[data-box=inter] { box-shadow: inset 0 -3px 0 #2fbf4a; }
+.panel-box button[data-box=lluvia] { box-shadow: inset 0 -3px 0 #1f6fff; }
+
+/* DRS y ERS junto al acelerador, con su logo */
+#botonesEnergia { position: absolute; display: flex; flex-direction: column; gap: 10px; bottom: calc(14vh + var(--sa-b)); right: calc(20px + min(21vw, 190px) + var(--sa-r)); }
+#tactil.tactil #botonesEnergia { right: calc(40px + 2 * min(15vw, 190px) + var(--sa-r)); bottom: calc(10px + var(--sa-b)); }
+.bt.energia { width: 74px; height: 64px; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 4px; background: rgba(6,9,15,.62); border: 2px solid rgba(255,255,255,.2); }
+.bt.energia svg { width: 52px; height: 32px; }
+.bt.energia span { font-size: 11px; font-weight: 900; letter-spacing: 1.5px; line-height: 1; }
+.drs-bt .ala-fija, .drs-bt .deriva { fill: rgba(255,255,255,.75); }
+.drs-bt .flap { fill: rgba(255,255,255,.45); transform-origin: 32px 22px; transition: transform .15s; }
+.drs-bt .aire { stroke: rgba(255,255,255,.0); stroke-width: 2.4; stroke-linecap: round; fill: none; }
+.drs-bt.activo { border-color: var(--verde); }
+.drs-bt.activo .flap { fill: var(--verde); }
+.drs-bt.abierto { background: rgba(47,224,122,.3); border-color: var(--verde); }
+.drs-bt.abierto .flap { transform: translateY(-6px) rotate(-14deg); fill: var(--verde); }
+.drs-bt.abierto .aire { stroke: var(--verde); }
+.ers-bt .pila { fill: none; stroke: rgba(255,255,255,.75); stroke-width: 2.5; }
+.ers-bt .borne { fill: rgba(255,255,255,.75); }
+.ers-bt .carga { fill: rgba(255,210,63,.28); transform-origin: 13px 20px; }
+.ers-bt .rayo { fill: #ffd23f; stroke: #2a1d00; stroke-width: 1; }
+.ers-bt.m0 { border-color: var(--azul); } .ers-bt.m0 .rayo { fill: #6fb0ff; }
+.ers-bt.m2 { border-color: #ffd23f; background: rgba(255,210,63,.22); }
+.ers-bt.m2 .rayo { filter: drop-shadow(0 0 4px #ffd23f); }
+body.tactil-on .bt.energia { width: 70px; height: 60px; }
+@media (max-height: 420px) { .bt.energia { width: 62px !important; height: 52px !important; } .bt.energia svg { width: 44px; height: 26px; } #botonesEnergia { gap: 6px; } }
+
+/* Banderas, radio, clima y sanciones */
+.bandera { position: absolute; top: calc(8px + var(--sa-t)); left: 50%; transform: translate(-50%, 0); margin-top: 92px; display: none; padding: 4px 14px; border-radius: 8px; font-weight: 900; font-size: 14px; letter-spacing: 2px; }
+.bandera.amarilla { display: block; background: #ffd23f; color: #1a1400; }
+.bandera.vsc { display: block; background: repeating-linear-gradient(45deg, #ffd23f 0 12px, #1a1400 12px 24px); color: #fff; text-shadow: 0 1px 3px #000; }
+.bandera.verde { display: block; background: var(--verde); color: #021; }
+.bandera.azul { display: block; background: #1f6fff; color: #fff; }
+.bandera.blanconegra { display: block; background: linear-gradient(135deg, #fff 50%, #111 50%); color: #ff3b3b; text-shadow: 0 0 3px #fff; }
+.radio { position: absolute; left: calc(12px + var(--sa-l)); bottom: calc(46vh + 70px + var(--sa-b)); max-width: min(380px, 44vw); display: none; background: rgba(6,9,15,.8); border-left: 3px solid var(--cian); padding: 6px 10px; border-radius: 6px; font-size: 13px; line-height: 1.3; }
+.radio.visible { display: block; }
+.radio b { color: var(--cian); font-size: 10px; letter-spacing: 2px; display: block; }
+body:not(.tactil-on) .radio { bottom: calc(150px + var(--sa-b)); }
+.clima-hud { position: absolute; top: calc(8px + var(--sa-t)); left: calc(170px + var(--sa-l)); font-size: 12px; background: rgba(6,9,15,.55); padding: 2px 8px; border-radius: 6px; display: none; }
+.clima-hud.visible { display: block; }
+.pen { position: absolute; top: calc(8px + var(--sa-t)); left: 50%; margin-left: 110px; display: none; background: var(--rojo); color: #fff; font-weight: 900; font-size: 13px; padding: 3px 8px; border-radius: 6px; }
+.pen.visible { display: block; }
+
+/* Campeonato, clasificación y rankings */
+.tablas-camp { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; overflow-y: auto; touch-action: pan-y; }
+.tablas-camp h3 { margin-top: 0; }
+.fila-camp { display: grid; grid-template-columns: 26px 1fr 44px; gap: 6px; padding: 4px 8px; border-radius: 6px; background: rgba(255,255,255,.04); font-size: 13px; align-items: center; font-variant-numeric: tabular-nums; }
+.fila-camp.yo { background: rgba(47,123,255,.25); }
+.fila-camp .pts { text-align: right; font-weight: 800; }
+.fila-camp i { display: inline-block; width: 4px; height: 14px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+.fila-q { display: grid; grid-template-columns: 30px 1fr 86px 70px; gap: 6px; padding: 5px 8px; border-radius: 6px; background: rgba(255,255,255,.04); font-size: 13px; font-variant-numeric: tabular-nums; align-items: center; }
+.fila-q.yo { background: rgba(47,123,255,.25); }
+.fila-q.fuera { opacity: .5; }
+.corte { border-top: 2px dashed var(--rojo); margin: 2px 0; font-size: 10px; color: var(--rojo); letter-spacing: 1px; }
+.fila-filtros { display: flex; gap: 8px; flex-wrap: wrap; }
+.premio { font-weight: 800; color: #ffd23f; text-align: center; }
+.premio:empty { display: none; }
+@media (max-width: 640px) { .tablas-camp { grid-template-columns: 1fr; } }
+
+/* Telemetría */
+#teleGrafico { width: 100%; height: auto; background: rgba(0,0,0,.35); border-radius: 10px; }
+
+/* Repetición */
+.repe { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: none; flex-direction: column; gap: 6px; padding: 8px calc(14px + var(--sa-r)) calc(10px + var(--sa-b)) calc(14px + var(--sa-l)); background: linear-gradient(0deg, rgba(0,0,0,.75), rgba(0,0,0,0)); }
+.repe.visible { display: flex; }
+.repe-sup { display: flex; gap: 14px; font-size: 13px; font-weight: 700; align-items: center; }
+.repe-rec { color: var(--rojo); letter-spacing: 2px; }
+#repeBarra { width: 100%; accent-color: var(--rojo); }
+.repe-bot { display: flex; gap: 6px; flex-wrap: wrap; }
+body.foto .repe { display: none !important; }
+.flash { position: fixed; inset: 0; z-index: 60; background: #fff; opacity: 0; pointer-events: none; transition: opacity .35s; }
+.flash.on { opacity: .85; transition: none; }

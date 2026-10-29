@@ -2,8 +2,8 @@
 import { Circuito } from '../js/track.js';
 import { Sesion } from '../js/race.js';
 import { PilotoIA } from '../js/ai.js';
-const c = new Circuito();
-const s = new Sesion(c, { modo: 'carrera', vueltas: +(process.argv[2] || 3), rivales: +(process.argv[3] || 7), dificultad: 'dificil' });
+const c = new Circuito(process.env.CIRCUITO || "valle");
+const s = new Sesion(c, { modo: 'carrera', vueltas: +(process.argv[2] || 3), rivales: +(process.argv[3] || 7), dificultad: 'dificil', clima: process.env.CLIMA || 'seco', semilla: +(process.env.SEMILLA || 7) });
 let paradas = 0, abandonos = 0;
 const ia = new PilotoIA(s.jugador.coche, c, 0.97, 0.6);
 s.jugador.coche.esIA = true;
@@ -14,6 +14,8 @@ while (t < 3000) {
   s.actualizar(1 / 60); t += 1 / 60;
   for (const e of s.eventos) {
     if (e.tipo === 'contacto') contactos++;
+    if (e.tipo === 'sancion' || e.tipo === 'vsc') console.log(e.tipo, e.p?.nombre || '', e.motivo || e.activo, 't', s.tiempo.toFixed(0));
+    if (e.tipo === 'paradaFin' && !process.env.SILENCIO) {}
     if (e.tipo === 'paradaFin') { paradas++; console.log(`parada de ${e.p.nombre}: ${e.duracion.toFixed(1)} s, compuesto ${e.p.coche.reglaje.compuesto}`); }
     if (e.tipo === 'abandono') { abandonos++; console.log('abandono', e.p.nombre, e.motivo, 'vuelta', e.p.vuelta, 's', e.p.coche.proj.s.toFixed(0), 'desg', Math.max(...e.p.coche.ruedas.map(w=>w.neum.desgaste)).toFixed(2), 'box', !!e.p.box, e.p.solicitudBox, JSON.stringify(e.p.coche.debugGolpe)); }
     if (e.tipo === 'vuelta' && e.p.jugador && e.p.vuelta === 2 && process.env.BOX) s.pedirBox(e.p, 'duro');

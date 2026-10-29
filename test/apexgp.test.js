@@ -18,7 +18,7 @@ async function test(name, fn) {
 // ─── Modelos en memoria ────────────────────────────────────────────────────
 const consulta = v => ({ select() { return this; }, lean: async () => (v ? JSON.parse(JSON.stringify(v)) : v), then: (a, b) => Promise.resolve(v).then(a, b) });
 function crearMundo(monedas) {
-    const usuarios = { ana: { usuario: 'ana', monedas, saldo: 0 } };
+    const usuarios = { ana: { usuario: 'ana', monedas, saldo: 0 }, beto: { usuario: 'beto', monedas: 0, saldo: 0 }, caro: { usuario: 'caro', monedas: 0, saldo: 0 } };
     const perfiles = new Map();
     const txs = new Map();
     const Usuario = {
@@ -38,7 +38,24 @@ function crearMundo(monedas) {
         exists: async f => txs.has(f.ref),
         create: async d => { if (txs.has(d.ref)) { const e = new Error('dup'); e.code = 11000; throw e; } txs.set(d.ref, d); return d; },
         deleteOne: async f => { txs.delete(f.ref); },
+        countDocuments: async f => [...txs.values()].filter(t => t.usuario === f.usuario && t.planId === f.planId).length,
     };
+    // tiempos de contrarreloj: find/findOne con sort por tiempo
+    const tiempos = [];
+    const filtra = f => tiempos.filter(t => Object.entries(f).every(([k, v]) => (v && typeof v === 'object' && '$lt' in v ? t[k] < v.$lt : t[k] === v)));
+    const cursor = arr => { const c = { sort() { arr.sort((a, b) => a.tiempo - b.tiempo); return c; }, limit(n) { arr = arr.slice(0, n); return c; }, select() { return c; }, lean: async () => JSON.parse(JSON.stringify(arr)) }; return c; };
+    const Tiempo = {
+        find: f => cursor(filtra(f)),
+        findOne: f => { const c = cursor(filtra(f)); const lean = c.lean; c.lean = async () => (await lean())[0] || null; return c; },
+        countDocuments: async f => filtra(f).length,
+        updateOne: async (f, upd, opc = {}) => {
+            const t = filtra(f)[0];
+            if (t) { Object.assign(t, upd.$set); return { matchedCount: 1 }; }
+            if (opc.upsert) { const { tiempo, ...clave } = f; void tiempo; tiempos.push({ ...clave, ...upd.$set }); return { upsertedCount: 1 }; }
+            return { matchedCount: 0 };
+        },
+    };
+    mongoose.models.ApexTiempo = Tiempo;
     const Perfil = {
         findOne: f => consulta(perfiles.get(f.usuario) || null),
         updateOne: async (f, upd, opc = {}) => {
@@ -67,12 +84,12 @@ function crearMundo(monedas) {
     const rutas = {};
     const app = { get: (r, ...h) => { rutas['GET ' + r] = h.at(-1); }, post: (r, ...h) => { rutas['POST ' + r] = h.at(-1); }, put: (r, ...h) => { rutas['PUT ' + r] = h.at(-1); } };
     delete require.cache[require.resolve('../rutas/apexgp')];
-    require('../rutas/apexgp').registrar(app, { verificarToken: () => {}, Usuario, LiveTx, io: null, logger: { info() {}, error() {} } });
-    const llamar = (ruta, body) => new Promise(resolve => {
+    const r = require('../rutas/apexgp').registrar(app, { verificarToken: () => {}, Usuario, LiveTx, io: null, logger: { info() {}, error() {} }, JWT_SECRET: 'secreto-de-prueba' });
+    const llamar = (ruta, body, usuario = 'ana', query = {}) => new Promise(resolve => {
         const res = { code: 200, status(c) { this.code = c; return this; }, set() { return this; }, json(d) { resolve({ code: this.code, ...d }); } };
-        rutas[ruta]({ usuario: 'ana', body }, res);
+        rutas[ruta]({ usuario, body, query }, res);
     });
-    return { usuarios, perfiles, txs, llamar };
+    return { usuarios, perfiles, txs, tiempos, llamar, premiarSemana: r.premiarSemana };
 }
 
 (async () => {
@@ -223,6 +240,132 @@ function crearMundo(monedas) {
         assert.ok(S.reiniciar('a'));
         assert.strictEqual(sala.estado, 'espera');
         assert.strictEqual(sala.jugadores.size, 2);
+    });
+
+    // ─── Campeonato, contrarreloj y ELO ───────────────────────────────────
+    const ahoraReal = Date.now;
+    const adelantar = s => { const base = ahoraReal(); Date.now = () => base + s * 1000; };
+    await test('campeonato: P1 da 15 UC no retirables (monedas, nunca saldo) y la ficha no se reusa', async () => {
+        const m = crearMundo(0);
+        const f = await m.llamar('POST /apexgp/campeonato/carrera', { circuito: 'valle', vueltas: 5, rivales: 11, dificultad: 'normal' });
+        assert.strictEqual(f.premiable, true);
+        adelantar(5 * 70);
+        try {
+            const r = await m.llamar('POST /apexgp/campeonato/resultado', { ficha: f.ficha, pos: 1, tiempo: 5 * 69 });
+            assert.strictEqual(r.premio, 15, JSON.stringify(r));
+            assert.strictEqual(m.usuarios.ana.monedas, 15);
+            assert.strictEqual(m.usuarios.ana.saldo, 0);
+            const tx = [...m.txs.values()][0];
+            assert.strictEqual(tx.tipo, 'mision'); assert.strictEqual(tx.usd, 0);
+            const r2 = await m.llamar('POST /apexgp/campeonato/resultado', { ficha: f.ficha, pos: 1, tiempo: 5 * 69 });
+            assert.strictEqual(r2.premio, 0);
+            assert.strictEqual(m.usuarios.ana.monedas, 15);
+        } finally { Date.now = ahoraReal; }
+    });
+    await test('campeonato: P2=10, P3=5, P4=0; máximo 3 premios al día', async () => {
+        const m = crearMundo(0);
+        const jugar = async pos => {
+            Date.now = ahoraReal;
+            const f = await m.llamar('POST /apexgp/campeonato/carrera', { circuito: 'veloz', vueltas: 3, rivales: 7, dificultad: 'dificil' });
+            adelantar(3 * 80);
+            try { return await m.llamar('POST /apexgp/campeonato/resultado', { ficha: f.ficha, pos, tiempo: 3 * 79 }); } finally { Date.now = ahoraReal; }
+        };
+        assert.strictEqual((await jugar(2)).premio, 10);
+        assert.strictEqual((await jugar(3)).premio, 5);
+        assert.strictEqual((await jugar(4)).premio, 0);
+        assert.strictEqual((await jugar(1)).premio, 15);
+        const tope = await jugar(1);
+        assert.strictEqual(tope.premio, 0); assert.strictEqual(tope.tope, true);
+        assert.strictEqual(m.usuarios.ana.monedas, 30);
+        assert.ok([...m.txs.values()].every(t => t.monedas % 5 === 0 && t.monedas <= 15));
+    });
+    await test('campeonato: sin premio si la carrera dura menos de lo posible, es fácil o corta, o la ficha es falsa', async () => {
+        const m = crearMundo(0);
+        const f = await m.llamar('POST /apexgp/campeonato/carrera', { circuito: 'valle', vueltas: 5, rivales: 11, dificultad: 'normal' });
+        assert.strictEqual((await m.llamar('POST /apexgp/campeonato/resultado', { ficha: f.ficha, pos: 1, tiempo: 5 * 69 })).code, 400);   // nada de tiempo real
+        assert.strictEqual((await m.llamar('POST /apexgp/campeonato/resultado', { ficha: f.ficha, pos: 1, tiempo: 100 })).code, 400);      // tiempo imposible
+        assert.strictEqual((await m.llamar('POST /apexgp/campeonato/resultado', { ficha: f.ficha + 'x', pos: 1, tiempo: 400 })).code, 400);
+        assert.strictEqual((await m.llamar('POST /apexgp/campeonato/resultado', { ficha: f.ficha, pos: 1, tiempo: 400 }, 'beto')).code, 400); // ficha de otra persona
+        const facil = await m.llamar('POST /apexgp/campeonato/carrera', { circuito: 'valle', vueltas: 5, rivales: 11, dificultad: 'facil' });
+        assert.strictEqual(facil.premiable, false);
+        assert.strictEqual(A.carreraPremiable({ circuito: 'valle', vueltas: 2, rivales: 11, dificultad: 'normal' }), false);
+        assert.strictEqual(m.usuarios.ana.monedas, 0);
+    });
+
+    const fantasma = (seg, v = 60) => JSON.stringify(Array.from({ length: Math.round(seg * A.FANTASMA_HZ) }, (_, i) => [Math.round(i * v / A.FANTASMA_HZ * 10), 0, 0, v]));
+    await test('validarVuelta: duración, teletransportes y tiempos imposibles', () => {
+        assert.ok(A.validarVuelta('valle', 80, fantasma(80)).ok);
+        assert.strictEqual(A.validarVuelta('valle', 40, fantasma(40)).ok, false);
+        assert.strictEqual(A.validarVuelta('valle', 80, fantasma(60)).ok, false);
+        assert.strictEqual(A.validarVuelta('valle', 80, fantasma(80, 200)).ok, false);
+        assert.strictEqual(A.validarVuelta('valle', 80, 'basura').ok, false);
+        assert.strictEqual(A.validarVuelta('marte', 80, fantasma(80)).ok, false);
+    });
+    await test('contrarreloj: guarda la mejor vuelta semanal y global, ranking y fantasma del récord', async () => {
+        const m = crearMundo(0);
+        const s = await m.llamar('POST /apexgp/contrarreloj/sesion', { circuito: 'valle' });
+        const sb = await m.llamar('POST /apexgp/contrarreloj/sesion', { circuito: 'valle' }, 'beto');
+        adelantar(300);
+        try {
+            const a = await m.llamar('POST /apexgp/contrarreloj/tiempo', { ficha: s.ficha, tiempo: 85, fantasma: fantasma(85) });
+            assert.deepStrictEqual(a.mejorado, { semana: true, global: true }, JSON.stringify(a));
+            const b = await m.llamar('POST /apexgp/contrarreloj/tiempo', { ficha: s.ficha, tiempo: 90, fantasma: fantasma(90) });
+            assert.deepStrictEqual(b.mejorado, { semana: false, global: false });
+            await m.llamar('POST /apexgp/contrarreloj/tiempo', { ficha: s.ficha, tiempo: 82, fantasma: fantasma(82) });
+            await m.llamar('POST /apexgp/contrarreloj/tiempo', { ficha: sb.ficha, tiempo: 84, fantasma: fantasma(84) }, 'beto');
+        } finally { Date.now = ahoraReal; }
+        const rk = await m.llamar('GET /apexgp/contrarreloj/ranking', null, null, { circuito: 'valle' });
+        assert.deepStrictEqual(rk.filas.map(f => [f.usuario, f.tiempo]), [['ana', 82], ['beto', 84]]);
+        const g = await m.llamar('GET /apexgp/contrarreloj/fantasma', null, null, { circuito: 'valle', periodo: 'global' });
+        assert.strictEqual(g.usuario, 'ana'); assert.strictEqual(JSON.parse(g.fantasma).length, 820);
+        // una vuelta más larga que la sesión no vale
+        const s2 = await m.llamar('POST /apexgp/contrarreloj/sesion', { circuito: 'valle' });
+        assert.strictEqual((await m.llamar('POST /apexgp/contrarreloj/tiempo', { ficha: s2.ficha, tiempo: 80, fantasma: fantasma(80) })).code, 400);
+    });
+    await test('premios semanales: 15/10/5 al podio de cada circuito, una sola vez', async () => {
+        const m = crearMundo(0);
+        const sem = '2026-W40';
+        m.tiempos.push({ usuario: 'beto', circuito: 'valle', semana: sem, tiempo: 80 }, { usuario: 'ana', circuito: 'valle', semana: sem, tiempo: 78 },
+            { usuario: 'caro', circuito: 'valle', semana: sem, tiempo: 81 }, { usuario: 'caro', circuito: 'veloz', semana: sem, tiempo: 70 });
+        assert.strictEqual(await m.premiarSemana(sem), 4);
+        assert.strictEqual(await m.premiarSemana(sem), 0);
+        assert.deepStrictEqual([m.usuarios.ana.monedas, m.usuarios.beto.monedas, m.usuarios.caro.monedas], [15, 10, 20]);
+        assert.ok([m.usuarios.ana, m.usuarios.beto, m.usuarios.caro].every(u => u.saldo === 0));
+    });
+    await test('semanaDe: semanas ISO', () => {
+        assert.strictEqual(A.semanaDe(new Date('2026-01-01T12:00:00Z')), '2026-W01');
+        assert.strictEqual(A.semanaDe(new Date('2026-10-29T12:00:00Z')), '2026-W44');
+        assert.strictEqual(A.semanaAnterior(new Date('2026-10-29T12:00:00Z')), '2026-W43');
+    });
+    await test('ELO: gana quien queda delante, suma cero y pesa más ganar a alguien mejor', () => {
+        const r = A.eloTras([{ usuario: 'a', elo: 1200, pos: 1 }, { usuario: 'b', elo: 1200, pos: 2 }]);
+        assert.deepStrictEqual(r, { a: 1216, b: 1184 });
+        const sorpresa = A.eloTras([{ usuario: 'a', elo: 1000, pos: 1 }, { usuario: 'b', elo: 1600, pos: 2 }]);
+        assert.ok(sorpresa.a - 1000 > 25);
+        const tres = A.eloTras([{ usuario: 'a', elo: 1300, pos: 2 }, { usuario: 'b', elo: 1250, pos: 1 }, { usuario: 'c', elo: 1100, pos: 3 }]);
+        assert.ok(Math.abs(tres.a + tres.b + tres.c - 3650) <= 2);
+        assert.strictEqual(A.nivelElo(1600), 'Diamante');
+    });
+    await test('emparejador: agrupa por región y ELO, abre el margen con la espera', () => {
+        let t = 0;
+        const E = new A.Emparejador({ ahora: () => t, maximo: 4, espera: 10000 });
+        E.entrar('a', {}, 1200, 'america'); E.entrar('b', {}, 1250, 'america'); E.entrar('c', {}, 1900, 'america'); E.entrar('d', {}, 1210, 'europa');
+        assert.strictEqual(E.emparejar().length, 0);           // aún esperando a más
+        t = 11000;
+        const g = E.emparejar();
+        assert.strictEqual(g.length, 1);
+        assert.deepStrictEqual(g[0].map(x => x.id).sort(), ['a', 'b']);
+        t = 40000;                                             // con la espera: otras regiones y ELO más lejano
+        E.entrar('e', {}, 1500, 'asia');
+        t = 52000;
+        const g2 = E.emparejar();
+        assert.ok(g2.length === 1 && g2[0].length >= 2, JSON.stringify(g2.map(x => x.map(y => y.id))));
+    });
+    await test('salas: guardan circuito y clima válidos', () => {
+        const S = new A.Salas();
+        assert.strictEqual(S.crear('a', {}, { circuito: 'puerto', clima: 'lluvia' }).sala.circuito, 'puerto');
+        const b = S.crear('b', {}, { circuito: 'luna', clima: 'nieve' }).sala;
+        assert.deepStrictEqual([b.circuito, b.clima], ['valle', 'seco']);
     });
     await test('limpiarNombre: sin HTML ni nombres larguísimos', () => {
         assert.strictEqual(A.limpiarNombre('<b>Ana</b>'), 'bAnab');

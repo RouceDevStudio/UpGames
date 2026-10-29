@@ -5,14 +5,20 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { Circuito } from './track.js';
+import { Circuito, CIRCUITOS } from './track.js';
 import { Sesion } from './race.js';
-import { REGLAJE_DEF, COMPUESTOS, COCHE, EQUIPOS, MEJORAS_INFO } from './config.js';
+import { REGLAJE_DEF, COMPUESTOS, COCHE, EQUIPOS, MEJORAS_INFO, compuestoParaAgua } from './config.js';
+import { CLIMAS } from './clima.js';
+import * as CAMP from './campeonato.js';
+import { Radio } from './radio.js';
+import { Grabadora, crearProxy, CamarasTV, CAMARAS_REPE, NOMBRES_REPE } from './repeticion.js';
+import { Telemetria } from './telemetria.js';
+import { Lluvia } from './render/lluvia.js';
 import { construirEscenario } from './render/escenario.js';
 import { crearModelo, dibujarPlantilla } from './render/cocheModelo.js';
 import { GestorBoxes, Escombros } from './render/equipo.js';
 import { NOMBRES_PATRON, NOMBRES_CASCO } from './render/librea.js';
-import { cuenta, Multijugador, empaquetar, aplicarEstado } from './red.js';
+import { cuenta, Multijugador, empaquetar, aplicarEstado, fantasmaAServidor, fantasmaDeServidor } from './red.js';
 import { Efectos } from './render/efectos.js';
 import { Camara, NOMBRES_CAMARA } from './render/camara.js';
 import { Sonido } from './audio.js';
@@ -27,25 +33,39 @@ const CLAVE = 'apexgp.v1';
 const AJ_DEF = {
   control: esTactil ? 'inclinacion' : 'tactil', sensibilidad: 1, anguloInclinacion: 24, invertir: false, vibracion: true,
   tc: 2, abs: true, cambioAuto: true, direccion: true, estabilidad: false, trazada: true,
-  calidad: 'auto', fps: false, volumen: 0.8, unidades: 'kmh', camara: 'persecucion',
+  calidad: 'auto', fps: false, volumen: 0.8, unidades: 'kmh', camara: 'persecucion', radio: true, ambiente: true,
 };
-const OPC_CARRERA_DEF = { vueltas: 5, rivales: 7, dificultad: 'normal', posSalida: 4, compuesto: 'medio' };
+const OPC_CARRERA_DEF = { vueltas: 5, rivales: 7, dificultad: 'normal', posSalida: 0, compuesto: 'medio', clima: 'seco' };
 function cargar() {
   try { return JSON.parse(localStorage.getItem(CLAVE)) || {}; } catch { return {}; }
 }
 const datos = cargar();
 const ajustes = { ...AJ_DEF, ...(datos.ajustes || {}) };
-const reglaje = { ...REGLAJE_DEF, ...(datos.reglaje || {}) };
+// circuito elegido; el reglaje, los récords y el fantasma se guardan por circuito
+let circuitoId = CIRCUITOS[datos.circuito] ? datos.circuito : 'valle';
+const reglajes = datos.reglajes || { valle: datos.reglaje || {} };
+const reglaje = { ...REGLAJE_DEF, ...(reglajes[circuitoId] || {}) };
 const opcCarrera = { ...OPC_CARRERA_DEF, ...(datos.carrera || {}) };
 const records = datos.records || {};
-let fantasmaGuardado = datos.fantasma || null;
+if (records.contrarreloj && !records['crono:valle']) records['crono:valle'] = records.contrarreloj;
+const fantasmas = datos.fantasmas || (datos.fantasma ? { valle: datos.fantasma } : {});
+let fantasmaGuardado = fantasmas[circuitoId] || null;
+let fantasmaRival = null;          // récord descargado del ranking
 // garaje: lo equipado y lo comprado (el servidor manda; aquí queda una copia para jugar sin conexión)
 const EQUIPADO_DEF = { patron: 'flecha', acabado: 'brillo', casco: 'clasico', propia: false, colores: { base: '#0d47ff', acento: '#00e5ff', tercero: '#ffffff' }, cascoColores: { base: '#ffffff', acento: '#0d47ff' }, numero: 7 };
 const equipado = { ...EQUIPADO_DEF, ...(datos.equipado || {}), colores: { ...EQUIPADO_DEF.colores, ...(datos.equipado?.colores || {}) }, cascoColores: { ...EQUIPADO_DEF.cascoColores, ...(datos.equipado?.cascoColores || {}) } };
 let perfilApex = datos.perfil || { mejoras: {}, cosmeticos: [], upcoins: null };
-const opcMulti = { tipo: '1v1', max: 22, vueltas: 3, ...(datos.multi || {}) };
+const regionDef = (() => { const z = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; return /^Europe|^Africa/.test(z) ? 'europa' : /^Asia|^Australia|^Pacific/.test(z) ? 'asia' : 'america'; })();
+const opcMulti = { tipo: '1v1', max: 22, vueltas: 3, circuito: 'valle', clima: 'seco', region: regionDef, ...(datos.multi || {}) };
+const opcCamp = { vueltas: 5, rivales: 11, dificultad: 'normal', clima: 'auto', ...(datos.opcCamp || {}) };
+let temporada = (() => { try { return JSON.parse(localStorage.getItem('apexgp.campeonato')) || null; } catch { return null; } })();
 function guardar() {
-  try { localStorage.setItem(CLAVE, JSON.stringify({ ajustes, reglaje, carrera: opcCarrera, records, fantasma: fantasmaGuardado, equipado, perfil: perfilApex, multi: opcMulti })); } catch { /* sin almacenamiento */ }
+  reglajes[circuitoId] = { ...reglaje };
+  if (fantasmaGuardado) fantasmas[circuitoId] = fantasmaGuardado;
+  try {
+    localStorage.setItem(CLAVE, JSON.stringify({ ajustes, reglajes, circuito: circuitoId, carrera: opcCarrera, records, fantasmas, equipado, perfil: perfilApex, multi: opcMulti, opcCamp }));
+    localStorage.setItem('apexgp.campeonato', JSON.stringify(temporada));
+  } catch { /* sin almacenamiento */ }
 }
 // librea propia: imagen guardada aparte (puede pesar varios cientos de KB)
 let imagenLibrea = null;
@@ -79,29 +99,66 @@ let renderer, scene, composer, camara, efectos, escenario, circuito;
 const sonido = new Sonido();
 const entrada = new Entrada(ajustes);
 let sesion = null, modelos = [], modeloFantasma = null, lineaIdeal = null;
-let gestorBoxes = null, escombros = null;
+let gestorBoxes = null, escombros = null, lluviaFx = null, camarasTV = null;
+let grabadora = null, telemetria = null, repe = null;
+let qActual = null, carreraCamp = null, fichaCrono = null;
 const multi = new Multijugador();
+let estadoRadio = {};
+let tRadio = 0;
+const radio = new Radio({
+  sonido,
+  alSubtitulo: (m, on) => {
+    const el = $('#hRadio');
+    if (on) { el.innerHTML = `<b>${m.tipo === 'megafonia' ? '📢 MEGAFONÍA' : '📻 RADIO DEL EQUIPO'}</b>${m.texto}`; el.classList.add('visible'); clearTimeout(tRadio); }
+    else tRadio = setTimeout(() => el.classList.remove('visible'), 1200);
+  },
+});
 let enGaraje = false, enRed = false;
 let jugando = false, pausado = false, modoActual = 'practica';
 let pantallaPrevia = 'menu';
 
 async function iniciar() {
+  crearRenderer();
+  await cargarImagenLibrea();
+  await cargarCircuito(circuitoId);
+  mostrar('menu');
+  requestAnimationFrame(bucle);
+}
+
+// Construye (o reconstruye) el circuito y todo su escenario
+let cargando = null;
+async function cargarCircuito(id) {
+  if (cargando) await cargando;
+  if (circuito && circuito.id === id) return;
+  let fin;
+  cargando = new Promise(r => { fin = r; });
+  const visible = document.querySelector('.pantalla.visible')?.id;
+  ocultarTodo();
+  $('#carga').classList.add('visible');
   progreso(0.05, 'Trazando el circuito…');
   await esperar(20);
-  circuito = new Circuito();
+  // guardar el reglaje del circuito anterior y cargar el de este
+  if (circuito) reglajes[circuito.id] = { ...reglaje };
+  circuitoId = id;
+  Object.assign(reglaje, REGLAJE_DEF, reglajes[id] || {});
+  fantasmaGuardado = fantasmas[id] || null; fantasmaRival = null;
+  circuito = new Circuito(id);
   $('#largoPista').textContent = (circuito.largo / 1000).toFixed(3) + ' km';
-  progreso(0.25, 'Preparando el motor gráfico…');
+  $('#nombrePista').textContent = circuito.nombre;
+  progreso(0.3, 'Modelando el terreno, las gradas y los edificios…');
   await esperar(20);
-  crearRenderer();
-  progreso(0.4, 'Modelando el terreno y las gradas…');
-  await esperar(20);
+  if (scene) liberarEscena();
+  scene = new THREE.Scene();
+  configurarPost();
   escenario = construirEscenario(scene, renderer, circuito, calidad);
   progreso(0.75, 'Montando los coches…');
   await esperar(20);
   efectos = new Efectos(scene, calidad);
   gestorBoxes = new GestorBoxes(scene);
   escombros = new Escombros(scene, (x, z) => { const p = circuito.proyectar(x, z, -1, {}); return p.y + circuito.caida(p.i, p.d); });
-  await cargarImagenLibrea();
+  lluviaFx = new Lluvia(scene, escenario, calidad);
+  camarasTV = new CamarasTV(circuito);
+  modelos = []; modeloFantasma = null;
   construirLineaIdeal();
   dibujarMinimapaBase();
   progreso(0.9, 'Compilando sombreadores…');
@@ -110,11 +167,28 @@ async function iniciar() {
   crearModelos();
   renderer.compile(scene, camara.cam);
   progreso(1, '¡Listo!');
-  await esperar(150);
-  $('#carga').classList.remove('visible');
-  mostrar('menu');
+  guardar();
+  pintarCircuitos();
   actualizarRecordMenu();
-  requestAnimationFrame(bucle);
+  await esperar(120);
+  $('#carga').classList.remove('visible');
+  if (visible && visible !== 'carga') mostrar(visible);
+  cargando = null; fin();
+}
+
+function liberarEscena() {
+  scene.traverse(o => {
+    o.geometry?.dispose?.();
+    const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+    for (const m of ms) { for (const k in m) if (m[k]?.isTexture) m[k].dispose(); m.dispose?.(); }
+  });
+  scene.environment?.dispose?.();
+}
+
+function pintarCircuitos() {
+  const el = $('#selCircuito');
+  el.innerHTML = Object.values(CIRCUITOS).map(d => `<b data-v="${d.id}" class="${d.id === circuitoId ? 'sel' : ''}">${d.corto}<small>${d.tipo === 'urbano' ? 'urbano' : d.tipo === 'parque' ? 'rápido' : 'técnico'}</small></b>`).join('');
+  el.querySelectorAll('b').forEach(b => b.onclick = () => { if (b.dataset.v !== circuitoId) cargarCircuito(b.dataset.v); });
 }
 
 function crearRenderer() {
@@ -126,10 +200,8 @@ function crearRenderer() {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = calidad >= 1;
   renderer.shadowMap.type = calidad >= 2 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
-  scene = new THREE.Scene();
   camara = new Camara(innerWidth / innerHeight);
   camara.modo = ajustes.camara;
-  configurarPost();
   addEventListener('resize', redimensionar);
 }
 
@@ -252,16 +324,35 @@ function ayudasDe() {
 }
 
 // --- Sesiones -----------------------------------------------------------------
-function empezar(modo) {
+const nombreJugador = () => cuenta.usuario() ? '@' + cuenta.usuario() : 'Tú';
+function opcBase(modo) {
+  return { modo, reglaje: { ...reglaje }, ayudas: ayudasDe(), mejoras: perfilApex.mejoras, equipado: { ...equipado }, equipoJugador: equipado.equipo || 0, nombre: nombreJugador() };
+}
+
+function empezar(modo, extra = {}) {
   modoActual = modo;
   sonido.iniciar();
   sonido.ponerVolumen(ajustes.volumen);
-  const opc = { modo, reglaje: { ...reglaje }, ayudas: ayudasDe(), mejoras: perfilApex.mejoras, equipado: { ...equipado }, equipoJugador: equipado.equipo || 0, nombre: cuenta.usuario() ? '@' + cuenta.usuario() : 'Tú' };
-  if (modo === 'carrera') {
-    Object.assign(opc, { vueltas: opcCarrera.vueltas, rivales: opcCarrera.rivales, dificultad: opcCarrera.dificultad, posSalida: opcCarrera.posSalida });
-    opc.reglaje.compuesto = opcCarrera.compuesto;
+  const opc = { ...opcBase(modo), ...extra };
+  carreraCamp = extra.campeonato || null;
+  if (modo === 'carrera' && !extra.pilotos) {
+    // carrera rápida: con clasificación la parrilla la decide Q1-Q2-Q3
+    if (+opcCarrera.posSalida === 0 && !extra.sinClasif) { empezarClasificacion({ rivales: opcCarrera.rivales, dificultad: opcCarrera.dificultad, clima: opcCarrera.clima }); return; }
+    Object.assign(opc, { vueltas: opcCarrera.vueltas, rivales: opcCarrera.rivales, dificultad: opcCarrera.dificultad, posSalida: opcCarrera.posSalida || 1, clima: opcCarrera.clima });
   }
-  if (modo === 'contrarreloj' && fantasmaGuardado?.puntos?.length) opc.fantasma = fantasmaGuardado;
+  if (modo === 'carrera') {
+    opc.vueltas ??= opcCarrera.vueltas;
+    opc.reglaje.compuesto = extra.compuesto || opcCarrera.compuesto;
+    // si llueve y el jugador eligió lisos, el ingeniero le pone intermedios o de lluvia
+    if (opc.clima === 'lluvia' && !COMPUESTOS[opc.reglaje.compuesto].lluvia) opc.reglaje.compuesto = 'lluvia';
+  }
+  if (modo === 'contrarreloj') {
+    const f = fantasmaRival || fantasmaGuardado;
+    if (f?.puntos?.length) opc.fantasma = f;
+    fichaCrono = null;
+    if (cuenta.conectado()) cuenta.fichaCrono(circuito.id).then(d => { fichaCrono = d.ficha; }).catch(() => {});
+  }
+  if (modo === 'practica') opc.clima = extra.clima || opcCarrera.clima;
   sesion = new Sesion(circuito, opc);
   arrancarSesion(modo);
 }
@@ -286,6 +377,19 @@ function arrancarSesion(modo) {
   pantallaCompleta();
   if (ajustes.control === 'inclinacion' && esTactil) entrada.activarInclinacion().then(() => setTimeout(() => entrada.calibrar(), 400));
   pedirWakeLock();
+  // repetición, telemetría, radio y estado de la carrera
+  grabadora = new Grabadora(sesion.participantes.length);
+  telemetria = new Telemetria(circuito.largo);
+  estadoRadio = { clima: sesion.clima.agua > 0.13 ? 'mojado' : 'seco', lluvia: sesion.clima.lluvia > 0.05, lider: null, avisoDesg: false, vsc: false, ultimaPos: null };
+  radio.voz = !!ajustes.radio;
+  sonido.ponerAmbiente(!!ajustes.ambiente);
+  radio.callar();
+  $('#hPen').classList.remove('visible');
+  if (modo === 'carrera') {
+    const p = sesion.jugador;
+    if (ajustes.ambiente) radio.decir(`Bienvenidos al ${circuito.nombre}. ${sesion.participantes.length} pilotos en la parrilla${sesion.clima.lluvia > 0.05 ? ', con lluvia' : ''}.`, { tipo: 'megafonia' });
+    radio.decir(`Sales ${p.posicion}º. ${sesion.clima.agua > 0.13 ? 'Pista mojada, cuidado en las frenadas.' : sesion.clima.modo === 'variable' ? 'El radar marca lluvia en la carrera, atento.' : 'Neumáticos a temperatura, vamos.'}`, { clave: 'salida', cada: 1 });
+  } else if (modo === 'contrarreloj') radio.decir(fantasmaRival ? `Vas contra el récord de ${fantasmaRival.autor}: ${fmt(fantasmaRival.tiempo)}.` : 'Vuelta de salida. Calienta los neumáticos y empuja desde la meta.', { clave: 'crono', cada: 1 });
 }
 
 let wakeLock = null;
@@ -324,6 +428,7 @@ function pausar(si) {
 
 function salirAlMenu() {
   if (enRed) { multi.salir(); enRed = false; }
+  qActual = null; carreraCamp = null; radio.callar();
   jugando = false; pausado = false;
   $('#panelBox').classList.remove('visible');
   $('#hud').classList.remove('visible');
@@ -346,10 +451,10 @@ function actualizarRecordMenu() {
 function ocultarTodo() { document.querySelectorAll('.pantalla').forEach(p => p.classList.remove('visible')); }
 function mostrar(id) {
   const actual = document.querySelector('.pantalla.visible');
-  if (actual && actual.id !== id && !['reglaje', 'ajustes', 'ayuda', 'cuenta'].includes(actual.id)) pantallaPrevia = actual.id;
+  if (actual && actual.id !== id && !['reglaje', 'ajustes', 'ayuda', 'cuenta', 'telePantalla', 'carga'].includes(actual.id)) pantallaPrevia = actual.id;
   ocultarTodo();
   $('#' + id).classList.add('visible');
-  if (id === 'reglaje') pintarReglaje();
+  if (id === 'reglaje') { pintarReglaje(); $('#reglajeCircuito').textContent = '· ' + circuito.def.corto; }
   if (id === 'ajustes') pintarAjustes();
   if (id === 'cuenta') pintarCuenta();
 }
@@ -360,9 +465,11 @@ document.addEventListener('click', (e) => {
   sonido.iniciar();
   const destino = b.dataset.ir;
   if (destino === 'volver') { aplicarAjustesEnVivo(); mostrar(jugando ? 'pausa' : pantallaPrevia || 'menu'); return; }
-  if (destino === 'contrarreloj' || destino === 'practica') { empezar(destino); return; }
+  if (destino === 'contrarreloj' || destino === 'practica') { if (destino === 'contrarreloj') fantasmaRival = null; empezar(destino); return; }
   if (destino === 'garaje') { abrirGaraje(); return; }
   if (destino === 'multi') { abrirMulti(); return; }
+  if (destino === 'campeonato') { abrirCampeonato(); return; }
+  if (destino === 'rankings') { abrirRankings(); return; }
   if (destino === 'menu' && enGaraje) cerrarGaraje();
   mostrar(destino);
   if (destino === 'carrera') pintarSegmentos('#carrera', opcCarrera);
@@ -463,11 +570,15 @@ function aplicarAjustesEnVivo() {
 }
 
 $('#bContinuar').addEventListener('click', () => pausar(false));
-$('#bReiniciar').addEventListener('click', () => empezar(modoActual));
+$('#bReiniciar').addEventListener('click', () => { if (qActual) salirAPistaQ(); else empezar(modoActual, carreraCamp ? { pilotos: sesion.participantes.map(p => ({ id: p.idPiloto, nombre: p.nombre, ie: p.indiceEquipo, ip: p.numeroPiloto, hab: p.ia?.habilidad ?? 1, jugador: p.jugador })), vueltas: sesion.vueltasTotales, clima: sesion.clima.modo, campeonato: carreraCamp } : {}); });
 $('#bSalir').addEventListener('click', salirAlMenu);
 $('#bCalibrar').addEventListener('click', () => { entrada.calibrar(); mensaje('CENTRADO', '', 1); });
 $('#bResMenu').addEventListener('click', salirAlMenu);
-$('#bResOtra').addEventListener('click', () => empezar(modoActual));
+$('#bResOtra').addEventListener('click', () => { if (carreraCamp) { carreraCamp = null; volverMenuSinSesion(); abrirCampeonato(); } else empezar(modoActual === 'red' ? 'carrera' : modoActual); });
+$('#bPausaRepe').addEventListener('click', () => abrirRepe('pausa'));
+$('#bResRepe').addEventListener('click', () => abrirRepe('resultados'));
+$('#bPausaTele').addEventListener('click', () => abrirTelemetria());
+$('#bResTele').addEventListener('click', () => abrirTelemetria());
 
 entrada.conectarTactil({
   acel: $('#pedalAcel'), freno: $('#pedalFreno'), volante: $('#zonaVolante'), pomo: $('#pomo'),
@@ -569,7 +680,26 @@ function actualizarHud(dt) {
   const drs = $('#hDrs');
   drs.classList.toggle('abierto', c.drsAbierto);
   drs.classList.toggle('disponible', !c.drsAbierto && c.drsPermitido);
-  $('#bDrs').classList.toggle('activo', c.drsAbierto || c.drsPermitido);
+  const bD = $('#bDrs');
+  bD.classList.toggle('activo', !c.drsAbierto && c.drsPermitido);
+  bD.classList.toggle('abierto', c.drsAbierto);
+  const bE = $('#bErs'), modoE = c.mandos.ersModo ?? 1;
+  bE.classList.toggle('m0', modoE === 0); bE.classList.toggle('m2', modoE === 2);
+  $('#bErsTxt').textContent = ['RECARGA', 'ERS', 'ATAQUE'][modoE];
+  bE.querySelector('.carga').style.transform = `scaleX(${(c.ers / COCHE.ersCapacidad).toFixed(2)})`;
+  // banderas
+  const bandera = $('#hBandera');
+  let bnd = '', btxt = '';
+  if (sesion.vsc) { bnd = 'vsc'; btxt = 'VSC · COCHE DE SEGURIDAD VIRTUAL'; }
+  else if (sesion.enAmarilla?.(c.proj.s)) { bnd = 'amarilla'; btxt = 'BANDERA AMARILLA'; }
+  else if (estadoRadio.tVerde > 0) { bnd = 'verde'; btxt = 'PISTA LIBRE'; }
+  else if (estadoRadio.tBN > 0) { bnd = 'blanconegra'; btxt = 'AVISO: LÍMITES DE PISTA'; }
+  else if (sesion.modo === 'carrera' && azulPara(p)) { bnd = 'azul'; btxt = 'BANDERA AZUL · DEJA PASAR'; }
+  bandera.className = 'bandera ' + bnd; bandera.textContent = btxt;
+  const clima = sesion.clima, ch = $('#hClima');
+  ch.classList.toggle('visible', clima.lluvia > 0.02 || clima.agua > 0.02);
+  ch.textContent = `${clima.lluvia > 0.4 ? '🌧️' : clima.lluvia > 0.02 ? '🌦️' : '⛅'} pista ${clima.agua > 0.48 ? 'muy mojada' : clima.agua > 0.13 ? 'mojada' : clima.agua > 0.02 ? 'húmeda' : 'seca'} · ${Math.round(clima.agua * 100)}%`;
+  const pen = $('#hPen'); pen.classList.toggle('visible', p.penalizacion > 0); pen.textContent = `+${p.penalizacion} s`;
   c.ruedas.forEach((w, k) => {
     const el = neumEls[k];
     el.style.background = colorTemp(w.neum.tSup, w.neum.c.tOpt);
@@ -621,10 +751,20 @@ function actualizarHud(dt) {
     if (esTactil) { const i = filas.indexOf(p); filas = filas.filter((q, k) => k === 0 || Math.abs(k - i) <= 1); }
     $('#hTabla').innerHTML = filas.map(q => {
       const gap = q === lider ? 'Líder' : q.terminado ? '🏁' : '+' + ((lider.distancia - q.distancia) / Math.max(20, lider.coche.velocidad)).toFixed(1);
-      return `<div class="${q.jugador ? 'yo' : ''}"><span class="n">${q.posicion}</span><span class="c" style="background:${q.equipo.base}"></span><span>${q.equipo.corto}</span><span class="t">${gap}</span></div>`;
+      return `<div class="${q.jugador ? 'yo' : ''}"><span class="n">${q.posicion}</span><span class="c" style="background:${q.equipo.base}"></span><span>${q.equipo.corto}${q.penalizacion ? ' <b style="color:#ff3b3b">+' + q.penalizacion + '</b>' : ''}</span><span class="t">${gap}</span></div>`;
     }).join('');
   } else $('#hTabla').innerHTML = '';
   dibujarMinimapa();
+}
+
+// bandera azul: un coche con una vuelta más se acerca por detrás
+function azulPara(p) {
+  for (const o of sesion.participantes) {
+    if (o === p || o.abandono || o.distancia - p.distancia < sesion.c.largo * 0.5) continue;
+    let ds = p.coche.proj.s - o.coche.proj.s; if (ds < 0) ds += sesion.c.largo;
+    if (ds < 80) return true;
+  }
+  return false;
 }
 
 function telemetriaPausa() {
@@ -640,7 +780,26 @@ function telemetriaPausa() {
 function procesarEventos() {
   for (const e of sesion.eventos) {
     if (e === 'luz') { sonido.evento('luz'); }
-    else if (e === 'salida') { sonido.evento('salida'); mensaje('¡LUCES FUERA!', '', 1.2); entrada.vibrar(80); }
+    else if (e === 'salida') { sonido.evento('salida'); sonido.ovacion(1.6); mensaje('¡LUCES FUERA!', '', 1.2); entrada.vibrar(80); }
+    else if (e.tipo === 'vsc') {
+      if (e.activo) { mensaje('VSC', 'Coche de seguridad virtual · ritmo limitado y sin DRS', 2.5); radio.decir('VSC, VSC. Coche de seguridad virtual, levanta y respeta el delta.', { clave: 'vsc', cada: 5, prioridad: true }); radio.decir('Coche de seguridad virtual desplegado.', { tipo: 'megafonia', clave: 'vscM', cada: 30 }); }
+      else { mensaje('PISTA LIBRE', 'Fin del VSC', 1.8); estadoRadio.tVerde = 4; radio.decir('Fin del VSC, fin del VSC. ¡A fondo!', { clave: 'vscFin', cada: 5, prioridad: true }); }
+    }
+    else if (e.tipo === 'amarilla') {
+      let ds = e.s - sesion.jugador.coche.proj.s; if (ds < 0) ds += circuito.largo;
+      if (ds < 700) radio.decir('Bandera amarilla más adelante, cuidado.', { clave: 'amarilla', cada: 15 });
+    }
+    else if (e.tipo === 'sancion') {
+      if (e.p.jugador) { mensaje(`+${e.seg} s DE SANCIÓN`, e.motivo, 2.6); radio.decir(`Nos han puesto cinco segundos de sanción por ${e.motivo.toLowerCase()}. Llevamos ${e.total} en total.`, { prioridad: true }); }
+    }
+    else if (e.tipo === 'avisoLimites' && e.p.jugador) {
+      if (e.bandera) { estadoRadio.tBN = 4; radio.decir('Bandera blanca y negra. Un aviso más por límites de pista y son cinco segundos.', { prioridad: true }); }
+      else if (e.n >= 2) radio.decir(`Cuidado con los límites de pista, llevas ${e.n} avisos.`, { clave: 'limites', cada: 20 });
+    }
+    else if (e.tipo === 'vueltaRapida' && sesion.modo === 'carrera' && sesion.estado === 'carrera') {
+      radio.decir(`Vuelta rápida para ${e.p.nombre.replace('@', '')}: ${fmt(e.p.mejor)}.`, { tipo: 'megafonia', clave: 'vr', cada: 40 });
+      if (e.p.jugador) radio.decir('¡Vuelta rápida! Muy bien.', { clave: 'vrJ', cada: 30 });
+    }
     else if (e.tipo === 'contacto' && e.jugador) { sonido.evento('contacto', e.fuerza); entrada.vibrar(60, 0.8); }
     else if (e.tipo === 'limites' && e.jugador) mensaje('LÍMITES DE PISTA', 'Vuelta anulada', 1.8);
     else if (e.tipo === 'sector') {
@@ -651,13 +810,27 @@ function procesarEventos() {
       const txt = e.valida ? fmt(e.t) : fmt(e.t) + ' (anulada)';
       if (e.mejora) mensaje(sesion.modo === 'carrera' ? 'MEJOR VUELTA PERSONAL' : 'NUEVO MEJOR TIEMPO', txt, 2.4);
       else mensaje('VUELTA', txt, 1.8);
-      if (sesion.modo === 'contrarreloj' && e.valida && (!records.contrarreloj || e.t < records.contrarreloj)) {
-        records.contrarreloj = e.t; guardar();
+      const clave = 'crono:' + circuito.id;
+      if (sesion.modo === 'contrarreloj' && !qActual && e.valida && (!records[clave] || e.t < records[clave])) {
+        records[clave] = e.t; guardar();
       }
-      if (sesion.modo === 'carrera' && e.p.vuelta === sesion.vueltasTotales) mensaje('ÚLTIMA VUELTA', '', 1.8);
+      telemetria?.cerrarVuelta(e.t, e.valida);
+      if (qActual) finVueltaClasif(e);
+      if (sesion.modo === 'carrera' && e.p.vuelta === sesion.vueltasTotales) { mensaje('ÚLTIMA VUELTA', '', 1.8); radio.decir('Última vuelta. ¡Tráelo a casa!', { clave: 'ultima', cada: 60 }); }
+      else if (sesion.modo === 'carrera' && e.p.vuelta % 2 === 0) {
+        const g = sesion.diferencias(e.p);
+        radio.decir(`Vas P${e.p.posicion}${g.del != null ? `, a ${g.del.toFixed(1)} del coche de delante` : ''}${g.tras != null && g.tras < 1.2 ? `. Te sigue de cerca a ${g.tras.toFixed(1)}` : ''}.`, { clave: 'gap', cada: 50 });
+      }
     }
     else if (e.tipo === 'nuevoFantasma') {
-      if (sesion.modo === 'contrarreloj' && (!fantasmaGuardado || e.fantasma.tiempo < fantasmaGuardado.tiempo)) { fantasmaGuardado = e.fantasma; guardar(); }
+      if (sesion.modo === 'contrarreloj' && !qActual && (!fantasmaGuardado || e.fantasma.tiempo < fantasmaGuardado.tiempo)) { fantasmaGuardado = e.fantasma; guardar(); }
+      if (sesion.modo === 'contrarreloj' && !qActual) subirTiempo(e.fantasma);
+    }
+    else if (e.tipo === 'meta' && e.p.posicion === 1 && !estadoRadio.ganador) {
+      estadoRadio.ganador = true; sonido.ovacion(2.5);
+      radio.decir(`¡${e.p.nombre.replace('@', '')} gana en el ${circuito.def.corto}!`, { tipo: 'megafonia' });
+      if (e.p.jugador) { mensaje('🏆 ¡VICTORIA!', '', 3); radio.decir('¡¡Ganamos!! ¡Increíble carrera, campeón!', { prioridad: true }); entrada.vibrar(300); if (enRed) multi.meta(); }
+      if (!enRed && e.p.jugador) setTimeout(() => { if (jugando && sesion.modo === 'carrera' && sesion.jugador.terminado) mostrarResultados(); }, 4500);
     }
     else if (e.tipo === 'meta' && e.p.jugador) {
       mensaje('🏁 BANDERA A CUADROS', `Terminas P${e.p.posicion}`, 3);
@@ -669,7 +842,7 @@ function procesarEventos() {
     else if (e.tipo === 'paradaIni') {
       const k = sesion.participantes.indexOf(e.p);
       gestorBoxes.empezar(e.p.coche, modelos[k], e.p.equipo.base, e.duracion, e.morro);
-      if (e.p.jugador) mensaje('PARADA EN BOXES', e.morro ? 'Neumáticos y morro nuevo' : 'Cambio de neumáticos', 2);
+      if (e.p.jugador) { mensaje('PARADA EN BOXES', e.morro ? 'Neumáticos y morro nuevo' : 'Cambio de neumáticos', 2); estadoRadio.avisoDesg = false; }
     }
     else if (e.tipo === 'paradaFin') {
       const k = sesion.participantes.indexOf(e.p);
@@ -677,8 +850,10 @@ function procesarEventos() {
       if (e.p.jugador) { mensaje(`PARADA: ${e.duracion.toFixed(1)} s`, `Neumáticos ${COMPUESTOS[e.p.coche.reglaje.compuesto].nombre.toLowerCase()}`, 2.4); $('#bBox').classList.remove('activo'); }
     }
     else if (e.tipo === 'abandono') {
+      if (!e.p.jugador && sesion.modo === 'carrera') radio.decir(`Abandono de ${e.p.nombre.replace('@', '')}.`, { tipo: 'megafonia', clave: 'ab:' + e.p.nombre, cada: 999 });
       if (e.p.jugador) {
         mensaje('ABANDONO', e.motivo || 'Coche demasiado dañado', 3.5);
+        radio.decir('Se acabó, lo siento. Deja el coche en un lugar seguro.', { prioridad: true });
         if (enRed) multi.abandono();
         else if (sesion.modo === 'carrera') setTimeout(() => { if (jugando) mostrarResultados(); }, 4500);
         else setTimeout(() => { if (jugando && sesion.jugador.coche.abandono) { const c = sesion.jugador.coche; c.repararTodo(); c.repararEnBoxes(); c.recolocar(); sesion.jugador.abandono = false; sesion.jugador.valida = false; crearModelos(); mensaje('COCHE NUEVO', 'Vuelta anulada', 2); } }, 3500);
@@ -698,18 +873,59 @@ function procesarEventos() {
   for (const p of sesion.participantes) if (!p.jugador) p.coche.eventos.length = 0;
 }
 
+// Radio del ingeniero: clima, neumáticos, daños y posiciones (se revisa una vez por segundo)
+let tRadioRev = 0;
+function radioPeriodica(dt) {
+  tRadioRev += dt;
+  if (tRadioRev < 1) return;
+  tRadioRev = 0;
+  estadoRadio.tVerde = Math.max(0, (estadoRadio.tVerde || 0) - 1);
+  estadoRadio.tBN = Math.max(0, (estadoRadio.tBN || 0) - 1);
+  const p = sesion.jugador, c = p.coche, clima = sesion.clima;
+  if (!p || p.terminado || c.abandono) return;
+  const comp = c.reglaje.compuesto, deLluvia = COMPUESTOS[comp].lluvia;
+  const pr = clima.pronostico();
+  if (pr && pr.lluvia > 0 && pr.en < 70 && pr.en > 0) radio.decir(`El radar marca lluvia en un minuto más o menos.`, { clave: 'radarLluvia', cada: 999 });
+  if (pr && pr.lluvia === 0 && pr.en < 60 && pr.en > 0 && clima.lluvia > 0.2) radio.decir('Va a parar de llover pronto. La pista se secará poco a poco.', { clave: 'radarSeco', cada: 999 });
+  if (clima.lluvia > 0.1 && !estadoRadio.lluvia) { estadoRadio.lluvia = true; radio.decir('Empieza a llover. Cuidado en las frenadas.', { clave: 'llueve', cada: 60 }); }
+  if (clima.lluvia < 0.02 && estadoRadio.lluvia) { estadoRadio.lluvia = false; radio.decir('Ha parado de llover.', { clave: 'parado', cada: 60 }); }
+  if (sesion.modo === 'carrera' && !p.solicitudBox && !p.box) {
+    const ideal = compuestoParaAgua(clima.agua);
+    if (!deLluvia && clima.agua > 0.15) radio.decir(`La pista está mojada. Box, box: entra a por ${ideal === 'lluvia' ? 'neumáticos de lluvia' : 'intermedios'}. Pulsa BOX.`, { clave: 'aMojado', cada: 35, prioridad: true });
+    else if (comp === 'inter' && clima.agua > 0.6) radio.decir('Hay mucha agua. Los de lluvia serían más rápidos ahora.', { clave: 'aLluvia', cada: 45 });
+    else if (comp === 'lluvia' && clima.agua < 0.32 && clima.agua > 0.1) radio.decir('La pista mejora. Los intermedios ya son más rápidos.', { clave: 'aInter', cada: 45 });
+    else if (deLluvia && clima.agua < 0.09) radio.decir('La trazada está seca. Box: es hora de los lisos.', { clave: 'aSeco', cada: 35, prioridad: true });
+    const desg = Math.max(...c.ruedas.map(w => w.neum.desgaste));
+    if (desg > 0.55 && !estadoRadio.avisoDesg) { estadoRadio.avisoDesg = true; radio.decir('Los neumáticos están muy gastados. Entra a boxes cuando quieras.'); }
+    if (c.danoAleron > 0.3) radio.decir('Tienes el alerón delantero dañado. Entra a boxes a cambiar el morro.', { clave: 'morro', cada: 60 });
+  }
+  if (sesion.modo === 'carrera' && sesion.estado === 'carrera' && sesion.orden) {
+    if (estadoRadio.ultimaPos != null && p.posicion < estadoRadio.ultimaPos) { sonido.ovacion(0.7); if (Math.random() < 0.5) radio.decir(`¡Buen adelantamiento! P${p.posicion}.`, { clave: 'adel', cada: 20 }); }
+    estadoRadio.ultimaPos = p.posicion;
+    const lider = sesion.orden[0];
+    if (estadoRadio.lider && lider !== estadoRadio.lider && sesion.tiempo > 20) radio.decir(`¡Nuevo líder de la carrera: ${lider.nombre.replace('@', '')}!`, { tipo: 'megafonia', clave: 'lider', cada: 25 });
+    estadoRadio.lider = lider;
+  }
+}
+
 function mostrarResultados() {
   jugando = false;
   $('#hud').classList.remove('visible'); $('#tactil').classList.remove('visible');
   document.body.classList.remove('jugando');
   sonido.silenciar(true);
+  radio.callar();
+  sesion._posiciones?.();
   const orden = sesion.orden || sesion.participantes;
   const ganador = orden[0];
-  $('#resTitulo').textContent = sesion.jugador.posicion === 1 ? '🏆 ¡Victoria!' : `Resultado: P${sesion.jugador.posicion}`;
+  const total = (p) => p.tTotal + (p.penalizacion || 0);
+  $('#resTitulo').textContent = sesion.jugador.posicion === 1 && !sesion.jugador.abandono ? '🏆 ¡Victoria!' : `Resultado: P${sesion.jugador.posicion}`;
   $('#resLista').innerHTML = orden.map(p => {
-    const dif = p === ganador ? fmt(p.tTotal - 0) : p.terminado ? '+' + (p.tTotal - ganador.tTotal).toFixed(3) : 'En pista';
-    return `<div class="fila-res ${p.jugador ? 'yo' : ''}"><b>${p.posicion}</b><span><i class="eq" style="background:${p.equipo.base}"></i>${p.nombre} <small style="color:var(--tenue)">${p.equipo.nombre}</small></span><span>${dif}</span><span>${fmt(p.mejor)}</span></div>`;
+    const dif = p.abandono ? 'Abandono' : p === ganador ? fmt(total(p)) : p.terminado ? '+' + (total(p) - total(ganador)).toFixed(3) : 'En pista';
+    return `<div class="fila-res ${p.jugador ? 'yo' : ''}"><b>${p.posicion}</b><span><i class="eq" style="background:${p.equipo.base}"></i>${p.nombre} <small style="color:var(--tenue)">${p.equipo.nombre}${p.penalizacion ? ` · <b style="color:#ff3b3b">+${p.penalizacion} s</b>` : ''}</small></span><span>${dif}</span><span>${fmt(p.mejor)}</span></div>`;
   }).join('');
+  $('#resPremio').textContent = '';
+  $('#bResOtra').textContent = carreraCamp ? (temporada?.terminada ? 'Ver campeonato' : 'Siguiente GP') : 'Otra vez';
+  if (carreraCamp) cerrarCarreraCampeonato(orden);
   mostrar('resultados');
 }
 
@@ -754,10 +970,17 @@ function bucle(ahora) {
     else if (!sesion._piloto) import('./ai.js').then(({ PilotoIA }) => { if (sesion && !sesion._piloto) { sesion._piloto = new PilotoIA(sesion.jugador.coche, circuito, 0.9, 0.3); sesion.jugador.coche.esIA = true; } });
     if (!enGaraje) sesion._piloto?.conducir(dt, sesion.coches);
   }
+  if (repe) { actualizarRepe(dt); return; }
   if (enRed && jugando) actualizarRed(dt);
   if (!pausado && !enGaraje) {
     sesion.actualizar(dt);
     if (jugando) procesarEventos(); else { sesion.eventos.length = 0; for (const p of sesion.participantes) p.coche.eventos.length = 0; }
+    if (jugando) {
+      grabadora?.grabar(dt, sesion.coches, sesion.tiempo);
+      const pj = sesion.jugador;
+      if (pj.vuelta > 0) telemetria?.registrar(pj.coche.proj.s, pj.coche, pj.tVuelta);
+      radioPeriodica(dt);
+    }
   }
   // semáforo
   if (sesion.modo === 'carrera' && jugando) {
@@ -816,6 +1039,10 @@ function bucle(ahora) {
     gestorBoxes.actualizar(dt);
   }
   for (const f of escenario.actualizables) f(dt);
+  // lluvia, spray y asfalto mojado
+  efectos.agua = sesion.clima.agua;
+  lluviaFx.actualizar(dt, camara.cam.position, sesion.clima.lluvia, sesion.clima.agua, renderer);
+  nivelDetalle();
   if (efectos._escala !== camara.cam.fov) { efectos.ajustarEscala(innerHeight * renderer.getPixelRatio(), camara.cam.fov); efectos._escala = camara.cam.fov; }
 
   // sonido
@@ -832,7 +1059,8 @@ function bucle(ahora) {
         cerca = { coche: p.coche, dist: d, vRel: -(vx * dx + vz * dz) / Math.max(1, d) };
       }
     }
-    sonido.actualizar(dt, j, dmin < 150 ? cerca : null, camara.cam);
+    const sj = j.proj.s;
+    sonido.actualizar(dt, j, dmin < 150 ? cerca : null, camara.cam, { lluvia: sesion.clima.lluvia, agua: sesion.clima.agua, grada: sj < 600 || sj > circuito.largo - 300 ? 1 : 0 });
     // vibración en bordillos
     if (j.enBordillo && j.velocidad > 15 && Math.random() < dt * 12) entrada.vibrar(12, 0.3);
     actualizarHud(dt);
@@ -841,6 +1069,7 @@ function bucle(ahora) {
 
   // render
   if (composer) composer.render(); else renderer.render(scene, camara.cam);
+  if (fotoPendiente) guardarFoto();
 
   // rendimiento: baja la calidad si el móvil no llega
   fpsAcum += dt; fpsN++;
@@ -917,7 +1146,7 @@ async function refrescarPerfil() {
   if (!cuenta.conectado()) return;
   try {
     const d = await cuenta.perfil();
-    perfilApex = { mejoras: d.mejoras || {}, cosmeticos: d.cosmeticos || [], upcoins: d.upcoins };
+    perfilApex = { mejoras: d.mejoras || {}, cosmeticos: d.cosmeticos || [], upcoins: d.upcoins, elo: d.elo, nivel: d.nivel };
     if (d.equipado) Object.assign(equipado, d.equipado, { propia: equipado.propia && d.equipado.propia });
     guardar();
   } catch (e) { if (e.status === 401) perfilApex.upcoins = null; }
@@ -1112,15 +1341,39 @@ function pintarOpcMulti() {
     });
   });
   $('#filaMax').classList.toggle('oculto', opcMulti.tipo === '1v1');
+  $('#mElo').textContent = perfilApex.elo ? `Tu ELO: ${perfilApex.elo} (${perfilApex.nivel})` : cuenta.conectado() ? '' : 'Inicia sesión para tener ELO y ranking';
 }
+let buscando = false;
+$('#bBuscar').addEventListener('click', async () => {
+  if (buscando) { multi.cancelarBusqueda(); buscando = false; $('#bBuscar').textContent = '⚡ Buscar partida'; $('#mEstado').textContent = 'Búsqueda cancelada'; return; }
+  try { await multi.conectar(); } catch (e) { $('#mEstado').textContent = e.message; return; }
+  const r = await multi.buscar({ ...datosJugador(), region: opcMulti.region });
+  if (!r?.ok) { $('#mEstado').textContent = r?.error || 'No se pudo buscar'; return; }
+  buscando = true;
+  $('#bBuscar').textContent = '✕ Cancelar búsqueda';
+  $('#mEstado').innerHTML = `Buscando rivales de tu nivel (ELO ${r.elo} · ${r.nivel})… en cola: ${r.enCola}. Se empareja en unos segundos.`;
+});
+multi.on('emparejado', (d) => {
+  buscando = false; $('#bBuscar').textContent = '⚡ Buscar partida';
+  salaActual = d.sala;
+  mostrar('sala'); pintarSala();
+  $('#salaInfo').innerHTML = `¡Rivales encontrados! ${d.sala.jugadores.length} pilotos · ${CIRCUITOS[d.sala.circuito]?.corto || ''} · la salida es en unos segundos…`;
+});
+let ultimoElo = null;
+const textoElo = (d) => { const dif = d.despues - d.antes; return `ELO ${d.antes} → ${d.despues} (${dif >= 0 ? '+' : ''}${dif}) · ${d.nivel}`; };
+multi.on('elo', (d) => {
+  perfilApex.elo = d.despues; perfilApex.nivel = d.nivel; guardar();
+  ultimoElo = d;
+  if ($('#resultados').classList.contains('visible')) $('#resPremio').textContent = textoElo(d);
+});
 multi.on('lista', (l) => {
-  $('#listaSalas').innerHTML = l.length ? '<h3>Salas abiertas</h3>' + l.map(x => `<div class="sala-pub" data-codigo="${x.codigo}"><span><b>${x.nombre.replace(/</g, '')}</b> · ${x.tipo === '1v1' ? 'Duelo' : 'Abierta'} · ${x.vueltas} vueltas${x.mejoras ? ' · con mejoras' : ''}</span><span>${x.jugadores}/${x.max}</span></div>`).join('') : '<p class="nota">No hay salas abiertas ahora mismo. ¡Crea una y comparte el código!</p>';
+  $('#listaSalas').innerHTML = l.length ? '<h3>Salas abiertas</h3>' + l.map(x => `<div class="sala-pub" data-codigo="${x.codigo}"><span><b>${x.nombre.replace(/</g, '')}</b> · ${x.tipo === '1v1' ? 'Duelo' : 'Abierta'} · ${CIRCUITOS[x.circuito]?.corto || 'Valle Andino'} · ${x.vueltas} vueltas${x.clima && x.clima !== 'seco' ? ' · ' + CLIMAS[x.clima] : ''}${x.mejoras ? ' · con mejoras' : ''}</span><span>${x.jugadores}/${x.max}</span></div>`).join('') : '<p class="nota">No hay salas abiertas ahora mismo. ¡Crea una y comparte el código!</p>';
   document.querySelectorAll('.sala-pub').forEach(el => el.onclick = () => unirse(el.dataset.codigo));
 });
 multi.on('aviso', (t) => { if ($('#sala').classList.contains('visible')) $('#salaInfo').textContent = t; else $('#mEstado').textContent = t; });
 const datosJugador = () => ({ nombre: cuenta.usuario() || 'Invitado', equipado: { ...equipado }, livery: libreaParaRed() });
 $('#bCrearSala').addEventListener('click', async () => {
-  const r = await multi.crear({ ...datosJugador(), opciones: { tipo: opcMulti.tipo, max: opcMulti.max, vueltas: opcMulti.vueltas, publica: $('#mpPublica').checked, mejoras: $('#mpMejoras').checked } });
+  const r = await multi.crear({ ...datosJugador(), opciones: { tipo: opcMulti.tipo, max: opcMulti.max, vueltas: opcMulti.vueltas, publica: $('#mpPublica').checked, mejoras: $('#mpMejoras').checked, circuito: opcMulti.circuito, clima: opcMulti.clima } });
   if (!r.ok) { $('#mEstado').textContent = r.error; return; }
   entrarSala(r.sala);
 });
@@ -1140,7 +1393,9 @@ function pintarSala() {
   const s = salaActual; if (!s) return;
   const yo = multi.yo, soyHost = s.host === yo;
   $('#salaTitulo').textContent = `${s.nombre} · ${s.codigo}`;
-  $('#salaInfo').innerHTML = `${s.tipo === '1v1' ? 'Duelo 1 vs 1' : `Sala abierta · hasta ${s.max} pilotos`} · ${s.vueltas} vueltas · ${s.mejoras ? 'con mejoras de UpCoins' : 'coches iguales'}${s.publica ? ' · pública' : ' · privada'}<br>Comparte el código <b style="color:#ffd23f;font-size:16px">${s.codigo}</b> para que se unan.`;
+  $('#salaInfo').innerHTML = `${s.rapida ? 'Partida rápida' : s.tipo === '1v1' ? 'Duelo 1 vs 1' : `Sala abierta · hasta ${s.max} pilotos`} · <b>${CIRCUITOS[s.circuito]?.nombre || ''}</b> · ${CLIMAS[s.clima] || 'Seco'} · ${s.vueltas} vueltas · ${s.mejoras ? 'con mejoras de UpCoins' : 'coches iguales'}${s.publica ? ' · pública' : ' · privada'}<br>Comparte el código <b style="color:#ffd23f;font-size:16px">${s.codigo}</b> para que se unan.`;
+  // el circuito de la sala se prepara mientras se espera
+  if (s.circuito && s.circuito !== circuito.id && !cargando && s.estado === 'espera') cargarCircuito(s.circuito);
   $('#salaPilotos').innerHTML = s.jugadores.map((j, k) => `<div class="sala-fila"><b>${k + 1}</b><span><i class="eq" style="display:inline-block;width:4px;height:16px;border-radius:2px;margin-right:8px;vertical-align:middle;background:${j.equipado?.colores?.base || '#888'}"></i>${j.nombre.replace(/</g, '')}${j.id === yo ? ' (tú)' : ''}</span><span class="host">${j.id === s.host ? 'ANFITRIÓN' : ''}</span><span class="listo">${j.listo || j.id === s.host ? 'LISTO' : ''}</span></div>`).join('');
   $('#bSalaEmpezar').classList.toggle('oculto', !soyHost);
   $('#bSalaListo').classList.toggle('oculto', soyHost);
@@ -1156,12 +1411,16 @@ $('#bSalaCompartir').addEventListener('click', async () => {
 });
 
 // el servidor da la salida: todos arrancan la carrera a la vez con el mismo semáforo
-multi.on('salida', (d) => {
+multi.on('salida', async (d) => {
   const s = salaActual;
+  if (s.circuito && s.circuito !== circuito?.id) await cargarCircuito(s.circuito);
   modoActual = 'red'; enRed = true;
+  carreraCamp = null; qActual = null; ultimoElo = null;
   sonido.iniciar(); sonido.ponerVolumen(ajustes.volumen);
+  const rc = { ...reglaje };
+  if (s.clima === 'lluvia' && !COMPUESTOS[rc.compuesto]?.lluvia) rc.compuesto = 'lluvia';
   sesion = new Sesion(circuito, {
-    modo: 'carrera', vueltas: s.vueltas, reglaje: { ...reglaje }, ayudas: ayudasDe(),
+    modo: 'carrera', vueltas: s.vueltas, reglaje: rc, ayudas: ayudasDe(), clima: s.clima, semilla: s.semilla,
     multijugador: { parrilla: d.parrilla, yo: multi.yo, jugadores: s.jugadores.map(j => j.id === multi.yo ? { ...j, mejoras: perfilApex.mejoras } : j), mejoras: s.mejoras },
   });
   sesion.tSalidaLocal = d.tSalidaLocal;
@@ -1204,6 +1463,7 @@ function mostrarResultadosRed(r) {
   const yo = r.find(x => x.id === multi.yo);
   $('#resTitulo').textContent = yo?.pos === 1 && !yo.abandono ? '🏆 ¡Victoria en línea!' : `Resultado: P${yo?.pos ?? '-'}`;
   const ganador = r[0];
+  $('#resPremio').textContent = ultimoElo ? textoElo(ultimoElo) : cuenta.conectado() ? 'Calculando ELO…' : '';
   $('#resLista').innerHTML = r.map(x => `<div class="fila-res ${x.id === multi.yo ? 'yo' : ''}"><b>${x.pos}</b><span>${String(x.nombre).replace(/</g, '')}</span><span>${x.abandono ? 'Abandono' : x === ganador ? fmt(x.tiempo) : '+' + (x.tiempo - ganador.tiempo).toFixed(3)}</span><span>${fmt(x.mejor)}</span></div>`).join('');
   mostrar('resultados');
   $('#bResOtra').textContent = 'Volver a la sala';
@@ -1218,8 +1478,355 @@ $('#bResOtra').addEventListener('click', (e) => {
   mostrar('sala'); pintarSala();
 }, true);
 
+
+// --- Nivel de detalle y sombras --------------------------------------------------------
+// Los coches lejanos pierden piezas pequeñas (piloto, retrovisores, tornillería) y solo
+// los cercanos proyectan sombra.
+const vLod = new THREE.Vector3();
+function prepararLod(m) {
+  m._detalle = []; m._mallas = [];
+  m.raiz.traverse(o => {
+    if (!o.isMesh) return;
+    m._mallas.push(o);
+    o.geometry.computeBoundingSphere?.();
+    if ((o.geometry.boundingSphere?.radius ?? 1) < 0.16) m._detalle.push(o);
+  });
+  m._lejos = false; m._sombra = true;
+}
+function nivelDetalle() {
+  const cp = camara.cam.position;
+  for (const m of modelos) {
+    if (!m._mallas) prepararLod(m);
+    const d = vLod.copy(m.raiz.position).sub(cp).length();
+    const lejos = d > 85, sombra = d < 55 && calidad >= 1;
+    if (lejos !== m._lejos) { m._lejos = lejos; for (const o of m._detalle) o.visible = !lejos; }
+    if (sombra !== m._sombra) { m._sombra = sombra; for (const o of m._mallas) o.castShadow = sombra; }
+  }
+}
+
+// --- Repetición y modo foto ------------------------------------------------------------
+let fotoPendiente = false;
+function abrirRepe(desde) {
+  if (!grabadora || grabadora.cuantos < 10) { mensaje('SIN REPETICIÓN', 'Aún no hay nada grabado', 1.5); if (desde === 'pausa') return; return; }
+  const yo = sesion.participantes.indexOf(sesion.jugador);
+  repe = { desde, u: Math.max(0, 1 - 40 / grabadora.duracion), play: true, vel: 1, cam: 'tv', coche: yo, proxies: sesion.participantes.map(p => crearProxy(p.coche)), camPrev: camara.modo };
+  for (const m of modelos) { m.alDesprender = null; m.reponerPiezas?.(); }
+  ocultarTodo();
+  $('#hud').classList.remove('visible'); $('#tactil').classList.remove('visible');
+  $('#repe').classList.add('visible');
+  radio.callar();
+  sonido.silenciar(true);
+  pintarRepe();
+}
+function pintarRepe() {
+  $('#repePlay').textContent = repe.play ? '⏸' : '▶';
+  $('#repeVel').textContent = repe.vel + '×';
+  $('#repeCam').textContent = NOMBRES_REPE[repe.cam] + ' · ' + sesion.participantes[repe.coche].nombre;
+}
+function actualizarRepe(dt) {
+  const r = repe, g = grabadora;
+  if (r.play && !fotoPendiente) {
+    r.u += dt * r.vel / Math.max(1, g.duracion);
+    if (r.u >= 1) { r.u = 1; r.play = false; pintarRepe(); }
+  }
+  g.leer(r.u, r.proxies);
+  $('#repeBarra').value = Math.round(r.u * 1000);
+  $('#repeT').textContent = fmt(g.tiempoEn(r.u));
+  sesion.participantes.forEach((p, k) => {
+    const c = r.proxies[k], m = modelos[k];
+    if (!m) return;
+    m.raiz.position.set(c.x, c.y, c.z);
+    m.raiz.rotation.set(0, -c.psi, 0);
+    m.actualizar(c, dt);
+  });
+  const c = r.proxies[r.coche], m = modelos[r.coche];
+  if (['persecucion', 'cabina', 'tcam'].includes(r.cam)) { camara.modo = r.cam; camara.actualizar(dt, c, m); }
+  else camarasTV.actualizar(camara.cam, c, r.cam, dt);
+  for (const f of escenario.actualizables) f(dt);
+  lluviaFx.actualizar(dt, camara.cam.position, sesion.clima.lluvia, sesion.clima.agua, renderer);
+  escenario.luzSol.target.position.set(c.x, c.y, c.z);
+  escenario.luzSol.position.copy(escenario.sol).multiplyScalar(250).add(escenario.luzSol.target.position);
+  nivelDetalle();
+  if (composer) composer.render(); else renderer.render(scene, camara.cam);
+  if (fotoPendiente) guardarFoto();
+}
+function cerrarRepe() {
+  const desde = repe.desde;
+  camara.modo = repe.camPrev; camara.iniciada = false;
+  repe = null;
+  $('#repe').classList.remove('visible');
+  document.body.classList.remove('foto');
+  crearModelos();
+  if (desde === 'resultados') mostrar('resultados');
+  else { mostrar('pausa'); $('#hud').classList.add('visible'); if (esTactil) $('#tactil').classList.add('visible'); }
+}
+$('#repePlay').addEventListener('click', () => { if (repe.u >= 1) repe.u = 0; repe.play = !repe.play; pintarRepe(); });
+$('#repeVel').addEventListener('click', () => { const v = [0.25, 0.5, 1, 2, 4]; repe.vel = v[(v.indexOf(repe.vel) + 1) % v.length]; pintarRepe(); });
+$('#repeCamBt').addEventListener('click', () => { repe.cam = CAMARAS_REPE[(CAMARAS_REPE.indexOf(repe.cam) + 1) % CAMARAS_REPE.length]; camara.iniciada = false; pintarRepe(); });
+$('#repeCoche').addEventListener('click', () => {
+  // siguiente coche por orden de carrera
+  const orden = sesion.orden || sesion.participantes;
+  const i = orden.indexOf(sesion.participantes[repe.coche]);
+  repe.coche = sesion.participantes.indexOf(orden[(i + 1) % orden.length]);
+  camara.iniciada = false; pintarRepe();
+});
+$('#repeBarra').addEventListener('input', (e) => { repe.u = +e.target.value / 1000; for (const m of modelos) m.reponerPiezas?.(); });
+$('#repeSalir').addEventListener('click', cerrarRepe);
+$('#repeFoto').addEventListener('click', () => { document.body.classList.add('foto'); fotoPendiente = true; });
+
+function guardarFoto() {
+  fotoPendiente = false;
+  try {
+    const src = renderer.domElement;
+    const cv = document.createElement('canvas'); cv.width = src.width; cv.height = src.height;
+    const x = cv.getContext('2d');
+    x.drawImage(src, 0, 0);
+    // marca de agua
+    const h = Math.max(18, cv.height * 0.035);
+    x.font = `900 italic ${h}px system-ui, Arial`; x.textBaseline = 'bottom'; x.textAlign = 'right';
+    x.fillStyle = 'rgba(0,0,0,.45)'; x.fillText('APEX GP · UPGAMES', cv.width - h * 0.6 + 2, cv.height - h * 0.5 + 2);
+    x.fillStyle = '#fff'; x.fillText('APEX GP · UPGAMES', cv.width - h * 0.6, cv.height - h * 0.5);
+    cv.toBlob(b => {
+      const a = document.createElement('a'); a.href = URL.createObjectURL(b);
+      a.download = `apexgp-${circuito.id}-${Date.now()}.png`; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }, 'image/png');
+  } catch (e) { console.warn('foto', e); }
+  const f = $('#flash'); f.classList.add('on'); setTimeout(() => f.classList.remove('on'), 60);
+  setTimeout(() => document.body.classList.remove('foto'), 400);
+}
+
+function abrirTelemetria() {
+  mostrar('telePantalla');
+  const t = telemetria;
+  $('#teleInfo').innerHTML = t?.ultima ? 'Velocidad de tu última vuelta (cian) contra tu mejor vuelta (morado). Abajo: frenada (rojo), acelerador (verde) y diferencia de tiempo acumulada (amarillo: por encima pierdes).' : '';
+  t?.dibujar($('#teleGrafico'), fmt, circuito.curvas) ?? (() => { const x = $('#teleGrafico').getContext('2d'); x.clearRect(0, 0, 1400, 520); })();
+}
+
+function volverMenuSinSesion() {
+  jugando = false; pausado = false; enRed = false;
+  $('#hud').classList.remove('visible'); $('#tactil').classList.remove('visible');
+  document.body.classList.remove('jugando');
+  sesion = new Sesion(circuito, { modo: 'practica', reglaje, ayudas: ayudasDe() });
+  crearModelos();
+}
+
+// --- Contrarreloj en línea ---------------------------------------------------------------
+async function subirTiempo(f) {
+  if (!cuenta.conectado() || !fichaCrono || !f?.puntos?.length) return;
+  try {
+    const d = await cuenta.enviarTiempo({ ficha: fichaCrono, tiempo: f.tiempo, fantasma: fantasmaAServidor(f) });
+    if (d.mejorado?.semana) mensaje('TIEMPO EN EL RANKING', `P${d.posicionSemana} de la semana · ${fmt(d.tiempo)}`, 2.6);
+  } catch (e) { console.warn('ranking', e.message); }
+}
+
+// --- Clasificación Q1-Q2-Q3 ----------------------------------------------------------------
+const NOMBRE_Q = ['Q1', 'Q2', 'Q3'];
+function ritmoRivales(clima) {
+  // en mojado la IA va tan lenta como dice el perfil de agarre (con neumáticos de lluvia)
+  const f = clima === 'lluvia' ? 0.72 : 1;
+  return circuito.def.ritmoIA * (f < 1 ? circuito.vueltaTeorica(f) / circuito.vueltaTeorica(1) : 1);
+}
+function empezarClasificacion(cfg) {
+  const pilotos = cfg.pilotos || CAMP.crearPilotos({ rivales: cfg.rivales, dificultad: cfg.dificultad, equipoJugador: equipado.equipo || 0, nombre: nombreJugador(), semilla: Math.floor(Math.random() * 1e9) });
+  const climaQ = cfg.clima === 'lluvia' ? 'lluvia' : 'seco';
+  qActual = { cfg: { ...cfg, climaQ }, clasif: new CAMP.Clasificacion(pilotos, { ritmo: ritmoRivales(climaQ), semilla: Math.floor(Math.random() * 1e9) }), mejor: null, vueltas: 0 };
+  pintarClasif(null);
+}
+function pintarClasif(orden) {
+  const q = qActual, cl = q.clasif, k = Math.min(2, cl.tanda);
+  $('#qTitulo').textContent = `Clasificación · ${circuito.def.corto}${q.cfg.campeonato ? ` · GP ${temporada.ronda + 1}/${temporada.rondas.length}` : ''}`;
+  const yo = cl.jugador;
+  if (!orden) {
+    $('#qInfo').innerHTML = `<b>${NOMBRE_Q[cl.tanda]}</b> · ${cl.vivos.length} pilotos · ${cl.tanda < 2 ? `los ${cl.cortes[cl.tanda]} más lentos quedan fuera` : 'la pole se decide aquí'}. Tienes 2 vueltas lanzadas: cuenta la mejor.${q.cfg.climaQ === 'lluvia' ? ' 🌧️ Pista mojada.' : ''}`;
+    $('#qLista').innerHTML = '';
+    $('#bQSeguir').textContent = `Salir a pista (${NOMBRE_Q[cl.tanda]})`;
+    $('#bQSaltar').classList.remove('oculto');
+  } else {
+    const kk = cl.tanda - 1;
+    const fuera = cl.pilotos.filter(p => p.fuera === kk);
+    const corte = orden.length - fuera.length;
+    const lider = orden[0].tiempos[kk];
+    $('#qLista').innerHTML = orden.map((p, i) => `${i === corte && fuera.length ? '<div class="corte">ZONA DE ELIMINACIÓN</div>' : ''}<div class="fila-q ${p.jugador ? 'yo' : ''} ${p.fuera === kk ? 'fuera' : ''}"><b>${i + 1}</b><span><i class="eq" style="display:inline-block;width:4px;height:14px;border-radius:2px;margin-right:6px;vertical-align:middle;background:${EQUIPOS[p.ie].base}"></i>${p.jugador ? nombreJugador() : p.nombre}</span><span>${fmt(p.tiempos[kk])}</span><span>${p.tiempos[kk] != null && i ? '+' + (p.tiempos[kk] - lider).toFixed(3) : ''}</span></div>`).join('');
+    const pos = orden.indexOf(yo) + 1;
+    if (yo.fuera != null || cl.fin) {
+      const grid = cl.parrilla().indexOf(yo) + 1;
+      $('#qInfo').innerHTML = cl.fin && yo.fuera == null ? (grid === 1 ? '🏆 <b>¡POLE POSITION!</b>' : `Terminas la Q3 en <b>P${grid}</b>.`) : `Eliminado en ${NOMBRE_Q[yo.fuera]}: sales <b>P${grid}</b>.`;
+      $('#bQSeguir').textContent = 'A la parrilla';
+      $('#bQSaltar').classList.add('oculto');
+      if (cl.fin && grid === 1) radio.decir('¡Pole position! ¡Qué vuelta!', { prioridad: true });
+    } else {
+      $('#qInfo').innerHTML = `${NOMBRE_Q[kk]}: P${pos}. Pasas a la <b>${NOMBRE_Q[cl.tanda]}</b>.`;
+      $('#bQSeguir').textContent = `Salir a pista (${NOMBRE_Q[cl.tanda]})`;
+      $('#bQSaltar').classList.remove('oculto');
+    }
+  }
+  void k;
+  mostrar('clasif');
+}
+function salirAPistaQ() {
+  const q = qActual;
+  q.mejor = null; q.vueltas = 0;
+  modoActual = 'contrarreloj';
+  sonido.iniciar(); sonido.ponerVolumen(ajustes.volumen);
+  const opc = opcBase('contrarreloj');
+  opc.clima = q.cfg.climaQ;
+  opc.reglaje.compuesto = q.cfg.climaQ === 'lluvia' ? 'lluvia' : 'blando';
+  sesion = new Sesion(circuito, opc);
+  arrancarSesion('contrarreloj');
+  mensaje(NOMBRE_Q[q.clasif.tanda], 'Vuelta de salida · 2 vueltas lanzadas', 3);
+}
+function finVueltaClasif(e) {
+  const q = qActual;
+  q.vueltas++;
+  if (e.valida && (q.mejor == null || e.t < q.mejor)) q.mejor = e.t;
+  if (q.vueltas >= 2) setTimeout(() => { if (qActual === q && jugando) terminarTandaQ(); }, 1500);
+  else mensaje(e.valida ? fmt(e.t) : 'VUELTA ANULADA', 'Una vuelta más', 2);
+}
+function terminarTandaQ() {
+  const q = qActual;
+  jugando = false; pausado = false;
+  $('#hud').classList.remove('visible'); $('#tactil').classList.remove('visible');
+  document.body.classList.remove('jugando');
+  sonido.silenciar(true);
+  const orden = q.clasif.cerrarTanda(q.mejor);
+  pintarClasif(orden);
+}
+$('#bQSeguir').addEventListener('click', () => {
+  const q = qActual; if (!q) return;
+  const yo = q.clasif.jugador;
+  if (q.clasif.fin || yo.fuera != null) empezarCarreraTrasQ();
+  else salirAPistaQ();
+});
+$('#bQSaltar').addEventListener('click', () => { if (qActual) { qActual.mejor = null; terminarTandaQ(); } });
+function empezarCarreraTrasQ() {
+  const q = qActual; qActual = null;
+  const parrilla = q.clasif.parrilla();
+  const cfg = q.cfg;
+  empezar('carrera', {
+    pilotos: parrilla, vueltas: cfg.vueltas ?? opcCarrera.vueltas, clima: cfg.clima, semilla: cfg.semilla,
+    campeonato: cfg.campeonato ? { ronda: temporada.ronda } : null,
+    compuesto: cfg.clima === 'lluvia' ? 'lluvia' : opcCarrera.compuesto,
+  });
+  if (cfg.campeonato && cuenta.conectado()) {
+    const cc = carreraCamp;
+    cuenta.fichaCarrera({ circuito: circuito.id, vueltas: sesion.vueltasTotales, rivales: sesion.participantes.length - 1, dificultad: temporada.opc.dificultad })
+      .then(d => { if (cc) { cc.ficha = d.ficha; cc.premiable = d.premiable; } }).catch(() => {});
+  }
+}
+
+// --- Campeonato -------------------------------------------------------------------------------
+function pintarCampeonato() {
+  const t = temporada;
+  const activa = t && !t.terminada;
+  $('#campNueva').classList.toggle('oculto', !!activa);
+  document.querySelectorAll('#campeonato [data-camp]').forEach(sg => {
+    const k = sg.dataset.camp;
+    sg.querySelectorAll('b').forEach(b => { b.classList.toggle('sel', String(opcCamp[k]) === b.dataset.v); b.onclick = () => { opcCamp[k] = isNaN(+b.dataset.v) ? b.dataset.v : +b.dataset.v; guardar(); pintarCampeonato(); }; });
+  });
+  if (t) {
+    const pil = CAMP.tablaPilotos(t), cons = CAMP.tablaConstructores(t);
+    $('#campTablas').innerHTML = `<div><h3>Pilotos</h3>${pil.map((p, i) => `<div class="fila-camp ${p.jugador ? 'yo' : ''}"><b>${i + 1}</b><span><i style="background:${EQUIPOS[p.ie].base}"></i>${p.jugador ? nombreJugador() : p.nombre}${p.victorias ? ` <small style="color:#ffd23f">🏆${p.victorias}</small>` : ''}</span><span class="pts">${p.puntos}</span></div>`).join('')}</div>
+      <div><h3>Constructores</h3>${cons.map((e, i) => `<div class="fila-camp ${e.ie === (equipado.equipo || 0) ? 'yo' : ''}"><b>${i + 1}</b><span><i style="background:${e.base}"></i>${e.nombre}</span><span class="pts">${e.puntos}</span></div>`).join('')}</div>`;
+  } else $('#campTablas').innerHTML = '';
+  if (activa) {
+    const id = t.rondas[t.ronda], cl = CAMP.climaRonda(t);
+    $('#campTitulo').textContent = `Campeonato · GP ${t.ronda + 1} de ${t.rondas.length}`;
+    $('#campInfo').innerHTML = `Próximo: <b>${CIRCUITOS[id].nombre}</b> · ${t.opc.vueltas} vueltas · ${CLIMAS[cl]}${cl === 'variable' ? ' (puede llover)' : ''} · ${t.pilotos.length} pilotos.${t.premios ? ` UpCoins ganadas esta temporada: <b style="color:#ffd23f">${t.premios}</b>` : ''}`;
+    $('#bCampSeguir').textContent = 'Ir a la clasificación';
+    $('#bCampAbandonar').classList.remove('oculto');
+  } else if (t?.terminada) {
+    const campeon = CAMP.tablaPilotos(t)[0];
+    $('#campTitulo').textContent = campeon.jugador ? '🏆 ¡CAMPEÓN DEL MUNDO!' : 'Temporada terminada';
+    $('#campInfo').innerHTML = `Campeón: <b>${campeon.jugador ? nombreJugador() : campeon.nombre}</b> (${EQUIPOS[campeon.ie].nombre}) con ${campeon.puntos} puntos.`;
+    $('#bCampSeguir').textContent = 'Nueva temporada';
+    $('#bCampAbandonar').classList.add('oculto');
+  } else {
+    $('#campTitulo').textContent = 'Campeonato';
+    $('#campInfo').textContent = '';
+    $('#bCampSeguir').textContent = 'Empezar temporada';
+    $('#bCampAbandonar').classList.add('oculto');
+  }
+}
+function abrirCampeonato() { mostrar('campeonato'); pintarCampeonato(); }
+$('#bCampSeguir').addEventListener('click', async () => {
+  if (!temporada || temporada.terminada) {
+    temporada = CAMP.crearTemporada({ ...opcCamp, equipoJugador: equipado.equipo || 0, nombre: nombreJugador() });
+    guardar();
+  }
+  const t = temporada;
+  await cargarCircuito(t.rondas[t.ronda]);
+  const cl = CAMP.climaRonda(t);
+  empezarClasificacion({ pilotos: t.pilotos.map(p => ({ id: p.id, nombre: p.nombre, ie: p.ie, ip: p.ip, hab: p.hab, jugador: p.jugador })), clima: cl, vueltas: t.opc.vueltas, semilla: t.semilla + t.ronda, campeonato: true });
+});
+$('#bCampAbandonar').addEventListener('click', () => {
+  if (!confirm('¿Empezar una temporada nueva? Se pierde la clasificación actual.')) return;
+  temporada = null; guardar(); pintarCampeonato();
+});
+
+function cerrarCarreraCampeonato(orden) {
+  const cc = carreraCamp;
+  if (!cc || cc.cerrada || !temporada) return;
+  cc.cerrada = true;
+  const rapido = orden.filter(p => isFinite(p.mejor)).sort((a, b) => a.mejor - b.mejor)[0];
+  const res = orden.map(p => ({ id: p.idPiloto, pos: p.posicion, abandono: p.abandono || !p.terminado, vueltaRapida: p === rapido }));
+  const ganados = CAMP.registrarCarrera(temporada, res);
+  const yo = sesion.jugador;
+  const pts = ganados.jugador || 0;
+  let txt = `+${pts} puntos en el campeonato`;
+  $('#resPremio').textContent = txt;
+  guardar();
+  // premio en UpCoins (no retirables) validado por el servidor
+  if (cc.ficha && yo.terminado && !yo.abandono && yo.posicion <= 3) {
+    $('#resPremio').textContent = txt + ' · reclamando premio…';
+    cuenta.resultadoCarrera({ ficha: cc.ficha, pos: yo.posicion, tiempo: yo.tTotal })
+      .then(d => {
+        if (d.premio > 0) { temporada.premios = (temporada.premios || 0) + d.premio; perfilApex.upcoins = d.upcoins; guardar(); actualizarCuentaMenu(); txt += ` · 🪙 +${d.premio} UpCoins`; }
+        else if (d.tope) txt += ' · ya ganaste los 3 premios de hoy';
+        $('#resPremio').textContent = txt;
+      })
+      .catch(e => { $('#resPremio').textContent = txt + ` · sin premio: ${e.message}`; });
+  } else if (!cuenta.conectado() && yo.posicion <= 3) $('#resPremio').textContent = txt + ' · inicia sesión para ganar UpCoins con el podio';
+  else if (cc.premiable === false && yo.posicion <= 3) $('#resPremio').textContent = txt + ' · sin premio (mínimo 7 rivales, 3 vueltas y dificultad normal)';
+}
+
+// --- Rankings en línea ------------------------------------------------------------------------
+const rk = { tab: 'crono', circuito: 'valle', periodo: 'semana' };
+function abrirRankings() { rk.circuito = circuito.id; mostrar('rankings'); pintarRankings(); }
+async function pintarRankings() {
+  document.querySelectorAll('#rankings .pestanas b').forEach(b => { b.classList.toggle('sel', b.dataset.rk === rk.tab); b.onclick = () => { rk.tab = b.dataset.rk; pintarRankings(); }; });
+  const cs = $('#rkCircuito');
+  cs.innerHTML = Object.values(CIRCUITOS).map(d => `<b data-v="${d.id}" class="${d.id === rk.circuito ? 'sel' : ''}">${d.corto}</b>`).join('');
+  cs.querySelectorAll('b').forEach(b => b.onclick = () => { rk.circuito = b.dataset.v; pintarRankings(); });
+  $('#rkPeriodo').querySelectorAll('b').forEach(b => { b.classList.toggle('sel', b.dataset.v === rk.periodo); b.onclick = () => { rk.periodo = b.dataset.v; pintarRankings(); }; });
+  $('#rkFiltros').classList.toggle('oculto', rk.tab !== 'crono');
+  $('#bRkFantasma').classList.toggle('oculto', rk.tab !== 'crono');
+  $('#rkLista').innerHTML = '<p class="nota">Cargando…</p>';
+  try {
+    if (rk.tab === 'crono') {
+      $('#rkInfo').innerHTML = `Mejores vueltas en <b>${CIRCUITOS[rk.circuito].nombre}</b>. Premios cada semana al podio de cada circuito: <b style="color:#ffd23f">1º 15 UC · 2º 10 UC · 3º 5 UC</b> (UpCoins de juego, no retirables). Inicia sesión y corre en Contrarreloj para entrar.${records['crono:' + rk.circuito] ? ` Tu récord local: <b>${fmt(records['crono:' + rk.circuito])}</b>.` : ''}`;
+      const d = await cuenta.ranking(rk.circuito, rk.periodo);
+      const yo = cuenta.usuario();
+      $('#rkLista').innerHTML = d.filas.length ? d.filas.map(f => `<div class="fila-q ${f.usuario === yo ? 'yo' : ''}"><b>${f.pos}</b><span>@${String(f.usuario).replace(/</g, '')}</span><span>${fmt(f.tiempo)}</span><span>${f.pos <= 3 && rk.periodo === 'semana' ? ['🥇', '🥈', '🥉'][f.pos - 1] : ''}</span></div>`).join('') : '<p class="nota">Nadie ha marcado tiempo todavía. ¡Sé el primero!</p>';
+    } else {
+      $('#rkInfo').innerHTML = `Puntuación ELO de las carreras en línea entre pilotos con cuenta. La partida rápida te empareja con rivales de tu nivel y tu región.${perfilApex.elo ? ` Tu ELO: <b>${perfilApex.elo}</b> (${perfilApex.nivel}).` : ''}`;
+      const d = await cuenta.rankingElo();
+      const yo = cuenta.usuario();
+      $('#rkLista').innerHTML = d.filas.length ? d.filas.map(f => `<div class="fila-q ${f.usuario === yo ? 'yo' : ''}"><b>${f.pos}</b><span>@${String(f.usuario).replace(/</g, '')} <small style="color:var(--tenue)">${f.nivel}</small></span><span>${f.elo}</span><span>${f.carreras} carr.</span></div>`).join('') : '<p class="nota">Aún no hay carreras puntuadas.</p>';
+    }
+  } catch (e) { $('#rkLista').innerHTML = `<p class="nota">No se pudo cargar el ranking: ${e.message}</p>`; }
+}
+$('#bRkFantasma').addEventListener('click', async () => {
+  try {
+    const d = await cuenta.fantasmaRecord(rk.circuito, rk.periodo);
+    await cargarCircuito(rk.circuito);
+    fantasmaRival = { ...fantasmaDeServidor(d.fantasma, d.tiempo), autor: '@' + d.usuario };
+    empezar('contrarreloj');
+  } catch (e) { $('#rkInfo').textContent = e.status === 404 ? 'Aún no hay récord en este circuito.' : 'No se pudo descargar el fantasma: ' + e.message; }
+});
+
 // acceso para pruebas automáticas desde la consola
-window.apexDebug = { get sesion() { return sesion; }, get camara() { return camara; }, circuito: () => circuito, multi, get modelos() { return modelos; } };
+window.apexDebug = { get sesion() { return sesion; }, get camara() { return camara; }, circuito: () => circuito, multi, get modelos() { return modelos; }, cargarCircuito, get qActual() { return qActual; }, get temporada() { return temporada; }, get repe() { return repe; }, terminarTandaQ, radio };
 actualizarCuentaMenu();
 refrescarPerfil().then(actualizarCuentaMenu);
 

@@ -1,9 +1,13 @@
 // Sesión: parrilla, semáforo, cronometraje por sectores, posiciones, DRS,
 // rebufo, contactos entre coches y fantasma de la mejor vuelta.
 
-import { EQUIPOS, COCHE } from './config.js';
+import { EQUIPOS, COCHE, compuestoParaAgua } from './config.js';
 import { Monoplaza } from './physics/monoplaza.js';
 import { PilotoIA, PilotoBox } from './ai.js';
+import { Clima } from './clima.js';
+
+const AVISOS_LIMITES = 3;          // a la cuarta salida de pista, +5 s
+const PENALIZACION = 5;
 
 const DT = 1 / 300;
 // sitio frente a su garaje para los coches que ya terminaron
@@ -25,6 +29,13 @@ export class Sesion {
     this.fantasma = opc.fantasma || null;
     this.grabacion = [];
     this.tGrab = 0;
+    // clima (determinista con la semilla) y estado de la pista
+    this.clima = new Clima(opc.clima || 'seco', opc.semilla ?? Math.floor(Math.random() * 1e9));
+    circuito.agua = this.clima.agua;
+    // banderas: amarillas por zona, coche de seguridad virtual y sanciones
+    this.amarillas = [];           // { s, hasta }
+    this.vsc = false; this.tVsc = 0;
+    this.permitirVsc = opc.vsc !== false && this.modo === 'carrera';
 
     const mp = opc.multijugador || null;
     this.mp = mp;
@@ -34,6 +45,7 @@ export class Sesion {
       mejoresSectores: [Infinity, Infinity, Infinity], tSector: 0, sector: 0,
       valida: true, terminado: false, abandono: false, tTotal: 0, posicion: 1, distancia: 0, drsHabil: false,
       sAnterior: 0, ultimaVuelta: null, box: null, solicitudBox: null, paradas: 0,
+      avisosLimites: 0, penalizacion: 0, tUltimaSancion: -99,
     });
     const colocarParrilla = (coche, k) => {
       if (this.modo === 'carrera') coche.colocar(circuito.largo - 12 - 7 * k, k % 2 === 0 ? -2.6 : 2.6);
@@ -62,6 +74,27 @@ export class Sesion {
         p.sAnterior = coche.proj.s;
         this.participantes.push(p);
       });
+    } else if (opc.pilotos) {
+      // parrilla decidida fuera (clasificación o campeonato): cada piloto con su equipo y habilidad
+      opc.pilotos.forEach((d, k) => {
+        const eq = EQUIPOS[d.ie];
+        const coche = new Monoplaza(circuito, {
+          ia: !d.jugador,
+          reglaje: d.jugador ? opc.reglaje : { compuesto: this.clima.agua > 0.13 ? compuestoParaAgua(this.clima.agua) : (opc.reglaje?.compuesto && !['inter', 'lluvia'].includes(opc.reglaje.compuesto) ? opc.reglaje.compuesto : 'medio') },
+          ayudas: d.jugador ? opc.ayudas : { tc: 2, abs: true, cambioAuto: true },
+          mejoras: d.jugador ? opc.mejoras : {},
+          combustible,
+        });
+        const p = {
+          ...plantilla(), coche, equipo: eq, indiceEquipo: d.ie, numeroPiloto: d.ip, idPiloto: d.id,
+          equipado: d.jugador ? opc.equipado : null, nombre: d.jugador ? (opc.nombre || 'Tú') : d.nombre,
+          jugador: !!d.jugador, posicion: k + 1,
+          ia: d.jugador ? null : new PilotoIA(coche, circuito, d.hab, 0.3 + Math.random() * 0.6),
+        };
+        colocarParrilla(coche, k);
+        p.sAnterior = coche.proj.s;
+        this.participantes.push(p);
+      });
     } else {
       const rivales = this.modo === 'carrera' ? Math.min(opc.rivales ?? 7, EQUIPOS.length * 2 - 1) : 0;
       const total = rivales + 1;
@@ -80,7 +113,7 @@ export class Sesion {
         const eq = EQUIPOS[ie];
         const coche = new Monoplaza(circuito, {
           ia: !esJugador,
-          reglaje: esJugador ? opc.reglaje : { compuesto: opc.reglaje?.compuesto || 'medio' },
+          reglaje: esJugador ? opc.reglaje : { compuesto: this.clima.agua > 0.13 ? compuestoParaAgua(this.clima.agua) : (opc.reglaje?.compuesto && !['inter', 'lluvia'].includes(opc.reglaje.compuesto) ? opc.reglaje.compuesto : 'medio') },
           ayudas: esJugador ? opc.ayudas : { tc: 2, abs: true, cambioAuto: true },
           mejoras: esJugador ? opc.mejoras : {},
           combustible,
@@ -123,7 +156,7 @@ export class Sesion {
     car.limitadorPit = c.enLimitador(car.proj.s, car.proj.d);
     car.limitePit = c.pit.limite;
     if (p.box) {
-      if (p.box.estado === 'fin') { p.box = null; p.solicitudBox = null; }
+      if (p.box.estado === 'fin') { p.box = null; p.solicitudBox = null; p.porClima = false; }
       return;
     }
     if (!p.solicitudBox || car.abandono) return;
@@ -147,13 +180,25 @@ export class Sesion {
 
   // Estrategia de la IA: parar por desgaste en carreras largas o por daños
   _estrategia(p) {
-    if (!p.ia || p.solicitudBox || p.box || p.terminado || p.coche.abandono || this.modo !== 'carrera') return;
+    if (!p.ia || p.box || p.terminado || p.coche.abandono || this.modo === 'contrarreloj') return;
     const car = p.coche;
     const restantes = this.vueltasTotales - p.vuelta;
+    // clima: cada piloto reacciona con su propio umbral (unos arriesgan más que otros)
+    const agua = this.clima.agua / (p.umbralClima ??= 0.85 + Math.random() * 0.3);
+    const actual = car.reglaje.compuesto, seco = restantes > 12 ? 'duro' : 'medio';
+    const esLluvia = c => c === 'inter' || c === 'lluvia';
+    let ideal = actual;
+    if (!esLluvia(actual) && agua > 0.15) ideal = agua > 0.55 ? 'lluvia' : 'inter';
+    else if (actual === 'inter' && (agua < 0.1 || agua > 0.62)) ideal = agua < 0.1 ? seco : 'lluvia';
+    else if (actual === 'lluvia' && agua < 0.36) ideal = agua < 0.1 ? seco : 'inter';
+    if (ideal !== actual && restantes >= 1) { p.solicitudBox = ideal; p.porClima = true; return; }
+    // si el tiempo cambió antes de llegar a boxes, se cancela la parada por clima
+    if (p.solicitudBox && p.porClima && ideal === actual) { p.solicitudBox = null; p.porClima = false; }
+    if (p.solicitudBox) return;
     const desg = Math.max(...car.ruedas.map(w => w.neum.desgaste));
     const danado = car.dano.pinchazo.some(Boolean) || car.danoAleron > 0.3 || car.dano.aleronTras > 0.4;
-    if (danado && restantes >= 1) this.pedirBox(p, restantes > 12 ? 'duro' : 'medio');
-    else if (desg > 0.45 && restantes >= 3 && this.vueltasTotales >= 8) this.pedirBox(p, restantes > 15 ? 'duro' : 'medio');
+    if (danado && restantes >= 1) this.pedirBox(p, esLluvia(actual) ? actual : seco);
+    else if (desg > 0.45 && restantes >= 3 && this.vueltasTotales >= 8) this.pedirBox(p, esLluvia(actual) ? actual : restantes > 15 ? 'duro' : 'medio');
   }
 
   get coches() { return this.participantes.map(p => p.coche); }
@@ -189,6 +234,9 @@ export class Sesion {
     this.tiempo += dt;
     const lista = this.participantes;
     const coches = this.coches;
+    this.clima.actualizar(dt);
+    this.c.agua = this.clima.agua;
+    this._banderas(dt);
     this._aerodinamicaRelativa();
     for (const p of lista) {
       if (p.remoto) continue;           // lo mueve la red
@@ -199,13 +247,27 @@ export class Sesion {
       if (p.retirado) continue;
       if (car.abandono && !p.terminado) {
         car.mandos.acelerador = 0; car.mandos.freno = 1; car.mandos.direccion = 0;
-        if (!p.abandono) { p.abandono = true; this.eventos.push({ tipo: 'abandono', p, motivo: car.motivoAbandono }); }
+        if (!p.abandono) {
+          p.abandono = true; p.tAbandono = this.tiempo;
+          this.eventos.push({ tipo: 'abandono', p, motivo: car.motivoAbandono });
+          // coche parado en pista: amarilla en la zona y, si está en la trazada, coche de seguridad virtual
+          if (this.modo === 'carrera' && this.estado === 'carrera') {
+            this.amarilla(car.proj.s, 30);
+            if (this.permitirVsc && Math.abs(car.proj.d) < this.c.semiAncho[car.proj.i] + 6 && !this.c.enZonaPit[car.proj.i]) this.ponerVsc(true);
+          }
+        }
+        // la grúa lo retira a los 20 s
+        if (p.tAbandono && this.tiempo - p.tAbandono > 20 && !p.retirado && !p.jugador) { p.retirado = true; car.colocar(c0Retiro(this.c, p), this.c.semiAncho[0] + this.c.pit.ancho - 1); car.retenido = true; }
       } else if (p.box) p.box.conducir(dt);
       else if (p.ia && !car.retenido) {
         p.ia.conducir(dt, coches);
         if (p.terminado) { car.mandos.acelerador *= 0.5; car.mandos.drs = false; }
       }
+      // coche de seguridad virtual: todos limitados a un ritmo lento (~35 % más lento) sin DRS
+      car.limiteVsc = this.vsc && !p.box ? this.c.perfil[car.proj.i] * 0.64 : 0;
       car.paso(dt);
+      // golpe fuerte contra el muro: amarilla en esa zona
+      if (car.impacto > 9 && this.modo === 'carrera' && this.estado === 'carrera') this.amarilla(car.proj.s, 10);
     }
     this._contactos();
     for (const p of lista) { if (!p.remoto) { this._cronometrar(p, dt); if (Math.floor(this.tiempo * 2) !== Math.floor((this.tiempo - dt) * 2)) this._estrategia(p); } }
@@ -239,7 +301,7 @@ export class Sesion {
         enZona ||= z.ini < z.fin ? (s >= z.ini && s <= z.fin) : (s >= z.ini || s <= z.fin);
       }
       const habil = this.modo !== 'carrera' || (p.drsHabil && p.vuelta >= 3);
-      c.drsPermitido = enZona && habil;
+      c.drsPermitido = enZona && habil && !this.vsc && !this.enAmarilla(c.proj.s);
       c.zonaDrs = enZona;
     }
   }
@@ -287,6 +349,11 @@ export class Sesion {
             const fDano = lista[a].jugador || lista[b].jugador || lista[a].remoto || lista[b].remoto ? 0.75 : 0.5;
             A.aplicarGolpe(oa + 0.9 * Math.sign(oa), Math.sign(latA) * (Math.abs(latA) > 0.5 ? 1 : 0.5), -vn * fDano);
             B.aplicarGolpe(ob + 0.9 * Math.sign(ob), Math.sign(latB) * (Math.abs(latB) > 0.5 ? 1 : 0.5), -vn * fDano);
+            // quien embiste con el morro la parte trasera o el lateral del otro provoca el choque
+            if (-vn > 7 && this.modo === 'carrera') {
+              if (oa > 0 && ob <= 0) this.sancionar(lista[a], 'Provocar una colisión');
+              else if (ob > 0 && oa <= 0) this.sancionar(lista[b], 'Provocar una colisión');
+            }
           }
         }
       }
@@ -307,7 +374,14 @@ export class Sesion {
     const c = p.coche, L = this.c.largo, s = c.proj.s;
     p.tVuelta += dt; p.tSector += dt;
     if (c.limitesExcedidos && p.vuelta > 0) {
-      if (p.valida) this.eventos.push({ tipo: 'limites', jugador: p.jugador });
+      if (p.valida) {
+        this.eventos.push({ tipo: 'limites', jugador: p.jugador });
+        if (this.modo === 'carrera' && !p.box) {
+          p.avisosLimites++;
+          if (p.avisosLimites > AVISOS_LIMITES) this.sancionar(p, 'Límites de pista');
+          else this.eventos.push({ tipo: 'avisoLimites', p, n: p.avisosLimites, bandera: p.avisosLimites === AVISOS_LIMITES });
+        }
+      }
       p.valida = false;
     }
     // detección del DRS: diferencia con el coche de delante menor de 1 s
@@ -355,6 +429,37 @@ export class Sesion {
     p.distancia = (p.vuelta - 1) * L + s;
   }
 
+  // ─── Banderas y sanciones ─────────────────────────────────────────────
+  amarilla(s, dur) {
+    const z = this.amarillas.find(a => Math.abs(this.c.envolver(a.s - s + this.c.largo / 2) - this.c.largo / 2) < 150);
+    if (z) z.hasta = Math.max(z.hasta, this.tiempo + dur);
+    else { this.amarillas.push({ s, hasta: this.tiempo + dur }); this.eventos.push({ tipo: 'amarilla', s }); }
+  }
+  enAmarilla(s) {
+    const L = this.c.largo;
+    return this.amarillas.some(a => { const ds = this.c.envolver(a.s - s); return ds < 220 || ds > L - 60; });
+  }
+  ponerVsc(si) {
+    if (si === this.vsc) { if (si) this.tVsc = Math.max(this.tVsc, 30); return; }
+    this.vsc = si; this.tVsc = si ? 30 : 0;
+    this.eventos.push({ tipo: 'vsc', activo: si });
+  }
+  _banderas(dt) {
+    this.amarillas = this.amarillas.filter(a => a.hasta > this.tiempo);
+    if (this.vsc) {
+      this.tVsc -= dt;
+      // termina cuando la grúa ha retirado los coches parados en pista
+      const parados = this.participantes.some(p => p.abandono && !p.retirado && !p.jugador);
+      if (this.tVsc <= 0 && !parados) this.ponerVsc(false);
+    }
+  }
+  sancionar(p, motivo) {
+    if (this.tiempo - p.tUltimaSancion < 8 || p.terminado) return;
+    p.tUltimaSancion = this.tiempo;
+    p.penalizacion += PENALIZACION;
+    this.eventos.push({ tipo: 'sancion', p, motivo, seg: PENALIZACION, total: p.penalizacion });
+  }
+
   _cruza(s0, s1, marca) {
     if (s1 >= s0) return s0 < marca && s1 >= marca && s1 - s0 < 100;
     return (s0 < marca || s1 >= marca) && s0 - s1 > this.c.largo - 100;
@@ -388,7 +493,7 @@ export class Sesion {
   _posiciones() {
     const orden = [...this.participantes].sort((a, b) => {
       if (a.abandono !== b.abandono) return a.abandono ? 1 : -1;
-      if (a.terminado && b.terminado) return a.tTotal - b.tTotal;
+      if (a.terminado && b.terminado) return (a.tTotal + a.penalizacion) - (b.tTotal + b.penalizacion);
       if (a.terminado) return -1;
       if (b.terminado) return 1;
       return b.distancia - a.distancia;

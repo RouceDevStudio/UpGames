@@ -1,7 +1,7 @@
 // Piloto automático para los rivales: persecución pura sobre la trazada ideal,
 // perfil de velocidad con margen según habilidad y maniobras de adelantamiento.
 
-import { COCHE } from './config.js';
+import { COCHE, factorAgua } from './config.js';
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 
@@ -51,7 +51,18 @@ export class PilotoIA {
     // interpolación según el agarre real de las ruedas (1 = en ventana, 0,85 = frías)
     const g = (1 - k) / 0.15;
     const base = limpio + (frio - limpio) * Math.max(0, g);
-    return base * this.habilidad * Math.sqrt(aero);
+    // pista mojada: el perfil entero escala con la raíz del agarre que queda (y algo de prudencia)
+    let mojado = 1;
+    const agua = c.agua || 0;
+    this.agarreMojado = 1;
+    if (agua > 0) {
+      let fa = 0;
+      for (const w of this.coche.ruedas) fa += factorAgua(w.neum.c, agua);
+      this.agarreMojado = fa / 4;
+      // margen de prudencia en mojado (el agarre cambia de una curva a otra y hay charcos)
+      mojado = c.perfilAgarre(fa / 4 * (1 - 0.14 * Math.min(1, agua * 4)))[i] / c.perfil[i];
+    }
+    return base * this.habilidad * Math.sqrt(aero) * mojado;
   }
 
   // ¿Viene recta? (curvatura baja en los próximos `m` metros)
@@ -93,10 +104,11 @@ export class PilotoIA {
         if (!delante || ds < delante.ds) delante = { o, ds, dd };
         // distancia de frenada hasta un coche más lento en nuestro carril
         if (Math.abs(dd) < 2.3) {
-          const hueco = 5 + v * 0.13;
+          const agarre = this.agarreMojado ?? 1;      // en mojado se frena menos y se deja más hueco
+          const hueco = (5 + v * 0.13) / Math.sqrt(agarre);
           // frenada prudente hasta el coche lento y, ya cerca, seguirlo a su ritmo
           const vo = Math.max(0, o.vx);
-          let vt = Math.sqrt(vo * vo + 2 * 8 * Math.max(0, ds - hueco));
+          let vt = Math.sqrt(vo * vo + 2 * 8 * agarre * Math.max(0, ds - hueco));
           if (ds < hueco + 30) vt = Math.min(vt, vo + (ds - hueco) * 0.7);
           vTrafico = Math.min(vTrafico, vt);
         }
@@ -248,16 +260,25 @@ export class PilotoBox {
     const beta = v > 4 ? Math.atan2(car.vy, car.vx) : 0;
     const delta = Math.atan(COCHE.wheelbase * 2 * ly / Math.max(1, lx * lx + ly * ly)) + beta * 0.5;
     m.direccion = clamp(delta / COCHE.angMaxRueda, -1, 1);
-    // velocidad: llegar al limitador a 80 km/h y parar justo en el garaje
+    // velocidad: llegar al limitador a 80 km/h y parar justo en el garaje (con agua, todo más suave)
+    let fa = 1;
+    if (c.agua > 0) { fa = 0; for (const w of car.ruedas) fa += factorAgua(w.neum.c, c.agua) / 4; fa *= 0.92; }
+    const g = Math.sqrt(fa);
     const lim = c.pit.limite * 0.96;
     const aLim = c.envolver(c.pit.limiteIni - s);
-    let vObj = c.uPit(s) >= 0 && aLim > L / 2 ? lim : Math.min(70, Math.sqrt(lim * lim + 2 * 13 * Math.max(0, aLim - 5)));
+    let vObj = c.uPit(s) >= 0 && aLim > L / 2 ? lim : Math.min(70, Math.sqrt(lim * lim + 2 * 13 * fa * Math.max(0, aLim - 5)));
     // antes de la entrada se respeta la velocidad de paso por curva
-    if (c.uPit(s) < 0) vObj = Math.min(vObj, c.perfil[car.proj.i] * 0.93, Math.sqrt(26 * 26 + 2 * 11 * Math.max(0, c.envolver(c.pit.entrada - s) - 5)));
-    else if (aLim < L / 2) vObj = Math.min(vObj, 26);   // rampa de entrada al carril
+    if (c.uPit(s) < 0) vObj = Math.min(vObj, c.perfil[car.proj.i] * 0.93 * g, Math.sqrt((26 * g) ** 2 + 2 * 11 * fa * Math.max(0, c.envolver(c.pit.entrada - s) - 5)));
+    else if (aLim < L / 2) vObj = Math.min(vObj, 26 * g);   // rampa de entrada al carril
     if (this.estado === 'entrada') {
-      if (aBox < L / 2) vObj = Math.min(vObj, Math.sqrt(2 * 7 * Math.max(0, aBox - 0.6)));
-      if ((aBox < 0.9 || aBox > L - 3) && v < 1.5) { this.estado = 'parada'; this.t = 0; this.alParar?.(); return; }
+      if (aBox < L / 2) vObj = Math.min(vObj, Math.sqrt(2 * 7 * fa * Math.max(0, aBox - 0.6)));
+      // se pasó un poco del garaje (pista resbaladiza): frena del todo y paran ahí mismo
+      const pasado = aBox > L - 25;
+      if (pasado) vObj = 0;
+      if ((aBox < 0.9 || pasado) && v < 1.5) { this.estado = 'parada'; this.t = 0; this.alParar?.(); return; }
+      // si por lo que sea sale de la calle de boxes sin parar, se anula la parada
+      if (c.uPit(s) < 0 && this.dentro) { this.estado = 'fin'; return; }
+      if (c.uPit(s) >= 0) this.dentro = true;
     } else if (c.uPit(s) < 0) { this.estado = 'fin'; return; }
     else if (!c.enLimitador(s, c.dCarrilPit(s)) && c.envolver(s - c.pit.limiteFin) < 200) vObj = 75;
     const err = vObj - v;

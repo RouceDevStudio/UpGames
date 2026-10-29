@@ -1,6 +1,6 @@
 // Dibuja el trazado en SVG para revisar el diseño: node tools/plano.mjs > plano.svg
-import { Circuito } from '../js/track.js';
-const c = new Circuito();
+import { Circuito } from "../js/track.js";
+const c = new Circuito(process.argv[2] || "valle");
 let minx=1e9,maxx=-1e9,minz=1e9,maxz=-1e9;
 for (let i=0;i<c.n;i++){minx=Math.min(minx,c.x[i]);maxx=Math.max(maxx,c.x[i]);minz=Math.min(minz,c.z[i]);maxz=Math.max(maxz,c.z[i]);}
 const pad=80, W=maxx-minx+2*pad, H=maxz-minz+2*pad;

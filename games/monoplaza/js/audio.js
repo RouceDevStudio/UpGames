@@ -31,8 +31,22 @@ class VozMotor {
       return { o, g: gg };
     };
     this.o1 = osc('sawtooth', 0.55);   // frecuencia de encendido
+    // timbre de V6 turbo: armónicos de encendido con los de orden 1,5 marcados
+    try {
+      const n = 16, re = new Float32Array(n), im = new Float32Array(n);
+      const amp = [0, 1, 0.62, 0.48, 0.3, 0.26, 0.18, 0.12, 0.1, 0.07, 0.05, 0.04, 0.03, 0.02, 0.015, 0.01];
+      for (let k = 1; k < n; k++) im[k] = amp[k] * (k % 3 === 0 ? 1.25 : 1);
+      this.o1.o.setPeriodicWave(ctx.createPeriodicWave(re, im));
+    } catch { /* navegador sin PeriodicWave: diente de sierra */ }
     this.o2 = osc('square', 0.18);     // segundo armónico
     this.o3 = osc('sine', 0.5);        // fundamental del cigüeñal
+    // irregularidad de combustión: un vibrato rápido y pequeño
+    this.lfo = ctx.createOscillator(); this.lfo.frequency.value = 23;
+    this.gLfo = ctx.createGain(); this.gLfo.gain.value = 0;
+    this.lfo.connect(this.gLfo); this.gLfo.connect(this.o1.o.frequency); this.lfo.start();
+    // resonancia del escape: un filtro de pico que sigue a las vueltas
+    this.escape = ctx.createBiquadFilter(); this.escape.type = 'peaking'; this.escape.Q.value = 2.2; this.escape.gain.value = 7;
+    this.filtro.disconnect(); this.filtro.connect(this.escape); this.escape.connect(this.salida);
     if (completo) {
       this.o4 = osc('triangle', 0.22); // armónico 1.5 (carácter V6)
       // aspereza de combustión: ruido filtrado alrededor de la frecuencia de encendido
@@ -55,6 +69,8 @@ class VozMotor {
       this.gRuido.gain.setTargetAtTime(0.12 + carga * 0.35, t, 0.05);
     }
     this.filtro.frequency.setTargetAtTime(500 + carga * 4200 + rpm * 0.28, t, 0.04);
+    this.escape.frequency.setTargetAtTime(180 + rpm * 0.055, t, 0.05);
+    this.gLfo.gain.setTargetAtTime(f * (0.004 + (1 - carga) * 0.01), t, 0.1);
     this.salida.gain.setTargetAtTime(volumen * (0.32 + 0.68 * carga), t, 0.04);
   }
 }
@@ -101,8 +117,53 @@ export class Sonido {
     this.gBord = ctx.createGain(); this.gBord.gain.value = 0;
     const fb = ctx.createBiquadFilter(); fb.type = 'lowpass'; fb.frequency.value = 220;
     this.bord.connect(fb); fb.connect(this.gBord); this.gBord.connect(this.maestro); this.bord.start();
+    // ambiente: público, lluvia y megafonía (mezclados aparte para poder apagarlos)
+    this.ambiente = ctx.createGain(); this.ambiente.gain.value = 1; this.ambiente.connect(this.maestro);
+    const lazoA = (tipo, f, q) => {
+      const s = ctx.createBufferSource(); s.buffer = this.ruido; s.loop = true;
+      const fl = ctx.createBiquadFilter(); fl.type = tipo; fl.frequency.value = f; fl.Q.value = q;
+      const g = ctx.createGain(); g.gain.value = 0;
+      s.connect(fl); fl.connect(g); g.connect(this.ambiente); s.start(ctx.currentTime + Math.random());
+      return { f: fl, g };
+    };
+    this.publico = lazoA('bandpass', 900, 0.8);
+    this.publico2 = lazoA('bandpass', 2100, 1.4);
+    this.lluvia = lazoA('highpass', 2600, 0.4);
+    this.spray = lazoA('bandpass', 1400, 0.6);
+    this.cercaGrada = 0;
     this.listo = true;
   }
+
+  // ovación del público (salida, adelantamientos, meta)
+  ovacion(fuerza = 1) {
+    if (!this.listo) return;
+    const t = this.ctx.currentTime;
+    for (const l of [this.publico, this.publico2]) {
+      l.g.gain.cancelScheduledValues(t);
+      l.g.gain.setTargetAtTime(0.16 * fuerza, t, 0.25);
+      l.g.gain.setTargetAtTime(0.03, t + 1.6 + fuerza, 1.2);
+    }
+  }
+
+  // ding-dong de megafonía antes de un anuncio
+  campana() {
+    if (!this.listo) return;
+    const ctx = this.ctx, t = ctx.currentTime;
+    [[784, 0], [622, 0.38]].forEach(([f, r]) => {
+      const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const g = ctx.createGain(); g.gain.setValueAtTime(0, t + r); g.gain.linearRampToValueAtTime(0.16, t + r + 0.02); g.gain.exponentialRampToValueAtTime(0.001, t + r + 1.1);
+      o.connect(g); g.connect(this.ambiente); o.start(t + r); o.stop(t + r + 1.2);
+    });
+  }
+
+  // chasquido y estática de la radio del equipo
+  radio(fin = false) {
+    if (!this.listo) return;
+    this._rafaga(fin ? 0.09 : 0.14, 2400, 'bandpass', 0.18);
+    this.pitido(fin ? 1250 : 1650, 0.06, 0.06);
+  }
+
+  ponerAmbiente(on) { if (this.ambiente) this.ambiente.gain.setTargetAtTime(on ? 1 : 0, this.ctx.currentTime, 0.2); }
 
   ponerVolumen(v) {
     this.volumen = v;
@@ -143,9 +204,15 @@ export class Sonido {
     else if (nombre === 'vuelta') this.pitido(990, 0.12, 0.12);
   }
 
-  actualizar(dt, car, rivalCercano, camara) {
+  actualizar(dt, car, rivalCercano, camara, entorno = {}) {
     if (!this.listo) return;
     const t = this.ctx.currentTime;
+    // ambiente: murmullo del público cerca de las gradas, lluvia y agua levantada por las ruedas
+    const lluvia = entorno.lluvia || 0, agua = entorno.agua || 0;
+    const base = 0.012 + 0.03 * (entorno.grada || 0);
+    if (this.publico.g.gain.value < base + 0.01) { this.publico.g.gain.setTargetAtTime(base, t, 0.6); this.publico2.g.gain.setTargetAtTime(base * 0.5, t, 0.6); }
+    this.lluvia.g.gain.setTargetAtTime(lluvia * 0.09, t, 0.5);
+    this.spray.g.gain.setTargetAtTime(agua * Math.min(1, car.velocidad / 60) * 0.12, t, 0.2);
     const v = car.velocidad;
     const acel = car.mandos.acelerador * (car.tc ?? 1);
     const carga = car.limitador ? 0.35 : clamp(acel, 0, 1);

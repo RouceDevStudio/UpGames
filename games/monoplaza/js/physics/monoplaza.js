@@ -2,7 +2,7 @@
 // Ejes del coche: x hacia delante, y hacia la derecha. Rumbo ψ: el vector delantero
 // en el mundo es (cos ψ, sin ψ) en el plano (x, z). Guiñada positiva = giro a la derecha.
 
-import { COCHE, COMPUESTOS, G, RHO_AIRE, REGLAJE_DEF, efectosMejoras } from '../config.js';
+import { COCHE, COMPUESTOS, G, RHO_AIRE, REGLAJE_DEF, efectosMejoras, factorAgua } from '../config.js';
 import { SUPERFICIES, SUP_ASFALTO, SUP_BORDILLO, SUP_ESCAPE } from '../track.js';
 import { Neumatico, fuerzasNeumatico, muCarga } from './neumatico.js';
 
@@ -308,6 +308,7 @@ export class Monoplaza {
     acel *= this.tc;
     // limitador de velocidad de la calle de boxes (80 km/h)
     if (this.limitadorPit) acel = Math.min(acel, clamp((this.limitePit - this.vx) * 0.6, 0, 1));
+    if (this.limiteVsc > 0) acel = Math.min(acel, clamp((this.limiteVsc - this.vx) * 0.4, 0, 1));
     const relacion = this.marcha > 0 ? COCHE.relaciones[this.marcha - 1] : (this.marcha < 0 ? COCHE.relacionReversa : 0);
     const rl = this.ruedas[2], rr = this.ruedas[3];
     const omegaEje = (rl.omega + rr.omega) / 2;
@@ -418,6 +419,9 @@ export class Monoplaza {
       w.tanAlfa += (tanSS - w.tanAlfa) * kr;
       const nm = w.neum;
       let mu = muCarga(nm.c.mu, w.fz) * nm.factorAgarre() * sp.mu;
+      // agua en la pista (fuera del asfalto, la hierba mojada es una pista de hielo)
+      const agua = c.agua || 0;
+      if (agua > 0) mu *= factorAgua(nm.c, agua) * (w.sup > SUP_ESCAPE ? 1 - 0.35 * agua : 1);
       const den = Math.max(Math.abs(vl), 3);
       let R = w.radio;
       const d = this.dano;
@@ -486,7 +490,8 @@ export class Monoplaza {
       const vDesl = Math.hypot(w.omega * R - vl, vt);
       w.deslizamiento = vDesl;
       if (vDesl > deslizMax && w.sigma > 1.0) deslizMax = vDesl;
-      nm.termico(dt, Math.abs(fxw) * Math.abs(w.omega * R - vl) + Math.abs(fyw * vt), w.fz, Math.abs(vl), this.tAmb);
+      // el agua enfría la goma: los lisos en mojado no llegan a temperatura y los de lluvia en seco se cuecen
+      nm.termico(dt, Math.abs(fxw) * Math.abs(w.omega * R - vl) + Math.abs(fyw * vt), w.fz, Math.abs(vl), this.tAmb - 12 * agua, agua);
       if (!w.delantera) maxKappaTras = Math.max(maxKappaTras, w.kappa / nm.picoKappa);
       // a ejes del coche
       const fxc = fxw * ca - fyw * sa;

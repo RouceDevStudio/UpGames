@@ -47,7 +47,39 @@ export const cuenta = {
   perfil: () => api('/apexgp/perfil'),
   comprar: (id) => api('/apexgp/comprar', { method: 'POST', body: { id, clave: clave() } }),
   equipar: (equipado) => api('/apexgp/equipar', { method: 'PUT', body: { equipado } }),
+  // campeonato: premios de 15/10/5 UpCoins no retirables validados por el servidor
+  fichaCarrera: (d) => api('/apexgp/campeonato/carrera', { method: 'POST', body: d }),
+  resultadoCarrera: (d) => api('/apexgp/campeonato/resultado', { method: 'POST', body: d }),
+  // contrarreloj: ranking con fantasma
+  fichaCrono: (circuito) => api('/apexgp/contrarreloj/sesion', { method: 'POST', body: { circuito } }),
+  enviarTiempo: (d) => api('/apexgp/contrarreloj/tiempo', { method: 'POST', body: d }),
+  ranking: (circuito, periodo) => api(`/apexgp/contrarreloj/ranking?circuito=${encodeURIComponent(circuito)}&periodo=${periodo}`),
+  fantasmaRecord: (circuito, periodo) => api(`/apexgp/contrarreloj/fantasma?circuito=${encodeURIComponent(circuito)}&periodo=${periodo}`),
+  rankingElo: () => api('/apexgp/ranking/elo'),
 };
+
+// Fantasma local (20 Hz: x, z, y, rumbo) ⇄ formato del servidor (10 Hz, enteros: dm, dm, rumbo·1000, y·10)
+export function fantasmaAServidor(f) {
+  const out = [];
+  for (let i = 0; i < f.puntos.length; i += 2) { const p = f.puntos[i]; out.push([Math.round(p[0] * 10), Math.round(p[1] * 10), Math.round(p[3] * 1000), Math.round(p[2] * 10)]); }
+  // el servidor espera tiempo × 10 muestras
+  const n = Math.round(f.tiempo * 10);
+  while (out.length > n) out.pop();
+  while (out.length < n && out.length) out.push(out[out.length - 1].slice());
+  return JSON.stringify(out);
+}
+export function fantasmaDeServidor(txt, tiempo) {
+  const m = JSON.parse(txt), puntos = [];
+  for (let i = 0; i < m.length; i++) {
+    const a = m[i], b = m[i + 1] || a;
+    const p = (q) => [q[0] / 10, q[1] / 10, q[3] / 10, q[2] / 1000];
+    const pa = p(a), pb = p(b);
+    puntos.push(pa);
+    let dpsi = pb[3] - pa[3]; dpsi = Math.atan2(Math.sin(dpsi), Math.cos(dpsi));
+    puntos.push([(pa[0] + pb[0]) / 2, (pa[1] + pb[1]) / 2, (pa[2] + pb[2]) / 2, pa[3] + dpsi / 2]);
+  }
+  return { tiempo, puntos };
+}
 
 function clave() {
   const a = new Uint8Array(12);
@@ -108,6 +140,8 @@ export class Multijugador {
       s.on('resultados', (r) => this._emitirLocal('resultados', r));
       s.on('livery', (d) => { this.libreas.set(d.id, d.livery); this._emitirLocal('livery', d); });
       s.on('evento', (d) => this._emitirLocal('evento', d));
+      s.on('emparejado', (d) => { this.sala = d.sala; this.yo = d.yo; this._emitirLocal('emparejado', d); });
+      s.on('elo', (d) => this._emitirLocal('elo', d));
       s.on('error_sala', (e) => this._emitirLocal('aviso', e));
       s.on('disconnect', () => this._emitirLocal('desconectado'));
     });
@@ -133,6 +167,8 @@ export class Multijugador {
   listo(v) { this.socket?.emit('listo', v); }
   iniciar() { return new Promise(r => this.socket.emit('iniciar', r)); }
   revancha() { this.socket?.emit('revancha'); }
+  buscar(datos) { return new Promise(r => this.socket.emit('buscar', datos, r)); }
+  cancelarBusqueda() { this.socket?.emit('cancelarBusqueda'); }
   salir() { this.socket?.emit('salir'); this.sala = null; this.buffers.clear(); }
   desconectar() { this.salir(); this.socket?.disconnect(); this.socket = null; }
   enviarEstado(arr) { this.socket?.volatile.emit('estado', arr.map(v => Math.round(v * 1000) / 1000)); }

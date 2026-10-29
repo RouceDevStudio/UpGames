@@ -31,19 +31,26 @@
 <div id="menu" class="pantalla">
   <div class="menu-col">
     <div class="marca">APEX<span>GP</span></div>
-    <div class="sub">Autódromo Valle del Cóndor · <b id="largoPista"></b></div>
+    <div class="sub"><span id="nombrePista">Autódromo Valle del Cóndor</span> · <b id="largoPista"></b></div>
+    <div class="segm circuitos" id="selCircuito"></div>
     <div class="botones">
-      <button class="btn grande" data-ir="carrera">🏁 Carrera</button>
-      <button class="btn grande" data-ir="contrarreloj">⏱️ Contrarreloj</button>
-      <button class="btn grande" data-ir="practica">🛞 Práctica libre</button>
+      <div class="fila">
+        <button class="btn grande" data-ir="carrera">🏁 Carrera</button>
+        <button class="btn grande" data-ir="campeonato">🏆 Campeonato</button>
+      </div>
+      <div class="fila">
+        <button class="btn grande" data-ir="contrarreloj">⏱️ Contrarreloj</button>
+        <button class="btn grande" data-ir="practica">🛞 Práctica</button>
+      </div>
       <div class="fila">
         <button class="btn grande" data-ir="multi">🌐 Multijugador</button>
         <button class="btn grande" data-ir="garaje">🏎️ Garaje</button>
       </div>
       <div class="fila">
+        <button class="btn" data-ir="rankings">📊 Rankings</button>
         <button class="btn" data-ir="reglaje">🔧 Reglaje</button>
         <button class="btn" data-ir="ajustes">⚙️ Ajustes</button>
-        <button class="btn" data-ir="ayuda">❔ Cómo se juega</button>
+        <button class="btn" data-ir="ayuda">❔ Ayuda</button>
       </div>
     </div>
     <div id="recordMenu" class="nota"></div>
@@ -59,16 +66,63 @@
     <div class="opcion"><label>Vueltas</label><div class="segm" data-campo="vueltas"><b data-v="3">3</b><b data-v="5">5</b><b data-v="10">10</b><b data-v="20">20</b></div></div>
     <div class="opcion"><label>Rivales</label><div class="segm" data-campo="rivales"><b data-v="3">3</b><b data-v="7">7</b><b data-v="11">11</b><b data-v="15">15</b><b data-v="21">21</b></div></div>
     <div class="opcion"><label>Dificultad</label><div class="segm" data-campo="dificultad"><b data-v="facil">Fácil</b><b data-v="normal">Normal</b><b data-v="dificil">Difícil</b><b data-v="extremo">Extremo</b></div></div>
-    <div class="opcion"><label>Salida</label><div class="segm" data-campo="posSalida"><b data-v="1">Pole</b><b data-v="6">Media</b><b data-v="22">Última</b></div></div>
-    <div class="opcion"><label>Neumático</label><div class="segm compuestos" data-campo="compuesto"><b data-v="blando">Blando</b><b data-v="medio">Medio</b><b data-v="duro">Duro</b></div></div>
+    <div class="opcion"><label>Salida<span class="desc">Con clasificación, Q1-Q2-Q3 deciden la parrilla</span></label><div class="segm" data-campo="posSalida"><b data-v="0">Clasificación</b><b data-v="1">Pole</b><b data-v="6">Media</b><b data-v="22">Última</b></div></div>
+    <div class="opcion"><label>Clima</label><div class="segm" data-campo="clima"><b data-v="seco">☀️ Seco</b><b data-v="variable">🌦️ Variable</b><b data-v="lluvia">🌧️ Lluvia</b></div></div>
+    <div class="opcion"><label>Neumático</label><div class="segm compuestos" data-campo="compuesto"><b data-v="blando">Blando</b><b data-v="medio">Medio</b><b data-v="duro">Duro</b><b data-v="inter">Inter</b><b data-v="lluvia">Lluvia</b></div></div>
     <div class="acciones"><button class="btn" data-ir="menu">Atrás</button><button class="btn primario" id="empezarCarrera">A la parrilla</button></div>
+  </div>
+</div>
+
+<!-- Campeonato -->
+<div id="campeonato" class="pantalla">
+  <div class="panel ancho">
+    <h2 id="campTitulo">Campeonato</h2>
+    <div id="campInfo" class="nota" style="text-align:left"></div>
+    <div id="campNueva" class="lista">
+      <div class="opcion"><label>Vueltas por carrera</label><div class="segm" data-camp="vueltas"><b data-v="3">3</b><b data-v="5">5</b><b data-v="8">8</b><b data-v="12">12</b></div></div>
+      <div class="opcion"><label>Rivales</label><div class="segm" data-camp="rivales"><b data-v="7">7</b><b data-v="11">11</b><b data-v="15">15</b><b data-v="21">21</b></div></div>
+      <div class="opcion"><label>Dificultad</label><div class="segm" data-camp="dificultad"><b data-v="facil">Fácil</b><b data-v="normal">Normal</b><b data-v="dificil">Difícil</b><b data-v="extremo">Extremo</b></div></div>
+      <div class="opcion"><label>Clima</label><div class="segm" data-camp="clima"><b data-v="auto">Realista</b><b data-v="seco">Siempre seco</b><b data-v="lluvia">Lluvia</b></div></div>
+      <p class="nota" style="text-align:left">Tres Grandes Premios: Valle Andino, Puerto Real y Autódromo Veloz. Cada uno con clasificación Q1-Q2-Q3 y carrera. Puntos 25-18-15-12-10-8-6-4-2-1 y +1 por la vuelta rápida.<br><b style="color:#ffd23f">Premios con tu cuenta de UpGames: P1 15 UC · P2 10 UC · P3 5 UC por carrera</b> (UpCoins de juego, no retirables; con 7+ rivales, 3+ vueltas y dificultad normal o más; máximo 3 premios al día).</p>
+    </div>
+    <div id="campTablas" class="tablas-camp"></div>
+    <div class="acciones">
+      <button class="btn" data-ir="menu">Atrás</button>
+      <button class="btn" id="bCampAbandonar">Nueva temporada</button>
+      <button class="btn primario" id="bCampSeguir">Empezar temporada</button>
+    </div>
+  </div>
+</div>
+
+<!-- Clasificación Q1-Q2-Q3 -->
+<div id="clasif" class="pantalla">
+  <div class="panel ancho">
+    <h2 id="qTitulo">Clasificación</h2>
+    <div id="qInfo" class="nota" style="text-align:left"></div>
+    <div id="qLista" class="lista"></div>
+    <div class="acciones"><button class="btn" id="bQSaltar">Saltar tanda</button><button class="btn primario" id="bQSeguir">Salir a pista</button></div>
+  </div>
+</div>
+
+<!-- Rankings en línea -->
+<div id="rankings" class="pantalla">
+  <div class="panel ancho">
+    <h2>Rankings</h2>
+    <div class="pestanas"><b data-rk="crono" class="sel">Contrarreloj</b><b data-rk="elo">Multijugador (ELO)</b></div>
+    <div id="rkFiltros" class="fila-filtros">
+      <div class="segm" id="rkCircuito"></div>
+      <div class="segm" id="rkPeriodo"><b data-v="semana" class="sel">Esta semana</b><b data-v="global">De siempre</b></div>
+    </div>
+    <div id="rkInfo" class="nota" style="text-align:left"></div>
+    <div id="rkLista" class="lista"></div>
+    <div class="acciones"><button class="btn" data-ir="menu">Atrás</button><button class="btn primario" id="bRkFantasma">Correr contra el récord</button></div>
   </div>
 </div>
 
 <!-- Reglaje -->
 <div id="reglaje" class="pantalla">
   <div class="panel ancho">
-    <h2>Reglaje del coche</h2>
+    <h2>Reglaje del coche <small id="reglajeCircuito" class="nota"></small></h2>
     <div id="listaReglaje" class="lista"></div>
     <div class="acciones"><button class="btn" id="reglajeDef">Valores de fábrica</button><button class="btn primario" data-ir="volver">Listo</button></div>
   </div>
@@ -96,6 +150,8 @@
       <div class="opcion"><label>Calidad</label><div class="segm" data-aj="calidad"><b data-v="auto">Auto</b><b data-v="0">Baja</b><b data-v="1">Media</b><b data-v="2">Alta</b><b data-v="3">Ultra</b></div></div>
       <div class="opcion"><label>Mostrar FPS</label><input type="checkbox" data-aj="fps"></div>
       <div class="opcion"><label>Volumen</label><input type="range" min="0" max="1" step="0.05" data-aj="volumen"><span class="valor"></span></div>
+      <div class="opcion"><label>Radio del ingeniero (voz)</label><input type="checkbox" data-aj="radio"></div>
+      <div class="opcion"><label>Público y megafonía</label><input type="checkbox" data-aj="ambiente"></div>
       <div class="opcion"><label>Unidades</label><div class="segm" data-aj="unidades"><b data-v="kmh">km/h</b><b data-v="mph">mph</b></div></div>
     </div>
     <div class="acciones"><button class="btn primario" data-ir="volver">Listo</button></div>
@@ -114,7 +170,10 @@
       <p><b>Aerodinámica:</b> la carga crece con el cuadrado de la velocidad: en curvas rápidas hay más agarre que en las lentas. Detrás de otro coche ganas velocidad en recta por el rebufo pero pierdes carga en curva (aire sucio).</p>
       <p><b>DRS:</b> abre el alerón trasero en las zonas marcadas (en carrera, si estás a menos de 1 s del de delante). Se cierra al frenar.</p>
       <p><b>ERS:</b> la batería se recarga frenando. Modo Normal reparte la energía; Adelantar la gasta toda; Recarga la recupera también al acelerar a medias. La luz trasera parpadea cuando recupera.</p>
-      <p><b>Límites de pista:</b> si sacas las cuatro ruedas fuera, la vuelta no cuenta.</p>
+      <p><b>Límites de pista:</b> si sacas las cuatro ruedas fuera, la vuelta no cuenta. En carrera tienes 3 avisos (bandera blanca y negra); desde el cuarto, +5 s. Provocar un choque también son +5 s.</p>
+      <p><b>Banderas:</b> amarilla = peligro en esa zona, sin DRS. VSC (coche de seguridad virtual) = todos limitados a un ritmo lento hasta que retiran el coche accidentado.</p>
+      <p><b>Lluvia:</b> con agua en la pista los neumáticos lisos no agarran. Intermedios para pista húmeda; de lluvia para mucha agua. La pista se seca poco a poco: tu ingeniero te avisará por radio.</p>
+      <p><b>Repetición y foto:</b> desde la pausa o al terminar, mira la repetición con cámaras de TV y saca fotos.</p>
     </div>
     <div class="acciones"><button class="btn primario" data-ir="menu">Entendido</button></div>
   </div>
@@ -159,7 +218,12 @@
   <div class="panel ancho">
     <h2>Multijugador</h2>
     <div id="mEstado" class="nota" style="text-align:left"></div>
+    <h3>Partida rápida</h3>
+    <div class="opcion"><label>Rivales de tu nivel (ELO) y de tu región<span class="desc" id="mElo"></span></label><div class="segm" data-mp="region"><b data-v="america">América</b><b data-v="europa">Europa</b><b data-v="asia">Asia</b></div></div>
+    <div class="acciones"><button class="btn primario" id="bBuscar">⚡ Buscar partida</button></div>
     <h3>Crear sala</h3>
+    <div class="opcion"><label>Circuito</label><div class="segm" data-mp="circuito"><b data-v="valle">Valle Andino</b><b data-v="puerto">Puerto Real</b><b data-v="veloz">Veloz</b></div></div>
+    <div class="opcion"><label>Clima</label><div class="segm" data-mp="clima"><b data-v="seco">Seco</b><b data-v="variable">Variable</b><b data-v="lluvia">Lluvia</b></div></div>
     <div class="opcion"><label>Tipo</label><div class="segm" data-mp="tipo"><b data-v="1v1">Duelo 1 vs 1</b><b data-v="abierta">Sala abierta (hasta 22)</b></div></div>
     <div class="opcion" id="filaMax"><label>Pilotos máximo</label><div class="segm" data-mp="max"><b data-v="4">4</b><b data-v="8">8</b><b data-v="12">12</b><b data-v="22">22</b></div></div>
     <div class="opcion"><label>Vueltas</label><div class="segm" data-mp="vueltas"><b data-v="2">2</b><b data-v="3">3</b><b data-v="5">5</b><b data-v="10">10</b></div></div>
@@ -228,9 +292,14 @@
     <i data-d="aleronDel">ALERÓN DEL.</i><i data-d="aleronTras">ALERÓN TRAS.</i><i data-d="susp">SUSPENSIÓN</i><i data-d="pinchazo">PINCHAZO</i><i data-d="motor">LIMITADOR PIT</i>
   </div>
   <div id="hMensaje" class="mensaje"></div>
+  <div id="hBandera" class="bandera"></div>
+  <div id="hRadio" class="radio"></div>
+  <div id="hClima" class="clima-hud"></div>
+  <div id="hPen" class="pen"></div>
   <div id="panelBox" class="panel-box">
     <div class="mini">ENTRAR A BOXES · NEUMÁTICOS</div>
     <div class="fila-box"><button class="btn" data-box="blando">Blando</button><button class="btn" data-box="medio">Medio</button><button class="btn" data-box="duro">Duro</button></div>
+    <div class="fila-box"><button class="btn" data-box="inter">Inter</button><button class="btn" data-box="lluvia">Lluvia</button></div>
     <button class="btn" data-box="cancelar">Cancelar</button>
   </div>
   <div id="hFps" class="fps"></div>
@@ -252,8 +321,16 @@
   <div id="botonesAccion">
     <button id="bBajar" class="bt marcha-bt">−</button>
     <button id="bSubir" class="bt marcha-bt">+</button>
-    <button id="bDrs" class="bt">DRS</button>
-    <button id="bErs" class="bt">ERS</button>
+  </div>
+  <div id="botonesEnergia">
+    <button id="bDrs" class="bt energia drs-bt" aria-label="DRS: abre el alerón trasero en las rectas">
+      <svg viewBox="0 0 64 40" aria-hidden="true"><path class="ala-fija" d="M6 26 L58 26 L56 31 L8 31 Z"/><path class="flap" d="M8 20 L56 20 L54 24 L10 24 Z"/><path class="deriva" d="M4 14 L9 14 L9 34 L4 34 Z M55 14 L60 14 L60 34 L55 34 Z"/><path class="aire" d="M14 9 h14 M34 6 h16 M22 3 h10"/></svg>
+      <span>DRS</span>
+    </button>
+    <button id="bErs" class="bt energia ers-bt" aria-label="ERS: modo de despliegue de la batería">
+      <svg viewBox="0 0 64 40" aria-hidden="true"><rect class="pila" x="10" y="8" width="40" height="24" rx="4"/><rect class="borne" x="50" y="15" width="5" height="10" rx="1.5"/><rect class="carga" x="13" y="11" width="34" height="18" rx="2"/><path class="rayo" d="M33 9 L22 22 L30 22 L27 31 L40 17 L32 17 Z"/></svg>
+      <span id="bErsTxt">ERS</span>
+    </button>
   </div>
 </div>
 
@@ -266,6 +343,8 @@
       <button class="btn" id="bReiniciar">Reiniciar</button>
       <button class="btn" id="bCalibrar">Centrar inclinación</button>
       <button class="btn" data-ir="reglaje" id="bPausaReglaje">Reglaje</button>
+      <button class="btn" id="bPausaRepe">🎬 Repetición</button>
+      <button class="btn" id="bPausaTele">📈 Telemetría</button>
       <button class="btn" data-ir="ajustes">Ajustes</button>
       <button class="btn" id="bSalir">Salir al menú</button>
     </div>
@@ -273,12 +352,38 @@
   </div>
 </div>
 
+<!-- Telemetría por vuelta -->
+<div id="telePantalla" class="pantalla">
+  <div class="panel ancho">
+    <h2>Telemetría · velocidad por vuelta</h2>
+    <div id="teleInfo" class="nota" style="text-align:left"></div>
+    <canvas id="teleGrafico" width="1400" height="520"></canvas>
+    <div class="acciones"><button class="btn primario" data-ir="volver">Listo</button></div>
+  </div>
+</div>
+
+<!-- Repetición y modo foto -->
+<div id="repe" class="repe">
+  <div class="repe-sup"><span class="repe-rec">● REPETICIÓN</span><span id="repeCam"></span><span id="repeT"></span></div>
+  <input type="range" id="repeBarra" min="0" max="1000" value="0">
+  <div class="repe-bot">
+    <button class="btn mini" id="repePlay">⏸</button>
+    <button class="btn mini" id="repeVel">1×</button>
+    <button class="btn mini" id="repeCamBt">🎥 Cámara</button>
+    <button class="btn mini" id="repeCoche">🏎️ Coche</button>
+    <button class="btn mini" id="repeFoto">📷 Foto</button>
+    <button class="btn mini primario" id="repeSalir">Salir</button>
+  </div>
+</div>
+<div id="flash" class="flash"></div>
+
 <!-- Resultados -->
 <div id="resultados" class="pantalla">
   <div class="panel ancho">
     <h2 id="resTitulo">Resultados</h2>
     <div id="resLista" class="lista"></div>
-    <div class="acciones"><button class="btn" id="bResMenu">Menú</button><button class="btn primario" id="bResOtra">Otra vez</button></div>
+    <div id="resPremio" class="premio"></div>
+    <div class="acciones"><button class="btn" id="bResMenu">Menú</button><button class="btn" id="bResRepe">🎬 Repetición</button><button class="btn" id="bResTele">📈 Telemetría</button><button class="btn primario" id="bResOtra">Otra vez</button></div>
   </div>
 </div>
 

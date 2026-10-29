@@ -67,17 +67,20 @@ export class Neumatico {
   }
 
   // potenciaDeslizamiento en W, fz en N, v en m/s
-  termico(dt, potenciaDeslizamiento, fz, v, tAmb) {
-    const calor = potenciaDeslizamiento * 0.55 * this.c.calor * this.factorCalorPresion
+  termico(dt, potenciaDeslizamiento, fz, v, tAmb, agua = 0) {
+    const calor = potenciaDeslizamiento * 0.55 * this.c.calor * this.factorCalorPresion * (1 - 0.4 * agua)
       + Math.max(0, fz) * v * 0.0027 * this.factorCalorPresion;
-    const hAire = 20 + 1.05 * v;
+    // el agua que levanta la rueda la enfría muchísimo (evaporación)
+    const hAire = (20 + 1.05 * v) * (1 + 2.2 * agua);
     const kCond = 90;
     const cSup = 3800, cNuc = 26000;
     this.tSup += (calor - kCond * (this.tSup - this.tNucleo) - hAire * (this.tSup - tAmb)) / cSup * dt;
     this.tNucleo += (kCond * (this.tSup - this.tNucleo) - 6 * (this.tNucleo - tAmb)) / cNuc * dt;
     // el desgaste se acelera fuera de la ventana térmica
     const sobre = Math.max(0, this.tSup - this.c.tOpt - 20) / 40;
-    this.desgaste += potenciaDeslizamiento * 2.4e-8 * this.c.desgaste * this.factorDesgastePresion * this.mejoraDesgaste * (1 + sobre) * dt;
+    // los de lluvia sobre pista seca se destrozan; el agua lubrica y apenas gasta los lisos
+    const seco = this.c.lluvia ? 1 + 3 * Math.max(0, 0.25 - agua) * 4 : 1 - 0.5 * Math.min(1, agua);
+    this.desgaste += potenciaDeslizamiento * 2.4e-8 * this.c.desgaste * this.factorDesgastePresion * this.mejoraDesgaste * (1 + sobre) * seco * dt;
     if (this.desgaste > 1) this.desgaste = 1;
   }
 }

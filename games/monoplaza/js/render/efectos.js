@@ -121,6 +121,7 @@ export class Efectos {
     this.chispas = new Particulas(scene, calidad >= 2 ? 400 : 150, true);
     this.marcas = new Marcas(scene, calidad >= 2 ? 6000 : 2500);
     this.acum = 0;
+    this.agua = 0;             // agua en la pista: spray detrás de los coches
   }
 
   ajustarEscala(alturaPx, fovGrados) {
@@ -158,6 +159,14 @@ export class Efectos {
           const grava = w.sup === SUP_GRAVA;
           this.humo.emitir(w.wx, w.wy + 0.2, w.wz, (rnd() - 0.5) * 2, 0.8 + rnd(), (rnd() - 0.5) * 2, 0.9, grava ? 0.5 : 0.25, 1.4 + rnd(), 2.6,
             grava ? 0.72 : 0.42, grava ? 0.64 : 0.4, grava ? 0.5 : 0.25);
+        }
+      }
+      // spray: cortina de agua que levantan las ruedas traseras y el difusor
+      if (this.agua > 0.06 && !lejos && v > 15 && rnd() < this.agua * 1.6 * (this.calidad >= 2 ? 1 : 0.55)) {
+        for (const w of [car.ruedas[2], car.ruedas[3]]) {
+          const l = 0.82 + rnd() * 0.12;
+          this.humo.emitir(w.wx - cos * 0.6, w.wy + 0.3, w.wz - sin * 0.6, cos * v * 0.25 + (rnd() - 0.5) * 2, 0.8 + rnd() * 1.5, sin * v * 0.25 + (rnd() - 0.5) * 2,
+            0.7 + this.agua, 0.22 + this.agua * 0.3, 0.7 + rnd() * 0.6, 3.2, l, l, l * 1.03);
         }
       }
       // chispas de los patines de titanio bajo el fondo
