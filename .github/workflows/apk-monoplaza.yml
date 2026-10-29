@@ -28,18 +28,21 @@ jobs:
       run:
         working-directory: apps/apex-gp-android
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
 
-      - uses: android-actions/setup-android@v3
+      # el runner ya trae el SDK de Android; solo se añade la plataforma que usa el proyecto
+      - name: SDK de Android
+        working-directory: .
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0" > /dev/null
 
       - name: Pruebas de físicas (sin gráficos)
         working-directory: games/monoplaza
