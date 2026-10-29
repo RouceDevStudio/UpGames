@@ -1,0 +1,19 @@
+{
+  "name": "apex-gp-android",
+  "version": "1.0.0",
+  "private": true,
+  "description": "APEX GP empaquetado como app Android (Capacitor). El juego vive en games/monoplaza.",
+  "type": "module",
+  "scripts": {
+    "copiar": "node copiar-web.mjs",
+    "sync": "node copiar-web.mjs && cap sync android",
+    "apk": "node copiar-web.mjs && cap sync android && cd android && ./gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/core": "8.5.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3"
+  }
+}

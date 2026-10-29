@@ -1,0 +1,11 @@
+{
+  "appId": "games.upgames.apexgp",
+  "appName": "APEX GP",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#05070c",
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  }
+}

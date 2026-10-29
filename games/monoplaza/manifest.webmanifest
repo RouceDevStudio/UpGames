@@ -1,0 +1,16 @@
+{
+  "name": "APEX GP · Simulador de monoplazas",
+  "short_name": "APEX GP",
+  "description": "Simulador de monoplazas con físicas reales para el celular. UpGames.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#05070c",
+  "theme_color": "#05070c",
+  "lang": "es",
+  "icons": [
+    { "src": "icono.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

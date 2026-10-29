@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#05070c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="APEX GP: simulador de monoplazas en el navegador con físicas reales (neumáticos Pacejka, aerodinámica, ERS, DRS). Hecho para el celular. UpGames.">
+<title>APEX GP · Simulador de monoplazas · UpGames</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icono.svg" type="image/svg+xml">
+<link rel="stylesheet" href="estilo.css">
+<script type="importmap">
+{ "imports": { "three": "./lib/three.module.min.js", "three/addons/": "./lib/addons/" } }
+</script>
+</head>
+<body>
+<canvas id="lienzo"></canvas>
+
+<!-- Carga -->
+<div id="carga" class="pantalla visible">
+  <div class="marca">APEX<span>GP</span></div>
+  <div class="sub">Simulador de monoplazas</div>
+  <div class="barra"><i id="cargaBarra"></i></div>
+  <div id="cargaTexto" class="nota">Preparando el circuito…</div>
+</div>
+
+<!-- Menú principal -->
+<div id="menu" class="pantalla">
+  <div class="menu-col">
+    <div class="marca">APEX<span>GP</span></div>
+    <div class="sub">Autódromo Valle del Cóndor · <b id="largoPista"></b></div>
+    <div class="botones">
+      <button class="btn grande" data-ir="carrera">🏁 Carrera</button>
+      <button class="btn grande" data-ir="contrarreloj">⏱️ Contrarreloj</button>
+      <button class="btn grande" data-ir="practica">🛞 Práctica libre</button>
+      <div class="fila">
+        <button class="btn" data-ir="reglaje">🔧 Reglaje</button>
+        <button class="btn" data-ir="ajustes">⚙️ Ajustes</button>
+        <button class="btn" data-ir="ayuda">❔ Cómo se juega</button>
+      </div>
+    </div>
+    <div id="recordMenu" class="nota"></div>
+    <a class="volver-upgames" href="https://upgames.games/public/biblioteca.html" target="_top">← UpGames</a>
+  </div>
+</div>
+
+<!-- Opciones de carrera -->
+<div id="carrera" class="pantalla">
+  <div class="panel">
+    <h2>Carrera</h2>
+    <div class="opcion"><label>Vueltas</label><div class="segm" data-campo="vueltas"><b data-v="3">3</b><b data-v="5">5</b><b data-v="10">10</b><b data-v="20">20</b></div></div>
+    <div class="opcion"><label>Rivales</label><div class="segm" data-campo="rivales"><b data-v="3">3</b><b data-v="5">5</b><b data-v="7">7</b></div></div>
+    <div class="opcion"><label>Dificultad</label><div class="segm" data-campo="dificultad"><b data-v="facil">Fácil</b><b data-v="normal">Normal</b><b data-v="dificil">Difícil</b><b data-v="extremo">Extremo</b></div></div>
+    <div class="opcion"><label>Salida</label><div class="segm" data-campo="posSalida"><b data-v="1">Pole</b><b data-v="4">Media</b><b data-v="8">Última</b></div></div>
+    <div class="opcion"><label>Neumático</label><div class="segm compuestos" data-campo="compuesto"><b data-v="blando">Blando</b><b data-v="medio">Medio</b><b data-v="duro">Duro</b></div></div>
+    <div class="acciones"><button class="btn" data-ir="menu">Atrás</button><button class="btn primario" id="empezarCarrera">A la parrilla</button></div>
+  </div>
+</div>
+
+<!-- Reglaje -->
+<div id="reglaje" class="pantalla">
+  <div class="panel ancho">
+    <h2>Reglaje del coche</h2>
+    <div id="listaReglaje" class="lista"></div>
+    <div class="acciones"><button class="btn" id="reglajeDef">Valores de fábrica</button><button class="btn primario" data-ir="volver">Listo</button></div>
+  </div>
+</div>
+
+<!-- Ajustes -->
+<div id="ajustes" class="pantalla">
+  <div class="panel ancho">
+    <h2>Ajustes</h2>
+    <div class="lista">
+      <h3>Control</h3>
+      <div class="opcion"><label>Dirección</label><div class="segm" data-aj="control"><b data-v="inclinacion">Inclinar el móvil</b><b data-v="tactil">Táctil</b></div></div>
+      <div class="opcion"><label>Sensibilidad</label><input type="range" min="0.5" max="1.5" step="0.05" data-aj="sensibilidad"><span class="valor"></span></div>
+      <div class="opcion"><label>Ángulo de inclinación máx.</label><input type="range" min="12" max="40" step="1" data-aj="anguloInclinacion"><span class="valor"></span></div>
+      <div class="opcion"><label>Invertir inclinación</label><input type="checkbox" data-aj="invertir"></div>
+      <div class="opcion"><label>Vibración</label><input type="checkbox" data-aj="vibracion"></div>
+      <h3>Ayudas a la conducción</h3>
+      <div class="opcion"><label>Control de tracción</label><div class="segm" data-aj="tc"><b data-v="0">No</b><b data-v="1">Bajo</b><b data-v="2">Medio</b><b data-v="3">Alto</b></div></div>
+      <div class="opcion"><label>ABS</label><input type="checkbox" data-aj="abs"></div>
+      <div class="opcion"><label>Cambio automático</label><input type="checkbox" data-aj="cambioAuto"></div>
+      <div class="opcion"><label>Dirección asistida (limita el giro según la velocidad)</label><input type="checkbox" data-aj="direccion"></div>
+      <div class="opcion"><label>Control de estabilidad</label><input type="checkbox" data-aj="estabilidad"></div>
+      <div class="opcion"><label>Trazada ideal</label><input type="checkbox" data-aj="trazada"></div>
+      <h3>Gráficos y sonido</h3>
+      <div class="opcion"><label>Calidad</label><div class="segm" data-aj="calidad"><b data-v="auto">Auto</b><b data-v="0">Baja</b><b data-v="1">Media</b><b data-v="2">Alta</b><b data-v="3">Ultra</b></div></div>
+      <div class="opcion"><label>Mostrar FPS</label><input type="checkbox" data-aj="fps"></div>
+      <div class="opcion"><label>Volumen</label><input type="range" min="0" max="1" step="0.05" data-aj="volumen"><span class="valor"></span></div>
+      <div class="opcion"><label>Unidades</label><div class="segm" data-aj="unidades"><b data-v="kmh">km/h</b><b data-v="mph">mph</b></div></div>
+    </div>
+    <div class="acciones"><button class="btn primario" data-ir="volver">Listo</button></div>
+  </div>
+</div>
+
+<!-- Ayuda -->
+<div id="ayuda" class="pantalla">
+  <div class="panel ancho">
+    <h2>Cómo se juega</h2>
+    <div class="lista texto">
+      <p><b>Celular:</b> inclina el teléfono como un volante (o usa el modo táctil en Ajustes). El pedal derecho acelera y el izquierdo frena; <b>cuanto más arriba lo pulsas, más presión</b>. Así puedes dosificar la frenada como en un coche real.</p>
+      <p><b>Teclado:</b> flechas o WASD · E/Q subir y bajar marcha · Espacio DRS · F modo ERS · C cámara · B mirar atrás · R volver a la pista · Esc pausa.</p>
+      <p><b>Mando:</b> stick izquierdo dirección · RT acelerar · LT frenar · RB/LB marchas · A DRS · B ERS · Y cámara · X mirar atrás.</p>
+      <p><b>Neumáticos:</b> rinden en su ventana de temperatura (cuadros del HUD: azul frío, verde óptimo, rojo caliente). El blando agarra más y se gasta antes. Si bloqueas o patinas, se recalientan y se desgastan.</p>
+      <p><b>Aerodinámica:</b> la carga crece con el cuadrado de la velocidad: en curvas rápidas hay más agarre que en las lentas. Detrás de otro coche ganas velocidad en recta por el rebufo pero pierdes carga en curva (aire sucio).</p>
+      <p><b>DRS:</b> abre el alerón trasero en las zonas marcadas (en carrera, si estás a menos de 1 s del de delante). Se cierra al frenar.</p>
+      <p><b>ERS:</b> la batería se recarga frenando. Modo Normal reparte la energía; Adelantar la gasta toda; Recarga la recupera también al acelerar a medias. La luz trasera parpadea cuando recupera.</p>
+      <p><b>Límites de pista:</b> si sacas las cuatro ruedas fuera, la vuelta no cuenta.</p>
+    </div>
+    <div class="acciones"><button class="btn primario" data-ir="menu">Entendido</button></div>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="hudIzq">
+    <div class="caja pos"><span id="hPos">P1</span><small id="hPosTot">/8</small></div>
+    <div class="caja"><small>VUELTA</small><span id="hVuelta">1/5</span></div>
+    <div id="hTabla" class="tabla"></div>
+  </div>
+  <div id="hudCentro">
+    <div id="hTiempo" class="tiempo">0:00.000</div>
+    <div id="hDelta" class="delta"></div>
+    <div class="sectores"><i id="hS1"></i><i id="hS2"></i><i id="hS3"></i></div>
+  </div>
+  <div id="hudDer">
+    <div class="caja tiempos"><small>MEJOR</small><span id="hMejor">--:--.---</span><small>ÚLTIMA</small><span id="hUltima">--:--.---</span></div>
+    <canvas id="minimapa" width="220" height="160"></canvas>
+  </div>
+  <div id="volanteHud">
+    <div id="leds"></div>
+    <div class="vh-fila">
+      <div class="vh-lado">
+        <div id="hNeum" class="neum"><i></i><i></i><i></i><i></i></div>
+        <div id="hNeumTxt" class="mini"></div>
+      </div>
+      <div class="vh-centro">
+        <div id="hMarcha" class="marcha">N</div>
+        <div id="hVel" class="vel">0</div><div id="hUnid" class="mini">KM/H</div>
+      </div>
+      <div class="vh-lado">
+        <div class="ers"><i id="hErs"></i></div>
+        <div id="hErsModo" class="mini">ERS NORMAL</div>
+        <div id="hDrs" class="drs">DRS</div>
+        <div id="hComb" class="mini"></div>
+      </div>
+    </div>
+  </div>
+  <div id="hMensaje" class="mensaje"></div>
+  <div id="hFps" class="fps"></div>
+  <div id="semaforo"><i></i><i></i><i></i><i></i><i></i></div>
+</div>
+
+<!-- Controles táctiles -->
+<div id="tactil">
+  <div id="zonaVolante"><div id="pomo"></div><span class="pista-volante">Desliza para girar</span></div>
+  <div id="pedalFreno" class="pedal freno"><span>FRENO</span></div>
+  <div id="pedalAcel" class="pedal acel"><span>GAS</span></div>
+  <div id="botonesSup">
+    <button id="bPausa" class="bt">❚❚</button>
+    <button id="bCam" class="bt">🎥</button>
+    <button id="bAtras" class="bt">↺</button>
+    <button id="bRecolocar" class="bt" title="Volver a la pista">⟲</button>
+  </div>
+  <div id="botonesAccion">
+    <button id="bBajar" class="bt marcha-bt">−</button>
+    <button id="bSubir" class="bt marcha-bt">+</button>
+    <button id="bDrs" class="bt">DRS</button>
+    <button id="bErs" class="bt">ERS</button>
+  </div>
+</div>
+
+<!-- Pausa -->
+<div id="pausa" class="pantalla">
+  <div class="panel">
+    <h2>Pausa</h2>
+    <div class="botones">
+      <button class="btn grande primario" id="bContinuar">Continuar</button>
+      <button class="btn" id="bReiniciar">Reiniciar</button>
+      <button class="btn" id="bCalibrar">Centrar inclinación</button>
+      <button class="btn" data-ir="reglaje" id="bPausaReglaje">Reglaje</button>
+      <button class="btn" data-ir="ajustes">Ajustes</button>
+      <button class="btn" id="bSalir">Salir al menú</button>
+    </div>
+    <div id="telemetria" class="telemetria"></div>
+  </div>
+</div>
+
+<!-- Resultados -->
+<div id="resultados" class="pantalla">
+  <div class="panel ancho">
+    <h2 id="resTitulo">Resultados</h2>
+    <div id="resLista" class="lista"></div>
+    <div class="acciones"><button class="btn" id="bResMenu">Menú</button><button class="btn primario" id="bResOtra">Otra vez</button></div>
+  </div>
+</div>
+
+<!-- Girar el teléfono -->
+<div id="girar"><div>📱↻</div><p>Gira el teléfono en horizontal</p></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
