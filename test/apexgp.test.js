@@ -99,6 +99,9 @@ function crearMundo(monedas) {
         assert.strictEqual(e.colores.acento, A.EQUIPADO_DEF.colores.acento);
         assert.strictEqual(e.numero, 7);
         assert.strictEqual(e.propia, false);
+        assert.strictEqual(e.equipo, 0);
+        assert.strictEqual(A.validarEquipado({ equipo: 4 }, {}).equipo, 4);
+        assert.strictEqual(A.validarEquipado({ equipo: 99 }, {}).equipo, 0);
     });
 
     await test('comprar: cobra, sube el nivel y no cobra dos veces el mismo nivel', async () => {

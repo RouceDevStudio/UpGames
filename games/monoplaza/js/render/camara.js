@@ -74,8 +74,8 @@ export class Camara {
       cam.near = 0.1;
     } else {
       // cámaras a bordo: siguen el cabeceo y balanceo de la carrocería
-      const local = this.modo === 'tcam' ? new THREE.Vector3(-0.32, 1.13, 0) : new THREE.Vector3(0.18, 0.86, 0);
-      const mirar = this.modo === 'tcam' ? new THREE.Vector3(30, 0.4, 0) : new THREE.Vector3(30, 0.55, 0);
+      const local = this.modo === 'tcam' ? new THREE.Vector3(-0.32, 1.13, 0) : new THREE.Vector3(0.16, 0.9, 0);
+      const mirar = this.modo === 'tcam' ? new THREE.Vector3(30, 0.4, 0) : new THREE.Vector3(30, -0.2, 0);
       if (this.mirarAtras) { mirar.x = -30; local.x = this.modo === 'tcam' ? -0.6 : -0.1; local.y += 0.1; }
       modelo.raiz.updateMatrixWorld(true);
       const m = modelo.carroceria.matrixWorld;

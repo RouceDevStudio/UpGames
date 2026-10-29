@@ -6,7 +6,9 @@ import { Monoplaza } from './physics/monoplaza.js';
 import { PilotoIA, PilotoBox } from './ai.js';
 
 const DT = 1 / 300;
-const HABILIDAD = { facil: [0.885, 0.92], normal: [0.935, 0.965], dificil: [0.965, 0.99], extremo: [0.985, 1.0] };
+// sitio frente a su garaje para los coches que ya terminaron
+const c0Retiro = (c, p) => c.pit.garajes[(p.indiceEquipo ?? 0) % c.pit.garajes.length] + (p.numeroPiloto ? -6 : 0);
+const HABILIDAD = { facil: [0.9, 0.93], normal: [0.94, 0.97], dificil: [0.97, 1.0], extremo: [1.0, 1.03] };
 
 export class Sesion {
   constructor(circuito, opc) {
@@ -65,15 +67,16 @@ export class Sesion {
       const total = rivales + 1;
       const posJugador = this.modo === 'carrera' ? Math.min(total, opc.posSalida || Math.ceil(total * 0.6)) : 1;
       const [hMin, hMax] = HABILIDAD[opc.dificultad || 'normal'];
-      // asientos: el jugador en UpGames Racing; los rivales llenan primero un coche por equipo
+      // asientos: el jugador en el equipo que eligió; los rivales llenan primero un coche por equipo
+      const ej = Math.max(0, Math.min(EQUIPOS.length - 1, opc.equipoJugador | 0));
       const asientos = [];
-      for (let k = 1; k < EQUIPOS.length; k++) asientos.push([k, 0]);
-      asientos.push([0, 1]);
-      for (let k = 1; k < EQUIPOS.length; k++) asientos.push([k, 1]);
+      for (let k = 0; k < EQUIPOS.length; k++) if (k !== ej) asientos.push([k, 0]);
+      asientos.push([ej, 1]);
+      for (let k = 0; k < EQUIPOS.length; k++) if (k !== ej) asientos.push([k, 1]);
       let iaIdx = 0;
       for (let k = 0; k < total; k++) {
         const esJugador = k === posJugador - 1;
-        const [ie, ip] = esJugador ? [0, 0] : asientos[iaIdx++];
+        const [ie, ip] = esJugador ? [ej, 0] : asientos[iaIdx++];
         const eq = EQUIPOS[ie];
         const coche = new Monoplaza(circuito, {
           ia: !esJugador,
@@ -98,7 +101,7 @@ export class Sesion {
     }
     this.participantes.forEach((p, k) => { p.coche.id = k; });
     // desgaste proporcional a la distancia: una carrera da para ~1,5 juegos de neumáticos
-    this.multDesgaste = this.modo === 'carrera' ? Math.max(1, Math.min(8, 46 / this.vueltasTotales)) : 1;
+    this.multDesgaste = this.modo === 'carrera' ? Math.max(1, Math.min(3, 30 / this.vueltasTotales)) : 1;
     for (const p of this.participantes) p.coche.ponerMultDesgaste(this.multDesgaste);
     this.jugador = this.participantes.find(p => p.jugador);
     this.mejorVueltaSesion = Infinity;
@@ -191,7 +194,9 @@ export class Sesion {
       if (p.remoto) continue;           // lo mueve la red
       this._gestionarBoxes(p);
       const car = p.coche;
-      if (p.terminado && this.tiempo - p.tTotal > 25 && !p.jugador) car.retenido = true;   // vuelta de enfriamiento terminada
+      // vuelta de enfriamiento terminada: el coche se retira a boxes y deja la pista libre
+      if (p.terminado && this.tiempo - p.tTotal > 25 && !p.jugador && !p.retirado) { p.retirado = true; car.retenido = true; car.colocar(c0Retiro(this.c, p), this.c.semiAncho[0] + this.c.pit.ancho - 1); }
+      if (p.retirado) continue;
       if (car.abandono && !p.terminado) {
         car.mandos.acelerador = 0; car.mandos.freno = 1; car.mandos.direccion = 0;
         if (!p.abandono) { p.abandono = true; this.eventos.push({ tipo: 'abandono', p, motivo: car.motivoAbandono }); }
@@ -245,6 +250,7 @@ export class Sesion {
     const R = 0.95, offs = [1.9, 0, -1.9];
     for (let a = 0; a < lista.length; a++) {
       for (let b = a + 1; b < lista.length; b++) {
+        if (lista[a].retirado || lista[b].retirado) continue;
         const A = lista[a].coche, B = lista[b].coche;
         const dx0 = B.x - A.x, dz0 = B.z - A.z;
         if (dx0 * dx0 + dz0 * dz0 > 64) continue;

@@ -47,6 +47,7 @@ const EQUIPADO_DEF = {
     colores: { base: '#0d47ff', acento: '#00e5ff', tercero: '#ffffff' },
     cascoColores: { base: '#ffffff', acento: '#0d47ff' },
     numero: 7,
+    equipo: 0,
 };
 
 function catalogo() {
@@ -96,6 +97,9 @@ function validarEquipado(entrada, perfil) {
     for (const k of ['base', 'acento']) if (COLOR.test(e.cascoColores?.[k] || '')) out.cascoColores[k] = e.cascoColores[k].toLowerCase();
     const n = Math.floor(+e.numero);
     if (n >= 1 && n <= 99) out.numero = n;
+    // monoplaza elegido: 0 = UpGames Racing (diseño propio), 1..10 = equipos de la parrilla
+    const eq = Math.floor(+e.equipo);
+    out.equipo = eq >= 0 && eq <= 10 ? eq : 0;
     return out;
 }
 

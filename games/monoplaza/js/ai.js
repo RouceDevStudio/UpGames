@@ -11,11 +11,15 @@ export class PilotoIA {
     this.c = circuito;
     this.habilidad = habilidad;
     this.agresividad = agresividad;
-    this.desvio = 0;        // desplazamiento lateral sobre la trazada
+    // personalidad: constancia (errores), reflejos en la salida y gusto por el riesgo
+    this.constancia = 0.6 + Math.random() * 0.4;
+    this.reaccion = 0.15 + Math.random() * 0.12;
+    this.desvio = 0;          // desplazamiento lateral sobre la trazada
     this.desvioObj = 0;
-    this.errorPrevio = 0;
-    this.atascado = 0;
-    this.ruido = Math.random() * 100;
+    this.ataque = null;       // { lado, rival, hasta } maniobra de adelantamiento comprometida
+    this.defensa = 0;         // lado al que se cubre (0 = ninguno)
+    this.error = null;        // { hasta, extra } curva en la que se pasará de frenada
+    this.curvaRevisada = -1;
     this.tiempo = 0;
   }
 
@@ -37,8 +41,32 @@ export class PilotoIA {
     // el perfil supone neumáticos blandos en su ventana: se ajusta al agarre real
     let agarre = 0;
     for (const w of this.coche.ruedas) agarre += w.neum.c.mu * w.neum.factorAgarre();
-    const k = Math.min(1.02, agarre / 4 / 1.78);
-    return c.perfil[i] * this.habilidad * Math.sqrt(k);
+    const k = Math.min(1.02, agarre / 4 / 1.76);
+    // daños y aire sucio quitan carga aerodinámica: se pasa más lento por curva
+    const aero = 1 - 0.05 * this.coche.danoAleron - 0.04 * (this.coche.dano?.aleronTras || 0);
+    // detrás de otro coche (o con el alerón roto) se usa el perfil de tráfico
+    const w = Math.min(1, this.coche.aireSucio * 2.5 + (this.enTrafico ? 0.6 : 0) + this.coche.danoAleron);
+    const limpio = c.perfil[i] * (1 - w) + c.perfilSucio[i] * w;
+    const frio = c.perfilFrio[i] * (1 - w) + c.perfilFrioSucio[i] * w;
+    // interpolación según el agarre real de las ruedas (1 = en ventana, 0,85 = frías)
+    const g = (1 - k) / 0.15;
+    const base = limpio + (frio - limpio) * Math.max(0, g);
+    return base * this.habilidad * Math.sqrt(aero);
+  }
+
+  // ¿Viene recta? (curvatura baja en los próximos `m` metros)
+  _recta(s, m) {
+    const c = this.c;
+    for (let k = 0; k < m; k += 10) if (Math.abs(c.trazada.curv[Math.floor(c.envolver(s + k) / c.paso) % c.n]) > 1 / 300) return false;
+    return true;
+  }
+
+  // Lado del interior de la próxima curva (+1 derecha, −1 izquierda)
+  _interior(s) {
+    const c = this.c;
+    let suma = 0;
+    for (let k = 20; k < 260; k += 10) suma += c.curv[Math.floor(c.envolver(s + k) / c.paso) % c.n];
+    return suma >= 0 ? 1 : -1;
   }
 
   conducir(dt, rivales = []) {
@@ -47,58 +75,118 @@ export class PilotoIA {
     const p = car.proj;
     if (p.i < 0) return;
     const v = car.velocidad;
-    // adelantamientos y defensa: buscar coches cerca por delante
-    this.desvioObj = 0;
-    let vTrafico = Infinity;
-    // en curva no se cambia de línea: la trazada manda
+    const L = c.largo;
+    // salida: cada piloto reacciona a su ritmo al apagarse el semáforo
+    if (this.tiempo < this.reaccion && v < 3) { car.mandos.acelerador = 0.3; car.mandos.freno = 0; car.mandos.direccion = 0; return; }
+
+    const recta = this._recta(p.s, 160);
     const iAdel = Math.floor(c.envolver(p.s + 40) / c.paso) % c.n;
     const curvaCerca = Math.abs(c.trazada.curv[p.i]) > 1 / 180 || Math.abs(c.trazada.curv[iAdel]) > 1 / 180;
+    let vTrafico = Infinity;
+    let delante = null, detras = null, apar = [];
     for (const o of rivales) {
-      if (o === car || o.proj.i < 0) continue;
+      if (o === car || o.proj.i < 0 || o.abandono && o.velocidad < 1 && Math.abs(o.proj.d) > c.semiAncho[o.proj.i] + 1) continue;
       let ds = o.proj.s - p.s;
-      if (ds < -c.largo / 2) ds += c.largo; else if (ds > c.largo / 2) ds -= c.largo;
+      if (ds < -L / 2) ds += L; else if (ds > L / 2) ds -= L;
       const dd = o.proj.d - p.d;
-      const cierre = car.vx - o.vx;
-      if (ds > 0 && ds < 45) {
+      if (ds > 0 && ds < 150) {
+        if (!delante || ds < delante.ds) delante = { o, ds, dd };
+        // distancia de frenada hasta un coche más lento en nuestro carril
         if (Math.abs(dd) < 2.3) {
-          // mismo carril: buscar hueco si somos más rápidos y hay recta
-          if (!curvaCerca && (cierre > 0.3 || ds < 15)) {
-            const ladoLibre = o.proj.d > 0 ? -1 : 1;
-            this.desvioObj = (o.proj.d + ladoLibre * 3.3) - (p.d - this.desvio);
-          }
-          // distancia de seguridad
-          const hueco = 5.5 + v * 0.12;
-          if (ds < hueco + 25) vTrafico = Math.min(vTrafico, o.vx + (ds - hueco) * 0.6);
+          const hueco = 5 + v * 0.13;
+          // frenada prudente hasta el coche lento y, ya cerca, seguirlo a su ritmo
+          const vo = Math.max(0, o.vx);
+          let vt = Math.sqrt(vo * vo + 2 * 8 * Math.max(0, ds - hueco));
+          if (ds < hueco + 30) vt = Math.min(vt, vo + (ds - hueco) * 0.7);
+          vTrafico = Math.min(vTrafico, vt);
         }
-      } else if (ds > -5.5 && ds <= 0 && Math.abs(dd) < 2.6) {
-        // coche a la par: dejar espacio
-        this.desvioObj += dd > 0 ? -1.0 : 1.0;
+      } else if (ds <= 0 && ds > -40) {
+        if (!detras || ds > detras.ds) detras = { o, ds, dd };
+      }
+      if (Math.abs(ds) < 5.5) apar.push({ o, ds, dd });
+    }
+
+    this.enTrafico = !!(delante && delante.ds < 35) || apar.length > 0;
+    // ── Adelantamiento comprometido ──────────────────────────────────────
+    if (this.ataque) {
+      const a = this.ataque;
+      let ds = a.rival.proj.s - p.s; if (ds < -L / 2) ds += L; else if (ds > L / 2) ds -= L;
+      // la maniobra se abandona si llega la curva y aún no vamos emparejados
+      if (ds < -7 || this.tiempo > a.hasta || ds > 60 || (curvaCerca && ds > 3 && !a.lento)) this.ataque = null;
+    }
+    // en los primeros segundos de carrera cada uno mantiene su carril (salida limpia)
+    const salida = this.tiempo < 9;
+    if (!this.ataque && !salida && delante && delante.ds < 40 && Math.abs(delante.dd) < 2.6) {
+      const o = delante.o;
+      const cierre = car.vx - o.vx;
+      const rebufo = delante.ds < 30;
+      const lento = o.vx < v * 0.6 || o.abandono;       // coche dañado o parado: esquivarlo ya
+      if (lento || (recta && (cierre > 0.4 || rebufo) && Math.random() < dt * (1 + this.agresividad * 2))) {
+        // por el interior de la siguiente curva, salvo que esté tapado
+        let lado = this._interior(p.s);
+        const libre = (l) => !rivales.some(x => x !== car && x !== o && Math.abs(c.envolver(x.proj.s - p.s + L / 2) - L / 2) < 12 && Math.sign(x.proj.d - o.proj.d) === l && Math.abs(x.proj.d - o.proj.d) < 4.5);
+        if (!libre(lado)) lado = -lado;
+        if (libre(lado) || lento) this.ataque = { lado, rival: o, hasta: this.tiempo + 5, lento };
       }
     }
-    this.desvioObj = clamp(this.desvioObj, -6, 6);
-    const kDes = curvaCerca && this.desvioObj === 0 ? 0.6 : 1.4;
-    this.desvio += (this.desvioObj - this.desvio) * Math.min(1, dt * kDes);
-    const frenarPorTrafico = vTrafico;
+    // ── Defensa: cubrir el interior antes de la frenada, una sola vez ─────
+    if (detras && !salida && !this.ataque && detras.ds > -14 && (detras.o.vx - car.vx) > 0.5 && recta && Math.random() < dt * this.agresividad) this.defensa = this._interior(p.s);
+    if (!detras || detras.ds < -30 || curvaCerca) this.defensa = 0;
 
-    // dirección: persecución pura
+    // ── Desplazamiento lateral objetivo ────────────────────────────────────
+    const hw = c.semiAncho[p.i];
+    const offTraz = c.trazada.off[p.i];
+    let dObj = offTraz;                                     // en coordenada d de la pista
+    if (this.ataque) dObj = this.ataque.rival.proj.d + this.ataque.lado * 3.4;
+    else if (this.defensa) dObj = this.defensa * (hw - 2.2);
+    // lado a lado en curva: cada uno conserva su línea (nada de cerrar la puerta)
+    if (curvaCerca && apar.some(a => Math.abs(a.dd) < 4)) dObj = p.d;
+    // lado a lado: mantener al menos 3,2 m entre centros
+    for (const a of apar) {
+      if (Math.abs(a.dd) < 3.2) {
+        const lejos = a.dd > 0 ? a.o.proj.d - 3.3 : a.o.proj.d + 3.3;
+        dObj = a.dd > 0 ? Math.min(dObj, lejos) : Math.max(dObj, lejos);
+      }
+    }
+    dObj = clamp(dObj, -hw + 1.2, hw - 1.2);
+    this.desvioObj = dObj - offTraz;
+    const kDes = this.ataque || apar.length ? 1.6 : curvaCerca ? 1.3 : 1.0;
+    this.desvio += (this.desvioObj - this.desvio) * Math.min(1, dt * kDes);
+
+    // ── Dirección: persecución pura ────────────────────────────────────────
     const mirar = clamp(5 + v * 0.32, 7, 34);
     const obj = this._puntoTrazada(p.s + mirar, this.desvio, this._o || (this._o = {}));
     const cos = Math.cos(car.psi), sin = Math.sin(car.psi);
     const dx = obj.x - car.x, dz = obj.z - car.z;
     const lx = dx * cos + dz * sin, ly = -dx * sin + dz * cos;
-    const l2 = lx * lx + ly * ly;
-    const curv = 2 * ly / Math.max(1, l2);
+    const curv = 2 * ly / Math.max(1, lx * lx + ly * ly);
     let delta = Math.atan(COCHE.wheelbase * curv);
-    // amortiguación de guiñada: corrige el sobreviraje
     const beta = v > 4 ? Math.atan2(car.vy, car.vx) : 0;
-    delta += beta * 0.5;
-    if (lx < 0) delta = Math.sign(ly || 1) * COCHE.angMaxRueda; // apuntando hacia atrás
+    delta += beta * 0.55;                                   // contravolante
+    if (lx < 0) delta = Math.sign(ly || 1) * COCHE.angMaxRueda;
     car.mandos.direccion = clamp(delta / COCHE.angMaxRueda, -1, 1);
 
-    // velocidad
+    // ── Errores humanos: a veces se pasa de frenada en una curva ──────────
+    const iFren = Math.floor(c.envolver(p.s + 120) / c.paso) % c.n;
+    if (c.perfil[iFren] < v * 0.75 && iFren !== this.curvaRevisada && !this.error) {
+      this.curvaRevisada = iFren;
+      // errores pequeños (pasarse de frenada, abrirse en la salida); los graves son raros
+      const prob = (1.02 - this.habilidad) * 0.5 * (1.4 - this.constancia);
+      if (Math.random() < prob) this.error = { hasta: this.tiempo + 3, extra: 1.02 + Math.random() * Math.random() * 0.05 };
+    }
+    if (this.error && this.tiempo > this.error.hasta) this.error = null;
+
+    // ── Velocidad ──────────────────────────────────────────────────────────
     let vObj = this.velocidadObjetivo(p.s + v * 0.12);
-    if (Math.abs(this.desvio) > 1.5) vObj *= 0.985;
-    vObj = Math.min(vObj, frenarPorTrafico);
+    if (this.error) vObj *= this.error.extra;
+    if (this.ataque && recta) vObj *= 1.01;               // en el ataque se apura algo más la frenada
+    // fuera de la trazada la curva es más cerrada: hay que ir más despacio
+    if (curvaCerca) vObj *= 1 - Math.min(0.25, 0.04 * Math.abs(this.desvio));
+    // si el coche se abre hacia el exterior de la curva, levantar el pie (como un piloto)
+    const kc = c.trazada.curv[p.i];
+    const abierto = (p.d - dObj) * -Math.sign(kc || 1);    // > 0: desplazado hacia fuera
+    if (Math.abs(kc) > 1 / 600 && abierto > 1.2) vObj = Math.min(vObj, v * (1 - Math.min(0.08, (abierto - 1.2) * 0.02)));
+    vObj = Math.min(vObj, vTrafico);
     if (car.enTierra) vObj = Math.min(vObj, 25);
     const err = vObj - v;
     let ac = 0, fr = 0;
@@ -106,16 +194,19 @@ export class PilotoIA {
     else if (err > -1.2) ac = clamp(0.35 + err * 0.3, 0, 1);
     else fr = clamp(-err * 0.16, 0, 1);
     if (Math.abs(beta) > 0.12) ac *= 0.5;
+    this.dbg = { vObj, beta, w: car.aireSucio, d: p.d, desvio: this.desvio, dObj };
     car.mandos.acelerador = ac;
     car.mandos.freno = fr;
     car.mandos.drs = true;
-    // ERS: adelantar cuando hay un rival cerca por delante
-    car.mandos.ersModo = this.desvioObj !== 0 ? 2 : 1;
+    // ERS: todo para atacar o defenderse; recargar si queda poca batería y no hay pelea
+    const pelea = this.ataque || this.defensa || (delante && delante.ds < 25) || (detras && detras.ds > -15);
+    car.mandos.ersModo = pelea && car.ers > 0.6e6 ? 2 : car.ers < 1.0e6 ? 0 : 1;
 
     // atasco: recolocar en pista
+    // atasco: volver a la pista, pero solo si no viene nadie lanzado por detrás
     if (v < 2 && car.tiempoParado > 2.5 && !car.retenido) {
-      car.recolocar();
-      car.tiempoParado = 0;
+      const viene = rivales.some(o => { if (o === car) return false; const ds = c.envolver(p.s - o.proj.s); return ds < 160 && o.velocidad > 8; });
+      if (!viene) { car.recolocar(); car.tiempoParado = 0; }
     }
   }
 }

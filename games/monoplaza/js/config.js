@@ -78,14 +78,14 @@ export const REGLAJE_DEF = {
 
 // Neumáticos: agarre base, ventana térmica, desgaste
 export const COMPUESTOS = {
-  blando: { nombre: 'Blando', color: '#e8202a', mu: 1.80, tOpt: 100, ancho: 26, calor: 1.15, desgaste: 1.6 },
-  medio:  { nombre: 'Medio',  color: '#f5c518', mu: 1.75, tOpt: 105, ancho: 28, calor: 1.0,  desgaste: 1.0 },
-  duro:   { nombre: 'Duro',   color: '#f2f2f2', mu: 1.70, tOpt: 112, ancho: 30, calor: 0.85, desgaste: 0.6 },
+  blando: { nombre: 'Blando', color: '#e8202a', mu: 1.80, tOpt: 88, ancho: 28, calor: 1.15, desgaste: 1.6 },
+  medio:  { nombre: 'Medio',  color: '#f5c518', mu: 1.75, tOpt: 93, ancho: 30, calor: 1.0,  desgaste: 1.0 },
+  duro:   { nombre: 'Duro',   color: '#f2f2f2', mu: 1.70, tOpt: 100, ancho: 32, calor: 0.85, desgaste: 0.6 },
 };
 
 // Equipos ficticios: 11 escuderías con dos pilotos (22 coches como en la parrilla real)
 export const EQUIPOS = [
-  { nombre: 'UpGames Racing', corto: 'UPG', base: '#0d47ff', acento: '#00e5ff', tercero: '#ffffff', pilotos: ['Tú', 'R. Castro'], patron: 'flecha' },
+  { nombre: 'UpGames Racing', corto: 'UPG', base: '#0d47ff', acento: '#00e5ff', tercero: '#ffffff', pilotos: ['A. Rouce', 'R. Castro'], patron: 'flecha' },
   { nombre: 'Rosso Vulcano', corto: 'RSV', base: '#c4061a', acento: '#ffd200', tercero: '#111111', pilotos: ['L. Moretti', 'A. Ferrandi'], patron: 'franjas' },
   { nombre: 'Silver Arrowhead', corto: 'SAH', base: '#b9c2c9', acento: '#00b3a4', tercero: '#111111', pilotos: ['K. Brandt', 'J. Weller'], patron: 'degradado' },
   { nombre: 'Nightbull', corto: 'NBL', base: '#14204a', acento: '#e3001b', tercero: '#ffd200', pilotos: ['M. Varga', 'T. Okafor'], patron: 'rayo' },

@@ -152,6 +152,11 @@ export class Circuito {
     this._superficies();
     this.trazada = this._trazadaIdeal();
     this.perfil = this._perfilVelocidad(this.trazada);
+    // perfil en tráfico: con aire sucio se pierde carga y agarre (las curvas rápidas dejan de ir a fondo)
+    this.perfilSucio = this._perfilVelocidad(this.trazada, { mu: 1.55 * 0.96, clA: 4.6 * 0.74 });
+    // neumáticos fríos o gastados: 15 % menos de agarre (en las curvas rápidas pesa mucho más)
+    this.perfilFrio = this._perfilVelocidad(this.trazada, { mu: 1.55 * 0.85 });
+    this.perfilFrioSucio = this._perfilVelocidad(this.trazada, { mu: 1.55 * 0.85 * 0.96, clA: 4.6 * 0.74 });
     this._indexar();
     // nombres de curvas por posición
     this.curvas = [];
@@ -351,17 +356,25 @@ export class Circuito {
   _perfilVelocidad(t, opc = {}) {
     const n = this.n;
     const m = COCHE.masaSeca + 40;
-    const mu = opc.mu ?? 1.62;
+    const mu = opc.mu ?? 1.55;
     const clA = opc.clA ?? 4.6, cdA = opc.cdA ?? 1.07;
     const kA = 0.5 * RHO_AIRE * clA, kD = 0.5 * RHO_AIRE * cdA;
     const P = 640000 * 0.92;
     const vmax = 97;
     const v = new Float64Array(n);
+    // el agarre efectivo baja con la carga (sensibilidad del neumático): a mucha velocidad
+    // la carga aerodinámica no rinde el 100 %, así que se resuelve por bisección
+    const muV = (vv) => {
+      const fz = (m * G + kA * vv * vv) / 4;
+      return mu * Math.max(0.62, Math.min(1.12, 1 - 0.085 * (fz / 3500 - 1))) / 0.97;
+    };
     for (let i = 0; i < n; i++) {
       const k = Math.abs(t.curv[i]) + 1e-6;
-      // m v² k = mu (m g + kA v²)  ->  v² = mu m g / (m k - mu kA)
-      const den = m * k - mu * kA;
-      v[i] = den <= 0 ? vmax : Math.min(vmax, Math.sqrt(mu * m * G / den));
+      const cabe = (vv) => muV(vv) * (m * G + kA * vv * vv) >= m * vv * vv * k;
+      if (cabe(vmax)) { v[i] = vmax; continue; }
+      let lo = 5, hi = vmax;
+      for (let it = 0; it < 30; it++) { const mid = (lo + hi) / 2; if (cabe(mid)) lo = mid; else hi = mid; }
+      v[i] = lo;
     }
     // dos pasadas de cada tipo por ser circular
     for (let pasada = 0; pasada < 2; pasada++) {

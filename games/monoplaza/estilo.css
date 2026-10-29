@@ -267,3 +267,23 @@ input[type=color] { width: 46px; height: 34px; border: 1px solid var(--borde); b
 .bt.box { color: #ffd23f; }
 .bt.box.activo { background: rgba(255,210,63,.85); color: #1a1200; }
 @media (max-height: 480px) { .pantalla.lateral .panel { width: min(470px, 62vw); } .danos { bottom: calc(96px + var(--sa-b)); } }
+
+/* Cámara de cabina: el tablero va en la pantalla del volante */
+body.vista-cabina #volanteHud { display: none; }
+body.vista-cabina .danos { bottom: calc(10px + var(--sa-b)); }
+
+/* Pantallas táctiles: botones arriba a la derecha, tiempos bajo el cronómetro, clasificación corta */
+.tiempos-mini { display: none; font-size: 11px; color: rgba(238,243,250,.8); background: rgba(6,9,15,.55); padding: 1px 8px; border-radius: 6px; white-space: nowrap; }
+body.tactil-on .tiempos-mini { display: block; }
+body.tactil-on #hudDer .caja.tiempos { display: none; }
+body.tactil-on #hudDer { top: calc(56px + var(--sa-t)); }
+body.tactil-on #botonesSup { top: calc(8px + var(--sa-t)); right: calc(10px + var(--sa-r)); }
+body.tactil-on .bt { width: 44px; height: 40px; }
+body.tactil-on .tabla div { min-width: 118px; padding: 1px 6px; }
+#tactil.inclinacion .pedal { height: 44vh; }
+#tactil.inclinacion #botonesAccion { bottom: calc(44vh + 18px + var(--sa-b)); }
+#tactil.inclinacion #botonesAccion .marcha-bt:first-child { bottom: calc(44vh + 18px + var(--sa-b)); }
+
+/* Garaje: tarjetas de monoplaza */
+.ficha.coche { padding-top: 6px; }
+.ficha .muestra { display: block; height: 26px; border-radius: 6px; margin-bottom: 5px; border: 1px solid rgba(255,255,255,.15); }

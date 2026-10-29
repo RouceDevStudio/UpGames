@@ -199,9 +199,15 @@ function construirLineaIdeal() {
 const NUMEROS_IA = [16, 55, 44, 63, 1, 22, 4, 81, 14, 18, 10, 31, 23, 2, 27, 77, 24, 20, 11, 3, 12];
 const imagenesRed = new Map();     // librea propia de cada rival en línea
 
+// Librea de un equipo de la parrilla con el número y el casco del piloto
+function libreaEquipo(ie, base) {
+  const eq = EQUIPOS[ie];
+  return { ...base, patron: eq.patron, acabado: base.acabado || 'brillo', propia: false, colores: { base: eq.base, acento: eq.acento, tercero: eq.tercero || '#ffffff' } };
+}
+
 function equipadoDe(p, k) {
-  if (p.jugador) return { ...equipado, propia: equipado.propia && !!imagenLibrea };
-  if (p.equipado) return p.equipado;
+  if (p.jugador) return (equipado.equipo || 0) > 0 ? libreaEquipo(equipado.equipo, equipado) : { ...equipado, propia: equipado.propia && !!imagenLibrea };
+  if (p.equipado) return (p.equipado.equipo || 0) > 0 && p.equipado.equipo < EQUIPOS.length ? libreaEquipo(p.equipado.equipo, p.equipado) : p.equipado;
   const eq = p.equipo;
   return { patron: eq.patron, acabado: 'brillo', casco: ['clasico', 'rayas', 'estrellas', 'damero', 'llamas'][k % 5], colores: { base: eq.base, acento: eq.acento, tercero: eq.tercero || '#ffffff' },
     cascoColores: { base: eq.tercero || '#ffffff', acento: eq.base }, numero: NUMEROS_IA[k % NUMEROS_IA.length] };
@@ -250,7 +256,7 @@ function empezar(modo) {
   modoActual = modo;
   sonido.iniciar();
   sonido.ponerVolumen(ajustes.volumen);
-  const opc = { modo, reglaje: { ...reglaje }, ayudas: ayudasDe(), mejoras: perfilApex.mejoras, equipado: { ...equipado }, nombre: cuenta.usuario() ? '@' + cuenta.usuario() : 'Tú' };
+  const opc = { modo, reglaje: { ...reglaje }, ayudas: ayudasDe(), mejoras: perfilApex.mejoras, equipado: { ...equipado }, equipoJugador: equipado.equipo || 0, nombre: cuenta.usuario() ? '@' + cuenta.usuario() : 'Tú' };
   if (modo === 'carrera') {
     Object.assign(opc, { vueltas: opcCarrera.vueltas, rivales: opcCarrera.rivales, dificultad: opcCarrera.dificultad, posSalida: opcCarrera.posSalida });
     opc.reglaje.compuesto = opcCarrera.compuesto;
@@ -268,7 +274,7 @@ function arrancarSesion(modo) {
   if (camara.modo === 'orbita') camara.modo = ajustes.camara || 'persecucion';
   ocultarTodo();
   $('#hud').classList.add('visible');
-  if (esTactil) $('#tactil').classList.add('visible');
+  if (esTactil) { $('#tactil').classList.add('visible'); document.body.classList.add('tactil-on'); }
   aplicarModoControl();
   document.body.classList.add('jugando');
   document.body.classList.toggle('cambio-auto', !!ajustes.cambioAuto);
@@ -590,6 +596,7 @@ function actualizarHud(dt) {
   tEl.textContent = p.vuelta > 0 ? fmt(p.tVuelta) : (sesion.modo === 'carrera' ? fmt(0) : 'SALIDA');
   tEl.classList.toggle('invalida', !p.valida && p.vuelta > 0);
   $('#hMejor').textContent = fmt(p.mejor);
+  $('#hTiemposMini').textContent = `Mejor ${fmt(p.mejor)} · Última ${p.ultimaVuelta ? fmt(p.ultimaVuelta.t) : '--:--.---'}`;
   $('#hUltima').textContent = p.ultimaVuelta ? fmt(p.ultimaVuelta.t) + (p.ultimaVuelta.valida ? '' : ' ✕') : '--:--.---';
   const dEl = $('#hDelta');
   const d = sesion.modo !== 'carrera' ? sesion.delta() : null;
@@ -609,7 +616,10 @@ function actualizarHud(dt) {
   $('#hVuelta').textContent = sesion.modo === 'carrera' ? `${Math.max(1, Math.min(p.vuelta, sesion.vueltasTotales))}/${sesion.vueltasTotales}` : String(Math.max(0, p.vuelta));
   if (sesion.modo === 'carrera' && sesion.orden) {
     const lider = sesion.orden[0];
-    $('#hTabla').innerHTML = sesion.orden.map(q => {
+    // en el móvil solo líder, el de delante, tú y el de detrás (el resto tapa los pedales)
+    let filas = sesion.orden;
+    if (esTactil) { const i = filas.indexOf(p); filas = filas.filter((q, k) => k === 0 || Math.abs(k - i) <= 1); }
+    $('#hTabla').innerHTML = filas.map(q => {
       const gap = q === lider ? 'Líder' : q.terminado ? '🏁' : '+' + ((lider.distancia - q.distancia) / Math.max(20, lider.coche.velocidad)).toFixed(1);
       return `<div class="${q.jugador ? 'yo' : ''}"><span class="n">${q.posicion}</span><span class="c" style="background:${q.equipo.base}"></span><span>${q.equipo.corto}</span><span class="t">${gap}</span></div>`;
     }).join('');
@@ -783,6 +793,16 @@ function bucle(ahora) {
     }
   }
   lineaIdeal.visible = jugando && ajustes.trazada;
+  // en la cámara de cabina el tablero está en el volante (se oculta el del HUD)
+  document.body.classList.toggle('vista-cabina', jugando && camara.modo === 'cabina');
+  const pj = sesion.jugador, mj = modelos[sesion.participantes.indexOf(pj)];
+  if (mj) mj.info = {
+    pos: sesion.modo === 'carrera' ? pj.posicion : null,
+    vuelta: sesion.modo === 'carrera' ? `VUELTA ${Math.max(1, Math.min(pj.vuelta, sesion.vueltasTotales))}/${sesion.vueltasTotales}` : `VUELTA ${Math.max(0, pj.vuelta)}`,
+    tiempo: pj.vuelta > 0 ? fmt(pj.tVuelta) : '',
+    delta: sesion.modo !== 'carrera' ? sesion.delta() : null,
+    box: !!pj.solicitudBox,
+  };
 
   // cámara, luz y efectos
   const mJ = modelos[sesion.participantes.indexOf(sesion.jugador)];
@@ -951,6 +971,11 @@ function pintarGaraje() {
   $('#tabMejoras').classList.toggle('oculto', tabGaraje !== 'mejoras');
   $('#tabLibrea').classList.toggle('oculto', tabGaraje !== 'librea');
   $('#tabCasco').classList.toggle('oculto', tabGaraje !== 'casco');
+  $('#tabMonoplaza').classList.toggle('oculto', tabGaraje !== 'monoplaza');
+  const eqSel = equipado.equipo || 0;
+  $('#tabMonoplaza').innerHTML = '<p class="nota" style="text-align:left">Elige con qué monoplaza corres. Todos rinden igual; cambia la librea, el garaje y tu compañero de equipo. Con <b>UpGames Racing</b> llevas tu propio diseño.</p><div class="rejilla">' +
+    EQUIPOS.map((eq, k) => `<div class="ficha coche ${eqSel === k ? 'sel' : ''}" data-equipo="${k}"><i class="muestra" style="background:linear-gradient(135deg, ${eq.base} 0 55%, ${eq.acento} 55% 75%, ${eq.tercero || '#fff'} 75%)"></i>${eq.nombre}<span class="precio libre">${eqSel === k ? 'TU COCHE' : k === 0 ? 'TU DISEÑO' : 'GRATIS'}</span></div>`).join('') + '</div>';
+  document.querySelectorAll('#garaje [data-equipo]').forEach(b => b.onclick = () => { equipado.equipo = +b.dataset.equipo; aplicarEquipado(); });
   $('#saldoUC').textContent = cuenta.conectado() ? `${perfilApex.upcoins ?? '…'} UpCoins` : 'Sin sesión';
   // mejoras de rendimiento
   const desc = { motor: '+1,2 % de potencia por nivel', aero: '+1 % de carga y −0,6 % de resistencia', frenos: '+3 % de frenada y mejor refrigeración', chasis: '−3 kg por nivel', neumaticos: '−6 % de desgaste y +0,4 % de agarre', ers: '+5 % de despliegue y +4 % de recuperación' };

@@ -164,14 +164,14 @@ function crearVolante(conPantalla) {
   }
   // pantalla
   let pantalla = null;
-  const geoP = new THREE.PlaneGeometry(0.105, 0.055);
+  const geoP = new THREE.PlaneGeometry(0.13, 0.068);
   if (conPantalla) {
-    const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
+    const cv = document.createElement('canvas'); cv.width = 512; cv.height = 268;
     pantalla = { cv, ctx: cv.getContext('2d'), tex: new THREE.CanvasTexture(cv) };
     pantalla.tex.colorSpace = THREE.SRGBColorSpace;
   }
   const mp = new THREE.Mesh(geoP, conPantalla ? new THREE.MeshBasicMaterial({ map: pantalla.tex, toneMapped: false }) : negro);
-  mp.rotation.y = -Math.PI / 2; mp.position.set(-0.024, 0.02, 0); g.add(mp);
+  mp.rotation.y = -Math.PI / 2; mp.position.set(-0.024, 0.018, 0); g.add(mp);
   // LEDs de cambio sobre la pantalla
   const leds = [];
   const geoL = new THREE.BoxGeometry(0.006, 0.008, 0.01);
@@ -193,20 +193,51 @@ function crearVolante(conPantalla) {
   return { g, pantalla, leds };
 }
 
-function pintarPantalla(p, car) {
-  const x = p.ctx;
-  x.fillStyle = '#05070a'; x.fillRect(0, 0, 256, 128);
-  x.fillStyle = '#ffd23f'; x.font = '900 72px Arial'; x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.fillText(car.marcha === -1 ? 'R' : car.marcha === 0 ? 'N' : String(car.marcha), 128, 60);
-  x.font = '700 28px Arial'; x.fillStyle = '#fff';
-  x.textAlign = 'left'; x.fillText(String(Math.round(car.velocidad * 3.6)), 10, 28);
-  x.textAlign = 'right'; x.fillText(String(Math.round(car.rpm / 100) * 100), 246, 28);
-  // ERS y DRS
-  x.fillStyle = '#333'; x.fillRect(10, 104, 236, 14);
-  x.fillStyle = '#2fe07a'; x.fillRect(10, 104, 236 * Math.max(0, car.ers / 4e6), 14);
-  x.font = '800 20px Arial'; x.textAlign = 'left'; x.fillStyle = car.drsAbierto ? '#2fe07a' : car.drsPermitido ? '#fff' : '#444';
-  x.fillText('DRS', 10, 86);
-  x.textAlign = 'right'; x.fillStyle = car.limitadorPit ? '#2f7bff' : '#444'; x.fillText('PIT', 246, 86);
+// Pantalla del volante: en la cámara de cabina es el tablero completo del piloto
+function pintarPantalla(p, car, info = {}) {
+  const x = p.ctx, W = 512, H = 268;
+  x.fillStyle = '#05070a'; x.fillRect(0, 0, W, H);
+  x.strokeStyle = '#1b2230'; x.lineWidth = 3; x.strokeRect(2, 2, W - 4, H - 4);
+  x.textBaseline = 'middle';
+  // marcha grande en el centro
+  x.fillStyle = car.limitador ? '#3a7bff' : '#ffd23f'; x.font = '900 150px Arial'; x.textAlign = 'center';
+  x.fillText(car.marcha === -1 ? 'R' : car.marcha === 0 ? 'N' : String(car.marcha), W / 2, 112);
+  x.fillStyle = '#fff'; x.font = '800 44px Arial';
+  x.fillText(String(Math.round(car.velocidad * 3.6)), W / 2, 214);
+  x.font = '700 18px Arial'; x.fillStyle = '#8a94a6'; x.fillText('KM/H', W / 2, 246);
+  // izquierda: posición, vuelta, tiempo y delta
+  x.textAlign = 'left';
+  x.fillStyle = '#fff'; x.font = '900 46px Arial'; x.fillText(info.pos ? `P${info.pos}` : '', 14, 42);
+  x.font = '700 22px Arial'; x.fillStyle = '#8a94a6'; x.fillText(info.vuelta || '', 14, 84);
+  x.fillStyle = '#fff'; x.font = '800 30px Arial'; x.fillText(info.tiempo || '', 14, 122);
+  if (info.delta != null) { x.fillStyle = info.delta <= 0 ? '#2fe07a' : '#ff3b3b'; x.fillText((info.delta > 0 ? '+' : '') + info.delta.toFixed(2), 14, 158); }
+  // ERS y modos
+  x.fillStyle = '#222a36'; x.fillRect(14, 186, 150, 16);
+  x.fillStyle = '#2fe07a'; x.fillRect(14, 186, 150 * Math.max(0, car.ers / 4e6), 16);
+  x.font = '800 18px Arial'; x.fillStyle = '#8a94a6'; x.fillText(['ERS RECARGA', 'ERS NORMAL', 'ERS ATAQUE'][car.mandos.ersModo ?? 1], 14, 220);
+  x.fillStyle = car.drsAbierto ? '#2fe07a' : car.drsPermitido ? '#fff' : '#3a4250'; x.font = '900 24px Arial'; x.fillText('DRS', 14, 250);
+  x.fillStyle = car.limitadorPit ? '#3a7bff' : '#3a4250'; x.fillText('PIT', 84, 250);
+  // derecha: neumáticos (temperatura y desgaste) y daños
+  const opt = car.ruedas[0].neum.c.tOpt;
+  const col = (t) => t < opt - 35 ? '#2f7bff' : t < opt - 15 ? '#36c4ff' : t < opt + 15 ? '#2fe07a' : t < opt + 30 ? '#ffd23f' : '#ff3b3b';
+  car.ruedas.forEach((w, k) => {
+    const cx = W - 140 + (k % 2) * 66, cy = 24 + Math.floor(k / 2) * 74;
+    x.fillStyle = car.dano?.suelta[k] ? '#222' : car.dano?.pinchazo[k] ? '#ff3b3b' : col(w.neum.tSup);
+    x.fillRect(cx, cy, 56, 64);
+    x.fillStyle = '#03140a'; x.font = '900 24px Arial'; x.textAlign = 'center';
+    x.fillText(String(Math.round(w.neum.tSup)), cx + 28, cy + 26);
+    x.fillStyle = 'rgba(0,0,0,.5)'; x.fillRect(cx + 6, cy + 48, 44, 8);
+    x.fillStyle = '#03140a'; x.fillRect(cx + 6, cy + 48, 44 * (1 - w.neum.desgaste), 8);
+  });
+  x.textAlign = 'right'; x.font = '800 18px Arial';
+  const avisos = [];
+  if (car.danoAleron > 0.05) avisos.push('ALERÓN DEL');
+  if (car.dano?.aleronTras > 0.05) avisos.push('ALERÓN TRAS');
+  if (car.dano?.pinchazo.some(Boolean)) avisos.push('PINCHAZO');
+  if (info.box) avisos.push('BOX BOX');
+  x.fillStyle = '#ff3b3b';
+  avisos.slice(0, 2).forEach((t, i) => x.fillText(t, W - 14, 196 + i * 26));
+  x.fillStyle = '#8a94a6'; x.font = '700 16px Arial'; x.fillText(`${car.combustible.toFixed(1)} KG`, W - 14, 252);
   p.tex.needsUpdate = true;
 }
 
@@ -260,8 +291,8 @@ export function crearModelo(opc) {
     ], 16, sg * 0.60));
     geo.negro.push(caja(0.02, 0.24, 0.30, 0.43, 0.42, sg * 0.60));
     // retrovisores
-    geo.librea.push(caja(0.06, 0.06, 0.14, 0.72, 0.68, sg * 0.46));
-    geo.carbono.push(barra([0.72, 0.6, sg * 0.32], [0.72, 0.66, sg * 0.42], 0.01));
+    geo.librea.push(loft([{ x: 0.76, w: 0.05, h: 0.02, yc: 0.69, n: 3 }, { x: 0.73, w: 0.065, h: 0.028, yc: 0.69, n: 3 }, { x: 0.71, w: 0.065, h: 0.028, yc: 0.69, n: 3 }], 12, sg * 0.45));
+    geo.carbono.push(barra([0.74, 0.58, sg * 0.30], [0.735, 0.67, sg * 0.43], 0.008));
   }
   geo.librea.push(loft([
     { x: 0.02, w: 0.10, h: 0.10, yc: 0.86 }, { x: -0.25, w: 0.13, h: 0.12, yc: 0.84 },
@@ -275,7 +306,9 @@ export function crearModelo(opc) {
     geo.librea.push(g);
   }
   // habitáculo (interior negro) y reposacabezas
-  geo.negro.push(loft([{ x: 0.62, w: 0.20, h: 0.03, yc: 0.71 }, { x: 0.30, w: 0.27, h: 0.035, yc: 0.735 }, { x: -0.05, w: 0.25, h: 0.035, yc: 0.79 }], 14));
+  geo.negro.push(loft([{ x: 0.36, w: 0.24, h: 0.03, yc: 0.72 }, { x: 0.20, w: 0.27, h: 0.035, yc: 0.74 }, { x: -0.05, w: 0.25, h: 0.035, yc: 0.79 }], 14));
+  // reborde acolchado del habitáculo
+  for (const sg of [-1, 1]) geo.carbono.push(loft([{ x: 0.66, w: 0.025, h: 0.025, yc: 0.735 }, { x: 0.3, w: 0.03, h: 0.03, yc: 0.775 }, { x: -0.05, w: 0.03, h: 0.03, yc: 0.80 }], 8, sg * 0.25));
   geo.negro.push(caja(0.18, 0.12, 0.42, -0.05, 0.74, 0));
   // halo de titanio
   {
@@ -314,6 +347,13 @@ export function crearModelo(opc) {
   carroceria.add(unir(geo.librea, pintura, true));
   carroceria.add(unir(geo.carbono, carbono));
   carroceria.add(unir(geo.negro, negro));
+  // cristal de los retrovisores (refleja el entorno)
+  const matEspejo = matComun('espejo', () => new THREE.MeshStandardMaterial({ color: 0xaab6c4, metalness: 1, roughness: 0.04 }));
+  for (const sg of [-1, 1]) {
+    const espejo = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.048), matEspejo);
+    espejo.rotation.y = Math.PI / 2; espejo.position.set(0.704, 0.69, sg * 0.45);
+    carroceria.add(espejo);
+  }
 
   // Alerón delantero (pieza aparte: se deforma y se desprende)
   const alaDel = new THREE.Group();
@@ -387,8 +427,8 @@ export function crearModelo(opc) {
   // Volante en la columna de dirección
   const volante = crearVolante(cabina);
   const columna = new THREE.Group();
-  columna.position.set(0.47, 0.67, 0);
-  columna.rotation.z = -0.5;          // inclinado hacia el piloto
+  columna.position.set(0.46, 0.755, 0);
+  columna.rotation.z = -0.3;          // inclinado hacia el piloto
   const giroVolante = new THREE.Group();
   giroVolante.add(volante.g);
   columna.add(giroVolante);
@@ -474,7 +514,8 @@ export function crearModelo(opc) {
       pivDrs.rotation.z += (objDrs - pivDrs.rotation.z) * Math.min(1, dt * 18);
       luzLluvia.material.emissiveIntensity = car.ersPotenciaActual < -1000 ? (Math.sin(performance.now() / 70) > 0 ? 6 : 0) : 0;
       // volante: ~9 vueltas de volante por radián de rueda (bloqueo ≈ ±170°)
-      const angVol = -(car.anguloVolante || 0) * 9;
+      // girar a la derecha (ángulo positivo) lleva la parte de arriba del volante hacia la derecha (+Z)
+      const angVol = (car.anguloVolante || 0) * 9;
       giroVolante.rotation.x = angVol;
       // la cabeza se inclina con la aceleración lateral
       casco.rotation.x = Math.max(-0.25, Math.min(0.25, -(car.ayF || 0) * 0.012));
@@ -497,7 +538,7 @@ export function crearModelo(opc) {
       volante.leds.forEach((m, k) => { m.emissiveIntensity = flash ? (k >= 10 ? 4 : 0) : k < nOn ? 3 : 0; });
       if (volante.pantalla) {
         tPantalla += dt;
-        if (tPantalla > 0.1) { tPantalla = 0; pintarPantalla(volante.pantalla, car); }
+        if (tPantalla > 0.1) { tPantalla = 0; pintarPantalla(volante.pantalla, car, this.info); }
       }
     },
     // al salir de boxes con un juego nuevo se repinta la banda del compuesto
