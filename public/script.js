@@ -564,12 +564,6 @@ function createTile(item, isFeatured=false) {
 
   el.addEventListener('click',(e)=>{
     if(e.target.closest('.tile-fav-quick')) return;
-    // Con diseño de tarjeta: primero la animación de "abrir" de ese diseño
-    if(el.dataset.tj && !matchMedia('(prefers-reduced-motion: reduce)').matches){
-      el.classList.remove('ugs-abre'); void el.offsetWidth; el.classList.add('ugs-abre');
-      setTimeout(()=>{ el.classList.remove('ugs-abre'); openDetail(item); }, 300);
-      return;
-    }
     openDetail(item);
   });
   el.querySelector('.tile-fav-quick').addEventListener('click',(e)=>{

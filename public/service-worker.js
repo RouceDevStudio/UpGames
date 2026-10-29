@@ -11,7 +11,7 @@
 // IMPORTANTE: bump CACHE_VERSION cuando cambies archivos estáticos.
 // ========================================
 
-const CACHE_VERSION = 'upgames-v6.28.0';
+const CACHE_VERSION = 'upgames-v6.29.0';
 const CACHE_STATIC  = `${CACHE_VERSION}-static`;
 const CACHE_RUNTIME = `${CACHE_VERSION}-runtime`;
 const CACHE_API     = `${CACHE_VERSION}-api`;
@@ -178,7 +178,7 @@ async function networkFirstAPI(request) {
 // Cloudinary: una URL = un archivo que nunca cambia (la versión va en la URL) → se sirve del caché sin volver a bajarlo.
 // Se pide en modo CORS: así la respuesta se puede guardar de verdad (una respuesta "opaca" ocupa ~7 MB de cuota en Chrome).
 const esCloudinary = url => /(^|\.)res\.cloudinary\.com$/i.test(new URL(url).hostname);
-let recortando = null;
+let recortando = null, guardadas = 0;
 async function recortarImagenes(cache) {
     if (recortando) return recortando;
     recortando = (async () => {
@@ -196,7 +196,8 @@ async function guardarImagen(request, response) {
     const h = new Headers(response.headers); h.set('X-UG-Guardada', String(Date.now()));
     const cuerpo = await response.blob();
     await cache.put(request.url, new Response(cuerpo, { status: 200, headers: h }));
-    recortarImagenes(cache).catch(() => {});
+    // Recortar cada 25 guardadas (listar 400 entradas en cada imagen era trabajo de sobra)
+    if (++guardadas % 25 === 0) recortarImagenes(cache).catch(() => {});
 }
 async function bajarImagen(request) {
     const url = request.url;
