@@ -198,12 +198,8 @@ function registrar(app, deps) {
             if (!j || j.usuario !== usuario) return 'Solo puedes destacar tus propias publicaciones';
             if (j.status !== 'aprobado') return 'La publicación debe estar aprobada para destacarla';
         }
-        if (p.tipo === 'acceso') {
-            const j = await acceso.cargarJuego(p.juegoId);
-            if (!j) return 'Publicación no disponible';
-            if (j.usuario === usuario) return 'Es tu propia publicación';
-            if (await acceso.Acceso.exists({ usuario, juegoId: p.juegoId })) return 'Ya tienes acceso directo a esta publicación';
-        }
+        // Ya no se vende acceso directo por publicación: saltar la espera es de Premium
+        if (p.tipo === 'acceso') return 'El acceso directo por publicación ya no se vende. Con Premium te saltas la espera en todas las publicaciones.';
         return null;
     }
 

@@ -23,6 +23,9 @@ const dns = require('dns').promises;
 const net = require('net');
 
 const PIRATERIA = /\b(crack(ed|eado|eo)?|pirat(a|eado|ear|eria)|keygen|warez|serial(es)? (gratis|crack)|activador|full gratis|premium gratis|repack)\b/i;
+// ROMs, ISOs y ports: aunque estén modificados (skins, parches) suelen llevar dentro el
+// juego original, así que nunca se aprueban solos: siempre pasan por una persona.
+const SENSIBLE = /\b(roms?|iso|isos|ports?|portado|porteado)\b/i;
 const CEBO = /\b(gratis|free|full|100% ?real|sin virus|descarga directa)\b/i;
 const ARCHIVO_MUERTO = [
     /Invalid or Deleted File/i, /file you attempted to download.{0,40}(removed|deleted)/i, /The key you provided for file download was invalid/i,
@@ -160,6 +163,9 @@ async function analizar(item, deps) {
         else add('bad', 'derechos', `Parece el juego comercial completo "${det.gameName}" (${det.platform || 'comercial'}): riesgo de piratería y de derechos de autor`, -30);
     }
 
+    const sensible = !esVideo && (/^rom$/i.test(item.category || '') || SENSIBLE.exec(texto));
+    if (sensible) add('warn', 'derechos', `Es ${sensible === true ? 'una ROM' : `"${sensible[0]}"`}: revisa a mano que no incluya el juego comercial original (una ROM o un port modificado sigue llevando el juego). Se permiten mods, parches, archivos de optimización y homebrew sin los archivos del juego.`, -5);
+
     // ── 5. Duplicados ───────────────────────────────────────────
     const [mismoLink, mismoTitulo] = await Promise.all([
         // Solo cuentan las publicaciones ANTERIORES: la original no es duplicado de su copia
@@ -221,6 +227,7 @@ async function analizar(item, deps) {
         else if (ia.decision === 'aprobar' && reglas === 'revisar' && puntos >= 58 && c >= 0.7) { decision = 'aprobar'; confianza = 0.6; }
         else { decision = 'revisar'; confianza = 0.5; }
     } else confianza = reglas === 'revisar' ? 0.5 : Math.min(0.9, 0.5 + Math.abs(puntos - 55) / 90);
+    if (sensible && decision === 'aprobar') { decision = 'revisar'; confianza = 0.5; }   // ROM/ISO/port: siempre revisión humana
 
     const resumenes = { aprobar: 'Todo indica que es una publicación legítima y funcional.', revisar: 'Hay señales mixtas: revisa los puntos marcados antes de decidir.', rechazar: 'Hay problemas serios que justifican rechazarla.' };
     return {
@@ -233,4 +240,4 @@ async function analizar(item, deps) {
     };
 }
 
-module.exports = { analizar, sondear, hostPublico, ipPrivada, PIRATERIA };
+module.exports = { analizar, sondear, hostPublico, ipPrivada, PIRATERIA, SENSIBLE };

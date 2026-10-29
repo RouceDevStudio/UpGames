@@ -8,11 +8,12 @@
  *
  *   Regalos en lives ........ 25 % del valor de los UpCoins regalados
  *                             (peor caso: paquete de 3.000 UC + bono Premium = 30 % de lo pagado)
- *   Acceso directo (US$1) ... 25 %
+ *   Acceso directo (US$1) ... 25 % (solo accesos vendidos antes de la v7.0 de los Términos:
+ *                             ya no se vende por publicación)
  *   Pases sin anuncios ...... fondo para creadores = 25 % del precio menos lo que
  *                             cuestan las monedas de regalo del pase; se reparte a
- *                             US$0,01 la primera vez que el usuario abre cada publicación
- *   Descargas (anuncios) .... CPM fijo por 1.000 descargas verificadas (CPM_VALUE);
+ *                             US$0,01 por la primera descarga efectiva del usuario en cada publicación
+ *   Descargas (anuncios) .... CPM fijo por 1.000 descargas efectivas (CPM_VALUE); las vistas no se pagan;
  *                             debe ser ≤ 30 % de lo que pagan los anuncios por 1.000 visitas
  */
 'use strict';

@@ -501,7 +501,8 @@ const JuegoSchema = new mongoose.Schema({
     },
     category:           { type: String, default: "General", trim: true },
     tags:               [String],
-    descargasEfectivas: { type: Number, default: 0, min: 0 },
+    descargasEfectivas: { type: Number, default: 0, min: 0 },   // solo descargas efectivas por la página puente (lo único que se paga)
+    vistas:             { type: Number, default: 0, min: 0 },   // reproducciones de videos: no generan ganancia ni cuentan como descarga
     likesCount:         { type: Number, default: 0, min: 0 },
     scoreRecomendacion: { type: Number, default: 0 },
     videoType:          { type: String, default: '' },
@@ -1170,7 +1171,7 @@ app.post('/economia/solicitar-pago', verificarToken, async (req, res) => {
         if (espera) return res.status(403).json({ success: false, error: `Cambiaste tu método de cobro hace poco. Por seguridad podrás retirar desde el ${espera.toLocaleString('es-CO')}.` });
         if (usuario.solicitudPagoPendiente) return res.status(400).json({ success: false, error: "Ya tienes una solicitud de pago pendiente" });
 
-        const juegoElegible = await Juego.findOne({ usuario: usuario.usuario, descargasEfectivas: { $gt: 0 } }).select('_id').lean();
+        const juegoElegible = await Juego.findOne({ usuario: usuario.usuario, category: { $ne: 'Video' }, descargasEfectivas: { $gt: 0 } }).select('_id').lean();
         if (!juegoElegible && !(await live.tieneIngresosLive(usuario.usuario))) return res.status(403).json({ success: false, error: "Aún no tienes ingresos por descargas ni por regalos en tus lives" });
 
         // Reclamo atómico de la marca: un doble clic creaba dos solicitudes por el mismo saldo
@@ -1195,7 +1196,7 @@ app.get('/economia/mi-saldo', verificarToken, async (req, res) => {
         if (!usuario) return res.status(404).json({ success: false, error: "Usuario no encontrado" });
 
         const [juegosElegibles, ingresosLive] = await Promise.all([
-            Juego.countDocuments({ usuario: req.usuario, descargasEfectivas: { $gt: 0 } }),
+            Juego.countDocuments({ usuario: req.usuario, category: { $ne: 'Video' }, descargasEfectivas: { $gt: 0 } }),
             live.tieneIngresosLive(req.usuario),
         ]);
         const puedeRetirar = usuario.saldo >= MIN_WITHDRAWAL && usuario.isVerificado && usuario.verificadoNivel >= 1 && !!cobros.metodoDe(usuario) && !cobros.esperaHasta(usuario) && (juegosElegibles > 0 || ingresosLive) && !usuario.solicitudPagoPendiente && !!usuario.emailVerificado;
@@ -1953,15 +1954,16 @@ app.put('/items/vistas/:id', [param('id').isMongoId()], async (req, res) => {
         const errors = validationResult(req);
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'ID inválido' });
         const juegoId = req.params.id;
-        const ip = req.ip;
-        const juego = await Juego.findById(juegoId).select('title category descargasEfectivas');
+        const juego = await Juego.findById(juegoId).select('title vistas descargasEfectivas').lean();
         if (!juego) return res.status(404).json({ success: false, error: 'Item no encontrado' });
-        const vistaExistente = await DescargaIP.findOne({ juegoId, ip });
-        if (vistaExistente) return res.json({ success: true, duplicada: true, descargasEfectivas: juego.descargasEfectivas || 0 });
-        await new DescargaIP({ juegoId, ip }).save();
-        const updated = await Juego.findByIdAndUpdate(juegoId, { $inc: { descargasEfectivas: 1 } }, { new: true }).select('descargasEfectivas');
-        logger.info(`Vista registrada — Video: ${juego.title} | IP: ${ip} | Total: ${updated.descargasEfectivas}`);
-        res.json({ success: true, duplicada: false, descargasEfectivas: updated.descargasEfectivas });
+        // Una vista de video NO es una descarga: va a su propio contador, no genera ganancia
+        // y no toca el registro de descargas por IP (DescargaIP) de la página puente.
+        // descargasEfectivas de videos antiguos guarda vistas de antes de separarlas.
+        const total = j => (j.vistas || 0) + (j.descargasEfectivas || 0);
+        if (!(await Limites.permitir(`vistaVideo:${juegoId}:${req.ip}`, [[Limites.DIA, 1]]))) return res.json({ success: true, duplicada: true, vistas: total(juego) });
+        const updated = await Juego.findByIdAndUpdate(juegoId, { $inc: { vistas: 1 } }, { new: true }).select('vistas descargasEfectivas').lean();
+        logger.info(`Vista registrada — Video: ${juego.title} | Total: ${total(updated)}`);
+        res.json({ success: true, duplicada: false, vistas: total(updated) });
     } catch (error) {
         logger.error(`Error en PUT /items/vistas: ${error.message}`);
         res.status(500).json({ success: false, error: 'Error al registrar vista' });
@@ -1984,7 +1986,7 @@ app.get("/items", async (req, res) => {
                 } },
                 { $sort: { promocionado: -1, _orden: -1, createdAt: -1 } },
                 { $limit: 100 },
-                { $project: { _id: 1, title: 1, description: 1, image: 1, images: 1, link: 1, category: 1, usuario: 1, resenas: 1, reportes: 1, linkStatus: 1, descargasEfectivas: 1, likesCount: 1, extraData: 1, videoType: 1, featuredItemId: 1, scoreRecomendacion: 1, serie: 1, createdAt: 1, promocionado: 1 } },
+                { $project: { _id: 1, title: 1, description: 1, image: 1, images: 1, link: 1, category: 1, usuario: 1, resenas: 1, reportes: 1, linkStatus: 1, descargasEfectivas: 1, vistas: 1, likesCount: 1, extraData: 1, videoType: 1, featuredItemId: 1, scoreRecomendacion: 1, serie: 1, createdAt: 1, promocionado: 1 } },
             ]);
             // Series por partes: solo la primera parte aparece en el catálogo
             return series.colapsar(items, Juego, { status: 'aprobado', linkStatus: { $in: ['online', 'revision'] } });
@@ -2005,7 +2007,7 @@ app.get("/items/user/:usuario", async (req, res) => {
         if (t && t.length > 20) { try { yo = jwt.verify(t, JWT_SECRET).usuario; } catch (_) {} }
         const propio = yo && yo === String(req.params.usuario).toLowerCase();
         const filtro = propio ? { usuario: req.params.usuario, status: { $ne: 'privado' } } : { usuario: req.params.usuario, status: 'aprobado' };
-        const aportes = await Juego.find(filtro).select('_id title description image images link category usuario reportes reportesDesglose linkStatus descargasEfectivas likesCount status createdAt scoreRecomendacion extraData videoType featuredItemId serie motivoRechazo nexusMentor destacadoHasta prioridadDesde prioridadReembolso').sort({ scoreRecomendacion: -1, createdAt: -1 }).lean();
+        const aportes = await Juego.find(filtro).select('_id title description image images link category usuario reportes reportesDesglose linkStatus descargasEfectivas vistas likesCount status createdAt scoreRecomendacion extraData videoType featuredItemId serie motivoRechazo nexusMentor destacadoHasta prioridadDesde prioridadReembolso').sort({ scoreRecomendacion: -1, createdAt: -1 }).lean();
         res.json(propio ? aportes : await series.colapsar(aportes, Juego, { usuario: req.params.usuario, status: 'aprobado' }));
     } catch (error) {
         res.status(500).json([]);
@@ -3884,9 +3886,9 @@ const live = require('./rutas/live').registrar(app, server, {
     verificarToken, verificarAdmin, Usuario, Notificacion, logger, config, JWT_SECRET,
     estaSuspendido: u => adminPanel.estaSuspendido(u), getPayPalAccessToken,
 });
-// Acceso directo: US$1 o 50 UpCoins para saltarse la página puente (o gratis con Premium)
+// Acceso directo: saltarse la página puente solo con Premium (ya no se vende por publicación)
 const mercadoPago = require('./modulos/mercadopago').crear();
-const accesoDirecto = require('./rutas/accesoDirecto').registrar(app, { verificarToken, Juego, Usuario, LiveTx: live.LiveTx, paypal: live.paypal, mp: mercadoPago, logger });
+const accesoDirecto = require('./rutas/accesoDirecto').registrar(app, { verificarToken, Juego, Usuario, LiveTx: live.LiveTx, logger });
 // Tienda: pases sin anuncios, "Mi plan", tarjeta con Mercado Pago, PayPal, saldo y monedas
 const tienda = require('./rutas/tienda').registrar(app, {
     verificarToken, Usuario, Juego, LiveTx: live.LiveTx, Notificacion, paypal: live.paypal, mp: mercadoPago,
@@ -3946,9 +3948,9 @@ app.get('/seo/paginas.json', async (req, res) => {
     try {
         const data = await cacheado('seo:paginas', 3600, async () => {
             const items = await Juego.find({ status: 'aprobado', linkStatus: { $in: ['online', 'revision'] } })
-                .select('_id title description image category usuario createdAt descargasEfectivas likesCount').sort({ createdAt: -1 }).limit(20000).lean();
+                .select('_id title description image category usuario createdAt descargasEfectivas vistas likesCount').sort({ createdAt: -1 }).limit(20000).lean();
             return items.map(j => ({ id: String(j._id), title: j.title || '', description: String(j.description || '').slice(0, 3000), image: j.image || '', category: j.category || '',
-                usuario: j.usuario, fecha: (j.createdAt || new Date()).toISOString(), descargas: j.descargasEfectivas || 0, likes: j.likesCount || 0 }));
+                usuario: j.usuario, fecha: (j.createdAt || new Date()).toISOString(), descargas: j.descargasEfectivas || 0, vistas: j.vistas || 0, likes: j.likesCount || 0 }));
         });
         res.set('Cache-Control', 'public, max-age=3600').json({ success: true, total: data.length, items: data });
     } catch (e) { logger.error(`[seo] paginas: ${e.message}`); res.status(500).json({ success: false }); }

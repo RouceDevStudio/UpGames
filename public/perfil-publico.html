@@ -24,7 +24,7 @@
     <meta name="theme-color" content="#0A0B0F">
     <title>Perfil de Usuario — UpGames</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="stylesheet" href="./upgames-estilo.css?v=20261029h">
+    <link rel="stylesheet" href="./upgames-estilo.css?v=20261029i">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="preconnect" href="https://unpkg.com">
     <style>
@@ -738,9 +738,9 @@ display:block;
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="UpGames">
 <script src="./upgames-pwa.js" defer></script>
-<script src="./upgames-extras.js?v=20261029h"></script>
-<script src="./upgames-social.js?v=20261029h"></script>
-<script src="./upgames-errores.js?v=20261029h"></script>
+<script src="./upgames-extras.js?v=20261029i"></script>
+<script src="./upgames-social.js?v=20261029i"></script>
+<script src="./upgames-errores.js?v=20261029i"></script>
 </head>
 <body>
 
@@ -899,7 +899,7 @@ display:block;
                 ${item.serieInfo ? `<span class="pp-tile-serie" title="${item.serieInfo.partes} partes"><ion-icon name="folder-open"></ion-icon>${item.serieInfo.partes}</span>` : ''}
                 ${pending ? '<span class="pp-tile-badge">Pendiente</span>' : ls !== 'online' ? `<span class="pp-tile-badge ${ls === 'caido' ? 'bad' : ''}">${ls === 'caido' ? 'Link caído' : 'Revisión'}</span>` : ''}
                 ${isVideo ? '<span class="pp-tile-type"><ion-icon name="play"></ion-icon></span>' : ''}
-                <span class="pp-tile-meta"><ion-icon name="${isVideo ? 'eye-outline' : 'cloud-download-outline'}"></ion-icon>${ppFmt(item.descargasEfectivas)}</span>
+                <span class="pp-tile-meta"><ion-icon name="${isVideo ? 'eye-outline' : 'cloud-download-outline'}"></ion-icon>${ppFmt(isVideo ? (item.vistas || 0) + (item.descargasEfectivas || 0) : item.descargasEfectivas)}</span>
             </a>`;
         }
         async function compartirPerfil() {

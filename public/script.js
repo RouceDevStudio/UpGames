@@ -531,7 +531,7 @@ function createTile(item, isFeatured=false) {
           <div class="tile-title">${escH(tituloT)}</div>
           <div class="tile-yt-meta">
             <span class="tile-user">@${escH(item.usuario||'Cloud')}${getBadge(item.usuario)}</span>
-            ${dl?`<span class="tile-yt-dot">·</span><span class="tile-yt-views"><ion-icon name="eye-outline"></ion-icon>${fmt(dl)}</span>`:''}
+            ${vistasVideo(item)?`<span class="tile-yt-dot">·</span><span class="tile-yt-views"><ion-icon name="eye-outline"></ion-icon>${fmt(vistasVideo(item))}</span>`:''}
             ${lk?`<span class="tile-yt-dot">·</span><span class="tile-yt-likes"><ion-icon name="heart"></ion-icon>${fmt(lk)}</span>`:''}
             ${window.UGR?.estrellasTile(item)||''}
           </div>
@@ -619,7 +619,7 @@ function initHeroCarousel(items, isVideoMode) {
     if(isYT) mediaSrc = getYouTubeThumbnail(item.image);
 
     const lk = item.likesCount || 0;
-    const vistas = item.descargasEfectivas || 0;
+    const vistas = vistasVideo(item);
 
     // Badge: video mode usa icono play + cyan, normal usa estrella
     const badgeHTML = isVideoMode
@@ -932,6 +932,10 @@ function toastVista(msg) {
   setTimeout(() => el.classList.remove('show'), 3000);
 }
 
+// Vistas de un video: su propio contador (no son descargas ni generan ganancia).
+// Los videos antiguos guardaban sus vistas en descargasEfectivas: se suman.
+function vistasVideo(item) { return (item?.vistas || 0) + (item?.descargasEfectivas || 0); }
+
 function registrarVista(item) {
   if(!item || !item._id) return;
   if(_vistaTimer) { clearTimeout(_vistaTimer); _vistaTimer = null; }
@@ -946,8 +950,8 @@ function registrarVista(item) {
       if(r.ok) {
         const data = await r.json();
         if(data.duplicada) return; // IP ya contada hoy, no actualizar UI
-        const newCount = data.descargasEfectivas ?? ((item.descargasEfectivas||0) + 1);
-        item.descargasEfectivas = newCount;
+        const newCount = data.vistas ?? (vistasVideo(item) + 1);
+        item.vistas = newCount - (item.descargasEfectivas || 0);
         // Reflejar en stat del detail sheet
         const dlEl = document.getElementById('ds-dl');
         if(dlEl) dlEl.textContent = fmt(newCount);
@@ -1176,7 +1180,7 @@ function openDetail(item) {
 
   document.getElementById('ds-cat').textContent=catLabel(item.category);
   document.getElementById('ds-title').textContent=item.title;
-  document.getElementById('ds-dl').textContent=fmt(item.descargasEfectivas||0);
+  document.getElementById('ds-dl').textContent=fmt(item.category === 'Video' ? vistasVideo(item) : item.descargasEfectivas||0);
   document.getElementById('ds-rep').textContent=item.reportes||0;
   document.getElementById('ds-desc').textContent=item.description||'Sin descripción.';
   renderSerieDetalle(item);
@@ -2744,7 +2748,7 @@ function pfTileHTML(item, i) {
   const isPending = item.status === 'pendiente' || item.status === 'pending';
   const ls        = item.linkStatus || 'online';
   const img       = item.image && !UG_VIDEO_RE.test(item.image) ? cldOpt(item.image, CLD_TILE) : '';
-  const n         = isVideo ? (item.descargasEfectivas || 0) : (item.descargasEfectivas || 0);
+  const n         = isVideo ? vistasVideo(item) : (item.descargasEfectivas || 0);
   return `<button type="button" class="pf2-tile${img ? '' : ' no-img'}" onclick="pfOpenPostSheet(${i})" aria-label="${ugEsc(item.title || 'Publicación')}">
       ${img ? `<img src="${ugEsc(img)}" alt="" loading="lazy" onerror="this.remove();this.parentElement.classList.add('no-img')">` : ''}
       <span class="pf2-tile-ph"><ion-icon name="${isVideo ? 'play' : 'game-controller'}"></ion-icon><em>${ugEsc(item.title || '')}</em></span>
@@ -2822,7 +2826,7 @@ function pfOpenPostSheet(i) {
         <div class="pf2-sheet-cat">${ugEsc(catLabel(item.category))} · <span class="${isRejected ? 'bad' : isPending ? 'warn' : 'ok'}">${isRejected ? 'Rechazado' : isPending ? 'Pendiente de revisión' : 'Aprobado'}</span></div>
         <h3>${ugEsc(item.title || 'Sin título')}</h3>
         <div class="pf2-sheet-stats">
-          <div><b>${item.descargasEfectivas || 0}</b><span>${isVideo ? 'Vistas' : 'Descargas'}</span></div>
+          <div><b>${isVideo ? vistasVideo(item) : item.descargasEfectivas || 0}</b><span>${isVideo ? 'Vistas' : 'Descargas efectivas'}</span></div>
           <div><b>${item.likesCount || 0}</b><span>Likes</span></div>
           <div><b style="color:${(item.reportes || 0) >= 3 ? '#ff4343' : 'inherit'}">${item.reportes || 0}</b><span>Reportes</span></div>
           <div><b style="font-size:.78rem">${lsTxt}</b><span>Enlace</span></div>
@@ -4240,10 +4244,10 @@ function ugAB(evento, modo) {
 
 // ── BIENVENIDA — 3 pantallas + términos ───────────────────
 (function initOnboarding() {
-  const TERMINOS_VERSION = '6.2';   // súbela al cambiar los Términos o la Privacidad
+  const TERMINOS_VERSION = '7.0';   // súbela al cambiar los Términos o la Privacidad
   function avisoTerminosNuevos() {
     const a = document.createElement('div'); a.className = 'ug-terminos-aviso'; a.setAttribute('role', 'status');
-    a.innerHTML = `<span>📜 Actualizamos los <a href="./terminos_condiciones.html#moderacion" target="_blank" rel="noopener">Términos (v${TERMINOS_VERSION})</a> y la <a href="./politica-privacidad.html" target="_blank" rel="noopener">Privacidad</a>: referidos, promover lives, repeticiones y moderación automática.</span><button type="button">Entendido</button>`;
+    a.innerHTML = `<span>📜 Actualizamos los <a href="./terminos_condiciones.html" target="_blank" rel="noopener">Términos (v${TERMINOS_VERSION})</a> y la <a href="./politica-privacidad.html" target="_blank" rel="noopener">Privacidad</a>: ahora bajo la ley colombiana, a los creadores se les paga solo por descargas efectivas (no por vistas) y saltar la espera es solo con Premium.</span><button type="button">Entendido</button>`;
     a.querySelector('button').onclick = () => { LS.set('upgames_terms_v', TERMINOS_VERSION); a.remove(); };
     setTimeout(() => document.body.appendChild(a), 2500);
   }
@@ -5045,7 +5049,7 @@ function openTheater(item) {
   metaEl.innerHTML = `
     <span>@${escH(item.usuario||'Cloud')}</span>
     ${item.videoType ? `<span>· ${escH(item.videoType)}</span>` : ''}
-    <span>· ${fmt(item.descargasEfectivas||0)} vistas</span>
+    <span>· ${fmt(vistasVideo(item))} vistas</span>
     <span>· ${fmt(item.likesCount||0)} likes</span>
   `;
 

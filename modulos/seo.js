@@ -31,12 +31,14 @@ function pagina(it) {
     const desc = String(it.description || `${cat} compartido por @${it.usuario} en UpGames.`).replace(/\s+/g, ' ').trim();
     const corta = desc.slice(0, 158) + (desc.length > 158 ? '…' : '');
     const img = esImg(it.image) ? it.image.replace('/upload/', '/upload/w_1200,h_630,c_fill,q_auto,f_jpg/') : `${SITIO}/og-cover.png`;
-    const titulo = `${it.title} — ${it.category === 'Video' ? 'Ver video' : 'Descargar ' + cat} | UpGames`;
     const esVideo = it.category === 'Video';
+    // Ficha informativa: UpGames indexa metadatos, no aloja archivos (el título no promete "Descargar")
+    const titulo = `${it.title} — ${esVideo ? 'Video' : cat} en UpGames`;
+    const vistas = (it.vistas || 0) + (esVideo ? it.descargas || 0 : 0);   // videos antiguos guardaban sus vistas en descargas
     const ld = esVideo ? {
         '@context': 'https://schema.org', '@type': 'VideoObject', name: it.title, description: corta, thumbnailUrl: [img], uploadDate: it.fecha,
         url, author: { '@type': 'Person', name: '@' + it.usuario },
-        interactionStatistic: { '@type': 'InteractionCounter', interactionType: { '@type': 'WatchAction' }, userInteractionCount: it.descargas || 0 },
+        interactionStatistic: { '@type': 'InteractionCounter', interactionType: { '@type': 'WatchAction' }, userInteractionCount: vistas },
     } : {
         '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: it.title, description: corta, image: img, url,
         applicationCategory: ['Juego', 'ROM', 'Mod'].includes(it.category) ? 'GameApplication' : 'UtilitiesApplication',
@@ -77,8 +79,8 @@ ${esImg(it.image) ? `<img src="${esc(it.image.replace('/upload/', '/upload/w_960
 <div class="c"><span class="cat">${esc(cat)}</span>
 <h1>${esc(it.title)}</h1>
 <div class="meta">Publicado por <a href="../perfil-publico.html?usuario=${encodeURIComponent(it.usuario)}">@${esc(it.usuario)}</a> · ${esc(new Date(it.fecha).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' }))}</div>
-<div class="st"><span>⬇️ ${Number(it.descargas || 0).toLocaleString('es-CO')} ${esVideo ? 'vistas' : 'descargas'}</span><span>❤️ ${Number(it.likes || 0).toLocaleString('es-CO')}</span></div>
-<a class="btn" href="${esc(app)}">${esVideo ? '▶ Ver el video en UpGames' : '⬇️ Ver y descargar en UpGames'}</a>
+<div class="st"><span>${esVideo ? `👁️ ${vistas.toLocaleString('es-CO')} vistas` : `⬇️ ${Number(it.descargas || 0).toLocaleString('es-CO')} descargas efectivas`}</span><span>❤️ ${Number(it.likes || 0).toLocaleString('es-CO')}</span></div>
+<a class="btn" href="${esc(app)}">${esVideo ? '▶ Ver el video en UpGames' : 'Ver la ficha completa en UpGames'}</a>
 <p class="desc">${esc(desc.slice(0, 3000))}</p>
 </div></article>
 <p class="pie">UpGames · descargas, videos, lives, red social e IA en un solo lugar · <a href="../terminos_condiciones.html">Términos</a></p>

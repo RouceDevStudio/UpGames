@@ -5,7 +5,7 @@
 'use strict';
 
 const assert = require('assert');
-const { analizar, ipPrivada, PIRATERIA } = require('../modulos/revisionIA');
+const { analizar, ipPrivada, PIRATERIA, SENSIBLE } = require('../modulos/revisionIA');
 
 let passed = 0;
 async function test(name, fn) {
@@ -35,6 +35,18 @@ const item = (extra = {}) => ({ _id: 'x', usuario: 'ana', title: 'Pack de textur
     console.log('piratería');
     await test('detecta crack/keygen', () => { assert.ok(PIRATERIA.test('GTA V Full Crack')); assert.ok(PIRATERIA.test('incluye keygen')); });
     await test('no confunde palabras normales', () => assert.ok(!PIRATERIA.test('Pack de texturas HD para Minecraft')));
+
+    console.log('ROMs, ISOs y ports');
+    await test('detecta rom/iso/port', () => ['God of War 2 Rom', 'Silksong mobile port', 'pack ISO PS2'].forEach(t => assert.ok(SENSIBLE.test(t), t)));
+    await test('no confunde soporte/importar', () => ['Soporte para mandos', 'Importar partidas', 'Romper el límite de FPS'].forEach(t => assert.ok(!SENSIBLE.test(t), t)));
+    await test('ROM nunca se aprueba sola aunque la IA diga aprobar', async () => {
+        const a = await analizar(item({ title: 'God of War 2 Rom con skins' }), deps({ iaRespuesta: { decision: 'aprobar', confianza: 0.99 } }));
+        assert.notStrictEqual(a.decision, 'aprobar'); assert.ok(a.hechos.some(h => h.area === 'derechos' && h.tipo === 'warn'));
+    });
+    await test('categoría ROM → revisión humana', async () => {
+        const a = await analizar(item({ category: 'ROM', title: 'Homebrew de prueba' }), deps({ iaRespuesta: { decision: 'aprobar', confianza: 0.99 } }));
+        assert.notStrictEqual(a.decision, 'aprobar');
+    });
 
     console.log('decisión');
     await test('enlace no permitido → rechazar aunque la IA diga aprobar', async () => {

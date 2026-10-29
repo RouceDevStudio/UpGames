@@ -1,11 +1,11 @@
 /**
- * Acceso directo: pagar US$1 (tarjeta o PayPal) o 50 UpCoins para saltarse la
- * página puente (espera + anuncios) y abrir el enlace al instante.
+ * Acceso directo: saltarse la página puente (espera + anuncios) y abrir el enlace
+ * al instante. Desde la v7.0 de los Términos es SOLO un beneficio de Premium:
+ * ya no se vende por publicación, para que ningún pago quede atado a un enlace.
  *
- * - Se paga UNA vez por publicación: después el enlace queda desbloqueado para
- *   siempre en esa cuenta (registro en `accesos_directos`).
- * - El creador recibe ACCESO_CREADOR (30% por defecto) del precio, retenido
- *   LIVE_RETENCION_DIAS como los regalos, y la descarga le cuenta.
+ * - Los accesos comprados antes siguen desbloqueados en esa cuenta
+ *   (registro en `accesos_directos`).
+ * - `entregarPagado` solo completa pagos con tarjeta ya cobrados antes del cambio.
  * - Las transacciones viven en la misma colección que las del live (LiveTx),
  *   así que la liberación, el reverso por contracargo y el retiro las cubren.
  */
@@ -14,7 +14,6 @@
 const StatsItems = require('../modulos/statsItems');
 const mongoose = require('mongoose');
 const L = require('../modulos/live');
-const UC = require('../modulos/upcoins');
 
 const num = (v, d) => { const n = parseFloat(v); return Number.isFinite(n) ? n : d; };
 const PRECIO_USD     = 1.00;
@@ -35,8 +34,7 @@ const AccesoSchema = new mongoose.Schema({
 AccesoSchema.index({ usuario: 1, juegoId: 1 }, { unique: true });
 const Acceso = mongoose.models.Acceso || mongoose.model('Acceso', AccesoSchema);
 
-function registrar(app, { verificarToken, Juego, Usuario, LiveTx, paypal, mp, logger }) {
-    const tarjetaActiva = () => paypal.activo() || !!mp?.activo();
+function registrar(app, { verificarToken, Juego, Usuario, LiveTx, logger }) {
     const ok = (res, d) => res.json({ success: true, ...d });
     const err = (res, code, error, extra) => res.status(code).json({ success: false, error, ...extra });
     const r4 = n => Math.round(n * 10000) / 10000;
@@ -67,106 +65,29 @@ function registrar(app, { verificarToken, Juego, Usuario, LiveTx, paypal, mp, lo
     const desbloquear = (usuario, juegoId, via) =>
         Acceso.updateOne({ usuario, juegoId }, { $setOnInsert: { via, fecha: new Date() } }, { upsert: true }).catch(e => { if (e.code !== 11000) throw e; });
 
-    // Estado: precio, saldo de monedas y, si ya está desbloqueado, el enlace
+    // Estado: si ya está desbloqueado (acceso comprado antes o publicación propia), el
+    // enlace; y si el usuario tiene Premium, que es lo único que salta la espera.
     app.get('/acceso-directo/:id', verificarToken, async (req, res) => {
         try {
             const juego = await cargarJuego(req.params.id);
             if (!juego) return err(res, 404, 'Publicación no disponible');
             const [acc, u] = await Promise.all([
                 Acceso.exists({ usuario: req.usuario, juegoId: String(juego._id) }),
-                Usuario.findOne({ usuario: req.usuario }).select('monedas saldo planId planHasta solicitudPagoPendiente').lean(),
+                Usuario.findOne({ usuario: req.usuario }).select('planId planHasta').lean(),
             ]);
             const propio = juego.usuario === req.usuario;
             const pase = u?.planHasta && new Date(u.planHasta) > new Date() ? { plan: u.planId, hasta: u.planHasta } : null;
-            ok(res, {
-                desbloqueado: !!acc || propio, link: acc || propio ? juego.link : undefined,
-                precioUsd: PRECIO_USD, precioMonedas: PRECIO_MONEDAS, monedas: Math.floor(UC.saldoUC(u || {}).total),
-                saldo: u?.solicitudPagoPendiente ? 0 : (u?.saldo || 0),
-                pase, pagosActivos: tarjetaActiva(),
-            });
+            ok(res, { desbloqueado: !!acc || propio, link: acc || propio ? juego.link : undefined, pase, soloPremium: true });
         } catch (e) { logger.error(`[acceso] estado: ${e.message}`); err(res, 500, 'Error al consultar el acceso'); }
     });
 
-    // Pagar con monedas (instantáneo). Clics simultáneos del mismo usuario sobre la
-    // misma publicación comparten UN resultado (si no, el segundo vería "sin monedas"
-    // justo después de que el primero pagara). La ref única en BD sigue impidiendo
-    // el doble cobro aunque hubiera varias instancias.
-    const enCurso = new Map();
-    async function pagarConMonedas(usuario, juego) {
-        const juegoId = String(juego._id);
-        if (juego.usuario === usuario || await Acceso.exists({ usuario, juegoId })) return [200, { link: juego.link, yaDesbloqueado: true }];
-        const cobro = await UC.cobrar(Usuario, usuario, PRECIO_MONEDAS);   // comprados primero, luego ganados
-        if (!cobro) {
-            const motivo = await UC.motivoSinSaldo(Usuario, usuario, PRECIO_MONEDAS);
-            return [/cuenta no puede/.test(motivo) ? 403 : 402, { error: motivo }];
-        }
-        const totalUC = async () => UC.saldoUC(await Usuario.findOne({ usuario }).select('monedas saldo solicitudPagoPendiente').lean() || {}).total;
-        let tx;
-        try {
-            tx = await LiveTx.create(datosTx(juego, usuario, { ref: `acceso:${usuario}:${juegoId}`, metodo: 'upcoins' }));
-        } catch (e) {
-            await UC.devolver(Usuario, usuario, cobro);   // ya estaba pagado: devolver
-            if (e.code === 11000) { await desbloquear(usuario, juegoId, 'monedas'); return [200, { link: juego.link, yaDesbloqueado: true, monedas: await totalUC() }]; }
-            throw e;
-        }
-        await desbloquear(usuario, juegoId, 'monedas');
-        await abonarCreador(juego, tx);
-        logger.info(`[acceso] @${usuario} desbloqueó ${juegoId} con monedas`);
-        return [200, { link: juego.link, monedas: await totalUC() }];
-    }
-    app.post('/acceso-directo/:id/monedas', verificarToken, async (req, res) => {
-        try {
-            const juego = await cargarJuego(req.params.id);
-            if (!juego) return err(res, 404, 'Publicación no disponible');
-            const clave = `${req.usuario}:${juego._id}`;
-            if (!enCurso.has(clave)) enCurso.set(clave, pagarConMonedas(req.usuario, juego).finally(() => enCurso.delete(clave)));
-            const [code, body] = await enCurso.get(clave);
-            code === 200 ? ok(res, body) : err(res, code, body.error, { monedas: body.monedas });
-        } catch (e) { logger.error(`[acceso] monedas: ${e.message}`); err(res, 500, 'No se pudo completar el pago'); }
-    });
-
-    // Pagar US$1 con tarjeta o PayPal
-    app.post('/acceso-directo/:id/orden', verificarToken, async (req, res) => {
-        try {
-            if (!paypal.activo()) return err(res, 503, 'Los pagos con tarjeta aún no están disponibles');
-            const juego = await cargarJuego(req.params.id);
-            if (!juego) return err(res, 404, 'Publicación no disponible');
-            if (juego.usuario === req.usuario || await Acceso.exists({ usuario: req.usuario, juegoId: String(juego._id) })) return err(res, 409, 'Ya tienes acceso directo a este enlace');
-            const orderID = await paypal.crearOrden({ usuario: req.usuario, referencia: `acceso:${juego._id}`, usd: PRECIO_USD, descripcion: `Acceso directo: ${juego.title || 'enlace'}` });
-            ok(res, { orderID });
-        } catch (e) { logger.error(`[acceso] orden: ${e.message} ${e.detalle || ''}`); err(res, e.status || 500, e.status ? e.message : 'No se pudo crear la orden'); }
-    });
-
-    app.post('/acceso-directo/:id/capturar', verificarToken, async (req, res) => {
-        try {
-            if (!paypal.activo()) return err(res, 503, 'Los pagos con tarjeta aún no están disponibles');
-            const juego = await cargarJuego(req.params.id);
-            if (!juego) return err(res, 404, 'Publicación no disponible');
-            const juegoId = String(juego._id);
-            const orderID = String(req.body?.orderID || '');
-            const ref = `paypal:${orderID}`;
-            const previa = await LiveTx.findOne({ ref }).lean();
-            if (previa) {
-                if (previa.usuario !== req.usuario || previa.juegoId !== juegoId) return err(res, 403, 'Esta orden no es tuya');
-                return ok(res, { link: juego.link, repetida: true });
-            }
-            const { captura } = await paypal.capturar(orderID, { usuario: req.usuario, validarRef: r => r === `acceso:${juegoId}`, usd: PRECIO_USD });
-            let tx;
-            try {
-                tx = await LiveTx.create(datosTx(juego, req.usuario, { ref, captureId: captura.id || '', monedas: 0 }));
-            } catch (e) {
-                if (e.code !== 11000) throw e;
-                return ok(res, { link: juego.link, repetida: true });
-            }
-            await desbloquear(req.usuario, juegoId, 'tarjeta_paypal');
-            await abonarCreador(juego, tx);
-            logger.info(`[acceso] @${req.usuario} desbloqueó ${juegoId} con tarjeta/PayPal (orden ${orderID})`);
-            ok(res, { link: juego.link });
-        } catch (e) {
-            if (e.status) { if (e.detalle) logger.warn(`[acceso] captura ${req.body?.orderID}: ${e.detalle}`); return err(res, e.status, e.message, e.reintentar ? { reintentar: true } : undefined); }
-            logger.error(`[acceso] capturar: ${e.message}`); err(res, 500, 'Error al confirmar el pago');
-        }
-    });
+    // La compra de acceso directo POR PUBLICACIÓN se retiró: ningún pago queda atado a
+    // un enlace concreto. Saltar la espera es solo un beneficio de Premium (global, igual
+    // para todas las publicaciones). Los accesos comprados antes se siguen respetando
+    // (GET de arriba) y `entregarPagado` queda para pagos con tarjeta ya cobrados.
+    const VENTA_RETIRADA = 'El acceso directo por publicación ya no se vende. Con Premium te saltas la espera y los anuncios en todas las publicaciones.';
+    app.post(['/acceso-directo/:id/monedas', '/acceso-directo/:id/orden', '/acceso-directo/:id/capturar'], verificarToken,
+        (req, res) => err(res, 410, VENTA_RETIRADA, { soloPremium: true }));
 
     /** Entrega un acceso ya cobrado (tarjeta, PayPal o saldo). Idempotente por ref. */
     async function entregarPagado({ usuario, juegoId, ref, captureId = '', via, metodo }) {
@@ -224,7 +145,7 @@ function registrar(app, { verificarToken, Juego, Usuario, LiveTx, paypal, mp, lo
         } catch (e) { logger.error(`[acceso] pase: ${e.message}`); err(res, 500, 'No se pudo abrir el enlace'); }
     });
 
-    logger.info(`[acceso] Acceso directo activo · US$${PRECIO_USD} o ${PRECIO_MONEDAS} UpCoins · creador ${Math.round(PARTE_CREADOR * 100)}% · pase: US$${PASE_CREADOR_USD}/descarga al creador (máx. ${PASE_TOPE_DIA}/usuario/día)`);
+    logger.info(`[acceso] Acceso directo solo con Premium · pase: US$${PASE_CREADOR_USD}/descarga al creador (máx. ${PASE_TOPE_DIA}/usuario/día)`);
     return { Acceso, PRECIO_USD, PRECIO_MONEDAS, PARTE_CREADOR, entregarPagado, cargarJuego };
 }
 

@@ -77,7 +77,7 @@
         .ad-pass.done { border-color: var(--neon-green); background: rgba(57,255,20,.08); box-shadow: none; }
         .debug-info { background: rgba(255, 255, 255, 0.05); padding: 10px; border-radius: 5px; font-size: 0.7rem; color: #666; margin-top: 15px; text-align: left; max-height: 200px; overflow-y: auto; }
     </style>
-<script src="./upgames-errores.js?v=20261029h"></script>
+<script src="./upgames-errores.js?v=20261029i"></script>
 </head>
 <body>
     
@@ -141,7 +141,6 @@
         <div id="debug-info" class="debug-info" style="display:none;"></div>
     </div>
 
-    <script src="./upgames-pagos.js?v=20261029h" defer></script>
     <script>
         // ⭐ CONFIGURACIÓN
         const API_URL   = "https://upgames-production.up.railway.app";
@@ -520,15 +519,17 @@
             timerEl.style.display = 'block';
         }
         
-        // ⚡ ACCESO DIRECTO — US$1 (tarjeta/PayPal) o 50 UpCoins: sin espera ni anuncios.
-        // Se paga una vez por publicación; el creador recibe una parte.
+        // ⚡ SIN ESPERA — solo con Premium (beneficio global, igual para todas las
+        // publicaciones). Ya no se vende acceso por publicación. Los accesos comprados
+        // antes siguen funcionando.
         (function accesoDirecto() {
             const box = document.getElementById('ad-pass');
             if (!juegoId || !box) return;
             const token = localStorage.getItem('token') || '';
             const esc = v => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-            const cabecera = (extra = '') => `<div class="ad-pass-h"><div class="ad-pass-ic">⚡</div><div><b>Acceso directo</b><small>Sin esperar ${countdown > 0 ? countdown + ' s' : ''} ni anuncios: el enlace se abre al instante.${extra}</small></div><div class="ad-pass-price">US$1</div></div>`;
-            const nota = `<div class="ad-pass-note">Pago único por esta publicación: queda desbloqueada en tu cuenta. El creador recibe una parte. <a href="./terminos_condiciones.html#pagos" target="_blank">Términos</a></div>`;
+            const cabecera = (extra = '') => `<div class="ad-pass-h"><div class="ad-pass-ic">⭐</div><div><b>Sin esperas con Premium</b><small>Sin esperar ${countdown > 0 ? countdown + ' s' : ''} ni anuncios en todas las publicaciones.${extra}</small></div></div>`;
+            const lnkPase = `<a class="ad-pass-btn coins" style="display:block;text-align:center;text-decoration:none" href="./biblioteca.html?plan=1">⭐ Premium: sin anuncios, NEXUS ilimitado y más · desde US$1.99</a>`;
+            const nota = `<div class="ad-pass-note">Premium es un plan prepago para toda la plataforma (sin cobros automáticos): no se paga por ningún enlace concreto. <a href="./terminos_condiciones.html#pagos" target="_blank">Términos</a></div>`;
             box.style.display = 'block';
 
             function listo(link, msg) {
@@ -541,12 +542,12 @@
                 habilitarBoton();
                 btnEl.innerText = '🚀 Abrir enlace ahora';
                 box.className = 'ad-pass done';
-                box.innerHTML = `<div class="ad-pass-h"><div class="ad-pass-ic" style="background:var(--neon-green)">✓</div><div><b>Acceso directo activo</b><small>Toca “Abrir enlace ahora”. Podrás volver a esta publicación sin esperas.</small></div></div>`;
+                box.innerHTML = `<div class="ad-pass-h"><div class="ad-pass-ic" style="background:var(--neon-green)">✓</div><div><b>Enlace listo</b><small>Toca “Abrir enlace ahora”.</small></div></div>`;
                 mostrarSiguienteParte(juegoId);
             }
 
             if (!token) {
-                box.innerHTML = cabecera() + `<div class="ad-pass-btns"><button class="ad-pass-btn card" onclick="location.href='../index.html'">Inicia sesión para usar el acceso directo</button></div>`;
+                box.innerHTML = cabecera() + `<div class="ad-pass-btns">${lnkPase}</div>` + nota;
                 return;
             }
             box.innerHTML = cabecera() + '<div class="ad-pass-btns"><button class="ad-pass-btn card" disabled>Cargando…</button></div>';
@@ -559,37 +560,16 @@
             api(`/acceso-directo/${encodeURIComponent(juegoId)}`).then(async est => {
                 try { est.pase ? localStorage.setItem('ug_pase_hasta', localStorage.getItem('user_admin') + '|' + (+new Date(est.pase.hasta))) : localStorage.removeItem('ug_pase_hasta'); } catch (_) {}
                 if (est.desbloqueado && est.link) return listo(est.link, '✅ Ya tienes acceso directo a esta publicación');
-                // Pase activo: enlace directo sin esperas (el creador igual cobra su parte)
+                // Premium activo: enlace sin esperas (la descarga cuenta igual para el creador)
                 if (est.pase) {
                     box.innerHTML = cabecera() + '<div class="ad-pass-btns"><button class="ad-pass-btn card" disabled>Abriendo con tu Premium…</button></div>';
                     try { const d = await api(`/acceso-directo/${encodeURIComponent(juegoId)}/pase`, { method: 'POST' }); return listo(d.link, `✅ Tu Premium está activo hasta el ${new Date(est.pase.hasta).toLocaleDateString()}: enlace directo`); }
-                    catch (_) { /* si falla, ofrecer las demás opciones */ }
+                    catch (_) { /* si falla, queda el contador normal */ }
                 }
-                const conMonedas = est.monedas >= est.precioMonedas;
-                const lnkPase = `<a class="ad-pass-btn coins" style="display:block;text-align:center;text-decoration:none" href="./biblioteca.html?plan=1">⭐ Premium: sin anuncios, NEXUS ilimitado y más · desde US$1.99</a>`;
-                box.innerHTML = cabecera() + `<div class="ad-pass-btns">
-                    ${est.pagosActivos ? '<button class="ad-pass-btn card" id="ad-pay-card">💳 Pagar US$1 con tarjeta o PayPal</button>' : ''}
-                    ${conMonedas ? `<button class="ad-pass-btn coins" id="ad-pay-coins">🪙 Usar ${est.precioMonedas} UpCoins (tienes ${est.monedas})</button>` : ''}
-                    <div id="ad-pay-area"></div>${lnkPase}</div>` + nota;
-                if (document.getElementById('ad-pay-card')) document.getElementById('ad-pay-card').onclick = () => {
-                    document.getElementById('ad-pay-card').style.display = 'none';
-                    const area = document.getElementById('ad-pay-area');
-                    const montar = () => window.UGPagos.pagar(area, {
-                        producto: `acceso:${juegoId}`,
-                        alExito: d => listo(d.link, '✅ ¡Pago confirmado! Enlace desbloqueado'),
-                        alError: msg => msg && showError('❌ ' + msg),
-                    });
-                    window.UGPagos ? montar() : window.addEventListener('load', montar, { once: true });
-                };
-                const bc = document.getElementById('ad-pay-coins');
-                if (bc) bc.onclick = async () => {
-                    bc.disabled = true; bc.innerText = 'Procesando…';
-                    try { const d = await api(`/acceso-directo/${encodeURIComponent(juegoId)}/monedas`, { method: 'POST' }); listo(d.link, '✅ Enlace desbloqueado con UpCoins'); }
-                    catch (e) { showError('❌ ' + e.message); bc.disabled = false; bc.innerText = `🪙 Usar ${est.precioMonedas} UpCoins`; }
-                };
+                box.innerHTML = cabecera() + `<div class="ad-pass-btns">${lnkPase}</div>` + nota;
             }).catch(e => {
                 if (e.status === 404) { box.style.display = 'none'; return; }   // publicación no disponible: el flujo normal informa
-                box.innerHTML = cabecera() + `<div class="ad-pass-note">No se pudo cargar el acceso directo (${esc(e.message)}). Puedes esperar el contador.</div>`;
+                box.innerHTML = cabecera() + `<div class="ad-pass-note">No se pudo comprobar tu Premium (${esc(e.message)}). Puedes esperar el contador.</div>`;
             });
         })();
 
@@ -620,9 +600,9 @@
     var d = document.createElement('details');
     d.className = 'bt-mini'; d.open = !visto;
     d.innerHTML = '<summary>ⓘ ¿Cómo funciona esta página?</summary><ol>'
-        + '<li>Es el <b>puente de seguridad</b>: verifica el enlace y registra la descarga para que el creador gane.</li>'
+        + '<li>Es el <b>puente de seguridad</b>: verifica el enlace y registra la <b>descarga efectiva</b>. Al creador se le paga por descargas efectivas, no por ver la publicación.</li>'
         + '<li>Espera el contador (30 s) y toca <b>Obtener enlace</b>: se abre en una pestaña nueva.</li>'
-        + '<li>¿Prisa? El <b>acceso directo</b> (US$1 o 50 UpCoins) o <b>Premium</b> te saltan la espera y los anuncios.</li>'
+        + '<li>¿Prisa? Con <b>Premium</b> te saltas la espera y los anuncios en todas las publicaciones.</li>'
         + '<li><b>Verde</b> = descarga validada · <b>amarillo</b> = límite diario (igual funciona) · <b>rojo</b> = recarga e inténtalo de nuevo.</li></ol>';
     var btn = document.getElementById('btn');
     var ancla = btn && btn.nextElementSibling && btn.nextElementSibling.tagName === 'BR' ? btn.nextElementSibling : btn;
