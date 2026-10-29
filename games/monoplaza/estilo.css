@@ -197,3 +197,17 @@ body.cambio-auto .marcha-bt { display: none; }
   .tiempo { font-size: 18px; }
   .panel { padding: 12px 14px; }
 }
+
+/* Teléfonos en horizontal: menús compactos y desplazables */
+@media (max-height: 480px) {
+  .pantalla { align-items: flex-start; overflow-y: auto; touch-action: pan-y; padding-top: calc(8px + var(--sa-t)); padding-bottom: calc(8px + var(--sa-b)); }
+  .pantalla > * { margin: auto 0; }
+  .menu-col { gap: 8px; }
+  .marca { font-size: clamp(28px, 11vh, 44px); }
+  .sub { font-size: 10px; letter-spacing: 2px; }
+  .botones { gap: 7px; }
+  .btn { min-height: 40px; padding: 8px 14px; }
+  .btn.grande { font-size: 16px; padding: 9px 16px; }
+  .panel { max-height: none; }
+  .panel .lista { max-height: none; overflow: visible; }
+}
