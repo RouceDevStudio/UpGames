@@ -52,6 +52,8 @@ export class Neumatico {
     this.factorDesgastePresion = 1 - dp * 0.03;
     this.picoAlfa = Math.tan(0.095 * (1 + dp * 0.012));
     this.picoKappa = 0.095;
+    this.mejoraMu = this.mejoraMu ?? 1;
+    this.mejoraDesgaste = this.mejoraDesgaste ?? 1;
   }
 
   // Agarre por temperatura y desgaste
@@ -61,7 +63,7 @@ export class Neumatico {
     const termico = 0.80 + 0.20 * Math.exp(-x * x);
     const w = this.desgaste;
     const desg = w < 0.75 ? 1 - 0.12 * w : 1 - 0.09 - 0.6 * (w - 0.75);
-    return termico * Math.max(0.55, desg) * this.factorMuPresion;
+    return termico * Math.max(0.55, desg) * this.factorMuPresion * this.mejoraMu;
   }
 
   // potenciaDeslizamiento en W, fz en N, v en m/s
@@ -75,7 +77,7 @@ export class Neumatico {
     this.tNucleo += (kCond * (this.tSup - this.tNucleo) - 6 * (this.tNucleo - tAmb)) / cNuc * dt;
     // el desgaste se acelera fuera de la ventana térmica
     const sobre = Math.max(0, this.tSup - this.c.tOpt - 20) / 40;
-    this.desgaste += potenciaDeslizamiento * 2.4e-8 * this.c.desgaste * this.factorDesgastePresion * (1 + sobre) * dt;
+    this.desgaste += potenciaDeslizamiento * 2.4e-8 * this.c.desgaste * this.factorDesgastePresion * this.mejoraDesgaste * (1 + sobre) * dt;
     if (this.desgaste > 1) this.desgaste = 1;
   }
 }

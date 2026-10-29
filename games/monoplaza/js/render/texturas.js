@@ -231,6 +231,10 @@ export function texturaNeumaticos() {
   }
   ctx.fillStyle = '#e8202a'; ctx.fillRect(0, 20, 256, 22);
   ctx.fillStyle = '#f4f4f4'; ctx.fillRect(0, 86, 256, 22);
+  // funda publicitaria sobre los neumáticos
+  ctx.fillStyle = '#0d47ff'; ctx.fillRect(0, 46, 256, 36);
+  ctx.fillStyle = '#ffffff'; ctx.font = '900 italic 28px Arial, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('UPGAMES', 128, 65);
   return aTextura(c);
 }
 

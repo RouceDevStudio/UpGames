@@ -33,6 +33,22 @@ export class Camara {
     const t = this.tiempo;
     const sx = (Math.sin(t * 61) + Math.sin(t * 97)) * vib, sy = (Math.sin(t * 73) + Math.sin(t * 41)) * vib;
 
+    if (this.modo === 'orbita') {
+      // garaje: vuelta lenta alrededor del coche parado
+      this.angulo = (this.angulo ?? 2.4) + dt * 0.22;
+      const r = 6.2;
+      cam.position.set(car.x + Math.cos(car.psi + this.angulo) * r, car.y + 1.7 + Math.sin(this.tiempo * 0.3) * 0.3, car.z + Math.sin(car.psi + this.angulo) * r);
+      cam.up.set(0, 1, 0);
+      cam.lookAt(car.x, car.y + 0.45, car.z);
+      cam.near = 0.1;
+      cam.fov += (50 - cam.fov) * Math.min(1, dt * 3);
+      // el panel del garaje ocupa la derecha: el coche se dibuja desplazado a la izquierda
+      const w = innerWidth, h = innerHeight;
+      cam.setViewOffset(w, h, w * 0.22, 0, w, h);
+      cam.updateProjectionMatrix();
+      return;
+    }
+    if (cam.view?.enabled) cam.clearViewOffset();
     if (this.modo === 'persecucion' || this.modo === 'cercana') {
       const cerca = this.modo === 'cercana';
       const dist = cerca ? 4.6 : 6.8, alto = cerca ? 1.45 : 2.05;

@@ -167,6 +167,7 @@ export class Circuito {
     const rr = this._sDeSegmento('Recta del Río');
     if (rr) this.drs.push({ ini: rr.s0 + 90, fin: rr.s1 - 40, deteccion: rr.s0 - 300 });
     this.sectores = [this.largo / 3, 2 * this.largo / 3];
+    this._calleBoxes();
   }
 
   _sDeSegmento(nombre) {
@@ -470,6 +471,7 @@ export class Circuito {
     const hw = this.semiAncho[i];
     const ad = Math.abs(d), lado = d >= 0 ? 1 : 0;
     if (ad <= hw) return SUP_ASFALTO;
+    if (lado === 1 && this.enZonaPit[i] && d <= hw + this.pit.ancho + 1) return SUP_ASFALTO;
     if (this.bordillo[i] && ad <= hw + 1.3) return SUP_BORDILLO;
     if (ad <= hw + 2.5) return SUP_ESCAPE;
     return this.grava[lado][i] ? SUP_GRAVA : SUP_HIERBA;
@@ -477,11 +479,75 @@ export class Circuito {
 
   // caída del terreno fuera del asfalto (perfil de arcén)
   caida(i, d) {
+    if (d > 0 && this.enZonaPit?.[i]) return 0;
     const ad = Math.abs(d) - this.semiAncho[i] - 3;
     if (ad <= 0) return 0;
     return -Math.min(0.35, ad * 0.03);
   }
 }
+
+// Calle de boxes paralela a la recta principal, a la derecha (lado del interior del circuito)
+Circuito.prototype._calleBoxes = function () {
+  const L = this.largo;
+  const pit = this.pit = {
+    entrada: this.envolver(-150),     // se abandona la pista
+    limiteIni: this.envolver(-55),    // línea del limitador
+    limiteFin: 330,
+    salida: 430,                      // se vuelve a la pista
+    ancho: 16,                        // desde el borde de la pista hasta los garajes
+    carril: 9.5,                      // centro del carril (desde el borde)
+    muroDe: 3.0, muroA: 3.9,          // muro de boxes entre la pista y el carril
+    garajes: [],
+    limite: 80 / 3.6,
+  };
+  pit.largo = this.envolver(pit.salida - pit.entrada);
+  this.enZonaPit = new Uint8Array(this.n);
+  for (let i = 0; i < this.n; i++) {
+    const u = this.envolver(i * this.paso - pit.entrada);
+    if (u <= pit.largo) {
+      this.enZonaPit[i] = 1;
+      this.muro[1][i] = this.semiAncho[i] + pit.ancho + 0.6;
+    }
+  }
+  // 11 garajes, uno por equipo, entre las dos líneas del limitador
+  const ini = this.envolver(pit.limiteIni + 45), tramo = this.envolver(pit.limiteFin - 30 - ini);
+  for (let k = 0; k < 11; k++) pit.garajes.push(this.envolver(ini + tramo * (k + 0.5) / 11));
+};
+
+// Distancia recorrida dentro de la zona de boxes (o -1 si s está fuera)
+Circuito.prototype.uPit = function (s) {
+  const u = this.envolver(s - this.pit.entrada);
+  return u <= this.pit.largo ? u : -1;
+};
+
+// Desplazamiento lateral del centro del carril de boxes en s (entra y sale en rampa)
+Circuito.prototype.dCarrilPit = function (s) {
+  const p = this.pit, i = Math.floor(this.envolver(s) / this.paso) % this.n;
+  const hw = this.semiAncho[i];
+  const u = this.uPit(s);
+  if (u < 0) return hw - 2;
+  const uLimI = this.envolver(p.limiteIni - p.entrada), uLimF = this.envolver(p.limiteFin - p.entrada);
+  const suave = (t) => t * t * (3 - 2 * t);
+  let t = 1;
+  if (u < uLimI) t = suave(Math.min(1, u / uLimI));
+  else if (u > uLimF) t = 1 - suave(Math.min(1, (u - uLimF) / (p.largo - uLimF)));
+  return hw - 2 + (p.carril + 2) * t;
+};
+
+// ¿Está el punto dentro del carril de boxes con limitador?
+Circuito.prototype.enLimitador = function (s, d) {
+  const p = this.pit;
+  const u = this.uPit(s);
+  if (u < 0) return false;
+  const i = Math.floor(this.envolver(s) / this.paso) % this.n;
+  return u >= this.envolver(p.limiteIni - p.entrada) && u <= this.envolver(p.limiteFin - p.entrada) && d > this.semiAncho[i] + p.muroA - 0.5;
+};
+
+// ¿Hay muro de boxes en esta muestra? (entre las líneas del limitador)
+Circuito.prototype.hayMuroPit = function (i) {
+  const u = this.uPit(i * this.paso), p = this.pit;
+  return u >= 0 && u >= this.envolver(p.limiteIni - p.entrada) + 35 && u <= this.envolver(p.limiteFin - p.entrada) - 25;
+};
 
 export const SUP_ASFALTO = 0, SUP_BORDILLO = 1, SUP_ESCAPE = 2, SUP_HIERBA = 3, SUP_GRAVA = 4;
 // agarre relativo, resistencia a la rodadura (fracción de Fz), rugosidad visual/vibración

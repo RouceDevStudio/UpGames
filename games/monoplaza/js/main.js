@@ -7,9 +7,12 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { Circuito } from './track.js';
 import { Sesion } from './race.js';
-import { REGLAJE_DEF, COMPUESTOS, COCHE, EQUIPOS } from './config.js';
+import { REGLAJE_DEF, COMPUESTOS, COCHE, EQUIPOS, MEJORAS_INFO } from './config.js';
 import { construirEscenario } from './render/escenario.js';
-import { crearModelo } from './render/cocheModelo.js';
+import { crearModelo, dibujarPlantilla } from './render/cocheModelo.js';
+import { GestorBoxes, Escombros } from './render/equipo.js';
+import { NOMBRES_PATRON, NOMBRES_CASCO } from './render/librea.js';
+import { cuenta, Multijugador, empaquetar, aplicarEstado } from './red.js';
 import { Efectos } from './render/efectos.js';
 import { Camara, NOMBRES_CAMARA } from './render/camara.js';
 import { Sonido } from './audio.js';
@@ -36,8 +39,21 @@ const reglaje = { ...REGLAJE_DEF, ...(datos.reglaje || {}) };
 const opcCarrera = { ...OPC_CARRERA_DEF, ...(datos.carrera || {}) };
 const records = datos.records || {};
 let fantasmaGuardado = datos.fantasma || null;
+// garaje: lo equipado y lo comprado (el servidor manda; aquí queda una copia para jugar sin conexión)
+const EQUIPADO_DEF = { patron: 'flecha', acabado: 'brillo', casco: 'clasico', propia: false, colores: { base: '#0d47ff', acento: '#00e5ff', tercero: '#ffffff' }, cascoColores: { base: '#ffffff', acento: '#0d47ff' }, numero: 7 };
+const equipado = { ...EQUIPADO_DEF, ...(datos.equipado || {}), colores: { ...EQUIPADO_DEF.colores, ...(datos.equipado?.colores || {}) }, cascoColores: { ...EQUIPADO_DEF.cascoColores, ...(datos.equipado?.cascoColores || {}) } };
+let perfilApex = datos.perfil || { mejoras: {}, cosmeticos: [], upcoins: null };
+const opcMulti = { tipo: '1v1', max: 22, vueltas: 3, ...(datos.multi || {}) };
 function guardar() {
-  try { localStorage.setItem(CLAVE, JSON.stringify({ ajustes, reglaje, carrera: opcCarrera, records, fantasma: fantasmaGuardado })); } catch { /* sin almacenamiento */ }
+  try { localStorage.setItem(CLAVE, JSON.stringify({ ajustes, reglaje, carrera: opcCarrera, records, fantasma: fantasmaGuardado, equipado, perfil: perfilApex, multi: opcMulti })); } catch { /* sin almacenamiento */ }
+}
+// librea propia: imagen guardada aparte (puede pesar varios cientos de KB)
+let imagenLibrea = null;
+function cargarImagenLibrea() {
+  let url = null;
+  try { url = localStorage.getItem('apexgp.librea'); } catch { /* nada */ }
+  if (!url) { imagenLibrea = null; return Promise.resolve(); }
+  return new Promise(r => { const im = new Image(); im.onload = () => { imagenLibrea = im; r(); }; im.onerror = () => r(); im.src = url; });
 }
 
 // --- Utilidades -------------------------------------------------------------
@@ -63,6 +79,9 @@ let renderer, scene, composer, camara, efectos, escenario, circuito;
 const sonido = new Sonido();
 const entrada = new Entrada(ajustes);
 let sesion = null, modelos = [], modeloFantasma = null, lineaIdeal = null;
+let gestorBoxes = null, escombros = null;
+const multi = new Multijugador();
+let enGaraje = false, enRed = false;
 let jugando = false, pausado = false, modoActual = 'practica';
 let pantallaPrevia = 'menu';
 
@@ -80,6 +99,9 @@ async function iniciar() {
   progreso(0.75, 'Montando los coches…');
   await esperar(20);
   efectos = new Efectos(scene, calidad);
+  gestorBoxes = new GestorBoxes(scene);
+  escombros = new Escombros(scene, (x, z) => { const p = circuito.proyectar(x, z, -1, {}); return p.y + circuito.caida(p.i, p.d); });
+  await cargarImagenLibrea();
   construirLineaIdeal();
   dibujarMinimapaBase();
   progreso(0.9, 'Compilando sombreadores…');
@@ -174,19 +196,40 @@ function construirLineaIdeal() {
   scene.add(lineaIdeal);
 }
 
+const NUMEROS_IA = [16, 55, 44, 63, 1, 22, 4, 81, 14, 18, 10, 31, 23, 2, 27, 77, 24, 20, 11, 3, 12];
+const imagenesRed = new Map();     // librea propia de cada rival en línea
+
+function equipadoDe(p, k) {
+  if (p.jugador) return { ...equipado, propia: equipado.propia && !!imagenLibrea };
+  if (p.equipado) return p.equipado;
+  const eq = p.equipo;
+  return { patron: eq.patron, acabado: 'brillo', casco: ['clasico', 'rayas', 'estrellas', 'damero', 'llamas'][k % 5], colores: { base: eq.base, acento: eq.acento, tercero: eq.tercero || '#ffffff' },
+    cascoColores: { base: eq.tercero || '#ffffff', acento: eq.base }, numero: NUMEROS_IA[k % NUMEROS_IA.length] };
+}
+
 function crearModelos() {
   for (const m of modelos) scene.remove(m.raiz);
   modelos = [];
+  gestorBoxes?.limpiar();
   sesion.participantes.forEach((p, k) => {
     p.coche.id = k;
-    const num = p.jugador ? 7 : [16, 44, 1, 4, 63, 10, 22][EQUIPOS.indexOf(p.equipo) % 7] || k + 2;
-    const m = crearModelo(p.equipo, num, p.coche.reglaje.compuesto, calidad);
+    const eq = equipadoDe(p, k);
+    const imagen = p.jugador ? (eq.propia ? imagenLibrea : null) : (p.idRed && imagenesRed.get(p.idRed)) || null;
+    const m = crearModelo({ equipo: p.equipo, equipado: eq, imagen, compuesto: p.coche.reglaje.compuesto, calidad, cabina: p.jugador });
+    // piezas que se desprenden en los choques
+    m.alDesprender = (tipo, obj) => {
+      const c = p.coche;
+      const vel = new THREE.Vector3(Math.cos(c.psi) * c.vx - Math.sin(c.psi) * c.vy, 0, Math.sin(c.psi) * c.vx + Math.cos(c.psi) * c.vy);
+      escombros.lanzar(obj, vel, { radio: tipo === 'rueda' ? 0.36 : 0.08, alto: tipo === 'rueda' ? 4 : 1 });
+      obj.updateMatrixWorld(true);
+      escombros.esquirlas(new THREE.Vector3().setFromMatrixPosition(obj.matrixWorld), vel, tipo === 'rueda' ? 4 : 10);
+    };
     scene.add(m.raiz);
     modelos.push(m);
   });
   if (modeloFantasma) { scene.remove(modeloFantasma.raiz); modeloFantasma = null; }
   if (sesion.modo !== 'carrera') {
-    modeloFantasma = crearModelo({ base: '#9fd3ff', acento: '#ffffff' }, 0, 'medio', 0);
+    modeloFantasma = crearModelo({ equipo: { base: '#9fd3ff', acento: '#ffffff' }, calidad: 0 });
     modeloFantasma.raiz.traverse(o => {
       if (o.isMesh) {
         o.material = new THREE.MeshBasicMaterial({ color: 0x8fd0ff, transparent: true, opacity: 0.22, depthWrite: false });
@@ -207,15 +250,22 @@ function empezar(modo) {
   modoActual = modo;
   sonido.iniciar();
   sonido.ponerVolumen(ajustes.volumen);
-  const opc = { modo, reglaje: { ...reglaje }, ayudas: ayudasDe() };
+  const opc = { modo, reglaje: { ...reglaje }, ayudas: ayudasDe(), mejoras: perfilApex.mejoras, equipado: { ...equipado }, nombre: cuenta.usuario() ? '@' + cuenta.usuario() : 'Tú' };
   if (modo === 'carrera') {
     Object.assign(opc, { vueltas: opcCarrera.vueltas, rivales: opcCarrera.rivales, dificultad: opcCarrera.dificultad, posSalida: opcCarrera.posSalida });
     opc.reglaje.compuesto = opcCarrera.compuesto;
   }
   if (modo === 'contrarreloj' && fantasmaGuardado?.puntos?.length) opc.fantasma = fantasmaGuardado;
   sesion = new Sesion(circuito, opc);
+  arrancarSesion(modo);
+}
+
+// Parte común de empezar una sesión local o en línea
+function arrancarSesion(modo) {
+  enGaraje = false;
   crearModelos();
   camara.iniciada = false;
+  if (camara.modo === 'orbita') camara.modo = ajustes.camara || 'persecucion';
   ocultarTodo();
   $('#hud').classList.add('visible');
   if (esTactil) $('#tactil').classList.add('visible');
@@ -267,7 +317,9 @@ function pausar(si) {
 }
 
 function salirAlMenu() {
+  if (enRed) { multi.salir(); enRed = false; }
   jugando = false; pausado = false;
+  $('#panelBox').classList.remove('visible');
   $('#hud').classList.remove('visible');
   $('#tactil').classList.remove('visible');
   document.body.classList.remove('jugando');
@@ -288,11 +340,12 @@ function actualizarRecordMenu() {
 function ocultarTodo() { document.querySelectorAll('.pantalla').forEach(p => p.classList.remove('visible')); }
 function mostrar(id) {
   const actual = document.querySelector('.pantalla.visible');
-  if (actual && actual.id !== id && !['reglaje', 'ajustes', 'ayuda'].includes(actual.id)) pantallaPrevia = actual.id;
+  if (actual && actual.id !== id && !['reglaje', 'ajustes', 'ayuda', 'cuenta'].includes(actual.id)) pantallaPrevia = actual.id;
   ocultarTodo();
   $('#' + id).classList.add('visible');
   if (id === 'reglaje') pintarReglaje();
   if (id === 'ajustes') pintarAjustes();
+  if (id === 'cuenta') pintarCuenta();
 }
 
 document.addEventListener('click', (e) => {
@@ -302,6 +355,9 @@ document.addEventListener('click', (e) => {
   const destino = b.dataset.ir;
   if (destino === 'volver') { aplicarAjustesEnVivo(); mostrar(jugando ? 'pausa' : pantallaPrevia || 'menu'); return; }
   if (destino === 'contrarreloj' || destino === 'practica') { empezar(destino); return; }
+  if (destino === 'garaje') { abrirGaraje(); return; }
+  if (destino === 'multi') { abrirMulti(); return; }
+  if (destino === 'menu' && enGaraje) cerrarGaraje();
   mostrar(destino);
   if (destino === 'carrera') pintarSegmentos('#carrera', opcCarrera);
 });
@@ -509,9 +565,23 @@ function actualizarHud(dt) {
   drs.classList.toggle('disponible', !c.drsAbierto && c.drsPermitido);
   $('#bDrs').classList.toggle('activo', c.drsAbierto || c.drsPermitido);
   c.ruedas.forEach((w, k) => {
-    neumEls[k].style.background = colorTemp(w.neum.tSup, w.neum.c.tOpt);
-    neumEls[k].style.opacity = (1 - w.neum.desgaste * 0.6).toFixed(2);
+    const el = neumEls[k];
+    el.style.background = colorTemp(w.neum.tSup, w.neum.c.tOpt);
+    el.firstChild.textContent = Math.round(w.neum.tSup);
+    el.lastChild.style.width = Math.max(0, 80 * (1 - w.neum.desgaste)).toFixed(0) + '%';
+    el.classList.toggle('pinchado', c.dano.pinchazo[k] && !c.dano.suelta[k]);
+    el.classList.toggle('suelta', c.dano.suelta[k]);
   });
+  // indicadores de daños
+  const dn = $('#hDanos').children;
+  const marcar = (i, on, leve) => { dn[i].classList.toggle('on', !!on); dn[i].classList.toggle('leve', !!leve); };
+  marcar(0, c.danoAleron > 0.05, c.danoAleron < 0.5);
+  marcar(1, c.dano.aleronTras > 0.05, c.dano.aleronTras < 0.5);
+  const sm = Math.max(...c.dano.susp);
+  marcar(2, sm > 0.15, sm < 0.5);
+  marcar(3, c.dano.pinchazo.some((x, k) => x && !c.dano.suelta[k]), false);
+  marcar(4, c.limitadorPit, false); dn[4].classList.toggle('pit', true);
+  $('#bBox').classList.toggle('activo', !!p.solicitudBox);
   const desg = Math.max(...c.ruedas.map(w => w.neum.desgaste));
   $('#hNeumTxt').textContent = `${c.reglaje.compuesto.toUpperCase()} · ${Math.round((1 - desg) * 100)}%`;
   $('#hComb').textContent = `${c.combustible.toFixed(1)} KG`;
@@ -581,8 +651,30 @@ function procesarEventos() {
     }
     else if (e.tipo === 'meta' && e.p.jugador) {
       mensaje('🏁 BANDERA A CUADROS', `Terminas P${e.p.posicion}`, 3);
-      setTimeout(() => { if (jugando && sesion.modo === 'carrera') mostrarResultados(); }, 3500);
+      if (enRed) multi.meta();
+      else setTimeout(() => { if (jugando && sesion.modo === 'carrera') mostrarResultados(); }, 3500);
     }
+    else if (e.tipo === 'vuelta' && e.p.jugador && enRed && e.valida) multi.vuelta(e.t);
+    else if (e.tipo === 'entraBoxes' && e.p.jugador) mensaje('ENTRANDO A BOXES', 'Limitador a 80 km/h', 2);
+    else if (e.tipo === 'paradaIni') {
+      const k = sesion.participantes.indexOf(e.p);
+      gestorBoxes.empezar(e.p.coche, modelos[k], e.p.equipo.base, e.duracion, e.morro);
+      if (e.p.jugador) mensaje('PARADA EN BOXES', e.morro ? 'Neumáticos y morro nuevo' : 'Cambio de neumáticos', 2);
+    }
+    else if (e.tipo === 'paradaFin') {
+      const k = sesion.participantes.indexOf(e.p);
+      modelos[k].cambiarCompuesto(e.p.coche.reglaje.compuesto);
+      if (e.p.jugador) { mensaje(`PARADA: ${e.duracion.toFixed(1)} s`, `Neumáticos ${COMPUESTOS[e.p.coche.reglaje.compuesto].nombre.toLowerCase()}`, 2.4); $('#bBox').classList.remove('activo'); }
+    }
+    else if (e.tipo === 'abandono') {
+      if (e.p.jugador) {
+        mensaje('ABANDONO', e.motivo || 'Coche demasiado dañado', 3.5);
+        if (enRed) multi.abandono();
+        else if (sesion.modo === 'carrera') setTimeout(() => { if (jugando) mostrarResultados(); }, 4500);
+        else setTimeout(() => { if (jugando && sesion.jugador.coche.abandono) { const c = sesion.jugador.coche; c.repararTodo(); c.repararEnBoxes(); c.recolocar(); sesion.jugador.abandono = false; sesion.jugador.valida = false; crearModelos(); mensaje('COCHE NUEVO', 'Vuelta anulada', 2); } }, 3500);
+      }
+    }
+    else if (e.tipo === 'finCarrera' && !enRed) { if (jugando && !$('#resultados').classList.contains('visible')) setTimeout(() => { if (jugando) mostrarResultados(); }, 1500); }
   }
   sesion.eventos.length = 0;
   const c = sesion.jugador.coche;
@@ -590,6 +682,7 @@ function procesarEventos() {
     if (e === 'cambio') sonido.evento('cambio');
     else if (e.startsWith('golpe:')) { const f = +e.slice(6); sonido.evento('golpe', f); entrada.vibrar(Math.min(250, 40 + f * 12), 1); }
     else if (e === 'reduccionDenegada') mensaje('REDUCCIÓN DENEGADA', 'Se pasaría de vueltas', 0.9);
+    else if (e.startsWith('dano:') || e.startsWith('rueda:')) avisoDano(e);
   }
   c.eventos.length = 0;
   for (const p of sesion.participantes) if (!p.jugador) p.coche.eventos.length = 0;
@@ -630,9 +723,14 @@ function bucle(ahora) {
       else if (e === 'bajar') j.cambiar(-1);
       else if (e === 'camara') { const m = camara.siguiente(); ajustes.camara = m; guardar(); mensaje(NOMBRES_CAMARA[m].toUpperCase(), '', 0.8); }
       else if (e === 'ers') { j.mandos.ersModo = ((j.mandos.ersModo ?? 1) + 1) % 3; mensaje(ERS_NOMBRES[j.mandos.ersModo], '', 0.8); }
-      else if (e === 'recolocar') { if (j.velocidad < 8 || j.fueraPista) { j.recolocar(); sesion.jugador.valida = false; mensaje('DE VUELTA A LA PISTA', 'Vuelta anulada', 1.2); } }
+      else if (e === 'recolocar') {
+        if (j.abandono && sesion.modo !== 'carrera') continue;
+        if (j.velocidad < 8 || j.fueraPista) { j.recolocar(); sesion.jugador.valida = false; mensaje('DE VUELTA A LA PISTA', 'Vuelta anulada', 1.2); }
+      }
+      else if (e === 'box') alternarPanelBox();
     }
     if (sesion._pilotoPrueba) sesion._pilotoPrueba.conducir(dt, sesion.coches);
+    else if (sesion.jugador.box) { /* la calle de boxes la conduce el ingeniero */ }
     else {
       j.mandos.direccion = entrada.direccion;
       j.mandos.acelerador = entrada.acelerador;
@@ -641,11 +739,13 @@ function bucle(ahora) {
     j.mandos.drs = entrada.drs || (j.drsPermitido && esTactil && ajustes.cambioAuto && !entrada.usandoMando);
     camara.mirarAtras = entrada.mirarAtras;
   } else {
-    // menú: el coche del jugador da vueltas solo como fondo
-    if (!sesion._piloto) import('./ai.js').then(({ PilotoIA }) => { if (sesion && !sesion._piloto) { sesion._piloto = new PilotoIA(sesion.jugador.coche, circuito, 0.9, 0.3); sesion.jugador.coche.esIA = true; } });
-    sesion._piloto?.conducir(dt, sesion.coches);
+    // menú: el coche del jugador da vueltas solo como fondo (en el garaje se queda quieto)
+    if (enGaraje) { /* parado frente a su garaje */ }
+    else if (!sesion._piloto) import('./ai.js').then(({ PilotoIA }) => { if (sesion && !sesion._piloto) { sesion._piloto = new PilotoIA(sesion.jugador.coche, circuito, 0.9, 0.3); sesion.jugador.coche.esIA = true; } });
+    if (!enGaraje) sesion._piloto?.conducir(dt, sesion.coches);
   }
-  if (!pausado) {
+  if (enRed && jugando) actualizarRed(dt);
+  if (!pausado && !enGaraje) {
     sesion.actualizar(dt);
     if (jugando) procesarEventos(); else { sesion.eventos.length = 0; for (const p of sesion.participantes) p.coche.eventos.length = 0; }
   }
@@ -690,7 +790,12 @@ function bucle(ahora) {
   const luz = escenario.luzSol;
   luz.target.position.set(j.x, j.y, j.z);
   luz.position.copy(escenario.sol).multiplyScalar(250).add(luz.target.position);
-  if (!pausado) efectos.actualizar(dt, sesion.coches, camara.cam.position);
+  if (!pausado) {
+    efectos.actualizar(dt, sesion.coches, camara.cam.position);
+    escombros.actualizar(dt);
+    gestorBoxes.actualizar(dt);
+  }
+  for (const f of escenario.actualizables) f(dt);
   if (efectos._escala !== camara.cam.fov) { efectos.ajustarEscala(innerHeight * renderer.getPixelRatio(), camara.cam.fov); efectos._escala = camara.cam.fov; }
 
   // sonido
@@ -731,8 +836,367 @@ function bucle(ahora) {
   }
 }
 
+// --- Daños y boxes ----------------------------------------------------------------
+const NOMBRE_RUEDA = ['delantera izquierda', 'delantera derecha', 'trasera izquierda', 'trasera derecha'];
+function avisoDano(e) {
+  const [tipo, det] = e.split(':');
+  entrada.vibrar(140, 1);
+  if (tipo === 'rueda') { mensaje('¡RUEDA ARRANCADA!', NOMBRE_RUEDA[+det], 3); return; }
+  if (det === 'aleronDel') mensaje('ALERÓN DELANTERO ROTO', 'Entra a boxes a cambiar el morro', 2.5);
+  else if (det === 'aleronDelTocado') mensaje('ALERÓN DELANTERO TOCADO', 'Menos carga delante', 1.8);
+  else if (det === 'aleronTras') mensaje('ALERÓN TRASERO DAÑADO', 'El coche pierde estabilidad', 2.2);
+  else if (det.startsWith('pinchazo')) mensaje('¡PINCHAZO!', `Rueda ${NOMBRE_RUEDA[+det.slice(8)]} · entra a boxes`, 2.8);
+  else if (det.startsWith('susp')) mensaje('SUSPENSIÓN DAÑADA', `Rueda ${NOMBRE_RUEDA[+det.slice(4)]} · el coche tira hacia un lado`, 2.4);
+}
+
+function alternarPanelBox() {
+  const p = sesion.jugador;
+  if (p.box) { mensaje('YA ESTÁS EN BOXES', '', 1); return; }
+  if (p.solicitudBox) { sesion.cancelarBox(p); mensaje('BOXES CANCELADO', '', 1); $('#panelBox').classList.remove('visible'); return; }
+  $('#panelBox').classList.toggle('visible');
+}
+document.querySelectorAll('#panelBox [data-box]').forEach(b => b.addEventListener('click', () => {
+  const v = b.dataset.box;
+  $('#panelBox').classList.remove('visible');
+  if (v === 'cancelar') { sesion.cancelarBox(sesion.jugador); return; }
+  sesion.pedirBox(sesion.jugador, v);
+  mensaje('BOX, BOX', `Entra al final de esta vuelta · neumáticos ${COMPUESTOS[v].nombre.toLowerCase()}`, 2.4);
+}));
+$('#bBox').addEventListener('click', () => entrada.eventos.push('box'));
+$('#bBox').addEventListener('touchstart', (e) => { e.preventDefault(); entrada.eventos.push('box'); }, { passive: false });
+addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'x' && !e.repeat) entrada.eventos.push('box'); });
+
+// --- Cuenta de UpGames ---------------------------------------------------------------
+function pintarCuenta() {
+  const u = cuenta.usuario();
+  const dentro = cuenta.conectado();
+  $('#formLogin').classList.toggle('oculto', dentro);
+  $('#cuentaSalir').classList.toggle('oculto', !dentro);
+  $('#cuentaEstado').innerHTML = dentro ? `Conectado como <b>@${u || 'tú'}</b>${perfilApex.upcoins != null ? ` · <b style="color:#ffd23f">${perfilApex.upcoins} UpCoins</b>` : ''}` : 'Inicia sesión para usar tus UpCoins, guardar tu garaje y aparecer con tu nombre en las salas en línea.';
+  $('#lgError').textContent = '';
+}
+$('#formLogin').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('#lgError').textContent = 'Entrando…';
+  try {
+    await cuenta.entrar($('#lgUsuario').value.trim(), $('#lgClave').value, $('#lg2fa').value.trim());
+    $('#lgClave').value = '';
+    await refrescarPerfil();
+    pintarCuenta(); actualizarCuentaMenu();
+    mostrar(pantallaPrevia === 'garaje' ? 'garaje' : 'menu');
+    if (enGaraje) pintarGaraje();
+  } catch (err) {
+    if (err.datos?.require2FA) { $('#fila2fa').classList.remove('oculto'); $('#lgError').textContent = 'Escribe el código de tu app de autenticación'; return; }
+    $('#lgError').textContent = err.message || 'No se pudo entrar';
+  }
+});
+$('#bSalirCuenta').addEventListener('click', () => { cuenta.salir(); perfilApex = { mejoras: {}, cosmeticos: [], upcoins: null }; guardar(); pintarCuenta(); actualizarCuentaMenu(); });
+$('#bCuentaG').addEventListener('click', () => { pantallaPrevia = 'garaje'; mostrar('cuenta'); });
+
+async function refrescarPerfil() {
+  if (!cuenta.conectado()) return;
+  try {
+    const d = await cuenta.perfil();
+    perfilApex = { mejoras: d.mejoras || {}, cosmeticos: d.cosmeticos || [], upcoins: d.upcoins };
+    if (d.equipado) Object.assign(equipado, d.equipado, { propia: equipado.propia && d.equipado.propia });
+    guardar();
+  } catch (e) { if (e.status === 401) perfilApex.upcoins = null; }
+}
+function actualizarCuentaMenu() {
+  const u = cuenta.usuario();
+  $('#cuentaMenu').innerHTML = cuenta.conectado() ? `@${u || 'piloto'} · ${perfilApex.upcoins ?? '…'} UpCoins` : '<a href="#" id="lnkEntrar" style="color:#9fd3ff">Inicia sesión con UpGames</a> para usar tus UpCoins';
+  const l = $('#lnkEntrar'); if (l) l.onclick = (e) => { e.preventDefault(); pantallaPrevia = 'menu'; mostrar('cuenta'); };
+}
+
+// --- Garaje ------------------------------------------------------------------------
+let catalogo = null, tabGaraje = 'mejoras';
+const PRECIOS_NIVEL = [60, 120, 200, 320, 500];
+const PRECIO_COSM = {
+  'patron:lisa': 0, 'patron:franjas': 0, 'patron:flecha': 60, 'patron:degradado': 80, 'patron:rayo': 100, 'patron:geometrico': 120, 'patron:digital': 150, 'patron:llamas': 180,
+  'acabado:brillo': 0, 'acabado:mate': 60, 'acabado:perlado': 120, 'acabado:cromado': 250, 'acabado:dorado': 400,
+  'casco:clasico': 0, 'casco:rayas': 40, 'casco:estrellas': 70, 'casco:damero': 70, 'casco:llamas': 100, 'casco:neon': 120, 'livery:propia': 150,
+};
+const NOMBRES_ACABADO = { brillo: 'Brillo', mate: 'Mate', perlado: 'Perlado', cromado: 'Cromado', dorado: 'Oro' };
+const tiene = (id) => (PRECIO_COSM[id] ?? 1) === 0 || perfilApex.cosmeticos.includes(id);
+
+async function abrirGaraje() {
+  sonido.iniciar();
+  enGaraje = true;
+  // el coche del jugador espera frente a su garaje en la calle de boxes
+  sesion = new Sesion(circuito, { modo: 'practica', reglaje, ayudas: ayudasDe(), mejoras: perfilApex.mejoras, equipado: { ...equipado } });
+  const c = sesion.jugador.coche;
+  const sG = circuito.pit.garajes[0];
+  c.colocar(sG, circuito.semiAncho[0] + circuito.pit.carril + 2.2);
+  c.retenido = true;
+  crearModelos();
+  camara.modo = 'orbita'; camara.iniciada = false;
+  mostrar('garaje');
+  pintarGaraje();
+  if (cuenta.conectado()) { await refrescarPerfil(); pintarGaraje(); }
+  if (!catalogo) cuenta.catalogo().then(d => { catalogo = d; }).catch(() => {});
+}
+function cerrarGaraje() {
+  enGaraje = false;
+  camara.modo = ajustes.camara || 'persecucion';
+  sesion = new Sesion(circuito, { modo: 'practica', reglaje, ayudas: ayudasDe() });
+  crearModelos();
+  actualizarCuentaMenu();
+}
+document.querySelectorAll('#garaje .pestanas b').forEach(b => b.addEventListener('click', () => { tabGaraje = b.dataset.tab; pintarGaraje(); }));
+
+function avisoG(t) { $('#gMensaje').textContent = t || ''; }
+
+function pintarGaraje() {
+  document.querySelectorAll('#garaje .pestanas b').forEach(b => b.classList.toggle('sel', b.dataset.tab === tabGaraje));
+  $('#tabMejoras').classList.toggle('oculto', tabGaraje !== 'mejoras');
+  $('#tabLibrea').classList.toggle('oculto', tabGaraje !== 'librea');
+  $('#tabCasco').classList.toggle('oculto', tabGaraje !== 'casco');
+  $('#saldoUC').textContent = cuenta.conectado() ? `${perfilApex.upcoins ?? '…'} UpCoins` : 'Sin sesión';
+  // mejoras de rendimiento
+  const desc = { motor: '+1,2 % de potencia por nivel', aero: '+1 % de carga y −0,6 % de resistencia', frenos: '+3 % de frenada y mejor refrigeración', chasis: '−3 kg por nivel', neumaticos: '−6 % de desgaste y +0,4 % de agarre', ers: '+5 % de despliegue y +4 % de recuperación' };
+  $('#tabMejoras').innerHTML = Object.entries(MEJORAS_INFO).map(([id, nom]) => {
+    const n = perfilApex.mejoras[id] || 0;
+    const pips = Array.from({ length: 5 }, (_, k) => `<i class="${k < n ? 'on' : ''}"></i>`).join('');
+    const boton = n >= 5 ? '<b class="mini" style="color:var(--verde)">MÁXIMO</b>' : `<button class="btn mini comprar" data-comprar="mejora:${id}">Nivel ${n + 1} · ${PRECIOS_NIVEL[n]} UC</button>`;
+    return `<div class="mejora"><div><span class="nom">${nom}</span><div class="pips">${pips}</div></div>${boton}<span class="desc">${desc[id]}</span></div>`;
+  }).join('') + '<p class="nota">Las mejoras cuentan en carreras contra la IA y en las salas en línea que las permitan.</p>';
+  // librea
+  const fichas = (tipo, nombres, actual) => Object.entries(nombres).map(([k, n]) => {
+    const id = `${tipo}:${k}`, ok = tiene(id), precio = PRECIO_COSM[id] ?? 0;
+    return `<div class="ficha ${actual === k ? 'sel' : ''}" data-equipar="${tipo}" data-v="${k}">${n}<span class="precio ${ok ? 'libre' : ''}">${ok ? (actual === k ? 'EQUIPADO' : 'TUYO') : precio + ' UC'}</span></div>`;
+  }).join('');
+  const col = equipado.colores;
+  $('#tabLibrea').innerHTML = `
+    <h3>Diseño</h3><div class="rejilla">${fichas('patron', NOMBRES_PATRON, equipado.patron)}</div>
+    <h3>Colores y número</h3>
+    <div class="colores">
+      <label>Base<input type="color" data-color="base" value="${col.base}"></label>
+      <label>Acento<input type="color" data-color="acento" value="${col.acento}"></label>
+      <label>Detalles<input type="color" data-color="tercero" value="${col.tercero}"></label>
+      <label>Número<input class="campo" style="width:70px" type="number" min="1" max="99" id="gNumero" value="${equipado.numero}"></label>
+    </div>
+    <h3>Acabado de la pintura</h3><div class="rejilla">${fichas('acabado', NOMBRES_ACABADO, equipado.acabado)}</div>
+    <h3>Librea propia</h3>
+    <p class="nota" style="text-align:left">Descarga la plantilla, pinta encima con cualquier editor (respetando las tres vistas) y súbela. ${tiene('livery:propia') ? '' : 'Desbloquéala por 150 UC.'}</p>
+    <div class="fila">
+      <button class="btn mini" id="gPlantilla">Descargar plantilla</button>
+      ${tiene('livery:propia') ? `<label class="btn mini" style="text-align:center">Subir imagen<input type="file" accept="image/*" id="gSubir" hidden></label>${imagenLibrea ? `<button class="btn mini" id="gUsarPropia">${equipado.propia ? 'Usar diseño del juego' : 'Usar mi librea'}</button>` : ''}` : '<button class="btn mini comprar" data-comprar="cosmetico:livery:propia">Desbloquear · 150 UC</button>'}
+    </div>`;
+  $('#tabCasco').innerHTML = `
+    <h3>Diseño del casco</h3><div class="rejilla">${fichas('casco', NOMBRES_CASCO, equipado.casco)}</div>
+    <h3>Colores</h3>
+    <div class="colores">
+      <label>Base<input type="color" data-casco="base" value="${equipado.cascoColores.base}"></label>
+      <label>Diseño<input type="color" data-casco="acento" value="${equipado.cascoColores.acento}"></label>
+    </div>`;
+  // eventos
+  document.querySelectorAll('#garaje [data-comprar]').forEach(b => b.onclick = () => comprar(b.dataset.comprar));
+  document.querySelectorAll('#garaje [data-equipar]').forEach(b => b.onclick = () => {
+    const tipo = b.dataset.equipar, v = b.dataset.v, id = `${tipo}:${v}`;
+    if (!tiene(id)) { comprar('cosmetico:' + id, () => { equipado[tipo] = v; aplicarEquipado(); }); return; }
+    equipado[tipo] = v; aplicarEquipado();
+  });
+  document.querySelectorAll('#garaje [data-color]').forEach(i => i.onchange = () => { equipado.colores[i.dataset.color] = i.value; aplicarEquipado(); });
+  document.querySelectorAll('#garaje [data-casco]').forEach(i => i.onchange = () => { equipado.cascoColores[i.dataset.casco] = i.value; aplicarEquipado(); });
+  const num = $('#gNumero'); if (num) num.onchange = () => { const n = Math.max(1, Math.min(99, Math.floor(+num.value) || 7)); equipado.numero = n; aplicarEquipado(); };
+  const pl = $('#gPlantilla'); if (pl) pl.onclick = descargarPlantilla;
+  const sub = $('#gSubir'); if (sub) sub.onchange = () => subirLibrea(sub.files[0]);
+  const up = $('#gUsarPropia'); if (up) up.onclick = () => { equipado.propia = !equipado.propia; aplicarEquipado(); };
+}
+
+let tGuardarEquipado = 0;
+function aplicarEquipado() {
+  guardar();
+  crearModelos();
+  pintarGaraje();
+  // se guarda en el servidor (con un respiro para no enviar cada clic)
+  clearTimeout(tGuardarEquipado);
+  if (cuenta.conectado()) tGuardarEquipado = setTimeout(() => cuenta.equipar(equipado).catch(() => {}), 800);
+}
+
+async function comprar(id, despues) {
+  if (!cuenta.conectado()) { avisoG('Inicia sesión con tu cuenta de UpGames para comprar con UpCoins.'); pantallaPrevia = 'garaje'; mostrar('cuenta'); return; }
+  avisoG('Comprando…');
+  try {
+    const d = await cuenta.comprar(id);
+    perfilApex = { mejoras: d.mejoras || perfilApex.mejoras, cosmeticos: d.cosmeticos || perfilApex.cosmeticos, upcoins: d.upcoins };
+    guardar();
+    avisoG(d.repetido ? 'Ya lo tenías.' : `¡Listo! −${d.precio} UpCoins`);
+    despues?.();
+    if (id.startsWith('mejora:')) { sesion.jugador.coche.ef = (await import('./config.js')).efectosMejoras(perfilApex.mejoras); }
+    pintarGaraje();
+  } catch (e) {
+    avisoG(e.status === 402 ? `${e.message}. Consigue UpCoins en upgames.games` : e.message || 'No se pudo comprar');
+  }
+}
+
+function descargarPlantilla() {
+  const cv = dibujarPlantilla(2048);
+  cv.toBlob((b) => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(b); a.download = 'apexgp-plantilla-librea.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }, 'image/png');
+}
+
+function subirLibrea(archivo) {
+  if (!archivo) return;
+  const im = new Image();
+  im.onload = () => {
+    // se guarda como JPEG cuadrado de 1024 px (cabe en el almacenamiento del navegador)
+    const cv = document.createElement('canvas'); cv.width = cv.height = 1024;
+    cv.getContext('2d').drawImage(im, 0, 0, 1024, 1024);
+    const url = cv.toDataURL('image/jpeg', 0.86);
+    try { localStorage.setItem('apexgp.librea', url); } catch { avisoG('La imagen es demasiado grande para guardarla.'); return; }
+    URL.revokeObjectURL(im.src);
+    cargarImagenLibrea().then(() => { equipado.propia = true; aplicarEquipado(); avisoG('Librea cargada.'); });
+  };
+  im.onerror = () => avisoG('No se pudo leer la imagen');
+  im.src = URL.createObjectURL(archivo);
+}
+
+// Versión reducida de la librea propia para enviarla a la sala (≈30 KB)
+function libreaParaRed() {
+  if (!equipado.propia || !imagenLibrea) return '';
+  const cv = document.createElement('canvas'); cv.width = cv.height = 384;
+  cv.getContext('2d').drawImage(imagenLibrea, 0, 0, 384, 384);
+  const url = cv.toDataURL('image/jpeg', 0.6);
+  return url.length < 48000 ? url : '';
+}
+
+// --- Multijugador -------------------------------------------------------------------
+let salaActual = null, carreraRed = null, tEnvio = 0;
+
+async function abrirMulti() {
+  mostrar('multi');
+  pintarOpcMulti();
+  $('#mEstado').textContent = 'Conectando con el servidor de UpGames…';
+  try {
+    await multi.conectar();
+    $('#mEstado').innerHTML = `Conectado${cuenta.conectado() ? ` como <b>@${cuenta.usuario()}</b>` : ' como invitado (inicia sesión para usar tu nombre y tus mejoras)'} · ping ${Math.round(multi.latencia || 0)} ms`;
+    multi.pedirLista();
+  } catch (e) { $('#mEstado').textContent = e.message + '. Revisa tu conexión.'; }
+}
+function pintarOpcMulti() {
+  document.querySelectorAll('#multi [data-mp]').forEach(sg => {
+    const k = sg.dataset.mp;
+    sg.querySelectorAll('b').forEach(b => {
+      b.classList.toggle('sel', String(opcMulti[k]) === b.dataset.v);
+      b.onclick = () => { opcMulti[k] = isNaN(+b.dataset.v) ? b.dataset.v : +b.dataset.v; guardar(); pintarOpcMulti(); };
+    });
+  });
+  $('#filaMax').classList.toggle('oculto', opcMulti.tipo === '1v1');
+}
+multi.on('lista', (l) => {
+  $('#listaSalas').innerHTML = l.length ? '<h3>Salas abiertas</h3>' + l.map(x => `<div class="sala-pub" data-codigo="${x.codigo}"><span><b>${x.nombre.replace(/</g, '')}</b> · ${x.tipo === '1v1' ? 'Duelo' : 'Abierta'} · ${x.vueltas} vueltas${x.mejoras ? ' · con mejoras' : ''}</span><span>${x.jugadores}/${x.max}</span></div>`).join('') : '<p class="nota">No hay salas abiertas ahora mismo. ¡Crea una y comparte el código!</p>';
+  document.querySelectorAll('.sala-pub').forEach(el => el.onclick = () => unirse(el.dataset.codigo));
+});
+multi.on('aviso', (t) => { if ($('#sala').classList.contains('visible')) $('#salaInfo').textContent = t; else $('#mEstado').textContent = t; });
+const datosJugador = () => ({ nombre: cuenta.usuario() || 'Invitado', equipado: { ...equipado }, livery: libreaParaRed() });
+$('#bCrearSala').addEventListener('click', async () => {
+  const r = await multi.crear({ ...datosJugador(), opciones: { tipo: opcMulti.tipo, max: opcMulti.max, vueltas: opcMulti.vueltas, publica: $('#mpPublica').checked, mejoras: $('#mpMejoras').checked } });
+  if (!r.ok) { $('#mEstado').textContent = r.error; return; }
+  entrarSala(r.sala);
+});
+$('#bUnirse').addEventListener('click', () => unirse($('#mpCodigo').value));
+async function unirse(codigo) {
+  const r = await multi.unirse({ ...datosJugador(), codigo: String(codigo || '').toUpperCase().trim() });
+  if (!r.ok) { $('#mEstado').textContent = r.error; return; }
+  entrarSala(r.sala);
+}
+$('#bSalirMulti').addEventListener('click', () => { multi.desconectar(); mostrar('menu'); });
+function entrarSala(sala) { salaActual = sala; mostrar('sala'); pintarSala(); }
+multi.on('sala', (sala) => { salaActual = sala; if ($('#sala').classList.contains('visible')) pintarSala(); });
+multi.on('livery', (d) => {
+  const im = new Image(); im.onload = () => { imagenesRed.set(d.id, im); if (enRed && jugando) crearModelos(); }; im.src = d.livery;
+});
+function pintarSala() {
+  const s = salaActual; if (!s) return;
+  const yo = multi.yo, soyHost = s.host === yo;
+  $('#salaTitulo').textContent = `${s.nombre} · ${s.codigo}`;
+  $('#salaInfo').innerHTML = `${s.tipo === '1v1' ? 'Duelo 1 vs 1' : `Sala abierta · hasta ${s.max} pilotos`} · ${s.vueltas} vueltas · ${s.mejoras ? 'con mejoras de UpCoins' : 'coches iguales'}${s.publica ? ' · pública' : ' · privada'}<br>Comparte el código <b style="color:#ffd23f;font-size:16px">${s.codigo}</b> para que se unan.`;
+  $('#salaPilotos').innerHTML = s.jugadores.map((j, k) => `<div class="sala-fila"><b>${k + 1}</b><span><i class="eq" style="display:inline-block;width:4px;height:16px;border-radius:2px;margin-right:8px;vertical-align:middle;background:${j.equipado?.colores?.base || '#888'}"></i>${j.nombre.replace(/</g, '')}${j.id === yo ? ' (tú)' : ''}</span><span class="host">${j.id === s.host ? 'ANFITRIÓN' : ''}</span><span class="listo">${j.listo || j.id === s.host ? 'LISTO' : ''}</span></div>`).join('');
+  $('#bSalaEmpezar').classList.toggle('oculto', !soyHost);
+  $('#bSalaListo').classList.toggle('oculto', soyHost);
+  const yoJ = s.jugadores.find(j => j.id === yo);
+  $('#bSalaListo').textContent = yoJ?.listo ? 'No estoy listo' : 'Estoy listo';
+}
+$('#bSalaListo').addEventListener('click', () => { const j = salaActual?.jugadores.find(x => x.id === multi.yo); multi.listo(!j?.listo); });
+$('#bSalaEmpezar').addEventListener('click', async () => { const r = await multi.iniciar(); if (!r?.ok) $('#salaInfo').textContent = r?.error || 'No se pudo empezar'; });
+$('#bSalaSalir').addEventListener('click', () => { multi.salir(); salaActual = null; abrirMulti(); });
+$('#bSalaCompartir').addEventListener('click', async () => {
+  const t = `¡Corre contra mí en APEX GP! Código de sala: ${salaActual?.codigo} · https://upgames.games/games/monoplaza/`;
+  try { if (navigator.share) await navigator.share({ title: 'APEX GP', text: t }); else { await navigator.clipboard.writeText(t); $('#salaInfo').textContent = 'Código copiado'; } } catch { /* cancelado */ }
+});
+
+// el servidor da la salida: todos arrancan la carrera a la vez con el mismo semáforo
+multi.on('salida', (d) => {
+  const s = salaActual;
+  modoActual = 'red'; enRed = true;
+  sonido.iniciar(); sonido.ponerVolumen(ajustes.volumen);
+  sesion = new Sesion(circuito, {
+    modo: 'carrera', vueltas: s.vueltas, reglaje: { ...reglaje }, ayudas: ayudasDe(),
+    multijugador: { parrilla: d.parrilla, yo: multi.yo, jugadores: s.jugadores.map(j => j.id === multi.yo ? { ...j, mejoras: perfilApex.mejoras } : j), mejoras: s.mejoras },
+  });
+  sesion.tSalidaLocal = d.tSalidaLocal;
+  carreraRed = { resultados: null };
+  arrancarSesion('carrera');
+});
+multi.on('resultados', (r) => { if (carreraRed) carreraRed.resultados = r; setTimeout(() => { if (enRed) mostrarResultadosRed(r); }, 2500); });
+multi.on('desconectado', () => { if (enRed && jugando) mensaje('CONEXIÓN PERDIDA', 'Reintentando…', 3); });
+
+function actualizarRed(dt) {
+  // semáforo sincronizado con el reloj del servidor
+  if (sesion.estado === 'parrilla' && sesion.tSalidaLocal) {
+    const faltan = (sesion.tSalidaLocal - Date.now()) / 1000;
+    const luces = faltan > 6.5 ? 0 : faltan > 0 ? Math.min(5, Math.floor(7.5 - faltan)) : 0;
+    if (luces > sesion.luces) { sesion.luces = luces; sonido.evento('luz'); }
+    sesion.tLuces = 0; sesion.tApagar = null;
+    if (faltan <= 0) { sesion.estado = 'carrera'; sesion.luces = 0; sesion.eventos.push('salida'); }
+  }
+  // rivales: posición interpolada de la red
+  for (const p of sesion.participantes) {
+    if (!p.remoto) continue;
+    const e = multi.interpolado(p.idRed);
+    if (!e) continue;
+    aplicarEstado(p.coche, e, circuito);
+    p.distancia = e[11]; p.vuelta = e[12];
+    for (const w of p.coche.ruedas) w.giro += p.coche.vx / w.radio * dt;
+    const j = salaActual?.jugadores.find(x => x.id === p.idRed);
+    if (j) { p.terminado = j.terminado; p.abandono = j.abandono; if (j.terminado) sesion.banderaFinal = true; }
+  }
+  // mi coche, ~15 veces por segundo
+  tEnvio += dt;
+  if (tEnvio >= 1 / 15) { tEnvio = 0; multi.enviarEstado(empaquetar(sesion.jugador.coche, sesion.jugador)); }
+}
+
+function mostrarResultadosRed(r) {
+  jugando = false;
+  $('#hud').classList.remove('visible'); $('#tactil').classList.remove('visible');
+  document.body.classList.remove('jugando');
+  sonido.silenciar(true);
+  const yo = r.find(x => x.id === multi.yo);
+  $('#resTitulo').textContent = yo?.pos === 1 && !yo.abandono ? '🏆 ¡Victoria en línea!' : `Resultado: P${yo?.pos ?? '-'}`;
+  const ganador = r[0];
+  $('#resLista').innerHTML = r.map(x => `<div class="fila-res ${x.id === multi.yo ? 'yo' : ''}"><b>${x.pos}</b><span>${String(x.nombre).replace(/</g, '')}</span><span>${x.abandono ? 'Abandono' : x === ganador ? fmt(x.tiempo) : '+' + (x.tiempo - ganador.tiempo).toFixed(3)}</span><span>${fmt(x.mejor)}</span></div>`).join('');
+  mostrar('resultados');
+  $('#bResOtra').textContent = 'Volver a la sala';
+}
+$('#bResOtra').addEventListener('click', (e) => {
+  if (!enRed) return;
+  e.stopImmediatePropagation();
+  enRed = false; carreraRed = null;
+  multi.revancha();
+  $('#bResOtra').textContent = 'Otra vez';
+  sesion = new Sesion(circuito, { modo: 'practica', reglaje, ayudas: ayudasDe() }); crearModelos();
+  mostrar('sala'); pintarSala();
+}, true);
+
 // acceso para pruebas automáticas desde la consola
-window.apexDebug = { get sesion() { return sesion; }, get camara() { return camara; }, circuito: () => circuito };
+window.apexDebug = { get sesion() { return sesion; }, get camara() { return camara; }, circuito: () => circuito, multi, get modelos() { return modelos; } };
+actualizarCuentaMenu();
+refrescarPerfil().then(actualizarCuentaMenu);
 
 // --- Arranque -----------------------------------------------------------------------
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !window.Capacitor) {

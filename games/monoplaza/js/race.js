@@ -3,7 +3,7 @@
 
 import { EQUIPOS, COCHE } from './config.js';
 import { Monoplaza } from './physics/monoplaza.js';
-import { PilotoIA } from './ai.js';
+import { PilotoIA, PilotoBox } from './ai.js';
 
 const DT = 1 / 300;
 const HABILIDAD = { facil: [0.885, 0.92], normal: [0.935, 0.965], dificil: [0.965, 0.99], extremo: [0.985, 1.0] };
@@ -24,49 +24,133 @@ export class Sesion {
     this.grabacion = [];
     this.tGrab = 0;
 
-    const rivales = this.modo === 'carrera' ? Math.min(opc.rivales ?? 7, EQUIPOS.length - 1) : 0;
-    const total = rivales + 1;
-    const posJugador = this.modo === 'carrera' ? Math.min(total, opc.posSalida || Math.ceil(total * 0.6)) : 1;
-    const [hMin, hMax] = HABILIDAD[opc.dificultad || 'normal'];
+    const mp = opc.multijugador || null;
+    this.mp = mp;
     const combustible = this.modo === 'carrera' ? 12 + this.vueltasTotales * 1.45 : 20;
-    let iaIdx = 1;
-    for (let k = 0; k < total; k++) {
-      const esJugador = k === posJugador - 1;
-      const eq = esJugador ? EQUIPOS[0] : EQUIPOS[iaIdx++];
-      const coche = new Monoplaza(circuito, {
-        ia: !esJugador,
-        reglaje: esJugador ? opc.reglaje : { compuesto: opc.reglaje?.compuesto || 'medio' },
-        ayudas: esJugador ? opc.ayudas : { tc: 2, abs: true, cambioAuto: true },
-        combustible,
-      });
-      // rivales más rápidos delante en la parrilla
-      const hab = esJugador ? 1 : hMax - (hMax - hMin) * (k / Math.max(1, total - 1)) + (Math.random() - 0.5) * 0.008;
-      const p = {
-        coche, equipo: eq, nombre: esJugador ? (opc.nombre || 'Tú') : eq.piloto,
-        jugador: esJugador,
-        ia: esJugador ? null : new PilotoIA(coche, circuito, hab, 0.3 + Math.random() * 0.6),
-        vuelta: 0, tVuelta: 0, tiempos: [], mejor: Infinity, sectores: [null, null, null],
-        mejoresSectores: [Infinity, Infinity, Infinity], tSector: 0, sector: 0,
-        valida: true, terminado: false, tTotal: 0, posicion: k + 1, distancia: 0, drsHabil: false,
-        sAnterior: 0, ultimaVuelta: null,
-      };
-      if (this.modo === 'carrera') {
-        const s = circuito.largo - 14 - 8 * k;
-        coche.colocar(s, k % 2 === 0 ? -2.6 : 2.6);
-      } else {
+    const plantilla = () => ({
+      vuelta: 0, tVuelta: 0, tiempos: [], mejor: Infinity, sectores: [null, null, null],
+      mejoresSectores: [Infinity, Infinity, Infinity], tSector: 0, sector: 0,
+      valida: true, terminado: false, abandono: false, tTotal: 0, posicion: 1, distancia: 0, drsHabil: false,
+      sAnterior: 0, ultimaVuelta: null, box: null, solicitudBox: null, paradas: 0,
+    });
+    const colocarParrilla = (coche, k) => {
+      if (this.modo === 'carrera') coche.colocar(circuito.largo - 12 - 7 * k, k % 2 === 0 ? -2.6 : 2.6);
+      else {
         // vuelta de salida lanzada
-        const s = circuito.largo - 700;
-        coche.colocar(s, 0);
+        coche.colocar(circuito.largo - 700, 0);
         coche.vx = 55; for (const w of coche.ruedas) w.omega = 55 / w.radio;
         coche.marcha = 5; coche.rpm = 11000;
-        p.vuelta = 0;
       }
-      p.sAnterior = coche.proj.s;
-      this.participantes.push(p);
+    };
+    if (mp) {
+      // multijugador: un coche local y los demás llegan por la red
+      mp.parrilla.forEach((id, k) => {
+        const j = mp.jugadores.find(x => x.id === id);
+        if (!j) return;
+        const local = id === mp.yo;
+        const eq = { ...EQUIPOS[k % EQUIPOS.length], nombre: j.nombre, corto: j.nombre.replace('@', '').slice(0, 3).toUpperCase(),
+          base: j.equipado?.colores?.base || EQUIPOS[k % EQUIPOS.length].base, acento: j.equipado?.colores?.acento || EQUIPOS[k % EQUIPOS.length].acento,
+          tercero: j.equipado?.colores?.tercero || '#ffffff' };
+        const coche = new Monoplaza(circuito, {
+          reglaje: local ? opc.reglaje : {}, ayudas: local ? opc.ayudas : {}, combustible,
+          mejoras: mp.mejoras ? j.mejoras : {}, ia: !local,
+        });
+        const p = { ...plantilla(), coche, equipo: eq, equipado: j.equipado, nombre: j.nombre, jugador: local, remoto: !local, idRed: id, ia: null, posicion: k + 1 };
+        colocarParrilla(coche, k);
+        p.sAnterior = coche.proj.s;
+        this.participantes.push(p);
+      });
+    } else {
+      const rivales = this.modo === 'carrera' ? Math.min(opc.rivales ?? 7, EQUIPOS.length * 2 - 1) : 0;
+      const total = rivales + 1;
+      const posJugador = this.modo === 'carrera' ? Math.min(total, opc.posSalida || Math.ceil(total * 0.6)) : 1;
+      const [hMin, hMax] = HABILIDAD[opc.dificultad || 'normal'];
+      // asientos: el jugador en UpGames Racing; los rivales llenan primero un coche por equipo
+      const asientos = [];
+      for (let k = 1; k < EQUIPOS.length; k++) asientos.push([k, 0]);
+      asientos.push([0, 1]);
+      for (let k = 1; k < EQUIPOS.length; k++) asientos.push([k, 1]);
+      let iaIdx = 0;
+      for (let k = 0; k < total; k++) {
+        const esJugador = k === posJugador - 1;
+        const [ie, ip] = esJugador ? [0, 0] : asientos[iaIdx++];
+        const eq = EQUIPOS[ie];
+        const coche = new Monoplaza(circuito, {
+          ia: !esJugador,
+          reglaje: esJugador ? opc.reglaje : { compuesto: opc.reglaje?.compuesto || 'medio' },
+          ayudas: esJugador ? opc.ayudas : { tc: 2, abs: true, cambioAuto: true },
+          mejoras: esJugador ? opc.mejoras : {},
+          combustible,
+        });
+        // rivales más rápidos delante en la parrilla
+        const hab = esJugador ? 1 : hMax - (hMax - hMin) * (k / Math.max(1, total - 1)) + (Math.random() - 0.5) * 0.008;
+        const p = {
+          ...plantilla(), coche, equipo: eq, indiceEquipo: ie, numeroPiloto: ip,
+          equipado: esJugador ? opc.equipado : null,
+          nombre: esJugador ? (opc.nombre || 'Tú') : eq.pilotos[ip],
+          jugador: esJugador, posicion: k + 1,
+          ia: esJugador ? null : new PilotoIA(coche, circuito, hab, 0.3 + Math.random() * 0.6),
+        };
+        colocarParrilla(coche, k);
+        p.sAnterior = coche.proj.s;
+        this.participantes.push(p);
+      }
     }
+    this.participantes.forEach((p, k) => { p.coche.id = k; });
+    // desgaste proporcional a la distancia: una carrera da para ~1,5 juegos de neumáticos
+    this.multDesgaste = this.modo === 'carrera' ? Math.max(1, Math.min(8, 46 / this.vueltasTotales)) : 1;
+    for (const p of this.participantes) p.coche.ponerMultDesgaste(this.multDesgaste);
     this.jugador = this.participantes.find(p => p.jugador);
     this.mejorVueltaSesion = Infinity;
     this.mejoresSectoresSesion = [Infinity, Infinity, Infinity];
+  }
+
+  // Boxes: el jugador o la IA piden parar; se entra la próxima vez que se pase por la entrada
+  pedirBox(p, compuesto) { if (!p.coche.abandono) p.solicitudBox = compuesto || p.coche.reglaje.compuesto; }
+  cancelarBox(p) { if (!p.box) p.solicitudBox = null; }
+
+  _garajeDe(p) {
+    const g = this.c.pit.garajes;
+    const ie = p.indiceEquipo ?? (this.participantes.indexOf(p) % g.length);
+    return g[ie % g.length] + (p.numeroPiloto ? -6 : 0);
+  }
+
+  _gestionarBoxes(p) {
+    const car = p.coche, c = this.c;
+    car.limitadorPit = c.enLimitador(car.proj.s, car.proj.d);
+    car.limitePit = c.pit.limite;
+    if (p.box) {
+      if (p.box.estado === 'fin') { p.box = null; p.solicitudBox = null; }
+      return;
+    }
+    if (!p.solicitudBox || car.abandono) return;
+    const antes = c.envolver(c.pit.entrada - car.proj.s);
+    if (antes > 25 || antes < 2) return;
+    const compuesto = p.solicitudBox;
+    // trabajo de la parada: neumáticos siempre; morro nuevo si está dañado
+    const morro = car.danoAleron > 0.12 || car.dano.aleronTras > 0.2;
+    const duracion = 2.1 + Math.random() * 0.7 + (morro ? 6.5 + Math.random() * 1.5 : 0) + (Math.random() < 0.06 ? 2.5 : 0);
+    p.box = new PilotoBox(car, c, this._garajeDe(p), {
+      duracion,
+      alParar: () => { p.paradaInfo = { inicio: this.tiempo, duracion, morro, compuesto }; this.eventos.push({ tipo: 'paradaIni', p, duracion, morro }); },
+      alTerminar: () => {
+        car.repararEnBoxes(compuesto); p.paradas++;
+        this.eventos.push({ tipo: 'paradaFin', p, duracion });
+        p.paradaInfo = null;
+      },
+    });
+    this.eventos.push({ tipo: 'entraBoxes', p });
+  }
+
+  // Estrategia de la IA: parar por desgaste en carreras largas o por daños
+  _estrategia(p) {
+    if (!p.ia || p.solicitudBox || p.box || p.terminado || p.coche.abandono || this.modo !== 'carrera') return;
+    const car = p.coche;
+    const restantes = this.vueltasTotales - p.vuelta;
+    const desg = Math.max(...car.ruedas.map(w => w.neum.desgaste));
+    const danado = car.dano.pinchazo.some(Boolean) || car.danoAleron > 0.3 || car.dano.aleronTras > 0.4;
+    if (danado && restantes >= 1) this.pedirBox(p, restantes > 12 ? 'duro' : 'medio');
+    else if (desg > 0.45 && restantes >= 3 && this.vueltasTotales >= 8) this.pedirBox(p, restantes > 15 ? 'duro' : 'medio');
   }
 
   get coches() { return this.participantes.map(p => p.coche); }
@@ -104,14 +188,26 @@ export class Sesion {
     const coches = this.coches;
     this._aerodinamicaRelativa();
     for (const p of lista) {
-      if (p.ia) {
+      if (p.remoto) continue;           // lo mueve la red
+      this._gestionarBoxes(p);
+      const car = p.coche;
+      if (p.terminado && this.tiempo - p.tTotal > 25 && !p.jugador) car.retenido = true;   // vuelta de enfriamiento terminada
+      if (car.abandono && !p.terminado) {
+        car.mandos.acelerador = 0; car.mandos.freno = 1; car.mandos.direccion = 0;
+        if (!p.abandono) { p.abandono = true; this.eventos.push({ tipo: 'abandono', p, motivo: car.motivoAbandono }); }
+      } else if (p.box) p.box.conducir(dt);
+      else if (p.ia && !car.retenido) {
         p.ia.conducir(dt, coches);
-        if (p.terminado) { p.coche.mandos.acelerador *= 0.5; p.coche.mandos.drs = false; }
+        if (p.terminado) { car.mandos.acelerador *= 0.5; car.mandos.drs = false; }
       }
-      p.coche.paso(dt);
+      car.paso(dt);
     }
     this._contactos();
-    for (const p of lista) this._cronometrar(p, dt);
+    for (const p of lista) { if (!p.remoto) { this._cronometrar(p, dt); if (Math.floor(this.tiempo * 2) !== Math.floor((this.tiempo - dt) * 2)) this._estrategia(p); } }
+    // fin de carrera cuando todos terminaron o abandonaron
+    if (this.modo === 'carrera' && !this.mp && this.banderaFinal && !this.carreraTerminada && lista.every(p => p.terminado || p.abandono)) {
+      this.carreraTerminada = true; this.eventos.push({ tipo: 'finCarrera' });
+    }
     if (this.modo !== 'carrera') this._grabarFantasma(dt);
     if (this.modo === 'carrera') this._posiciones();
   }
@@ -177,10 +273,14 @@ export class Sesion {
           this._impulso(B, jx, jz, rbx, rbz);
           if (-vn > 3) {
             this.eventos.push({ tipo: 'contacto', fuerza: -vn, jugador: lista[a].jugador || lista[b].jugador });
-            if (-vn > 8) {
-              if (Math.abs(oa) > 1) A.danoAleron = Math.min(1, A.danoAleron + 0.08 * (-vn - 8));
-              if (Math.abs(ob) > 1) B.danoAleron = Math.min(1, B.danoAleron + 0.08 * (-vn - 8));
-            }
+            // daños en la zona del contacto de cada coche (lado = proyección de la normal en su eje lateral)
+            const latA = nx * -sa + nz * ca, latB = -(nx * -sb + nz * cb);
+            // los contactos entre coches rebotan: cuentan algo menos que un muro
+            // (entre dos coches de la IA aún menos: no frenan tan fino como una persona en el tráfico)
+            A.fuenteGolpe = B.fuenteGolpe = 'coche';
+            const fDano = lista[a].jugador || lista[b].jugador || lista[a].remoto || lista[b].remoto ? 0.75 : 0.5;
+            A.aplicarGolpe(oa + 0.9 * Math.sign(oa), Math.sign(latA) * (Math.abs(latA) > 0.5 ? 1 : 0.5), -vn * fDano);
+            B.aplicarGolpe(ob + 0.9 * Math.sign(ob), Math.sign(latB) * (Math.abs(latB) > 0.5 ? 1 : 0.5), -vn * fDano);
           }
         }
       }
@@ -281,6 +381,7 @@ export class Sesion {
 
   _posiciones() {
     const orden = [...this.participantes].sort((a, b) => {
+      if (a.abandono !== b.abandono) return a.abandono ? 1 : -1;
       if (a.terminado && b.terminado) return a.tTotal - b.tTotal;
       if (a.terminado) return -1;
       if (b.terminado) return 1;

@@ -83,14 +83,34 @@ export const COMPUESTOS = {
   duro:   { nombre: 'Duro',   color: '#f2f2f2', mu: 1.70, tOpt: 112, ancho: 30, calor: 0.85, desgaste: 0.6 },
 };
 
-// Equipos ficticios (colores de librea)
+// Equipos ficticios: 11 escuderías con dos pilotos (22 coches como en la parrilla real)
 export const EQUIPOS = [
-  { nombre: 'UpGames Racing', corto: 'UPG', base: '#0d47ff', acento: '#00e5ff', piloto: 'Tú' },
-  { nombre: 'Rosso Vulcano',  corto: 'RSV', base: '#c4061a', acento: '#ffd200', piloto: 'L. Moretti' },
-  { nombre: 'Silver Arrowhead', corto: 'SAH', base: '#b9c2c9', acento: '#00b3a4', piloto: 'K. Brandt' },
-  { nombre: 'Nightbull',      corto: 'NBL', base: '#14204a', acento: '#e3001b', piloto: 'M. Varga' },
-  { nombre: 'Papaya Speed',   corto: 'PAP', base: '#ff7a00', acento: '#1c8dff', piloto: 'O. Reyes' },
-  { nombre: 'Verde Andino',   corto: 'VAN', base: '#0b6b4f', acento: '#c8ff00', piloto: 'S. Quintero' },
-  { nombre: 'Alpine Blue',    corto: 'ALB', base: '#1060d0', acento: '#ff4fa3', piloto: 'P. Dubois' },
-  { nombre: 'Kraken GP',      corto: 'KRK', base: '#1b1b1f', acento: '#ff3df5', piloto: 'H. Sato' },
+  { nombre: 'UpGames Racing', corto: 'UPG', base: '#0d47ff', acento: '#00e5ff', tercero: '#ffffff', pilotos: ['Tú', 'R. Castro'], patron: 'flecha' },
+  { nombre: 'Rosso Vulcano', corto: 'RSV', base: '#c4061a', acento: '#ffd200', tercero: '#111111', pilotos: ['L. Moretti', 'A. Ferrandi'], patron: 'franjas' },
+  { nombre: 'Silver Arrowhead', corto: 'SAH', base: '#b9c2c9', acento: '#00b3a4', tercero: '#111111', pilotos: ['K. Brandt', 'J. Weller'], patron: 'degradado' },
+  { nombre: 'Nightbull', corto: 'NBL', base: '#14204a', acento: '#e3001b', tercero: '#ffd200', pilotos: ['M. Varga', 'T. Okafor'], patron: 'rayo' },
+  { nombre: 'Papaya Speed', corto: 'PAP', base: '#ff7a00', acento: '#1c8dff', tercero: '#111111', pilotos: ['O. Reyes', 'N. Harlow'], patron: 'geometrico' },
+  { nombre: 'Verde Andino', corto: 'VAN', base: '#0b6b4f', acento: '#c8ff00', tercero: '#ffffff', pilotos: ['S. Quintero', 'D. Arango'], patron: 'franjas' },
+  { nombre: 'Alpine Blue', corto: 'ALB', base: '#1060d0', acento: '#ff4fa3', tercero: '#ffffff', pilotos: ['P. Dubois', 'E. Marchand'], patron: 'degradado' },
+  { nombre: 'Kraken GP', corto: 'KRK', base: '#1b1b1f', acento: '#ff3df5', tercero: '#00e5ff', pilotos: ['H. Sato', 'Y. Mori'], patron: 'digital' },
+  { nombre: 'Halcón Dorado', corto: 'HDO', base: '#f2f2f2', acento: '#c9a227', tercero: '#111111', pilotos: ['F. Salgado', 'C. Ibarra'], patron: 'flecha' },
+  { nombre: 'Polar Racing', corto: 'POL', base: '#e8f4ff', acento: '#0057b8', tercero: '#ff3b3b', pilotos: ['A. Lindqvist', 'M. Koskinen'], patron: 'geometrico' },
+  { nombre: 'Tormenta Roja', corto: 'TRJ', base: '#5a0b1e', acento: '#ff5a1f', tercero: '#ffffff', pilotos: ['V. Petrov', 'G. Rinaldi'], patron: 'llamas' },
 ];
+
+// Efecto de cada nivel de mejora comprada con UpCoins (niveles 0..5). Los mismos
+// nombres que modulos/apexgp.js en el servidor.
+export const MEJORAS_INFO = {
+  motor: 'Motor', aero: 'Aerodinámica', frenos: 'Frenos', chasis: 'Chasis ligero', neumaticos: 'Neumáticos', ers: 'ERS',
+};
+export function efectosMejoras(m = {}) {
+  const n = (k) => Math.max(0, Math.min(5, Math.floor(m?.[k] || 0)));
+  return {
+    potencia: 1 + 0.012 * n('motor'),
+    cl: 1 + 0.01 * n('aero'), cd: 1 - 0.006 * n('aero'),
+    freno: 1 + 0.03 * n('frenos'), refrigeracion: 1 + 0.1 * n('frenos'),
+    kg: 3 * n('chasis'),
+    desgaste: 1 - 0.06 * n('neumaticos'), mu: 1 + 0.004 * n('neumaticos'),
+    ers: 1 + 0.05 * n('ers'), recuperacion: 1 + 0.04 * n('ers'),
+  };
+}

@@ -44,6 +44,9 @@ const config = {
         'http://localhost:5500',
         'http://127.0.0.1:5500',
         'http://localhost:7700',
+        // app Android de APEX GP (Capacitor sirve el juego desde este origen)
+        'https://localhost',
+        'capacitor://localhost',
         ...[process.env.APP_URL, ...String(process.env.CORS_ORIGINS || '').split(',')]
             .map(u => { try { return new URL(String(u).trim()).origin; } catch (_) { return null; } }).filter(Boolean),
     ])],

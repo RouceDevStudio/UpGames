@@ -7,7 +7,8 @@ Juego de carreras de monoplazas en 3D que corre en el navegador (WebGL con Three
 
 ## Modos
 
-- **Carrera** contra hasta 7 rivales con IA: semáforo de salida, posiciones, rebufo, DRS con detección a 1 s y contactos entre coches.
+- **Carrera** contra hasta 21 rivales con IA (11 equipos de 2 coches): semáforo de salida, posiciones, rebufo, DRS con detección a 1 s, contactos, estrategia de boxes y abandonos.
+- **Multijugador**: duelos 1 vs 1 o salas abiertas de hasta 22 pilotos (Socket.IO, espacio `/apexgp` del backend). Salida sincronizada con el reloj del servidor, rivales interpolados y resultados validados en el servidor.
 - **Contrarreloj** con fantasma de tu mejor vuelta, delta en vivo y sectores de colores (morado, verde, amarillo).
 - **Práctica libre** para probar el reglaje.
 
@@ -26,6 +27,8 @@ Todo corre a 300 Hz con paso fijo, independiente de los FPS.
 | Transmisión | 8 marchas, tiempos de cambio, protección contra reducciones peligrosas, diferencial autoblocante con rampas de tracción y retención |
 | Frenos | Reparto ajustable, temperatura de los discos de carbono con pérdida de eficacia fuera de ventana, ABS opcional |
 | Pista | Relieve con pendientes y cambios de rasante (que cargan o descargan el coche), bordillos que hacen vibrar la carga, hierba y grava con menos agarre y más resistencia, muros con choques por impulsos |
+| Daños | Por zona del golpe: alerones que se doblan y se desprenden, suspensión doblada (el coche tira hacia un lado), pinchazos y ruedas arrancadas que dejan fuera de carrera |
+| Boxes | Calle de boxes con limitador de 80 km/h, muro, 11 garajes; la parada la conduce el ingeniero y el equipo cambia ruedas (y el morro si está roto) |
 
 Las ayudas (control de tracción, ABS, cambio automático, dirección asistida, estabilidad, trazada) se pueden apagar todas.
 
@@ -50,3 +53,10 @@ npm run apk        # deja el APK en android/app/build/outputs/apk/debug/
 ```
 
 En GitHub, el workflow `.github/workflows/apk-monoplaza.yml` lo compila en cada cambio y lo sube como artefacto; en `main` además lo publica en la versión `apex-gp-latest`. Para firmar la versión de publicación (Play Store), crea estos secretos del repositorio: `APEX_KEYSTORE_BASE64`, `APEX_KEYSTORE_PASSWORD`, `APEX_KEY_ALIAS` y `APEX_KEY_PASSWORD`.
+
+## Garaje, UpCoins y libreas
+
+- Mejoras de rendimiento (motor, aerodinámica, frenos, chasis, neumáticos, ERS) de 5 niveles y cosméticos (diseños, acabados, cascos, librea propia) se compran con UpCoins en `rutas/apexgp.js`; el cobro es atómico e idempotente (`modulos/upcoins.js`).
+- La librea es una textura con tres vistas (arriba, lado derecho, lado izquierdo). En el Garaje se descarga la plantilla con el contorno real de cada pieza, se pinta en cualquier editor y se sube como imagen cuadrada.
+- En la web se usa la sesión de upgames.games; en la app se inicia sesión desde el juego.
+- Para probar el multijugador contra un servidor local: `index.html?api=http://localhost:PUERTO`.

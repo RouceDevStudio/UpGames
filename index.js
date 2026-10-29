@@ -3886,6 +3886,8 @@ const live = require('./rutas/live').registrar(app, server, {
     verificarToken, verificarAdmin, Usuario, Notificacion, logger, config, JWT_SECRET,
     estaSuspendido: u => adminPanel.estaSuspendido(u), getPayPalAccessToken,
 });
+// APEX GP (games/monoplaza): mejoras y cosméticos con UpCoins y salas multijugador (Socket.IO /apexgp)
+require('./rutas/apexgp').registrar(app, { verificarToken, Usuario, LiveTx: live.LiveTx, io: live.io, logger, JWT_SECRET, estaSuspendido: u => adminPanel.estaSuspendido(u) });
 // Acceso directo: saltarse la página puente solo con Premium (ya no se vende por publicación)
 const mercadoPago = require('./modulos/mercadopago').crear();
 const accesoDirecto = require('./rutas/accesoDirecto').registrar(app, { verificarToken, Juego, Usuario, LiveTx: live.LiveTx, logger });

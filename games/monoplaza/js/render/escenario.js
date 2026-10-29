@@ -243,15 +243,16 @@ export function construirEscenario(scene, renderer, c, calidad) {
       for (const d of ds) out.push([sg * Math.min(d, w + 0.2), c.caida(i, sg * Math.min(d, w + 0.2))]);
       return out;
     };
-    const hierba = new THREE.Mesh(cinta(c, perfilExt, { filtro: (i) => !c.grava[lado][i], uDe: (j, d) => d / 12, escalaV: 12 }), matHierba);
+    const noPit = (i) => !(lado === 1 && c.enZonaPit[i]);
+    const hierba = new THREE.Mesh(cinta(c, perfilExt, { filtro: (i) => !c.grava[lado][i] && noPit(i), uDe: (j, d) => d / 12, escalaV: 12 }), matHierba);
     hierba.receiveShadow = true; scene.add(hierba);
-    const grava = new THREE.Mesh(cinta(c, perfilExt, { filtro: (i) => c.grava[lado][i], uDe: (j, d) => d / 5, escalaV: 5, yBase: 0.03 }), matGrava);
+    const grava = new THREE.Mesh(cinta(c, perfilExt, { filtro: (i) => c.grava[lado][i] && noPit(i), uDe: (j, d) => d / 5, escalaV: 5, yBase: 0.03 }), matGrava);
     grava.receiveShadow = true; scene.add(grava);
     // franja de hierba más allá del muro (une con el terreno)
     const fuera = new THREE.Mesh(cinta(c, (i) => {
       const w = c.muro[lado][i];
       return [[sg * (w + 0.2), c.caida(i, sg * (w + 0.2))], [sg * (w + 14), -0.6]];
-    }, { uDe: (j, d) => d / 12, escalaV: 12 }), matHierba);
+    }, { filtro: noPit, uDe: (j, d) => d / 12, escalaV: 12 }), matHierba);
     fuera.receiveShadow = true; scene.add(fuera);
     // muro: hormigón con publicidad o barrera de neumáticos en zonas de grava
     const muro = (filtro, mat, alto) => {
@@ -265,8 +266,8 @@ export function construirEscenario(scene, renderer, c, calidad) {
       m.castShadow = calidad >= 2; m.receiveShadow = true;
       scene.add(m);
     };
-    muro((i) => !c.grava[lado][i], matMuro, 1.05);
-    muro((i) => c.grava[lado][i], matNeum, 1.0);
+    muro((i) => !c.grava[lado][i] && noPit(i), matMuro, 1.05);
+    muro((i) => c.grava[lado][i] && noPit(i), matNeum, 1.0);
     // valla de protección sobre los muros
     if (calidad >= 2) {
       const texV = TX.texturaValla(); texV.repeat.set(1, 1);
@@ -275,7 +276,7 @@ export function construirEscenario(scene, renderer, c, calidad) {
         const w = c.muro[lado][i] + 0.3;
         const y0 = c.caida(i, sg * w) + 1.05;
         return [[sg * w, y0], [sg * (w + 0.4), y0 + 3.2]];
-      }, { escalaV: 1.6, uDe: (j) => j * 2 });
+      }, { filtro: noPit, escalaV: 1.6, uDe: (j) => j * 2 });
       scene.add(new THREE.Mesh(g, matV));
     }
   }
@@ -288,8 +289,8 @@ export function construirEscenario(scene, renderer, c, calidad) {
   meta.position.set(m0.x, m0.y + 0.008, m0.z);
   meta.receiveShadow = true;
   scene.add(meta);
-  for (let k = 0; k < 10; k++) {
-    const s = c.largo - 14 - 8 * k;
+  for (let k = 0; k < 22; k++) {
+    const s = c.largo - 12 - 7 * k;
     const mk = c.muestra(s);
     const d = k % 2 === 0 ? -2.6 : 2.6;
     const ga = Math.atan2(mk.tz, mk.tx);
@@ -306,7 +307,7 @@ export function construirEscenario(scene, renderer, c, calidad) {
   const matTecho = new THREE.MeshStandardMaterial({ color: 0xeef2f6, roughness: 0.5, metalness: 0.3 });
   const matEdif = new THREE.MeshStandardMaterial({ map: TX.texturaEdificio(), roughness: 0.6 });
   for (const [s0, largo] of [[-260, 150], [-90, 160], [120, 170], [330, 140]]) grada(scene, c, s0, largo, -1, matGrada, matTecho, matHormigon);
-  boxes(scene, c, -230, 400, matEdif, matTecho, matHormigon);
+  res.garajes = calleBoxes(scene, c, { matAsfalto: matEscape, matLinea, matMuro, matTecho, matHormigon, calidad });
   // tribuna en la horquilla y en la Parabólica
   for (const cv of c.curvas) {
     if (/Horquilla|Remanso|Parab/.test(cv.nombre)) {
@@ -318,6 +319,8 @@ export function construirEscenario(scene, renderer, c, calidad) {
   const rr = c.curvas.find(x => x.nombre.startsWith('T5'));
   if (rr) puente(scene, c, rr.s - 330, matHormigon);
   carteles(scene, c);
+
+  res.actualizables.push(...publicidad(scene, c, terreno, calidad));
 
   // --- Vegetación -----------------------------------------------------------
   arboles(scene, c, terreno, calidad);
@@ -414,33 +417,6 @@ function grada(scene, c, s0, largo, lado, matGrada, matTecho, matBase) {
     colocarEnPista(c, g, s, d);
     scene.add(g);
   }
-}
-
-function boxes(scene, c, s0, largo, matEdif, matTecho, matBase) {
-  const tramos = Math.round(largo / 50);
-  for (let k = 0; k < tramos; k++) {
-    const s = s0 + (k + 0.5) * largo / tramos;
-    const i = Math.floor(c.envolver(s) / c.paso) % c.n;
-    const d = c.muro[1][i] + 14;
-    const g = new THREE.Group();
-    const cuerpo = new THREE.Mesh(new THREE.BoxGeometry(50, 9, 16), [matBase, matBase, matTecho, matBase, matBase, matEdif]);
-    cuerpo.position.y = 4.5;
-    // la cara -z mira a la pista
-    cuerpo.material = [matBase, matBase, matTecho, matBase, matEdif, matEdif];
-    g.add(cuerpo);
-    const alero = new THREE.Mesh(new THREE.BoxGeometry(50, 0.3, 4), matTecho);
-    alero.position.set(0, 9.2, -9.5); g.add(alero);
-    g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    colocarEnPista(c, g, s, d);
-    scene.add(g);
-  }
-  // muro de boxes con tejadillos del equipo
-  const muro = new THREE.Mesh(new THREE.BoxGeometry(largo, 1.1, 0.5), matBase);
-  const sm = s0 + largo / 2;
-  const i = Math.floor(c.envolver(sm) / c.paso) % c.n;
-  colocarEnPista(c, muro, sm, c.muro[1][i] + 3);
-  muro.position.y += 0.55; muro.castShadow = true;
-  scene.add(muro);
 }
 
 function puente(scene, c, s, matBase) {
@@ -558,4 +534,187 @@ function montanas(scene, terreno) {
   g.computeVertexNormals();
   const mat = new THREE.MeshStandardMaterial({ color: 0x5d6e57, roughness: 1, flatShading: true, side: THREE.DoubleSide });
   scene.add(new THREE.Mesh(g, mat));
+}
+
+// ─── Calle de boxes: carril, muro, líneas del limitador, garajes y su equipo ───
+const nombreEquipos = ['UpGames Racing', 'Rosso Vulcano', 'Silver Arrowhead', 'Nightbull', 'Papaya Speed', 'Verde Andino', 'Alpine Blue', 'Kraken GP', 'Halcón Dorado', 'Polar Racing', 'Tormenta Roja'];
+const coloresEquipos = ['#0d47ff', '#c4061a', '#b9c2c9', '#14204a', '#ff7a00', '#0b6b4f', '#1060d0', '#1b1b1f', '#f2f2f2', '#e8f4ff', '#5a0b1e'];
+
+function calleBoxes(scene, c, m) {
+  const p = c.pit;
+  const zona = (i) => c.enZonaPit[i];
+  // asfalto del carril, desde la escapatoria hasta los garajes
+  const carril = new THREE.Mesh(cinta(c, (i) => [[c.semiAncho[i] + 2.6, 0], [c.semiAncho[i] + p.ancho + 0.8, 0]], { filtro: zona, uDe: (j, d) => d / 7, escalaV: 7 }), m.matAsfalto);
+  carril.receiveShadow = true; scene.add(carril);
+  // línea blanca del carril rápido y borde de la zona de trabajo
+  for (const off of [p.muroA + 0.3, p.carril + 2.2]) {
+    const l = new THREE.Mesh(cinta(c, (i) => [[c.semiAncho[i] + off, 0.006], [c.semiAncho[i] + off + 0.2, 0.006]], { filtro: (i) => c.hayMuroPit(i) }), m.matLinea);
+    scene.add(l);
+  }
+  // muro de boxes (hormigón con publicidad)
+  const muro = new THREE.Mesh(cinta(c, (i) => [[c.semiAncho[i] + p.muroDe, 1.0], [c.semiAncho[i] + (p.muroDe + p.muroA) / 2, 1.15], [c.semiAncho[i] + p.muroA, 1.0]],
+    { filtro: (i) => c.hayMuroPit(i), escalaV: 16, uDe: (j) => j / 2 }), m.matMuro);
+  const lados = new THREE.Mesh(cinta(c, (i) => [[c.semiAncho[i] + p.muroDe, -0.05], [c.semiAncho[i] + p.muroDe, 1.0]], { filtro: (i) => c.hayMuroPit(i), escalaV: 16, uDe: (j) => 1 - j }), m.matMuro);
+  const lados2 = new THREE.Mesh(cinta(c, (i) => [[c.semiAncho[i] + p.muroA, -0.05], [c.semiAncho[i] + p.muroA, 1.0]], { filtro: (i) => c.hayMuroPit(i), escalaV: 16, uDe: (j) => j }), m.matMuro);
+  for (const x of [muro, lados, lados2]) { x.castShadow = true; x.receiveShadow = true; scene.add(x); }
+  // líneas del limitador con el rótulo PIT
+  const texPit = TX.texturaCartel('PIT 80', '#ffffff', '#111111');
+  for (const sl of [p.limiteIni, p.limiteFin]) {
+    const k = Math.floor(c.envolver(sl) / c.paso) % c.n;
+    const hw = c.semiAncho[k];
+    const mk = c.muestra(sl);
+    const linea = new THREE.Mesh(new THREE.PlaneGeometry(0.4, p.ancho - 2.5), m.matLinea);
+    linea.rotation.x = -Math.PI / 2; linea.rotation.z = -Math.atan2(mk.tz, mk.tx);
+    const dc = hw + 2.5 + (p.ancho - 2.5) / 2;
+    linea.position.set(mk.x - mk.tz * dc, mk.y + 0.01, mk.z + mk.tx * dc);
+    scene.add(linea);
+    const rot = new THREE.Mesh(new THREE.PlaneGeometry(4, 2), new THREE.MeshStandardMaterial({ map: texPit, transparent: true, polygonOffset: true, polygonOffsetFactor: -3 }));
+    rot.rotation.x = -Math.PI / 2; rot.rotation.z = -Math.atan2(mk.tz, mk.tx) - Math.PI / 2;
+    const s2 = sl + (sl === p.limiteIni ? 6 : -6), m2 = c.muestra(s2);
+    rot.position.set(m2.x - m2.tz * (hw + p.carril), m2.y + 0.012, m2.z + m2.tx * (hw + p.carril));
+    scene.add(rot);
+  }
+  // garajes: un edificio corrido con 11 puertas, cartel de cada equipo y su plaza pintada
+  const garajes = [];
+  const texEdif = TX.texturaEdificio();
+  const matFachada = new THREE.MeshStandardMaterial({ map: texEdif, roughness: 0.6 });
+  p.garajes.forEach((sg, k) => {
+    const i = Math.floor(c.envolver(sg) / c.paso) % c.n;
+    const hw = c.semiAncho[i];
+    const g = new THREE.Group();
+    const cuerpo = new THREE.Mesh(new THREE.BoxGeometry(28, 9, 16), [m.matHormigon, m.matHormigon, m.matTecho, m.matHormigon, matFachada, matFachada]);
+    cuerpo.position.set(0, 4.5, 0);
+    g.add(cuerpo);
+    const alero = new THREE.Mesh(new THREE.BoxGeometry(28, 0.3, 4), m.matTecho); alero.position.set(0, 9.2, -9.5); g.add(alero);
+    const cartel = new THREE.Mesh(new THREE.PlaneGeometry(10, 1.6), new THREE.MeshStandardMaterial({ map: TX.texturaCartel(nombreEquipos[k], coloresEquipos[k], k === 8 || k === 9 || k === 2 ? '#111111' : '#ffffff'), roughness: 0.5 }));
+    cartel.position.set(0, 7.6, -8.02); cartel.rotation.y = Math.PI; g.add(cartel);
+    // plaza de parada pintada en el suelo con el color del equipo
+    const plaza = new THREE.Mesh(new THREE.PlaneGeometry(7, 3.2), new THREE.MeshStandardMaterial({ color: coloresEquipos[k], roughness: 0.7, transparent: true, opacity: 0.55, polygonOffset: true, polygonOffsetFactor: -2 }));
+    plaza.rotation.x = -Math.PI / 2; plaza.position.set(0, 0.012 - c.y[i] + c.y[i], 8 + 16 / 2 - (p.ancho - p.carril - 2.2) - 8);
+    g.add(plaza);
+    g.traverse(o => { if (o.isMesh && o !== plaza) { o.castShadow = true; o.receiveShadow = true; } });
+    // el frente del edificio queda en el borde de la zona de boxes
+    colocarEnPista(c, g, sg, hw + p.ancho + 0.8 + 8);
+    // la plaza se recoloca en el carril, delante de la puerta
+    const mk = c.muestra(sg);
+    const dPlaza = hw + p.carril + 2.2;
+    g.remove(plaza);
+    plaza.position.set(mk.x - mk.tz * dPlaza, mk.y + 0.012, mk.z + mk.tx * dPlaza);
+    plaza.rotation.set(-Math.PI / 2, 0, -Math.atan2(mk.tz, mk.tx));
+    scene.add(plaza);
+    scene.add(g);
+    garajes.push({ s: sg, d: dPlaza });
+  });
+  return garajes;
+}
+
+// ─── Publicidad de UpGames por todo el circuito ───────────────────────────────
+const LEMAS = [
+  ['UPGAMES', 'La primera plataforma de su especie', '#0d47ff', '#ffffff'],
+  ['UPCOINS', 'Mejora tu monoplaza en el Garaje', '#111318', '#ffd23f'],
+  ['UPGAMES LIVE', 'Transmite tus carreras', '#e8202a', '#ffffff'],
+  ['NEXUS IA', 'El cerebro de UpGames', '#0b0b14', '#00e5ff'],
+  ['upgames.games', 'Juegos, mods y apps', '#ffffff', '#0d47ff'],
+  ['APEX GP', 'Corre contra 21 pilotos en línea', '#ff7a00', '#111111'],
+];
+
+function texturaValla(lema) {
+  const [titulo, sub, fondo, color] = lema;
+  const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 320;
+  const x = cv.getContext('2d');
+  x.fillStyle = fondo; x.fillRect(0, 0, 1024, 320);
+  const g = x.createLinearGradient(0, 0, 1024, 320); g.addColorStop(0, 'rgba(255,255,255,0.12)'); g.addColorStop(1, 'rgba(0,0,0,0.18)');
+  x.fillStyle = g; x.fillRect(0, 0, 1024, 320);
+  x.fillStyle = color; x.textAlign = 'center'; x.textBaseline = 'middle';
+  let t = 170; do { x.font = `900 italic ${t}px Arial, sans-serif`; t -= 6; } while (x.measureText(titulo).width > 960);
+  x.fillText(titulo, 512, 140);
+  x.font = '700 44px Arial, sans-serif'; x.globalAlpha = 0.85; x.fillText(sub, 512, 262); x.globalAlpha = 1;
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  return tex;
+}
+
+function texturaLogoSuelo(texto, color) {
+  const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 256;
+  const x = cv.getContext('2d');
+  x.fillStyle = color; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.font = '900 italic 190px Arial, sans-serif';
+  x.fillText(texto, 512, 135);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  return t;
+}
+
+function publicidad(scene, c, terreno, calidad) {
+  const actualizables = [];
+  const mats = LEMAS.map(l => new THREE.MeshStandardMaterial({ map: texturaValla(l), roughness: 0.55, side: THREE.DoubleSide }));
+  const matPoste = new THREE.MeshStandardMaterial({ color: 0x3a3d44, metalness: 0.7, roughness: 0.4 });
+  // vallas gigantes junto a la pista
+  const paso = calidad >= 2 ? 230 : 330;
+  let k = 0;
+  for (let s = 60; s < c.largo - 60; s += paso) {
+    const i = Math.floor(s / c.paso) % c.n;
+    // en el exterior de la curva (más visible) o donde haya más espacio
+    const lado = c.curvSuave[i] > 0 ? -1 : c.curvSuave[i] < 0 ? 1 : (c.muro[0][i] > c.muro[1][i] ? -1 : 1);
+    if (lado > 0 && c.enZonaPit[i]) continue;
+    const d = lado * (c.muro[lado > 0 ? 1 : 0][i] + 7);
+    const g = new THREE.Group();
+    const panel = new THREE.Mesh(new THREE.PlaneGeometry(16, 5), mats[k++ % mats.length]);
+    panel.position.y = 6.5; g.add(panel);
+    for (const x of [-6, 6]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.35, 6.5, 0.35), matPoste); p.position.set(x, 3.25, 0); g.add(p); }
+    g.traverse(o => { if (o.isMesh) o.castShadow = calidad >= 2; });
+    const m = c.muestra(s);
+    const px = m.x - m.tz * d, pz = m.z + m.tx * d;
+    g.position.set(px, Math.min(m.y, terreno.altura(px, pz) + 0.3), pz);
+    // de cara a los coches que llegan
+    g.rotation.y = -Math.atan2(m.tz, m.tx) + Math.PI / 2 + lado * 0.35;
+    scene.add(g);
+  }
+  // logotipos pintados en la hierba de las escapatorias y en la recta
+  const texLogo = texturaLogoSuelo('UPGAMES', 'rgba(255,255,255,0.85)');
+  const matLogo = new THREE.MeshStandardMaterial({ map: texLogo, transparent: true, roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -4, depthWrite: false });
+  const ponerLogo = (s, d, largo) => {
+    const m = c.muestra(s), i = m.i;
+    const logo = new THREE.Mesh(new THREE.PlaneGeometry(largo, largo / 4), matLogo);
+    logo.rotation.x = -Math.PI / 2; logo.rotation.z = -Math.atan2(m.tz, m.tx);
+    logo.position.set(m.x - m.tz * d, m.y + c.caida(i, d) + 0.05, m.z + m.tx * d);
+    logo.receiveShadow = true;
+    scene.add(logo);
+  };
+  for (const cv of c.curvas) {
+    const i = Math.floor(c.envolver(cv.s + 40) / c.paso) % c.n;
+    const lado = c.curvSuave[i] > 0 ? -1 : 1;
+    const hueco = c.muro[lado > 0 ? 1 : 0][i] - c.semiAncho[i];
+    if (hueco > 12 && !(lado > 0 && c.enZonaPit[i])) ponerLogo(cv.s + 40, lado * (c.semiAncho[i] + 4 + (hueco - 6) / 2), Math.min(14, hueco * 1.4));
+  }
+  ponerLogo(150, 0, 12);                       // sobre el asfalto de la recta, como en la parrilla real
+  // dirigible de UpGames dando vueltas sobre el circuito
+  if (calidad >= 1) {
+    const cx = terreno.x0 + terreno.ancho / 2, cz = terreno.z0 + terreno.alto / 2;
+    const zep = new THREE.Group();
+    const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 256;
+    const x = cv.getContext('2d'); x.fillStyle = '#f4f6fa'; x.fillRect(0, 0, 1024, 256);
+    x.fillStyle = '#0d47ff'; x.fillRect(0, 96, 1024, 64);
+    x.fillStyle = '#0d47ff'; x.font = '900 italic 90px Arial'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText('UPGAMES', 256, 60); x.fillText('UPGAMES', 768, 60);
+    x.fillStyle = '#ffffff'; x.font = '800 44px Arial'; x.fillText('upgames.games', 256, 128); x.fillText('upgames.games', 768, 128);
+    const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
+    const cuerpo = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), new THREE.MeshStandardMaterial({ map: t, roughness: 0.5 }));
+    cuerpo.scale.set(38, 9.5, 9.5); cuerpo.rotation.y = Math.PI / 2;
+    zep.add(cuerpo);
+    const gondola = new THREE.Mesh(new THREE.BoxGeometry(6, 2, 2.4), new THREE.MeshStandardMaterial({ color: 0x222831 }));
+    gondola.position.y = -10; zep.add(gondola);
+    for (const [y, z] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
+      const ala = new THREE.Mesh(new THREE.BoxGeometry(7, 0.3, 5), new THREE.MeshStandardMaterial({ color: 0x0d47ff }));
+      ala.position.set(-30, y * 6, z * 6); ala.rotation.x = Math.atan2(y, z); zep.add(ala);
+    }
+    zep.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    scene.add(zep);
+    let a = 0;
+    actualizables.push((dt) => {
+      a += dt * 0.012;
+      const r = Math.max(terreno.ancho, terreno.alto) * 0.32;
+      zep.position.set(cx + Math.cos(a) * r, 150, cz + Math.sin(a) * r * 0.7);
+      zep.rotation.y = -a - Math.PI / 2 + 0.2;
+    });
+  }
+  return actualizables;
 }

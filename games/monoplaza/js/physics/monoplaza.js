@@ -2,7 +2,7 @@
 // Ejes del coche: x hacia delante, y hacia la derecha. Rumbo ψ: el vector delantero
 // en el mundo es (cos ψ, sin ψ) en el plano (x, z). Guiñada positiva = giro a la derecha.
 
-import { COCHE, COMPUESTOS, G, RHO_AIRE, REGLAJE_DEF } from '../config.js';
+import { COCHE, COMPUESTOS, G, RHO_AIRE, REGLAJE_DEF, efectosMejoras } from '../config.js';
 import { SUPERFICIES, SUP_ASFALTO, SUP_BORDILLO, SUP_ESCAPE } from '../track.js';
 import { Neumatico, fuerzasNeumatico, muCarga } from './neumatico.js';
 
@@ -65,6 +65,8 @@ export class Monoplaza {
       new Rueda(2, -b, -COCHE.viaTras / 2, COCHE.radioTras, false),
       new Rueda(3, -b, COCHE.viaTras / 2, COCHE.radioTras, false),
     ];
+    // mejoras compradas con UpCoins (factores acotados, ver config.js)
+    this.ef = efectosMejoras(opciones.mejoras);
     this.ponerCompuesto(this.reglaje.compuesto);
     this.combustible = opciones.combustible ?? 40;
     this.tAmb = opciones.tAmbiente ?? 26;
@@ -75,7 +77,68 @@ export class Monoplaza {
     this.drsPermitido = false;
     this.danoAleron = 0;
     this.eventos = [];
+    this.repararTodo();
   }
+
+  // Daños: alerones (0..1), suspensión doblada por rueda (0..1), pinchazos y ruedas sueltas
+  repararTodo() {
+    this.danoAleron = 0;
+    this.dano = { aleronTras: 0, susp: [0, 0, 0, 0], pinchazo: [false, false, false, false], suelta: [false, false, false, false] };
+    this.terminal = false; this.abandono = false; this.motivoAbandono = ''; this.tTerminal = 0;
+  }
+
+  // Un golpe en el punto (ex, ey) del coche con velocidad normal vn (m/s)
+  aplicarGolpe(ex, ey, vn, azar = Math.random) {
+    if (vn < 4) return;
+    // un mismo choque toca varios puntos a la vez: cuenta una sola vez (salvo que sea más fuerte)
+    if (this.reloj - (this._tGolpe ?? -9) < 0.3 && vn <= (this._vGolpe || 0) + 3) return;
+    this._tGolpe = this.reloj; this._vGolpe = vn;
+    const d = this.dano;
+    const delante = ex > 1.2, detras = ex < -1.4;
+    const k = (ex > 0 ? 0 : 2) + (ey > 0 ? 1 : 0);   // rueda más cercana
+    const avisar = (e) => this.eventos.push('dano:' + e);
+    if (delante && vn > 6) {
+      const antes = this.danoAleron;
+      this.danoAleron = Math.min(1, this.danoAleron + (vn - 6) * 0.07);
+      if (antes < 1 && this.danoAleron >= 1) avisar('aleronDel');
+      else if (antes < 0.3 && this.danoAleron >= 0.3) avisar('aleronDelTocado');
+    }
+    if (detras && vn > 7) {
+      const antes = d.aleronTras;
+      d.aleronTras = Math.min(1, d.aleronTras + (vn - 7) * 0.06);
+      if (antes < 0.5 && d.aleronTras >= 0.5) avisar('aleronTras');
+    }
+    // la rueda del lado del golpe: suspensión, pinchazo o arrancada
+    const lateral = Math.abs(ey) > 0.8 || Math.abs(ex - this.ruedas[k].px) < 0.8;
+    if (!lateral && !delante && !detras) return;
+    if (d.suelta[k]) return;
+    if (vn > 9) {
+      d.susp[k] = Math.min(1, d.susp[k] + (vn - 9) * 0.07);
+      if (d.susp[k] > 0.25) avisar('susp' + k);
+    }
+    if (vn > 17.5 || d.susp[k] >= 1) {
+      d.suelta[k] = true; d.pinchazo[k] = true;
+      this.terminal = true; this.motivoAbandono = 'Rueda arrancada'; this.debugGolpe = { fuente: this.fuenteGolpe, vn, v: this.velocidad, s: this.proj.s, d: this.proj.d };
+      this.eventos.push('rueda:' + k);
+    } else if (!d.pinchazo[k] && vn > 6.5 && azar() < Math.min(0.6, (vn - 6.5) * 0.06)) {
+      d.pinchazo[k] = true; avisar('pinchazo' + k);
+    }
+  }
+
+  // En boxes: neumáticos nuevos, alerones nuevos (la suspensión doblada no se arregla en una parada)
+  repararEnBoxes(compuesto) {
+    this.danoAleron = 0;
+    this.dano.aleronTras = 0;
+    this.dano.pinchazo = this.dano.pinchazo.map((_, k) => this.dano.suelta[k]);
+    if (compuesto) this.reglaje.compuesto = compuesto;
+    const c = COMPUESTOS[this.reglaje.compuesto] || COMPUESTOS.medio;
+    for (const w of this.ruedas) { w.neum = new Neumatico(c, this.reglaje.presion); w.neum.tSup = 82; w.neum.tNucleo = 80; this._mejorarNeum(w.neum); }
+  }
+
+  _mejorarNeum(n) { n.mejoraMu = this.ef.mu; n.mejoraDesgaste = this.ef.desgaste * (this.multDesgaste || 1); }
+
+  // En carreras cortas el desgaste se acelera para que la estrategia de boxes cuente
+  ponerMultDesgaste(m) { this.multDesgaste = m; for (const w of this.ruedas) this._mejorarNeum(w.neum); }
 
   ponerCompuesto(nombre) {
     this.reglaje.compuesto = nombre;
@@ -83,6 +146,7 @@ export class Monoplaza {
     for (const w of this.ruedas) {
       if (!w.neum) w.neum = new Neumatico(c, this.reglaje.presion);
       else w.neum.ponerCompuesto(c, this.reglaje.presion);
+      this._mejorarNeum(w.neum);
     }
   }
 
@@ -102,6 +166,7 @@ export class Monoplaza {
     this.proj = { i: -1 };
     this.fueraPista = false;
     this.tiempoParado = 0;
+    this.reloj = 0;
     this.embragueAbierto = false;
     this.impacto = 0;
     this.carga = { del: 0, tras: 0, drag: 0 };
@@ -121,7 +186,7 @@ export class Monoplaza {
     for (const w of this.ruedas) w.omega = 0;
   }
 
-  get masa() { return COCHE.masaSeca + this.combustible; }
+  get masa() { return COCHE.masaSeca - this.ef.kg + this.combustible; }
   get velocidad() { return Math.hypot(this.vx, this.vy); }
 
   // --- Aerodinámica ---------------------------------------------------------
@@ -138,7 +203,9 @@ export class Monoplaza {
     if (Math.min(this.alturaDel, this.alturaTras) < 0.004) suelo *= 0.93; // pérdida por contacto del fondo
     clDel *= suelo * clamp(1 + 3.0 * (hDelRef - this.alturaDel), 0.85, 1.18);
     clTras *= suelo * clamp(1 + 1.6 * (hTrasRef - this.alturaTras), 0.88, 1.12);
-    clDel *= 1 - 0.35 * this.danoAleron;
+    clDel *= (1 - 0.35 * this.danoAleron) * this.ef.cl;
+    clTras *= (1 - 0.55 * this.dano.aleronTras) * this.ef.cl;
+    cdA = cdA * this.ef.cd + 0.06 * this.dano.aleronTras + 0.03 * this.danoAleron;
     // aire sucio y rebufo
     clDel *= 1 - 0.24 * this.aireSucio; clTras *= 1 - 0.14 * this.aireSucio;
     cdA *= 1 - 0.28 * this.rebufo;
@@ -150,6 +217,7 @@ export class Monoplaza {
 
   // --- Paso de integración -------------------------------------------------
   paso(dt) {
+    this.reloj += dt;
     const c = this.circuito;
     const m = this.masa;
     const cos = Math.cos(this.psi), sin = Math.sin(this.psi);
@@ -193,6 +261,7 @@ export class Monoplaza {
     this.alturaTras += (objTras - this.alturaTras) * kSusp;
     this.fondoToca = 0;
     let rozFondo = 0;
+    if (this.dano.pinchazo.some((x, k) => x && !this.dano.suelta[k]) && v > 25) this.fondoToca = Math.max(this.fondoToca, 0.35); // llanta rozando
     if (this.alturaDel < 0.002 || this.alturaTras < 0.002) {
       const pen = Math.max(0.002 - this.alturaDel, 0.002 - this.alturaTras);
       this.fondoToca = Math.min(1, pen * 300);
@@ -226,6 +295,8 @@ export class Monoplaza {
     this.ruedas[0].angulo = delta + (delta > 0 ? -ack : ack) * 0.5;
     this.ruedas[1].angulo = delta + (delta > 0 ? ack : -ack) * 0.5;
     this.ruedas[2].angulo = 0; this.ruedas[3].angulo = 0;
+    // suspensión doblada: la rueda queda torcida (el coche tira hacia un lado)
+    for (const w of this.ruedas) { const sd = this.dano.susp[w.idx]; if (sd > 0) w.angulo += sd * 0.04 * (w.izquierda ? 1 : -1); }
     this.anguloVolante = delta;
 
     // --- Tren motriz ------------------------------------------------------
@@ -235,6 +306,8 @@ export class Monoplaza {
     if (this.marcha === -1) { const t = acel; acel = freno * 0.35; freno = t * 0.6; }
     if (this.ayudas.estabilidad && Math.abs(Math.atan2(this.vy, Math.max(1, this.vx))) > 0.14) acel *= 0.6;
     acel *= this.tc;
+    // limitador de velocidad de la calle de boxes (80 km/h)
+    if (this.limitadorPit) acel = Math.min(acel, clamp((this.limitePit - this.vx) * 0.6, 0, 1));
     const relacion = this.marcha > 0 ? COCHE.relaciones[this.marcha - 1] : (this.marcha < 0 ? COCHE.relacionReversa : 0);
     const rl = this.ruedas[2], rr = this.ruedas[3];
     const omegaEje = (rl.omega + rr.omega) / 2;
@@ -259,7 +332,7 @@ export class Monoplaza {
     }
     this.limitador = false;
     if (relacion !== 0 && !cambiando && (embragado || acel > 0.02)) {
-      const pT = parMotor(this.rpm);
+      const pT = parMotor(this.rpm) * this.ef.potencia;
       const fm = COCHE.frenoMotor[0] + COCHE.frenoMotor[1] * this.rpm;
       parCig = pT * acel - fm * (1 - acel) * (embragado ? 1 : 0);
       if (this.rpm > COCHE.rpmLimite) { parCig = Math.min(parCig, -fm); this.limitador = true; }
@@ -271,19 +344,19 @@ export class Monoplaza {
     // en modo normal se guarda una reserva para poder adelantar o defenderse
     const reserva = modo === 2 ? 0 : COCHE.ersCapacidad * 0.2;
     if (acel > 0.9 && this.marcha >= 2 && embragado && this.ers > reserva && this.ersDesplegado < COCHE.ersDespliegueVuelta && modo > 0) {
-      const pot = COCHE.ersPotencia * (modo === 2 ? 1 : 0.5);
+      const pot = COCHE.ersPotencia * this.ef.ers * (modo === 2 ? 1 : 0.5);
       const par = Math.min(COCHE.ersParMax, pot / wCig);
       parCig += par;
       const e = par * wCig * dt;
       this.ers -= e; this.ersDesplegado += e; this.ersPotenciaActual = par * wCig;
     }
     let parRecuperacion = 0;
-    if (freno > 0.05 && this.vx > 8 && this.ers < COCHE.ersCapacidad && this.ersRecuperado < COCHE.ersRecuperacionVuelta) {
+    if (freno > 0.05 && this.vx > 8 && this.ers < COCHE.ersCapacidad && this.ersRecuperado < COCHE.ersRecuperacionVuelta * this.ef.recuperacion) {
       const pot = COCHE.ersPotencia * Math.min(1, freno * 1.6);
       parRecuperacion = Math.min(1000, pot / Math.max(5, omegaEje));
       const e = parRecuperacion * omegaEje * dt * 0.9;
       this.ers += e; this.ersRecuperado += e; this.ersPotenciaActual = -parRecuperacion * omegaEje;
-    } else if (modo === 0 && acel > 0.3 && embragado && this.ers < COCHE.ersCapacidad && this.ersRecuperado < COCHE.ersRecuperacionVuelta) {
+    } else if (modo === 0 && acel > 0.3 && embragado && this.ers < COCHE.ersCapacidad && this.ersRecuperado < COCHE.ersRecuperacionVuelta * this.ef.recuperacion) {
       const pot = 60000;
       const par = Math.min(120, pot / wCig);
       parCig -= par;
@@ -299,7 +372,7 @@ export class Monoplaza {
 
     // --- Frenos -----------------------------------------------------------
     const reparto = rg.repartoFreno / 100;
-    const parFreno = COCHE.parFrenoMax * freno;
+    const parFreno = COCHE.parFrenoMax * this.ef.freno * freno;
 
     // --- Ruedas -----------------------------------------------------------
     let fxT = 0, fyT = 0, mzT = 0;
@@ -344,9 +417,25 @@ export class Monoplaza {
       const kr = Math.min(1, (Math.abs(vl) + 1.5) / kRelax * dt);
       w.tanAlfa += (tanSS - w.tanAlfa) * kr;
       const nm = w.neum;
-      const mu = muCarga(nm.c.mu, w.fz) * nm.factorAgarre() * sp.mu;
+      let mu = muCarga(nm.c.mu, w.fz) * nm.factorAgarre() * sp.mu;
       const den = Math.max(Math.abs(vl), 3);
-      const R = w.radio;
+      let R = w.radio;
+      const d = this.dano;
+      if (d.susp[k] > 0) mu *= 1 - 0.12 * d.susp[k];
+      // pinchazo: llanta casi sin goma, menos radio y mucha resistencia
+      if (d.pinchazo[k]) { mu *= 0.38; R *= 0.88; }
+      if (!d.pinchazo[k] && nm.desgaste >= 0.985) { d.pinchazo[k] = true; this.eventos.push('dano:pinchazo' + k); }
+      if (d.suelta[k]) {
+        // sin rueda: la esquina del coche arrastra por el suelo
+        const vcx2 = this.vx - this.r * w.py, vcy2 = this.vy + this.r * w.px;
+        const vv = Math.hypot(vcx2, vcy2);
+        const fr = vv > 0.05 ? Math.min(0.9 * Math.max(0, w.fz), vv * 4000) : 0;
+        const fxc = vv > 0.05 ? -vcx2 / vv * fr : 0, fyc = vv > 0.05 ? -vcy2 / vv * fr : 0;
+        fxT += fxc; fyT += fyc; mzT += w.px * fyc - w.py * fxc;
+        w.fx = 0; w.fy = 0; w.omega = 0; w.deslizamiento = vv; w.sigma = 0;
+        if (vv > 8) this.fondoToca = Math.max(this.fondoToca, 0.8);
+        continue;
+      }
       // pares en la rueda
       let parMotriz = 0, parFr = 0;
       if (!w.delantera) {
@@ -368,7 +457,7 @@ export class Monoplaza {
         : tf > COCHE.frenoTempOpt[1] ? Math.max(0.6, 1 - (tf - COCHE.frenoTempOpt[1]) / 900) : 1;
       parFr *= fade;
       // resistencia a la rodadura como par resistente
-      parFr += w.fz * (COCHE.rodadura + sp.rod) * R;
+      parFr += w.fz * (COCHE.rodadura + sp.rod + (d.pinchazo[k] ? 0.07 : 0)) * R;
       const iEff = COCHE.inerciaRueda + (w.delantera ? 0 : inerciaReflejada);
       // fuerza y su derivada respecto a ω (rueda semi-implícita)
       w.kappa = clamp((w.omega * R - vl) / den, -1, 4);
@@ -392,7 +481,7 @@ export class Monoplaza {
       w.fx = fxw; w.fy = fyw;
       // temperatura de frenos
       const potFreno = parFr * Math.abs(w.omega);
-      w.tFreno += (potFreno * 0.9 - (12 + 1.1 * v) * (w.tFreno - this.tAmb)) / 1500 * dt;
+      w.tFreno += (potFreno * 0.9 - (12 + 1.1 * v) * this.ef.refrigeracion * (w.tFreno - this.tAmb)) / 1500 * dt;
       // potencia disipada en el contacto
       const vDesl = Math.hypot(w.omega * R - vl, vt);
       w.deslizamiento = vDesl;
@@ -423,6 +512,7 @@ export class Monoplaza {
     this.r += mzT / COCHE.inerciaYaw * dt;
     // a muy baja velocidad sin gas: el coche se detiene del todo
     if (v < 0.4 && acel < 0.02 && freno > 0.05) { this.vx *= 0.9; this.vy *= 0.9; this.r *= 0.9; }
+    if (this.retenido || this.abandono) { this.vx *= 0.8; this.vy *= 0.8; this.r *= 0.8; }
     this.x += (this.vx * cos - this.vy * sin) * dt;
     this.z += (this.vx * sin + this.vy * cos) * dt;
     this.psi += this.r * dt;
@@ -443,6 +533,10 @@ export class Monoplaza {
     this._muros(dt);
 
     if (v < 0.5) this.tiempoParado += dt; else this.tiempoParado = 0;
+    if (this.terminal && !this.abandono) {
+      this.tTerminal += dt;
+      if (v < 3 || this.tTerminal > 5) { this.abandono = true; this.eventos.push('abandono'); }
+    }
   }
 
   _cajaAutomatica(dt, acel, freno, v) {
@@ -457,7 +551,7 @@ export class Monoplaza {
         if (acel > 0.1 && v < 2) { this.marcha = 1; }
         return;
       }
-      if (v < 0.6 && freno > 0.5 && acel < 0.05 && this.vx < 0.5) {
+      if (v < 0.6 && freno > 0.5 && acel < 0.05 && this.vx < 0.5 && !this.retenido && !this.abandono && !this.esIA) {
         this._tReversa = (this._tReversa || 0) + dt;
         if (this._tReversa > 0.8) { this.marcha = -1; this._tReversa = 0; return; }
       } else this._tReversa = 0;
@@ -499,6 +593,7 @@ export class Monoplaza {
     const nx = -p.tz, nz = p.tx;
     const esquinas = [[2.75, -0.95], [2.75, 0.95], [-2.4, -0.85], [-2.4, 0.85], [0.6, -1.0], [0.6, 1.0]];
     this.impacto = 0;
+    this._peor = null;
     for (const [ex, ey] of esquinas) {
       const ox = cos * ex - sin * ey, oz = sin * ex + cos * ey;
       const along = ox * p.tx + oz * p.tz;
@@ -506,9 +601,15 @@ export class Monoplaza {
       const i = (p.i + Math.round(along / c.paso) + c.n) % c.n;
       const lado = d >= 0 ? 1 : 0;
       const lim = c.muro[lado][i];
-      const pen = Math.abs(d) - lim;
+      let pen = Math.abs(d) - lim;
+      let sg = d >= 0 ? -1 : 1;            // normal hacia el interior de la pista
+      // muro de boxes entre la pista y el carril (se choca desde los dos lados)
+      if (c.hayMuroPit(i)) {
+        const hw = c.semiAncho[i], m0 = hw + c.pit.muroDe, m1 = hw + c.pit.muroA;
+        if (p.d < (m0 + m1) / 2) { if (d - m0 > pen) { pen = d - m0; sg = -1; } }
+        else if (m1 - d > pen) { pen = m1 - d; sg = 1; }
+      }
       if (pen <= 0) continue;
-      const sg = d >= 0 ? -1 : 1;          // normal hacia el interior de la pista
       const wnx = nx * sg, wnz = nz * sg;
       this.x += wnx * pen; this.z += wnz * pen;
       // velocidad del punto en el mundo
@@ -533,8 +634,9 @@ export class Monoplaza {
       this.vy = -nvx * sin + nvz * cos;
       const golpe = -vn;
       this.impacto = Math.max(this.impacto, golpe);
-      if (ex > 2 && golpe > 7) this.danoAleron = Math.min(1, this.danoAleron + (golpe - 7) * 0.06);
+      if (golpe > (this._peor?.v || 0)) this._peor = { ex, ey, v: golpe };
     }
+    if (this._peor) { this.fuenteGolpe = 'muro'; this.aplicarGolpe(this._peor.ex, this._peor.ey, this._peor.v); }
     if (this.impacto > 2) this.eventos.push('golpe:' + this.impacto.toFixed(1));
   }
 

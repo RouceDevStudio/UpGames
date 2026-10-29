@@ -37,12 +37,17 @@
       <button class="btn grande" data-ir="contrarreloj">⏱️ Contrarreloj</button>
       <button class="btn grande" data-ir="practica">🛞 Práctica libre</button>
       <div class="fila">
+        <button class="btn grande" data-ir="multi">🌐 Multijugador</button>
+        <button class="btn grande" data-ir="garaje">🏎️ Garaje</button>
+      </div>
+      <div class="fila">
         <button class="btn" data-ir="reglaje">🔧 Reglaje</button>
         <button class="btn" data-ir="ajustes">⚙️ Ajustes</button>
         <button class="btn" data-ir="ayuda">❔ Cómo se juega</button>
       </div>
     </div>
     <div id="recordMenu" class="nota"></div>
+    <div id="cuentaMenu" class="nota"></div>
     <a class="volver-upgames" href="https://upgames.games/public/biblioteca.html" target="_top">← UpGames</a>
   </div>
 </div>
@@ -52,9 +57,9 @@
   <div class="panel">
     <h2>Carrera</h2>
     <div class="opcion"><label>Vueltas</label><div class="segm" data-campo="vueltas"><b data-v="3">3</b><b data-v="5">5</b><b data-v="10">10</b><b data-v="20">20</b></div></div>
-    <div class="opcion"><label>Rivales</label><div class="segm" data-campo="rivales"><b data-v="3">3</b><b data-v="5">5</b><b data-v="7">7</b></div></div>
+    <div class="opcion"><label>Rivales</label><div class="segm" data-campo="rivales"><b data-v="3">3</b><b data-v="7">7</b><b data-v="11">11</b><b data-v="15">15</b><b data-v="21">21</b></div></div>
     <div class="opcion"><label>Dificultad</label><div class="segm" data-campo="dificultad"><b data-v="facil">Fácil</b><b data-v="normal">Normal</b><b data-v="dificil">Difícil</b><b data-v="extremo">Extremo</b></div></div>
-    <div class="opcion"><label>Salida</label><div class="segm" data-campo="posSalida"><b data-v="1">Pole</b><b data-v="4">Media</b><b data-v="8">Última</b></div></div>
+    <div class="opcion"><label>Salida</label><div class="segm" data-campo="posSalida"><b data-v="1">Pole</b><b data-v="6">Media</b><b data-v="22">Última</b></div></div>
     <div class="opcion"><label>Neumático</label><div class="segm compuestos" data-campo="compuesto"><b data-v="blando">Blando</b><b data-v="medio">Medio</b><b data-v="duro">Duro</b></div></div>
     <div class="acciones"><button class="btn" data-ir="menu">Atrás</button><button class="btn primario" id="empezarCarrera">A la parrilla</button></div>
   </div>
@@ -115,6 +120,73 @@
   </div>
 </div>
 
+<!-- Garaje: mejoras y librea -->
+<div id="garaje" class="pantalla lateral">
+  <div class="panel ancho">
+    <div class="cab-garaje">
+      <h2>Garaje</h2>
+      <div id="saldoUC" class="saldo"></div>
+    </div>
+    <div class="pestanas"><b data-tab="mejoras" class="sel">Mejoras</b><b data-tab="librea">Librea</b><b data-tab="casco">Casco</b></div>
+    <div id="gMensaje" class="aviso-g"></div>
+    <div id="tabMejoras" class="lista"></div>
+    <div id="tabLibrea" class="lista oculto"></div>
+    <div id="tabCasco" class="lista oculto"></div>
+    <div class="acciones"><button class="btn" id="bCuentaG">Cuenta</button><button class="btn primario" data-ir="menu" id="bCerrarGaraje">Listo</button></div>
+  </div>
+</div>
+
+<!-- Cuenta de UpGames -->
+<div id="cuenta" class="pantalla">
+  <div class="panel">
+    <h2>Tu cuenta de UpGames</h2>
+    <div id="cuentaEstado" class="nota" style="text-align:left"></div>
+    <form id="formLogin" class="lista" autocomplete="on">
+      <div class="opcion"><label>Usuario o email</label><input id="lgUsuario" class="campo" autocomplete="username" required></div>
+      <div class="opcion"><label>Contraseña</label><input id="lgClave" class="campo" type="password" autocomplete="current-password" required></div>
+      <div class="opcion oculto" id="fila2fa"><label>Código 2FA</label><input id="lg2fa" class="campo" inputmode="numeric" maxlength="8"></div>
+      <div id="lgError" class="aviso-g"></div>
+      <div class="acciones"><button class="btn" type="button" data-ir="volver">Atrás</button><button class="btn primario" type="submit">Entrar</button></div>
+    </form>
+    <div id="cuentaSalir" class="acciones oculto"><button class="btn" data-ir="volver">Atrás</button><button class="btn" id="bSalirCuenta">Cerrar sesión</button></div>
+    <p class="nota">¿No tienes cuenta? Créala gratis en <b>upgames.games</b>. Tus UpCoins sirven para mejorar y personalizar el monoplaza.</p>
+  </div>
+</div>
+
+<!-- Multijugador: lobby -->
+<div id="multi" class="pantalla">
+  <div class="panel ancho">
+    <h2>Multijugador</h2>
+    <div id="mEstado" class="nota" style="text-align:left"></div>
+    <h3>Crear sala</h3>
+    <div class="opcion"><label>Tipo</label><div class="segm" data-mp="tipo"><b data-v="1v1">Duelo 1 vs 1</b><b data-v="abierta">Sala abierta (hasta 22)</b></div></div>
+    <div class="opcion" id="filaMax"><label>Pilotos máximo</label><div class="segm" data-mp="max"><b data-v="4">4</b><b data-v="8">8</b><b data-v="12">12</b><b data-v="22">22</b></div></div>
+    <div class="opcion"><label>Vueltas</label><div class="segm" data-mp="vueltas"><b data-v="2">2</b><b data-v="3">3</b><b data-v="5">5</b><b data-v="10">10</b></div></div>
+    <div class="opcion"><label>Mejoras de UpCoins<span class="desc">Si las desactivas, todos corren con el mismo coche</span></label><input type="checkbox" id="mpMejoras"></div>
+    <div class="opcion"><label>Sala pública</label><input type="checkbox" id="mpPublica" checked></div>
+    <div class="acciones"><button class="btn primario" id="bCrearSala">Crear sala</button></div>
+    <h3>Unirse</h3>
+    <div class="opcion"><label>Código de la sala</label><input id="mpCodigo" class="campo" maxlength="5" placeholder="ABCDE" style="text-transform:uppercase"><button class="btn" id="bUnirse">Unirse</button></div>
+    <div id="listaSalas" class="lista"></div>
+    <div class="acciones"><button class="btn" id="bSalirMulti">Atrás</button></div>
+  </div>
+</div>
+
+<!-- Multijugador: sala de espera -->
+<div id="sala" class="pantalla">
+  <div class="panel ancho">
+    <h2 id="salaTitulo">Sala</h2>
+    <div id="salaInfo" class="nota" style="text-align:left"></div>
+    <div id="salaPilotos" class="lista"></div>
+    <div class="acciones">
+      <button class="btn" id="bSalaSalir">Salir</button>
+      <button class="btn" id="bSalaCompartir">Compartir código</button>
+      <button class="btn" id="bSalaListo">Estoy listo</button>
+      <button class="btn primario" id="bSalaEmpezar">Empezar carrera</button>
+    </div>
+  </div>
+</div>
+
 <!-- HUD -->
 <div id="hud">
   <div id="hudIzq">
@@ -135,7 +207,7 @@
     <div id="leds"></div>
     <div class="vh-fila">
       <div class="vh-lado">
-        <div id="hNeum" class="neum"><i></i><i></i><i></i><i></i></div>
+        <div id="hNeum" class="neum"><i><b></b><s></s></i><i><b></b><s></s></i><i><b></b><s></s></i><i><b></b><s></s></i></div>
         <div id="hNeumTxt" class="mini"></div>
       </div>
       <div class="vh-centro">
@@ -150,7 +222,15 @@
       </div>
     </div>
   </div>
+  <div id="hDanos" class="danos">
+    <i data-d="aleronDel">ALERÓN DEL.</i><i data-d="aleronTras">ALERÓN TRAS.</i><i data-d="susp">SUSPENSIÓN</i><i data-d="pinchazo">PINCHAZO</i><i data-d="motor">LIMITADOR PIT</i>
+  </div>
   <div id="hMensaje" class="mensaje"></div>
+  <div id="panelBox" class="panel-box">
+    <div class="mini">ENTRAR A BOXES · NEUMÁTICOS</div>
+    <div class="fila-box"><button class="btn" data-box="blando">Blando</button><button class="btn" data-box="medio">Medio</button><button class="btn" data-box="duro">Duro</button></div>
+    <button class="btn" data-box="cancelar">Cancelar</button>
+  </div>
   <div id="hFps" class="fps"></div>
   <div id="semaforo"><i></i><i></i><i></i><i></i><i></i></div>
 </div>
@@ -165,6 +245,7 @@
     <button id="bCam" class="bt">🎥</button>
     <button id="bAtras" class="bt">↺</button>
     <button id="bRecolocar" class="bt" title="Volver a la pista">⟲</button>
+    <button id="bBox" class="bt box">BOX</button>
   </div>
   <div id="botonesAccion">
     <button id="bBajar" class="bt marcha-bt">−</button>

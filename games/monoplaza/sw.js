@@ -1,5 +1,5 @@
 // Caché para jugar sin conexión. Cambia VERSION al publicar archivos nuevos.
-const VERSION = 'apexgp-v2';
+const VERSION = 'apexgp-v3';
 const ARCHIVOS = [
   './', './index.html', './estilo.css', './manifest.webmanifest', './icono.svg', './icono-512.png',
   './lib/three.module.min.js', './lib/addons/objects/Sky.js', './lib/addons/utils/BufferGeometryUtils.js',
@@ -8,8 +8,8 @@ const ARCHIVOS = [
   './lib/addons/postprocessing/OutputPass.js', './lib/addons/postprocessing/MaskPass.js', './lib/addons/postprocessing/Pass.js',
   './lib/addons/shaders/CopyShader.js', './lib/addons/shaders/LuminosityHighPassShader.js', './lib/addons/shaders/OutputShader.js',
   './js/main.js', './js/config.js', './js/track.js', './js/race.js', './js/ai.js', './js/audio.js', './js/input.js',
-  './js/physics/monoplaza.js', './js/physics/neumatico.js',
-  './js/render/escenario.js', './js/render/cocheModelo.js', './js/render/efectos.js', './js/render/camara.js', './js/render/texturas.js',
+  './js/physics/monoplaza.js', './js/physics/neumatico.js', './js/red.js', './lib/socket.io.esm.min.js',
+  './js/render/escenario.js', './js/render/cocheModelo.js', './js/render/efectos.js', './js/render/camara.js', './js/render/texturas.js', './js/render/librea.js', './js/render/equipo.js',
 ];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(ARCHIVOS)).then(() => self.skipWaiting()));

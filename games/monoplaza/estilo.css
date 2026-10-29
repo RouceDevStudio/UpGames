@@ -211,3 +211,59 @@ body.cambio-auto .marcha-bt { display: none; }
   .panel { max-height: none; }
   .panel .lista { max-height: none; overflow: visible; }
 }
+
+/* Garaje, cuenta y multijugador */
+.pantalla.lateral { justify-content: flex-end; background: linear-gradient(90deg, rgba(3,5,10,0) 0%, rgba(3,5,10,.55) 45%, rgba(3,5,10,.9) 100%); backdrop-filter: none; }
+.pantalla.lateral .panel { width: min(520px, 58vw); max-height: 100%; }
+.cab-garaje { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.saldo { font-weight: 800; color: #ffd23f; font-size: 14px; }
+.pestanas { display: flex; gap: 4px; border-bottom: 1px solid var(--borde); }
+.pestanas b { padding: 8px 12px; cursor: pointer; color: var(--tenue); font-size: 14px; }
+.pestanas b.sel { color: var(--texto); box-shadow: inset 0 -2px 0 var(--rojo); }
+.oculto { display: none !important; }
+.aviso-g { font-size: 13px; color: #ffd23f; min-height: 0; }
+.aviso-g:empty { display: none; }
+.mejora { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,.04); align-items: center; }
+.mejora .nom { font-weight: 800; }
+.mejora .desc { font-size: 11px; color: var(--tenue); grid-column: 1 / 2; }
+.pips { display: flex; gap: 3px; }
+.pips i { width: 16px; height: 6px; border-radius: 3px; background: rgba(255,255,255,.14); }
+.pips i.on { background: linear-gradient(90deg, var(--azul), var(--cian)); }
+.btn.mini { min-height: 34px; padding: 6px 10px; font-size: 13px; }
+.btn.comprar { background: linear-gradient(180deg, #ffd23f, #e0a800); color: #1a1200; border-color: #ffd23f; }
+.rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 6px; }
+.ficha { position: relative; padding: 8px; border-radius: 9px; border: 1px solid var(--borde); background: rgba(255,255,255,.05); font-size: 12px; font-weight: 700; cursor: pointer; text-align: center; }
+.ficha.sel { border-color: var(--rojo); box-shadow: 0 0 0 1px var(--rojo) inset; }
+.ficha .precio { display: block; font-size: 11px; color: #ffd23f; font-weight: 800; }
+.ficha .precio.libre { color: var(--verde); }
+.colores { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.colores label { font-size: 12px; color: var(--tenue); display: flex; flex-direction: column; align-items: center; gap: 3px; }
+input[type=color] { width: 46px; height: 34px; border: 1px solid var(--borde); border-radius: 8px; background: none; padding: 2px; }
+.campo { background: rgba(255,255,255,.07); border: 1px solid var(--borde); border-radius: 8px; color: var(--texto); padding: 9px 10px; font: inherit; width: min(240px, 46vw); user-select: text; -webkit-user-select: text; }
+.sala-fila { display: grid; grid-template-columns: 28px 1fr auto auto; gap: 8px; align-items: center; padding: 7px 9px; border-radius: 8px; background: rgba(255,255,255,.04); font-size: 14px; }
+.sala-fila .listo { color: var(--verde); font-weight: 800; font-size: 12px; }
+.sala-fila .host { color: #ffd23f; font-size: 12px; }
+.sala-pub { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; border-radius: 9px; background: rgba(255,255,255,.05); cursor: pointer; }
+
+/* HUD: neumáticos con temperatura y desgaste, daños, boxes */
+.neum { grid-template-columns: 30px 30px; gap: 3px 6px; }
+.neum i { width: 30px; height: 26px; border-radius: 5px; display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 1px 0 2px; border-width: 1px; }
+.neum i b { font-size: 10px; font-weight: 900; color: #04110a; line-height: 1.3; }
+.neum i s { display: block; height: 3px; width: 80%; background: rgba(0,0,0,.55); border-radius: 2px; text-decoration: none; }
+.neum i.pinchado { background: #ff3b3b !important; animation: parpadeo .5s infinite; }
+.neum i.suelta { background: #222 !important; border-color: #ff3b3b; }
+@keyframes parpadeo { 50% { opacity: .35; } }
+.danos { position: absolute; left: 50%; bottom: calc(118px + var(--sa-b)); transform: translateX(-50%); display: flex; gap: 4px; }
+.danos i { display: none; font-size: 9px; font-weight: 900; letter-spacing: 1px; padding: 2px 6px; border-radius: 4px; background: rgba(255,59,59,.85); color: #fff; }
+.danos i.on { display: block; }
+.danos i.leve { background: rgba(255,210,63,.9); color: #221a00; }
+.danos i.pit { background: rgba(47,123,255,.9); }
+.panel-box { position: absolute; right: calc(180px + var(--sa-r)); top: calc(100px + var(--sa-t)); display: none; flex-direction: column; gap: 6px; padding: 10px; border-radius: 12px; background: rgba(6,9,15,.88); border: 1px solid var(--borde); pointer-events: auto; }
+.panel-box.visible { display: flex; }
+.panel-box .fila-box { display: flex; gap: 6px; }
+.panel-box button[data-box=blando] { box-shadow: inset 0 -3px 0 #e8202a; }
+.panel-box button[data-box=medio] { box-shadow: inset 0 -3px 0 #f5c518; }
+.panel-box button[data-box=duro] { box-shadow: inset 0 -3px 0 #f2f2f2; }
+.bt.box { color: #ffd23f; }
+.bt.box.activo { background: rgba(255,210,63,.85); color: #1a1200; }
+@media (max-height: 480px) { .pantalla.lateral .panel { width: min(470px, 62vw); } .danos { bottom: calc(96px + var(--sa-b)); } }
