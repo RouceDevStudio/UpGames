@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-<url><loc>https://upgames.games/public/biblioteca.html</loc><lastmod>2026-10-27</lastmod><changefreq>hourly</changefreq><priority>1.0</priority></url>
+<url><loc>https://upgames.games/public/biblioteca.html</loc><lastmod>2026-10-29</lastmod><changefreq>hourly</changefreq><priority>1.0</priority></url>
 <url><loc>https://upgames.games/public/live.html</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>
+<url><loc>https://upgames.games/public/biblioteca.html?id=6ae2948b0e686a57d884c50c</loc><lastmod>2026-10-29</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
+<url><loc>https://upgames.games/public/biblioteca.html?id=6ae27229569820daa9521793</loc><lastmod>2026-10-29</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
+<url><loc>https://upgames.games/public/biblioteca.html?id=6ae2412b0cf9b4888bd16b32</loc><lastmod>2026-10-28</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
 <url><loc>https://upgames.games/public/p/resident-evil-2-remake-mod-pt9-6ae0192a31af3f254562d255.html</loc><lastmod>2026-10-28</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
 <url><loc>https://upgames.games/public/p/resident-evil-2-remake-mod-pt8-6ae018ed31af3f254562d233.html</loc><lastmod>2026-10-28</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
 <url><loc>https://upgames.games/public/p/resident-evil-2-remake-mod-pt7-6ae0189331af3f254562d210.html</loc><lastmod>2026-10-28</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
@@ -40,7 +43,7 @@
 <url><loc>https://upgames.games/public/p/mods-para-project-zomboid-698fa0c20570f431e283ae6b.html</loc><lastmod>2026-10-28</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
 <url><loc>https://upgames.games/public/p/project-zomdroid-launcher-para-android-698f9e920570f431e283acad.html</loc><lastmod>2026-10-28</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
 <url><loc>https://upgames.games/public/p/dar-souls-3-mod-de-rendimiento-698c1045c3da7e6da551dc00.html</loc><lastmod>2026-10-28</lastmod><changefreq>weekly</changefreq><priority>0.7</priority></url>
-<url><loc>https://upgames.games/public/perfil-publico.html?usuario=keroxenee</loc><lastmod>2026-10-28</lastmod><changefreq>weekly</changefreq><priority>0.5</priority></url>
+<url><loc>https://upgames.games/public/perfil-publico.html?usuario=keroxenee</loc><lastmod>2026-10-29</lastmod><changefreq>weekly</changefreq><priority>0.5</priority></url>
 <url><loc>https://upgames.games/public/perfil-publico.html?usuario=kale_ab</loc><lastmod>2026-10-27</lastmod><changefreq>weekly</changefreq><priority>0.5</priority></url>
 <url><loc>https://upgames.games/public/terminos_condiciones.html</loc><changefreq>monthly</changefreq><priority>0.2</priority></url>
 <url><loc>https://upgames.games/public/politica-privacidad.html</loc><changefreq>monthly</changefreq><priority>0.2</priority></url>
