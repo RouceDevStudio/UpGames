@@ -110,11 +110,21 @@ class VozWorklet {
 // coche (acelerando o reteniendo); la velocidad de reproducción ajusta el tono exacto,
 // así que cada cambio de marcha de la física se oye en el mismo instante.
 const RPM_V10 = 18000 / 15000;          // las rpm del juego (corte a 15 000) a rpm del V10
+// Motores grabados que se pueden elegir en Ajustes (cada banco: trozos a tono constante cada
+// ~3 %, así el juego apenas cambia la velocidad de la grabación y suena natural)
+export const MOTORES = {
+  ferrari: { archivo: 'motor_ferrari', nombre: 'V10 · Escudería roja 2004' },
+  alonso: { archivo: 'motor_alonso', nombre: 'V10 · Escudería azul 2004' },
+  verstappen: { archivo: 'motor_verstappen', nombre: 'V6 turbo híbrido · 2019' },
+};
+const RPM_LIMITE_JUEGO = 15000;
+
 class VozMuestras {
   constructor(ctx, destino, banco, ligero = false) {
     this.ctx = ctx;
+    this.fLim = banco.fLim;
     this.salida = ctx.createGain(); this.salida.gain.value = 0;
-    this.filtro = ctx.createBiquadFilter(); this.filtro.type = 'lowpass'; this.filtro.frequency.value = 14000; this.filtro.Q.value = 0.5;
+    this.filtro = ctx.createBiquadFilter(); this.filtro.type = 'lowpass'; this.filtro.frequency.value = 9000; this.filtro.Q.value = 0.5;
     this.filtro.connect(this.salida);
     if (destino) this.salida.connect(destino);
     this.gAcel = ctx.createGain(); this.gRet = ctx.createGain();
@@ -125,7 +135,7 @@ class VozMuestras {
       const g = ctx.createGain(); g.gain.value = 0;
       src.connect(g); g.connect(bus);
       src.start(ctx.currentTime, b.ini + Math.random() * (b.fin - b.ini));
-      return { rpm: b.rpm, src, g };
+      return { f: b.f, src, g };
     };
     // los rivales usan la mitad de bucles (suenan lejos y son varios)
     const acel = banco.bucles.filter(b => b.acel).filter((b, k, a) => !ligero || k % 2 === 0 || k === a.length - 1);
@@ -134,23 +144,26 @@ class VozMuestras {
     this.ret = ret.map(b => crear(b, this.gRet));
     this.carga = 0;
   }
-  _mezclar(lista, rpm, t, tono) {
-    // los dos bucles que rodean a las rpm, con fundido de igual potencia
+  parar() { const t = this.ctx.currentTime + 0.2; for (const v of [...this.acel, ...this.ret]) { try { v.src.stop(t); } catch { /* ya parada */ } } }
+  _mezclar(lista, f, t, tono) {
+    // los dos trozos que rodean al tono buscado, con fundido de igual potencia
     let i = lista.length - 1;
-    for (let k = 0; k < lista.length - 1; k++) if (rpm < lista[k + 1].rpm) { i = k; break; }
+    for (let k = 0; k < lista.length - 1; k++) if (f < lista[k + 1].f) { i = k; break; }
     const a = lista[i], b = lista[Math.min(lista.length - 1, i + 1)];
-    const u = a === b ? 0 : clamp((rpm - a.rpm) / (b.rpm - a.rpm), 0, 1);
+    const u = a === b ? 0 : clamp((f - a.f) / (b.f - a.f), 0, 1);
     lista.forEach((v) => {
       const peso = v === a ? Math.cos(u * Math.PI / 2) : v === b ? Math.sin(u * Math.PI / 2) : 0;
       v.g.gain.setTargetAtTime(peso, t, 0.015);
-      v.src.playbackRate.setTargetAtTime(clamp(rpm / v.rpm * tono, 0.4, 2.2), t, 0.012);
+      v.src.playbackRate.setTargetAtTime(clamp(f / v.f * tono, 0.4, 2.2), t, 0.012);
     });
   }
   ajustar(rpm, carga, volumen, t, tono = 1, brillo = 1, corte = 0) {
+    // el tono del motor es proporcional a las rpm: el limitador del juego cae en el de la grabación
     const r = Math.max(5000, rpm * RPM_V10);
+    const f = this.fLim * Math.max(0.33, rpm / RPM_LIMITE_JUEGO);
     this.carga += (carga - this.carga) * 0.35;
-    this._mezclar(this.acel, r, t, tono);
-    this._mezclar(this.ret, r, t, tono);
+    this._mezclar(this.acel, f, t, tono);
+    this._mezclar(this.ret, f, t, tono);
     const c = clamp(this.carga, 0, 1);
     this.gAcel.gain.setTargetAtTime(Math.sqrt(c) * 1.05, t, 0.02);
     this.gRet.gain.setTargetAtTime(Math.sqrt(1 - c) * 0.75, t, 0.03);
@@ -160,7 +173,7 @@ class VozMuestras {
     const limita = rpm > 14850 && carga > 0.6 ? (Math.sin(t * 2 * Math.PI * 22) > 0 ? 1 : 0.45) : 1;
     const v = volumen * (0.55 + 0.45 * c) * (0.75 + 0.25 * clamp(r / 18000, 0, 1)) * enCorte * limita;
     this.salida.gain.setTargetAtTime(v, t, corte ? 0.006 : 0.025);
-    this.filtro.frequency.setTargetAtTime(2500 + 13000 * clamp(brillo, 0, 1), t, 0.1);
+    this.filtro.frequency.setTargetAtTime(2200 + 6800 * clamp(brillo, 0, 1), t, 0.1);
   }
 }
 
@@ -192,7 +205,14 @@ export class Sonido {
     this.envioEco.connect(this.eco); this.eco.connect(this.maestro);
     // bus de los motores: va seco al maestro y una parte al eco
     this.busMotor = ctx.createGain();
-    this.busMotor.connect(this.maestro); this.busMotor.connect(this.envioEco);
+    // timbre del motor: graves con cuerpo, sin estridencia arriba, y un compresor suave que
+    // le da pegada sin distorsionar (las grabaciones apenas se tocan)
+    const graves = ctx.createBiquadFilter(); graves.type = 'lowshelf'; graves.frequency.value = 160; graves.gain.value = 5;
+    const medios = ctx.createBiquadFilter(); medios.type = 'peaking'; medios.frequency.value = 3400; medios.Q.value = 0.8; medios.gain.value = -3.5;
+    const agudos = ctx.createBiquadFilter(); agudos.type = 'highshelf'; agudos.frequency.value = 7000; agudos.gain.value = -3;
+    const compM = ctx.createDynamicsCompressor(); compM.threshold.value = -16; compM.knee.value = 8; compM.ratio.value = 2.5; compM.attack.value = 0.004; compM.release.value = 0.12;
+    this.busMotor.connect(graves); graves.connect(medios); medios.connect(agudos); agudos.connect(compM);
+    compM.connect(this.maestro); compM.connect(this.envioEco);
 
     this.motor = new VozMotor(ctx, this.busMotor, this.ruido, true);
     this.rivales = [];
@@ -256,17 +276,39 @@ export class Sonido {
     return await this.ctx.decodeAudioData(await r.arrayBuffer());
   }
 
-  async _cargarGrabaciones() {
+  /** Acelerón de muestra al elegir el motor en el menú (en carrera no hace falta). */
+  probarMotor() {
+    if (!this.ctx || (this._tUlt && performance.now() - this._tUlt < 600)) return;
+    clearInterval(this._prueba);
+    const t0 = performance.now();
+    // espera a que cargue el banco nuevo y hace: ralentí → a fondo hasta el corte → suelta
+    this._prueba = setInterval(() => {
+      const t = (performance.now() - t0) / 1000 - 0.6;
+      if (t < 0 || !this.muestras) return;
+      const rpm = t < 1.9 ? 7000 + 8000 * Math.min(1, t / 1.6) : Math.max(6000, 15000 - (t - 1.9) * 7000);
+      const carga = t < 1.9 ? 1 : 0;
+      this.motor.ajustar(rpm, carga, this.volumen * 0.9, this.ctx.currentTime);
+      if (t > 3.3) { this.motor.ajustar(6000, 0, 0, this.ctx.currentTime); clearInterval(this._prueba); }
+    }, 30);
+  }
+
+  /** Cambia el sonido del motor (Ajustes). */
+  cambiarMotor(id) { if (this.ctx && id !== this.motorElegido) this._cargarGrabaciones(id); else this.motorElegido = id; }
+
+  async _cargarGrabaciones(id = this.motorElegido || 'ferrari') {
     const ctx = this.ctx;
+    const m = MOTORES[id] || MOTORES.ferrari;
+    this.motorElegido = MOTORES[id] ? id : 'ferrari';
     try {
-      const [buffer, datos] = await Promise.all([this._buffer('motor_v10.wav'), fetch(new URL('../audio/motor_v10.json', import.meta.url)).then(r => r.json())]);
-      const banco = { buffer, bucles: datos.bucles.sort((a, b) => a.rpm - b.rpm) };
+      const [buffer, datos] = await Promise.all([this._buffer(m.archivo + '.wav'), fetch(new URL(`../audio/${m.archivo}.json`, import.meta.url)).then(r => r.json())]);
+      const banco = { buffer, fLim: datos.fLim, bucles: datos.bucles.sort((a, b) => a.f - b.f) };
       // espera a que el worklet (si lo hay) se haya colocado, para sustituirlo después
-      await new Promise(r => setTimeout(r, 300));
+      if (!this.muestras) await new Promise(r => setTimeout(r, 300));
       const viejo = this.motor;
       this.motor = new VozMuestras(ctx, this.busMotor, banco);
-      viejo.salida.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
-      this.rivales.forEach((rv) => { const v = new VozMuestras(ctx, rv.panner, banco, true); rv.voz.salida.gain.setTargetAtTime(0, ctx.currentTime, 0.05); rv.voz = v; });
+      viejo?.salida.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+      viejo?.parar?.();
+      this.rivales.forEach((rv) => { const v = new VozMuestras(ctx, rv.panner, banco, true); rv.voz.salida.gain.setTargetAtTime(0, ctx.currentTime, 0.05); rv.voz.parar?.(); rv.voz = v; });
       this.muestras = true;
     } catch (e) { console.warn('motor grabado no disponible', e); }
     try { this.bufChoque = await this._buffer('choque.mp3'); } catch { /* sintetizado */ }
@@ -457,6 +499,7 @@ export class Sonido {
   }
 
   actualizar(dt, car, rivales, cam, entorno = {}) {
+    this._tUlt = performance.now();
     if (!this.listo) return;
     const t = this.ctx.currentTime;
     this._oyente(cam, t);

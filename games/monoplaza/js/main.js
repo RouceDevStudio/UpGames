@@ -49,7 +49,7 @@ const CLAVE = 'apexgp.v1';
 const AJ_DEF = {
   control: esTactil ? 'inclinacion' : 'tactil', sensibilidad: 1, anguloInclinacion: 24, invertir: false, vibracion: true,
   tc: 2, abs: true, cambioAuto: true, direccion: true, estabilidad: false, trazada: true,
-  calidad: 'auto', fps: false, volumen: 0.8, unidades: 'kmh', camara: 'persecucion', radio: true, ambiente: true, averias: true, repeAuto: true,
+  calidad: 'auto', fps: false, volumen: 0.8, unidades: 'kmh', camara: 'persecucion', radio: true, ambiente: true, averias: true, repeAuto: true, motorSonido: 'ferrari',
 };
 const OPC_CARRERA_DEF = { vueltas: 5, rivales: 7, dificultad: 'normal', posSalida: 0, compuesto: 'medio', clima: 'seco', hora: 'dia', formacion: 0, duracion: 0 };
 function cargar() {
@@ -128,6 +128,7 @@ let calidad = calidadInicial();
 // --- Estado global ----------------------------------------------------------
 let renderer, scene, composer, camara, efectos, escenario, circuito;
 const sonido = new Sonido();
+sonido.motorElegido = ajustes.motorSonido || "ferrari";
 const entrada = new Entrada(ajustes);
 let sesion = null, modelos = [], modeloFantasma = null, lineaIdeal = null;
 // para pruebas automáticas (?depurar): acceso a la sesión desde la consola
@@ -734,6 +735,7 @@ function pintarAjustes() {
           ajustes[k] = isNaN(+b.dataset.v) ? b.dataset.v : +b.dataset.v; guardar(); pintarAjustes();
           // el idioma se aplica al recargar (así se traduce todo desde el principio)
           if (k === 'idioma' && antes !== ajustes[k]) setTimeout(() => location.reload(), 150);
+          if (k === 'motorSonido') { sonido.iniciar(); sonido.cambiarMotor(ajustes.motorSonido); sonido.probarMotor?.(); }
         };
       });
     } else if (el.type === 'checkbox') {
