@@ -205,6 +205,7 @@ const P = {
   // el de la piruleta / señalero con el brazo derecho estirado
   senala: { y: 0.95, tronco: [0, 0, 0], cabeza: [0, 0, 0], hI: [0.08, 0, 0.1], hD: [-0.2, 0, 1.55], cI: [0, 0, 0.2], cD: [0, 0, 0.05], kI: [0, 0, 0.03], kD: [0, 0, 0.03], rI: [0, 0, -0.05], rD: [0, 0, -0.05] },
   // manos en la cintura, esperando
+  lamento: { y: 0.95, tronco: [0, 0, -0.18], cabeza: [0, 0, 0.4], hI: [0.55, 0, 2.35], hD: [-0.55, 0, 2.35], cI: [0, 0, 2.1], cD: [0, 0, 2.1], kI: [0, 0, 0.04], kD: [0, 0, 0.04], rI: [0, 0, -0.06], rD: [0, 0, -0.06] },
   espera: { y: 0.95, tronco: [0, 0, 0], cabeza: [0, 0, 0.05], hI: [0.35, 0, -0.2], hD: [-0.35, 0, -0.2], cI: [-0.6, 0, 1.6], cD: [0.6, 0, 1.6], kI: [0.05, 0, 0.03], kD: [-0.05, 0, -0.05], rI: [0, 0, -0.04], rD: [0, 0, -0.04] },
 };
 const HUESOS = ['tronco', 'cabeza', 'hI', 'hD', 'cI', 'cD', 'mI', 'mD', 'kI', 'kD', 'rI', 'rD'];

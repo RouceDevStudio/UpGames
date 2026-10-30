@@ -1,5 +1,5 @@
 // Caché para jugar sin conexión. Cambia VERSION al publicar archivos nuevos.
-const VERSION = 'apexgp-v16';
+const VERSION = 'apexgp-v17';
 const ARCHIVOS = [
   './', './index.html', './estilo.css', './manifest.webmanifest', './icono.svg', './logo.svg', './icono-512.png',
   './lib/three.module.min.js', './lib/addons/objects/Sky.js', './lib/addons/utils/BufferGeometryUtils.js',
@@ -10,7 +10,7 @@ const ARCHIVOS = [
   './js/main.js', './js/config.js', './js/track.js', './js/race.js', './js/ai.js', './js/audio.js', './js/input.js',
   './js/physics/monoplaza.js', './js/physics/neumatico.js', './js/red.js', './lib/socket.io.esm.min.js',
   './js/render/escenario.js', './js/render/cocheModelo.js', './js/render/efectos.js', './js/render/camara.js', './js/render/texturas.js', './js/render/librea.js', './js/render/equipo.js',
-  './js/render/barreras.js', './js/render/vida.js', './js/render/camaraRepe.js', './js/render/personas.js', './js/render/garaje.js', './lib/mp4-muxer/mp4-muxer.mjs', './js/render/cine.js', './js/grabarVideo.js', './js/motorWorklet.js', './js/clima.js', './js/campeonato.js', './js/radio.js', './js/repeticion.js', './js/telemetria.js', './js/render/lluvia.js', './js/circuitosReales.js', './js/ingeniero.js', './js/trayectoria.js', './js/editorCircuito.js', './js/render/publico.js', './js/render/helicoptero.js', './js/render/piloto.js',
+  './js/render/barreras.js', './js/render/vida.js', './js/render/camaraRepe.js', './js/render/personas.js', './js/render/garaje.js', './lib/mp4-muxer/mp4-muxer.mjs', './js/render/cine.js', './js/grabarVideo.js', './js/motorWorklet.js', './js/clima.js', './js/campeonato.js', './js/radio.js', './js/repeticion.js', './js/telemetria.js', './js/render/lluvia.js', './js/circuitosReales.js', './js/ingeniero.js', './js/trayectoria.js', './js/editorCircuito.js', './js/render/publico.js', './js/render/helicoptero.js', './js/render/piloto.js', './js/render/pilotoFuera.js',
 ];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(ARCHIVOS)).then(() => self.skipWaiting()));

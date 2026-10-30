@@ -249,9 +249,20 @@ export class Monoplaza {
     // aire sucio y rebufo
     clDel *= 1 - 0.24 * this.aireSucio; clTras *= 1 - 0.14 * this.aireSucio;
     cdA *= 1 - 0.28 * this.rebufo;
-    const v = Math.max(0, this.vx);
+    // viento: la aerodinámica trabaja con la velocidad del aire, no con la del coche
+    const cs = Math.cos(this.psi), sn = Math.sin(this.psi), wv = this.viento;
+    const vaL = this.vx - (wv ? wv.x * cs + wv.z * sn : 0);          // de cara: más carga y más resistencia
+    const vaT = this.vy - (wv ? -wv.x * sn + wv.z * cs : 0);         // de lado: empuja y quita carga
+    this.vientoLat = vaT;
+    const guinada = Math.atan2(Math.abs(vaT), Math.max(5, Math.abs(vaL)));
+    const perdida = 1 - Math.min(0.25, 2.2 * guinada * guinada);
+    // efecto suelo a alta velocidad: con el coche bajo el fondo rebota (porpoising)
+    const bajo = Math.max(0, 0.03 - Math.min(this.alturaDel, this.alturaTras)) / 0.03;
+    const rebote = 1 + Math.sin(this.reloj * 2 * Math.PI * 3.2) * 0.06 * bajo * Math.max(0, Math.min(1, (vaL - 70) / 20));
+    this.porpoising = (rebote - 1) * 10;
+    const v = Math.max(0, vaL);
     const q = 0.5 * RHO_AIRE * v * v;
-    this.carga.del = q * clDel; this.carga.tras = q * clTras; this.carga.drag = 0.5 * RHO_AIRE * cdA * this.vx * Math.abs(this.vx);
+    this.carga.del = q * clDel * perdida * rebote; this.carga.tras = q * clTras * perdida * rebote; this.carga.drag = 0.5 * RHO_AIRE * cdA * vaL * Math.abs(vaL);
     this.carga.balance = clDel / (clDel + clTras);
   }
 
@@ -269,6 +280,9 @@ export class Monoplaza {
     if (mand.freno > 0.08 || !this.drsPermitido) this.drsAbierto = false;
     else if (mand.drs && this.drsPermitido) this.drsAbierto = true;
 
+    // el depósito va detrás del centro de gravedad: lleno, el coche carga más atrás
+    { const L0 = COCHE.wheelbase, rep = (COCHE.repartoDel * (m - this.combustible) + (COCHE.repartoDel - 0.25 / L0) * this.combustible) / m;
+      this.b = L0 * rep; this.a = L0 * (1 - rep); }
     this._aero();
 
     // --- Cargas verticales ------------------------------------------------
@@ -424,6 +438,7 @@ export class Monoplaza {
     // --- Ruedas -----------------------------------------------------------
     let fxT = 0, fyT = 0, mzT = 0;
     let deslizMax = 0, bordillo = 0, fuera = 0, superficieMala = 0, salchicha = 0, charcoFuerte = 0, planos = 0;
+    const bajoRueda = Math.max(0, 0.03 - Math.min(this.alturaDel, this.alturaTras)) / 0.03;
     const kRelax = 0.38;
     // diferencial autoblocante
     const dOmega = rl.omega - rr.omega;
@@ -453,6 +468,12 @@ export class Monoplaza {
         const fase = Math.sin((p.s + k * 0.7) * (w.sup === SUP_BORDILLO ? 2.6 : 5.1));
         w.fz *= 1 + 0.22 * sp.vib * fase;
       }
+      // baches del asfalto: a alta velocidad, con el coche pegado al suelo, se notan mucho más
+      if (c.bache && v > 30 && w.sup === SUP_ASFALTO) {
+        const b = c.bache(p.s + w.px, w.d), f = Math.min(1, ((v - 30) / 55) ** 2);
+        w.fz *= 1 + b * 0.22 * f * (1 + bajoRueda);
+        if (b > 0.75 && v > 70 && Math.min(this.alturaDel, this.alturaTras) < 0.018) this.fondoToca = Math.max(this.fondoToca, 0.5 * b);
+      }
       // un plano golpea una vez por vuelta de la rueda
       if (w.neum.bloqueo > 0.05 && v > 5) { planos = Math.max(planos, w.neum.bloqueo); w.fz *= 1 + 0.18 * w.neum.bloqueo * Math.sin(w.giro); }
       // velocidad del punto de contacto en ejes coche
@@ -471,6 +492,12 @@ export class Monoplaza {
       // agua en la pista (fuera del asfalto, la hierba mojada es una pista de hielo)
       const agua = c.agua || 0;
       if (agua > 0) mu *= factorAgua(nm.c, agua) * (w.sup > SUP_ESCAPE ? 1 - 0.35 * agua : 1);
+      // neumáticos sucios tras pisar hierba o grava: se limpian rodando unos cientos de metros
+      if (w.sup > SUP_ESCAPE && Math.abs(vl) > 2) w.suciedad = Math.min(1, (w.suciedad || 0) + dt * 1.2);
+      else if (w.suciedad > 0) w.suciedad = Math.max(0, w.suciedad - Math.abs(vl) * dt / (w.sup === SUP_ASFALTO ? 650 : 2000));
+      if (w.suciedad > 0) mu *= 1 - 0.15 * w.suciedad;
+      // la pista gana goma con las vueltas (más agarre en la trazada) y la lluvia se la lleva
+      if (w.sup === SUP_ASFALTO) mu *= 0.975 + 0.04 * (c.goma ?? 0.6);
       // canicas fuera de la trazada en seco: casi como pisar rodamientos
       if (w.sup === SUP_ASFALTO && agua < 0.2 && c.enCanicas?.(iw, w.d)) mu *= 0.86;
       // charco: aquaplaning que crece con la velocidad y la profundidad (y menos con los de lluvia)
@@ -544,7 +571,8 @@ export class Monoplaza {
       w.fx = fxw; w.fy = fyw;
       // temperatura de frenos
       const potFreno = parFr * Math.abs(w.omega);
-      w.tFreno += (potFreno * 0.9 - (12 + 1.1 * v) * this.ef.refrigeracion * (w.tFreno - this.tAmb)) / 1500 * dt;
+      // detrás de otro coche entra aire caliente y menos caudal: los frenos se recalientan
+      w.tFreno += (potFreno * 0.9 - (12 + 1.1 * v) * this.ef.refrigeracion * (1 - 0.45 * this.aireSucio) * (w.tFreno - this.tAmb)) / 1500 * dt;
       // potencia disipada en el contacto
       const vDesl = Math.hypot(w.omega * R - vl, vt);
       w.deslizamiento = vDesl;
@@ -574,6 +602,8 @@ export class Monoplaza {
     // --- Fuerzas externas ---------------------------------------------------
     fxT -= this.carga.drag;
     fxT -= m * G * pendCoche;
+    // viento lateral: empuja el coche y lo gira (el centro de presión va detrás del de gravedad)
+    if (this.viento) { const fv = -0.5 * RHO_AIRE * 1.9 * this.vientoLat * Math.abs(this.vientoLat); fyT += fv; mzT += fv * -0.35; }
     if (rozFondo > 0) fxT -= Math.sign(this.vx) * rozFondo;
     // --- Integración ------------------------------------------------------
     const axc = fxT / m, ayc = fyT / m;

@@ -206,9 +206,13 @@ export function crearPuestoMuro({ nombre, color, calidad = 2 }) {
       g.add(p.raiz); gente.push(p);
     }
   }
+  let tFiesta = 0;
   return {
     grupo: g,
+    /** Vuelta rápida del equipo: los ingenieros se levantan con los brazos arriba. */
+    celebrar(seg = 3) { tFiesta = seg; for (const p of gente) { p.poner('celebra', 0.25); p.salto = 0.35 + Math.random() * 0.3; } },
     actualizar(dt, cerca) {
+      if (tFiesta > 0) { tFiesta -= dt; if (tFiesta <= 0) for (const p of gente) { p.salto = 0; p.poner('sentado', 0.6); } }
       for (const p of gente) { p.raiz.visible = cerca; if (cerca) p.actualizar(dt); }
     },
   };

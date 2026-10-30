@@ -301,6 +301,13 @@ export class Circuito {
     this._superficieViva();
   }
 
+  /** Baches del asfalto (−1..1) en s y d: suaves y largos, con alguna zona más rota (más en los urbanos). */
+  bache(s, d = 0) {
+    const a = this.def.urbano ? 1 : this.def.real ? 0.75 : 0.55, k = this._semillaBache ??= (this.largo * 0.0137) % 6.28;
+    const zona = Math.max(0, Math.sin(s * 0.0093 + k)) ** 2;
+    return a * (0.55 * Math.sin(s * 0.83 + k + d * 0.4) * (0.4 + zona) + 0.45 * Math.sin(s * 2.7 + 2 * k) * zona);
+  }
+
   // Perfil con el agarre multiplicado por f (pista mojada). Se calcula al pedirlo y se guarda
   // cuantizado: con carga aerodinámica la velocidad en curva rápida cae mucho más que √f.
   perfilAgarre(f) {

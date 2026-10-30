@@ -32,6 +32,7 @@ import { Efectos } from './render/efectos.js';
 import { Camara, NOMBRES_CAMARA } from './render/camara.js';
 import { Sonido } from './audio.js';
 import { Entrada } from './input.js';
+import { PilotosFuera } from './render/pilotoFuera.js';
 import * as ED from './editorCircuito.js';
 
 const $ = (s) => document.querySelector(s);
@@ -123,6 +124,7 @@ const sonido = new Sonido();
 const entrada = new Entrada(ajustes);
 let sesion = null, modelos = [], modeloFantasma = null, lineaIdeal = null;
 let gestorBoxes = null, escombros = null, lluviaFx = null, camarasTV = null, barreras = null, comisarios = null, cocheSeg = null;
+let pilotosFuera = null, salidasPendientes = [], tAturdido = 0;
 let capaCamara = null;
 const _vSol = new THREE.Vector3();
 let grabadora = null, telemetria = null, repe = null;
@@ -186,6 +188,7 @@ async function cargarCircuito(id, forzar = false) {
   });
   escombros = new Escombros(scene, (x, z) => { const p = circuito.proyectar(x, z, -1, {}); return p.y + circuito.caida(p.i, p.d); });
   lluviaFx = new Lluvia(scene, escenario, calidad);
+  pilotosFuera = new PilotosFuera(scene, circuito, calidad);
   barreras = new Barreras(scene, circuito, { escombros, efectos, calidad, deformar: (g) => escenario.deformarMuro(g), reparar: () => escenario.repararMuros() });
   comisarios = new Comisarios(scene, circuito, calidad);
   cocheSeg = new CocheSeguridad(scene);
@@ -396,6 +399,8 @@ function crearModelos() {
     modeloFantasma.raiz.visible = false;
     scene.add(modeloFantasma.raiz);
   }
+  if (sesion) pilotosFuera?.ocultarEn(modelos, sesion.participantes);
+  aguaCoches = -1;
 }
 
 // En línea todos corren igual: sin control de tracción, ABS, dirección asistida, estabilidad
@@ -468,6 +473,7 @@ function arrancarSesion(modo) {
   if (ajustes.control === 'inclinacion' && esTactil) entrada.activarInclinacion().then(() => setTimeout(() => entrada.calibrar(), 400));
   pedirWakeLock();
   barreras?.reponer();
+  pilotosFuera?.limpiar(); salidasPendientes = []; tAturdido = 0; document.body.classList.remove('aturdido');
   // repetición, telemetría, radio y estado de la carrera
   grabadora = new Grabadora(sesion.participantes.length);
   posPrev = new Map();
@@ -976,6 +982,7 @@ function procesarEventos() {
     else if (e.tipo === 'vueltaRapida' && sesion.modo === 'carrera' && sesion.estado === 'carrera') {
       radio.decir(`Vuelta rápida para ${e.p.nombre.replace('@', '')}: ${fmt(e.p.mejor)}.`, { tipo: 'megafonia', clave: 'vr', cada: 40 });
       if (e.p.jugador) radio.decir('¡Vuelta rápida! Muy bien.', { clave: 'vrJ', cada: 30 });
+      escenario.puestosMuro?.[e.p.indiceEquipo ?? -1]?.celebrar(3.5);
     }
     else if (e.tipo === 'contacto' && e.jugador) {
       sonido.evento('contacto', e.fuerza); entrada.vibrar(60, 0.8);
@@ -1043,13 +1050,15 @@ function procesarEventos() {
       if (e.p.jugador) { mensaje(`PARADA: ${e.duracion.toFixed(1)} s`, `Neumáticos ${COMPUESTOS[e.p.coche.reglaje.compuesto].nombre.toLowerCase()}`, 2.4); $('#bBox').classList.remove('activo'); }
     }
     else if (e.tipo === 'abandono') {
+      // el piloto se baja cuando el coche se detiene (en carrera; en práctica te dan otro coche)
+      if (sesion.modo === 'carrera' && !e.p.remoto) salidasPendientes.push({ p: e.p, t: 0, herido: (e.p.coche.picoGolpe || 0) > 24 });
       if (!e.p.jugador && sesion.modo === 'carrera') radio.decir(`Abandono de ${e.p.nombre.replace('@', '')}.`, { tipo: 'megafonia', clave: 'ab:' + e.p.nombre, cada: 999 });
       if (e.p.jugador) {
         mensaje('ABANDONO', e.motivo || 'Coche demasiado dañado', 3.5);
         radio.decir('Se acabó, lo siento. Deja el coche en un lugar seguro.', { prioridad: true });
         if (enRed) { multi.abandono(informeIncidentes()); setTimeout(() => { if (jugando && enRed) mostrarFueraRed(e.motivo); }, 3500); }
         else if (sesion.modo === 'carrera') setTimeout(() => { if (jugando) mostrarResultados(); }, 4500);
-        else setTimeout(() => { if (jugando && sesion.jugador.coche.abandono) { const c = sesion.jugador.coche; c.repararTodo(); c.repararEnBoxes(); c.recolocar(); sesion.jugador.abandono = false; sesion.jugador.valida = false; barreras?.reponer(); crearModelos(); mensaje('COCHE NUEVO', 'Vuelta anulada', 2); } }, 3500);
+        else setTimeout(() => { if (jugando && sesion.jugador.coche.abandono) { const c = sesion.jugador.coche; c.repararTodo(); c.repararEnBoxes(); c.recolocar(); sesion.jugador.abandono = false; sesion.jugador.valida = false; barreras?.reponer(); pilotosFuera?.limpiar(); crearModelos(); mensaje('COCHE NUEVO', 'Vuelta anulada', 2); } }, 3500);
       }
     }
     else if (e.tipo === 'finCarrera' && !enRed) { if (jugando && !$('#resultados').classList.contains('visible')) setTimeout(() => { if (jugando) mostrarResultados(); }, 1500); }
@@ -1312,6 +1321,8 @@ function bucle(ahora) {
   if (!pausado) {
     efectos.actualizar(dt, sesion.coches, camara.cam.position);
     escombros.actualizar(dt);
+    actualizarPilotosFuera(dt);
+    avisosConduccion();
     for (const e of barreras.actualizar(dt, sesion.participantes)) {
       if (e.tipo === 'bidon' && jugando) { sonido.evento('golpe', 4); if (e.jugador) { mensaje('¡BIDONES DE AGUA!', '', 1.2); entrada.vibrar(120, 0.8); radio.decir('¡Te has llevado los bidones! Revisa que el alerón esté bien.', { clave: 'bidon', cada: 30 }); } }
     }
@@ -1331,6 +1342,7 @@ function bucle(ahora) {
   // lluvia, spray y asfalto mojado
   efectos.agua = sesion.clima.agua;
   ponerAgua(escenario, sesion.clima.agua);
+  mojarCoches(sesion.clima.agua, sesion.clima.lluvia);
   lluviaFx.actualizar(dt, camara.cam.position, sesion.clima.lluvia, sesion.clima.agua, renderer);
   nivelDetalle();
   if (efectos._escala !== camara.cam.fov) { efectos.ajustarEscala(innerHeight * renderer.getPixelRatio(), camara.cam.fov); efectos._escala = camara.cam.fov; }
@@ -2797,7 +2809,7 @@ $('#bRkFantasma').addEventListener('click', async () => {
 });
 
 // acceso para pruebas automáticas desde la consola
-window.apexDebug = { celebrar: (p) => celebrar(p || sesion.jugador), get grabadora() { return grabadora; }, get sesion() { return sesion; }, get sonido() { return sonido; }, get renderer() { return renderer; }, get escenario() { return escenario; }, get camara() { return camara; }, circuito: () => circuito, multi, get modelos() { return modelos; }, cargarCircuito, get qActual() { return qActual; }, get temporada() { return temporada; }, get repe() { return repe; }, terminarTandaQ, radio };
+window.apexDebug = { get pilotosFuera() { return pilotosFuera; }, celebrar: (p) => celebrar(p || sesion.jugador), get grabadora() { return grabadora; }, get sesion() { return sesion; }, get sonido() { return sonido; }, get renderer() { return renderer; }, get escenario() { return escenario; }, get camara() { return camara; }, circuito: () => circuito, multi, get modelos() { return modelos; }, cargarCircuito, get qActual() { return qActual; }, get temporada() { return temporada; }, get repe() { return repe; }, terminarTandaQ, radio };
 actualizarCuentaMenu();
 refrescarPerfil().then(actualizarCuentaMenu);
 // enlace estable al APK (servido por el servidor de UpGames); dentro de la app no hace falta
@@ -2910,4 +2922,65 @@ function eliminarCircuitoEd() {
   delete CIRCUITOS[edActual.id];
   ED.guardarLista(circuitosCom);
   editarCircuito(circuitosCom[0] || null);
+}
+
+// ─── Pilotos a pie: salen del coche tras abandonar; atropellos y golpes que aturden ───────
+function actualizarPilotosFuera(dt) {
+  if (!pilotosFuera || !sesion) return;
+  salidasPendientes = salidasPendientes.filter(x => {
+    x.t += dt;
+    if (x.p.coche.velocidad > 1 && x.t < 12) return true;
+    if (x.t < 1.5) return true;
+    const k = sesion.participantes.indexOf(x.p);
+    pilotosFuera.salir({ coche: x.p.coche, modelo: modelos[k], equipo: x.p.equipo, numero: x.p.numeroPiloto || 1, herido: x.herido, participante: x.p });
+    if (x.p.jugador) radio.decir(x.herido ? 'Sal despacio, los médicos van hacia ti. ¿Puedes andar?' : 'Sal del coche y ponte detrás del muro, rápido.', { prioridad: true, clave: 'salir', cada: 10 });
+    return false;
+  });
+  for (const e of pilotosFuera.actualizar(dt, sesion.participantes)) {
+    if (e.tipo !== 'atropello') continue;
+    sonido.evento('golpe', Math.min(4, e.fuerza / 8));
+    const nom = (e.victima?.nombre || 'un piloto').replace('@', '');
+    sesion.amarilla?.(e.culpable.coche.proj.s, 10);
+    if (sesion.modo === 'carrera') sesion.sancionar?.(e.culpable, 'Atropellar a un piloto');
+    if (e.culpable.jugador) { mensaje('¡HAS ATROPELLADO A UN PILOTO!', nom, 3); entrada.vibrar(250, 1); radio.decir(`¡Cuidado! Has golpeado a ${nom}, que estaba en la pista. Te van a sancionar.`, { prioridad: true }); }
+    else radio.decir(`¡${e.culpable.nombre.replace('@', '')} ha golpeado a ${nom} en la pista!`, { tipo: 'megafonia', clave: 'atropello', cada: 8 });
+  }
+  // golpe muy fuerte del jugador: queda aturdido unos segundos (visión borrosa y pitido)
+  const j = sesion.jugador?.coche;
+  if (j && (j.picoGolpe || 0) > 20 && tAturdido <= 0) {
+    tAturdido = Math.min(5, 2 + (j.picoGolpe - 20) * 0.25);
+    document.body.classList.add('aturdido');
+    radio.decir('¿Estás bien? Respira, respira. Háblame.', { prioridad: true, clave: 'aturdido', cada: 15 });
+  }
+  if (tAturdido > 0) { tAturdido -= dt; if (tAturdido <= 0) document.body.classList.remove('aturdido'); }
+}
+
+// Radio sobre lo que no se ve: neumáticos sucios, frenos recalentados en tráfico y viento
+function avisosConduccion() {
+  const j = sesion?.jugador?.coche;
+  if (!j || !jugando) return;
+  const suc = Math.max(...j.ruedas.map(w => w.suciedad || 0));
+  if (suc > 0.45 && !j.enTierra) radio.decir('Neumáticos sucios después de la salida. Ojo en la próxima curva, no hay agarre.', { clave: 'sucios', cada: 25 });
+  const tf = Math.max(...j.ruedas.map(w => w.tFreno || 0));
+  if (tf > 900 && j.aireSucio > 0.3) radio.decir('Frenos muy calientes detrás de él. Sal del rebufo una vuelta para enfriarlos.', { clave: 'frenosTraf', cada: 40 });
+  if (sesion.viento && sesion.tiempo > 6 && sesion.tiempo < 7 && sesion.modo !== 'practica') {
+    const kmh = Math.round(sesion.viento.media * 3.6);
+    if (kmh >= 10) radio.decir(`Hoy hay viento de unos ${kmh} kilómetros por hora, con rachas. Notarás el coche ligero en algunas rectas.`, { clave: 'viento', cada: 999 });
+  }
+}
+
+// Coches mojados: con agua la pintura brilla más (capa de agua encima) y el carbono se oscurece
+let aguaCoches = -1;
+function mojarCoches(agua, lluvia) {
+  const w = Math.min(1, agua * 2.5 + lluvia * 0.5);
+  if (Math.abs(w - aguaCoches) < 0.02) return;
+  aguaCoches = w;
+  for (const m of modelos) {
+    const mat = m?.pintura;
+    if (!mat) continue;
+    mat.userData.base ??= { r: mat.roughness, cc: mat.clearcoat ?? 0, ccr: mat.clearcoatRoughness ?? 0 };
+    const b = mat.userData.base;
+    mat.roughness = b.r * (1 - 0.55 * w);
+    if ('clearcoat' in mat) { mat.clearcoat = Math.min(1, b.cc + w); mat.clearcoatRoughness = b.ccr * (1 - 0.6 * w); }
+  }
 }

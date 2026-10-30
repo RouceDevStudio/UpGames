@@ -526,7 +526,7 @@ function focos(scene, c, calidad) {
 /** Hora de la carrera: 'dia' | 'atardecer' | 'noche'. Cambia el cielo, las luces y los focos. */
 export function ponerHora(esc, scene, renderer, hora = 'dia') {
   const u = esc.cielo.material.uniforms;
-  const [elev, azim] = hora === 'noche' ? [-8, 215] : hora === 'atardecer' ? [5, 250] : [SOL_ELEVACION, SOL_AZIMUT];
+  const [elev, azim] = hora === 'noche' ? [-8, 215] : hora === 'atardecer' ? [3.5, 255] : [SOL_ELEVACION, SOL_AZIMUT];
   const sol = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - elev), THREE.MathUtils.degToRad(azim));
   u.sunPosition.value.copy(sol);
   u.turbidity.value = hora === 'atardecer' ? 9 : 5.5; u.rayleigh.value = hora === 'atardecer' ? 2.6 : 1.4;
@@ -541,8 +541,8 @@ export function ponerHora(esc, scene, renderer, hora = 'dia') {
     scene.environmentIntensity = 0.35;
   } else if (hora === 'atardecer') {
     esc.sol = sol;
-    esc.luzSol.color.set(0xffb070);
-    esc.base = { sol: 2.4, fogColor: new THREE.Color(0xe0a080), fogFar: 4200, exp: 0.95, hemi: 0.5 };
+    esc.luzSol.color.set(0xff9a50);
+    esc.base = { sol: 2.7, fogColor: new THREE.Color(0xe0a080), fogFar: 4200, exp: 0.95, hemi: 0.5 };
     esc.hemi.color.set(0xffc8a0); esc.hemi.groundColor.set(0x504030);
     scene.environmentIntensity = 0.7;
   } else {
@@ -553,6 +553,15 @@ export function ponerHora(esc, scene, renderer, hora = 'dia') {
     scene.environmentIntensity = 1;
   }
   esc.luzSol.intensity = esc.base.sol; esc.hemi.intensity = esc.base.hemi;
+  // al atardecer las sombras son larguísimas: la zona de sombras se agranda para que quepan
+  const sc = esc.luzSol.shadow?.camera;
+  if (sc) {
+    esc._extSombra ??= sc.right;
+    const ext = esc._extSombra * (hora === 'atardecer' ? 1.9 : 1);
+    Object.assign(sc, { left: -ext, right: ext, top: ext, bottom: -ext, far: hora === 'atardecer' ? 1100 : 700 });
+    sc.updateProjectionMatrix();
+    esc.luzSol.shadow.bias = hora === 'atardecer' ? -0.0006 : -0.00025;
+  }
   scene.fog.color.copy(esc.base.fogColor); scene.fog.far = esc.base.fogFar;
   if (renderer) renderer.toneMappingExposure = esc.base.exp;
 }
@@ -908,6 +917,7 @@ function calleBoxes(scene, c, m, res) {
     colocarEnPista(c, puesto.grupo, sg, hw + (p.muroDe + p.muroA) / 2);
     puesto.grupo.position.y += 1.15;
     if (m.calidad >= 1) scene.add(puesto.grupo);
+    (res.puestosMuro ??= [])[k] = puesto;
     // animación solo con la cámara cerca (son muchas mallas)
     const pg = g.position.clone();
     res.actualizables.push((dt) => {

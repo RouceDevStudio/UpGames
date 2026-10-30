@@ -491,3 +491,7 @@ body.resistencia .relevo-op { display: flex; }
 .ed-input { width: 100%; max-width: 220px; background: rgba(255,255,255,.06); color: inherit; border: 1px solid var(--borde); border-radius: 8px; padding: 6px 8px; font: inherit; }
 .ed-herr { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 @media (max-width: 760px) { .ed-cuerpo { grid-template-columns: 1fr; } #edPlano { max-height: 70vh; } }
+
+/* golpe muy fuerte: visión borrosa y apagada unos segundos */
+body.aturdido #lienzo { filter: blur(2.5px) saturate(0.4) brightness(0.85); transition: filter 0.2s; }
+body #lienzo { transition: filter 1.5s; }

@@ -181,11 +181,21 @@ class Parada {
     if (this.estado === 'trabajo') return this._trabajo(dt);
     // terminado: el equipo recoge y vuelve al garaje andando
     this.tFin += dt;
+    // reacción a la parada: rápida (< 2,6 s) se celebra con saltos; lenta (> 4 s), manos a la cabeza
+    const rapida = this.D < 2.6, lenta = this.D > 4 && !this.morro;
+    const tReac = rapida || lenta ? 1.6 : 0;
     for (const p of e) {
-      if (this.tFin > 0.25 + (p.base.x + 4) * 0.04 && !p.vuelve) { p.vuelve = true; p.poner(p.rolParada === 'pone' || p.rolParada === 'quita' ? 'ruedaAlta' : 'de_pie', 0.3); p.andar = 1.6; p.raiz.rotation.y = 0; }
+      if ((rapida || lenta) && this.tFin < tReac && !p.reacciona) {
+        p.reacciona = true; p.andar = 0;
+        p.poner(rapida ? 'celebra' : 'lamento', 0.25 + Math.random() * 0.15);
+        if (rapida) p.salto = 0.6 + Math.random() * 0.5;
+      }
+      if (this.tFin >= tReac && p.reacciona && !p.vuelve) { p.salto = 0; }
+      if (this.tFin < tReac) continue;
+      if (this.tFin > tReac + 0.25 + (p.base.x + 4) * 0.04 && !p.vuelve) { p.vuelve = true; p.poner(p.rolParada === 'pone' || p.rolParada === 'quita' ? 'ruedaAlta' : 'de_pie', 0.3); p.andar = 1.6; p.raiz.rotation.y = 0; }
       if (p.vuelve) { p.raiz.position.z += dt * 1.6; p.raiz.rotation.y = -Math.PI / 2; }
     }
-    if (this.tFin > 5) { this.scene.remove(this.grupo); return false; }
+    if (this.tFin > 5 + (this.D < 2.6 || this.D > 4 ? 1.6 : 0)) { this.scene.remove(this.grupo); return false; }
     return true;
   }
 

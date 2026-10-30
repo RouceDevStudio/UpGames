@@ -35,6 +35,11 @@ export class Sesion {
     // clima (determinista con la semilla) y estado de la pista
     this.clima = new Clima(opc.clima || 'seco', opc.semilla ?? Math.floor(Math.random() * 1e9));
     circuito.agua = this.clima.agua;
+    // goma en la pista: los libres empiezan con poca, la carrera con la del fin de semana
+    circuito.goma = opc.goma ?? ({ practica: 0.35, contrarreloj: 0.6, carrera: 0.75 }[opc.modo] ?? 0.6);
+    // viento del día (determinista con la semilla): dirección, fuerza media y rachas
+    { const sem = (opc.semilla ?? 7) * 0.618;
+      this.viento = { dir: (sem * 6.283) % 6.283, media: 1 + (Math.abs(Math.sin(sem * 3.1)) * 6), x: 0, z: 0, racha: 0 }; }
     // banderas: amarillas por zona, coche de seguridad virtual y sanciones
     this.amarillas = [];           // { s, hasta }
     this.vsc = false; this.tVsc = 0;
@@ -285,6 +290,7 @@ export class Sesion {
     this._moverSc(dt);
     this._neutralizar(dt);
     this._aerodinamicaRelativa();
+    this._vientoYGoma(dt);
     for (const p of lista) {
       if (p.remoto) continue;           // lo mueve la red
       this._gestionarBoxes(p);
@@ -337,6 +343,19 @@ export class Sesion {
     }
     if (this.modo !== 'carrera') this._grabarFantasma(dt);
     if (this.modo === 'carrera') this._posiciones();
+  }
+
+  // viento con rachas que cambian poco a poco; la goma crece con los km de todos los coches
+  _vientoYGoma(dt) {
+    const w = this.viento, t = this.tiempo;
+    w.racha = Math.sin(t * 0.23 + w.dir) * 0.5 + Math.sin(t * 0.71) * 0.3 + Math.sin(t * 1.9 + 1.3) * 0.2;
+    const f = w.media * (1 + 0.45 * w.racha), dir = w.dir + Math.sin(t * 0.05) * 0.4;
+    w.x = Math.cos(dir) * f; w.z = Math.sin(dir) * f;
+    const c = this.c;
+    let km = 0;
+    for (const p of this.participantes) { p.coche.viento = w; km += p.coche.velocidad * dt / 1000; }
+    // ~+0,05 por cada 100 km recorridos entre todos; con lluvia la pista se «lava»
+    c.goma = Math.min(1, Math.max(0, (c.goma ?? 0.6) + km * 0.0005 - (c.agua > 0.3 ? dt * 0.0006 : 0)));
   }
 
   _aerodinamicaRelativa() {
