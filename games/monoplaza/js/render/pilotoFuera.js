@@ -86,6 +86,7 @@ export class PilotosFuera {
         else if (t < 4.4) { fase = 'preparado'; lat = 1.3; alto = 0; }                        // aterriza flexionando
         else { fase = f.herido ? 'estabiliza' : 'de_pie'; lat = 1.3; alto = 0; }
         if (fase !== f.fase) { f.fase = fase; per.poner(fase, fase === 'preparado' ? 0.12 : 0.35); }
+        if (per.volante) per.volante.visible = t > 1.1;      // se lleva el volante (como en la tele)
         f.pos.x = f.coche.x + nx * lat - ax * 0.15; f.pos.z = f.coche.z + nz * lat - az * 0.15;
         f.pos.y = (t < 3.4 ? base : suelo(pr.d)) + alto;
         // mira hacia delante en el coche, luego hacia el coche (de lado) antes de marcharse
@@ -122,7 +123,7 @@ export class PilotosFuera {
       } else if (f.estado === 'fuera') {
         // detrás del muro mirando a la pista (si está bien, saluda al público de vez en cuando)
         f.rumbo = Math.atan2(-c.tx[i] * f.lado, c.tz[i] * f.lado);
-        if (!f.herido && f.t > 3) per.poner(Math.sin(f.t * 0.5) > 0.6 ? 'celebra' : 'espera', 0.6);
+        if (!f.herido && f.t > 3) per.poner(Math.sin(f.t * 0.5) > 0.6 ? 'lamento' : 'jarra', 0.6);
         if (f.t > 90) { this._quitar(f); continue; }
       }
       // ¿lo atropella alguien? (solo mientras está en la pista y de pie o tendido)

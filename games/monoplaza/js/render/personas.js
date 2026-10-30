@@ -42,6 +42,44 @@ function normalTela() {
   return t;
 }
 
+// Pliegues del mono de piloto (como el modelo esculpido de referencia): arrugas grandes y
+// alargadas que siguen las extremidades, más las costuras acolchadas. Mapa de normales.
+function normalPliegues() {
+  if (cacheTex.has('pliegues')) return cacheTex.get('pliegues');
+  const n = 256, cv = lienzo(n, n), x = cv.getContext('2d'), img = x.createImageData(n, n);
+  const H = new Float32Array(n * n);
+  let sem = 7; const r = () => { sem = (sem * 16807) % 2147483647; return sem / 2147483647; };
+  const ondas = Array.from({ length: 22 }, () => ({ fx: Math.floor(r() * 7) - 3, fy: 2 + Math.floor(r() * 7), f: r() * 6.28, a: 0.25 + r() * 0.5, d: (r() - 0.5) * 4 }));
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    const u = i / n * Math.PI * 2, v = j / n * Math.PI * 2;
+    let h = 0;
+    for (const o of ondas) h += o.a * Math.pow(Math.abs(Math.sin(o.fy * v + o.fx * u + o.d * Math.sin(u * 2 + o.f) + o.f)), 3);
+    // costuras del acolchado (líneas finas que dan la vuelta)
+    if (j % 64 < 2) h -= 1.2;
+    H[j * n + i] = h;
+  }
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    const hx = H[j * n + (i + 1) % n] - H[j * n + (i - 1 + n) % n], hy = H[((j + 1) % n) * n + i] - H[((j - 1 + n) % n) * n + i];
+    const k = (j * n + i) * 4, nx = -hx * 0.55, ny = -hy * 0.55, nz = 1, l = Math.hypot(nx, ny, nz);
+    img.data[k] = 128 + nx / l * 127; img.data[k + 1] = 128 + ny / l * 127; img.data[k + 2] = 128 + nz / l * 127; img.data[k + 3] = 255;
+  }
+  x.putImageData(img, 0, 0);
+  const t = aTex(cv, false); t.repeat.set(2, 2);
+  cacheTex.set('pliegues', t);
+  return t;
+}
+
+// Bota de piloto: piel lisa con cordones cruzados delante
+function texturaBota() {
+  if (cacheTex.has('bota')) return cacheTex.get('bota');
+  const cv = lienzo(128, 128), x = cv.getContext('2d');
+  x.fillStyle = '#1c1c1e'; x.fillRect(0, 0, 128, 128);
+  x.strokeStyle = '#d8d8dc'; x.lineWidth = 2.2;
+  for (let k = 0; k < 7; k++) { const y = 18 + k * 14; x.beginPath(); x.moveTo(48, y); x.lineTo(80, y + 10); x.moveTo(80, y); x.lineTo(48, y + 10); x.stroke(); }
+  x.fillStyle = '#555'; x.fillRect(0, 118, 128, 10);          // suela
+  const t = aTex(cv); cacheTex.set('bota', t); return t;
+}
+
 // Mono del equipo: color base, laterales oscuros, vivos claros, patrocinadores delante y detrás.
 // El torso es un torno: u da la vuelta al cuerpo (u = 0.25 delante, 0.75 detrás), v sube.
 function texturaMono(color, texto, numero) {
@@ -173,6 +211,21 @@ function geometrias() {
     codo: new THREE.SphereGeometry(0.041, 10, 8),
     rodilla: new THREE.SphereGeometry(0.064, 10, 8),
   };
+  // piezas del piloto (guantes, botas, arnés)
+  G.puno = new THREE.CylinderGeometry(0.045, 0.04, 0.07, 12);
+  G.palma = new THREE.BoxGeometry(0.035, 0.08, 0.085); G.palma.translate(0, 0, 0);
+  G.dedos = new THREE.CapsuleGeometry(0.02, 0.05, 3, 8); G.dedos.scale(0.85, 1, 2.0);
+  G.pulgar = new THREE.CapsuleGeometry(0.012, 0.035, 3, 6);
+  G.hombrera = new THREE.BoxGeometry(0.11, 0.02, 0.07);
+  G.cana = new THREE.CylinderGeometry(0.052, 0.048, 0.16, 14);
+  G.zapato = new THREE.CapsuleGeometry(0.045, 0.16, 4, 10); G.zapato.rotateZ(Math.PI / 2); G.zapato.scale(1, 0.75, 1.05);
+  G.rodillera = new THREE.SphereGeometry(0.05, 12, 8); G.rodillera.scale(0.45, 1.15, 0.9);
+  G.cintaHombro = new THREE.BoxGeometry(0.012, 0.36, 0.05);
+  G.ajuste = new THREE.BoxGeometry(0.012, 0.035, 0.06);
+  G.cinturon = new THREE.TorusGeometry(0.17, 0.022, 6, 24); G.cinturon.rotateX(Math.PI / 2);
+  G.hebilla = new THREE.CylinderGeometry(0.035, 0.035, 0.016, 18);
+  G.cintaPierna = new THREE.BoxGeometry(0.012, 0.16, 0.045);
+  G.cuelloMono = new THREE.CylinderGeometry(0.065, 0.075, 0.05, 14, 1, true);
   G.nariz.rotateZ(-Math.PI / 2 - 0.35);
   G.pie.translate(0.06, -0.035, 0);
   G.mano.translate(0, -0.06, 0);
@@ -210,6 +263,7 @@ const P = {
   apoya: { y: 0.9, tronco: [0, 0, -0.32], cabeza: [0, 0, 0.15], hI: [0.25, 0, 1.1], hD: [-0.25, 0, 1.1], cI: [0, 0, 0.55], cD: [0, 0, 0.55], kI: [0.04, 0, 0.35], kD: [-0.04, 0, 0.35], rI: [0, 0, -0.5], rD: [0, 0, -0.5] },
   trepa: { y: 0.88, tronco: [0, 0, -0.25], cabeza: [0, 0, 0.1], hI: [0.35, 0, 0.6], hD: [-0.1, 0, 1.0], cI: [0, 0, 0.4], cD: [0, 0, 0.6], kI: [0.35, 0, 1.25], kD: [0, 0, 0.1], rI: [0, 0, -1.4], rD: [0, 0, -0.15] },
   quita_volante: { y: 0.62, tronco: [0, 0, -0.05], cabeza: [0, 0, 0.2], hI: [0.15, 0, 1.35], hD: [-0.15, 0, 1.35], cI: [0, 0, 0.5], cD: [0, 0, 0.5], kI: [0.08, 0, 1.5], kD: [-0.08, 0, 1.5], rI: [0, 0, -1.5], rD: [0, 0, -1.5] },
+  jarra: { y: 0.95, tronco: [0, 0, 0.02], cabeza: [0, 0.15, 0.02], hI: [0.78, 0.6, 0.05], hD: [-0.12, 0, 0.12], cI: [0, 0, -1.62], cD: [0, 0, 0.35], kI: [0.06, 0, 0.03], kD: [-0.04, 0, 0.05], rI: [0, 0, -0.04], rD: [0, 0, -0.05] },
   espera: { y: 0.95, tronco: [0, 0, 0], cabeza: [0, 0, 0.05], hI: [0.35, 0, -0.2], hD: [-0.35, 0, -0.2], cI: [-0.6, 0, 1.6], cD: [0.6, 0, 1.6], kI: [0.05, 0, 0.03], kD: [-0.05, 0, -0.05], rI: [0, 0, -0.04], rD: [0, 0, -0.04] },
 };
 const HUESOS = ['tronco', 'cabeza', 'hI', 'hD', 'cI', 'cD', 'mI', 'mD', 'kI', 'kD', 'rI', 'rD'];
@@ -221,8 +275,11 @@ export class Persona {
   constructor({ color = '#0d47ff', texto = 'UPGAMES', numero = 1, rol = 'mecanico', piel = '#c9967a', alto = 1, calidad = 2 } = {}) {
     const g = geometrias();
     this.rol = rol;
-    const normal = calidad >= 2 ? normalTela() : null;
-    const tela = (map) => new THREE.MeshStandardMaterial({ map, roughness: 0.85, normalMap: normal, normalScale: new THREE.Vector2(0.35, 0.35) });
+    const piloto = rol === 'piloto';
+    // el mono del piloto lleva los pliegues marcados del Nomex (como el modelo de referencia)
+    const normal = piloto && calidad >= 1 ? normalPliegues() : calidad >= 2 ? normalTela() : null;
+    const escN = piloto ? 0.6 : 0.35;
+    const tela = (map) => new THREE.MeshStandardMaterial({ map, roughness: 0.85, normalMap: normal, normalScale: new THREE.Vector2(escN, escN) });
     const matTorso = tela(texturaMono(color, texto, numero));
     const matManga = tela(texturaManga(color));
     const matNegro = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.7 });
@@ -247,7 +304,7 @@ export class Persona {
     malla(g.pelvis, matTorso, cadera).scale.set(1, 1, 1.15);
     // tronco
     const tronco = this.tronco = hueso(cadera, 0, 0.1, 0);
-    const mt = malla(g.torso, matTorso, tronco); mt.scale.set(0.8, 1, 1.1);
+    const mt = malla(g.torso, matTorso, tronco); mt.scale.set(piloto ? 0.9 : 0.8, 1, piloto ? 1.18 : 1.1);
     const matCuello = new THREE.MeshStandardMaterial({ color: piel, roughness: 0.6 });
     const cuello = hueso(tronco, 0.01, 0.49, 0);
     malla(g.cuello, rol === 'mecanico' ? matNegro : matCuello, cuello).scale.set(1, 0.75, 1);   // verdugo ignífugo
@@ -259,6 +316,9 @@ export class Persona {
       const vis = malla(g.visera, new THREE.MeshStandardMaterial({ color: 0x0c1016, roughness: 0.05, metalness: 0.8 }), cabeza, 0, 0.1, 0);
       vis.rotation.y = Math.PI;
       malla(g.mentonera, matCasco, cabeza, 0.02, 0.06, 0);
+    } else if (piloto) {
+      // cabeza bajo el casco (el casco se pone aparte): solo el sotocasco ignífugo
+      malla(g.craneo, matNegro, cabeza, 0.01, 0.1, 0).scale.set(0.95, 1.1, 0.88);
     } else {
       const cr = malla(g.craneo, matPiel, cabeza, 0.01, 0.1, 0); cr.scale.set(0.95, 1.12, 0.88); cr.rotation.y = Math.PI / 2;
       malla(g.nariz, matCuello, cabeza, 0.098, 0.09, 0);
@@ -274,17 +334,38 @@ export class Persona {
         for (const z of [-0.1, 0.1]) malla(g.orejera, matNegro, cabeza, 0, 0.1, z);
       }
     }
+    if (piloto) {
+      const matCinta = new THREE.MeshStandardMaterial({ color: 0x2a2a2e, roughness: 0.7 });
+      const matMetal = new THREE.MeshStandardMaterial({ color: 0xb8bcc4, metalness: 1, roughness: 0.3 });
+      for (const l of [-1, 1]) {
+        malla(G.cintaHombro, matCinta, tronco, 0.135, 0.25, l * 0.07).rotation.x = -l * 0.12;     // tirantes
+        malla(G.ajuste, matMetal, tronco, 0.15, 0.38, l * 0.075);                                 // hebillas de ajuste
+      }
+      malla(G.cinturon, matCinta, tronco, 0, 0.03, 0).scale.set(0.82, 1, 1.12);                  // cinturón abdominal
+      malla(G.hebilla, matMetal, tronco, 0.165, 0.04, 0).rotation.z = Math.PI / 2;              // cierre rotatorio
+      malla(G.cintaPierna, matCinta, tronco, 0.16, -0.06, 0);                                    // la de la entrepierna
+      malla(G.cuelloMono, matManga, cuello, 0, 0.0, 0);                                          // cuello del mono
+    }
     // brazos: hombro → codo → muñeca
     const brazo = (lado) => {
       const z = lado * 0.21;
       const h = hueso(tronco, 0, 0.43, z);
-      malla(g.hombro, matManga, h);
-      malla(g.brazo, matManga, h);
+      const gr = piloto ? 1.28 : 1;            // el mono ignífugo es holgado
+      malla(g.hombro, matManga, h).scale.setScalar(gr);
+      malla(g.brazo, matManga, h).scale.set(gr, 1, gr);
       const c = hueso(h, 0, -0.29, 0);
-      malla(g.codo, matManga, c);
-      malla(g.antebrazo, matManga, c);
+      malla(g.codo, matManga, c).scale.setScalar(gr);
+      malla(g.antebrazo, matManga, c).scale.set(gr, 1, gr);
       const m = hueso(c, 0, -0.25, 0);
-      malla(g.mano, matNegro, m);                     // guantes
+      if (piloto) {
+        // guante de piloto: puño largo, palma, dedos juntos y pulgar; hombrera del mono
+        const matGuante = matNegro;
+        malla(G.puno, matGuante, m, 0, 0.02, 0);
+        malla(G.palma, matGuante, m, 0, -0.055, 0);
+        malla(G.dedos, matGuante, m, 0.008, -0.125, 0);
+        malla(G.pulgar, matGuante, m, 0.03, -0.07, lado * 0.03).rotation.z = 0.5;
+        malla(G.hombrera, matManga, h, 0, 0.05, 0);
+      } else malla(g.mano, matNegro, m);              // guantes
       return { h, c, m };
     };
     const bI = brazo(-1), bD = brazo(1);
@@ -293,12 +374,19 @@ export class Persona {
     // piernas: cadera → rodilla → tobillo
     const pierna = (lado) => {
       const k = hueso(cadera, 0, -0.02, lado * 0.095);
-      malla(g.muslo, matManga, k);
+      const gp = piloto ? 1.22 : 1;
+      malla(g.muslo, matManga, k).scale.set(gp, 1, gp);
       const r = hueso(k, 0, -0.44, 0);
-      malla(g.rodilla, matManga, r);
-      malla(g.pierna, matManga, r);
+      malla(g.rodilla, matManga, r).scale.setScalar(gp);
+      malla(g.pierna, matManga, r).scale.set(gp, 1, gp);
       const t = hueso(r, 0, -0.43, 0);
-      malla(g.pie, matBota, t);
+      if (piloto) {
+        // botas altas de piloto con cordones y rodillera acolchada
+        const matB = new THREE.MeshStandardMaterial({ map: texturaBota(), roughness: 0.45 });
+        malla(G.cana, matB, t, 0, 0.06, 0);
+        malla(G.zapato, matB, t, 0.05, -0.04, 0);
+        malla(G.rodillera, matManga, r, 0.045, 0, 0);
+      } else malla(g.pie, matBota, t);
       return { k, r, t };
     };
     const pI = pierna(-1), pD = pierna(1);
@@ -330,6 +418,18 @@ export class Persona {
     cuerpo.bind(new THREE.Skeleton(huesos));
     R.add(cuerpo);
     R.scale.setScalar(alto);
+    // el piloto puede llevar el volante en la mano derecha (al salir del coche)
+    if (piloto) {
+      const v = this.volante = new THREE.Group();
+      const matV = new THREE.MeshStandardMaterial({ color: 0x1a1c20, roughness: 0.5, metalness: 0.2 });
+      const cuerpoV = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.15, 0.27), matV); v.add(cuerpoV);
+      for (const l of [-1, 1]) { const asa = new THREE.Mesh(new THREE.CapsuleGeometry(0.022, 0.09, 3, 8), matV); asa.position.set(0, -0.02, l * 0.15); v.add(asa); }
+      const pantalla = new THREE.Mesh(new THREE.PlaneGeometry(0.09, 0.055), new THREE.MeshStandardMaterial({ color: 0x0a2a1a, emissive: 0x2fe07a, emissiveIntensity: 0.6 }));
+      pantalla.position.set(0.017, 0.02, 0); pantalla.rotation.y = Math.PI / 2; v.add(pantalla);
+      v.position.set(0.02, -0.13, 0.12); v.rotation.set(0, 0, 0.2);
+      v.visible = false;
+      this.mD.add(v);
+    }
 
     // estado de animación
     this.pose = 'de_pie'; this.mezcla = 1; this.velMezcla = 6;

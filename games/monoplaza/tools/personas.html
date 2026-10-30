@@ -7,6 +7,7 @@
 // Visor de mecánicos e ingenieros: ?poses=de_pie,pistola,rueda&vista=lado|frente|3q|cerca
 import * as THREE from 'three';
 import { Persona } from '../js/render/personas.js';
+import { casco } from '../js/render/piloto.js';
 const q = new URLSearchParams(location.search);
 const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 r.setSize(innerWidth, innerHeight); r.setPixelRatio(1);
@@ -23,7 +24,9 @@ const poses = (q.get('poses') || 'de_pie,preparado,pistola,rueda,gato,estabiliza
 const rol = q.get('rol') || 'mecanico';
 poses.forEach((ps, k) => {
   const p = new Persona({ color: q.get('color') || '#0d47ff', numero: k + 1, rol: k === poses.length - 1 && !q.get('rol') ? 'ingeniero' : rol, calidad: 3 });
-  p.poner(ps, 0.01); p.actualizar(1);
+  if (rol === 'piloto') { const c = casco(new THREE.MeshPhysicalMaterial({ color: 0xf2f4f8, roughness: 0.2, clearcoat: 1 }), new THREE.MeshStandardMaterial({ color: 0x111111 }), 3); c.position.set(0.035, 0.06, 0); c.scale.setScalar(1.08); p.cabeza.add(c); if (q.get('volante')) p.volante.visible = true; }
+  if (q.get('extra')) p.extra = JSON.parse(q.get('extra'))[k] || {};
+  p.poner(ps, 0.01); for (let i = 0; i < 80; i++) p.actualizar(0.05);
   p.raiz.position.set(0, 0, (k - (poses.length - 1) / 2) * 1.1);
   scene.add(p.raiz);
 });

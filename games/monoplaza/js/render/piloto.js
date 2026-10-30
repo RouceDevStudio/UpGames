@@ -10,7 +10,7 @@ import { texturaCasco } from './librea.js';
 const BRAZO = 0.27, ANTEBRAZO = 0.25;          // m
 const _x = new THREE.Vector3(1, 0, 0), _z = new THREE.Vector3(0, 0, 1);
 
-function casco(matCasco, matNegro, calidad) {
+export function casco(matCasco, matNegro, calidad) {
   const g = new THREE.Group();
   // carcasa: esfera alargada y aplanada por los lados, con la mentonera prolongada
   const gC = new THREE.SphereGeometry(0.135, calidad >= 2 ? 36 : 22, calidad >= 2 ? 24 : 14);
@@ -29,6 +29,16 @@ function casco(matCasco, matNegro, calidad) {
   visor.rotation.y = Math.PI; visor.scale.set(1.12, 1, 0.92); g.add(visor);
   const aler = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.012, 0.16), matCasco); aler.position.set(-0.13, 0.06, 0); aler.rotation.z = -0.25; g.add(aler);
   const toma = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.02, 0.05), matNegro); toma.position.set(0.04, 0.135, 0); g.add(toma);
+  // detalles del casco de referencia: aletas del alerón superior, cápsulas laterales de la
+  // visera con su palanca, micrófono de la radio, tira del borde y tomas de la mentonera
+  for (const l of [-1, 1]) {
+    const aleta = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.035, 0.008), matCasco); aleta.position.set(-0.11, 0.1, l * 0.055); aleta.rotation.z = -0.5; g.add(aleta);
+    const capsula = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.012, 16), matNegro); capsula.rotation.x = Math.PI / 2; capsula.position.set(0.045, 0.02, l * 0.128); g.add(capsula);
+    const palanca = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.008, 0.008), matNegro); palanca.position.set(0.07, 0.0, l * 0.13); palanca.rotation.z = -0.4; g.add(palanca);
+  }
+  const mic = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.07, 6), matNegro); mic.rotation.x = Math.PI / 2; mic.rotation.z = 0.3; mic.position.set(0.1, -0.06, 0.1); g.add(mic);
+  const borde = new THREE.Mesh(new THREE.TorusGeometry(0.118, 0.007, 6, calidad >= 2 ? 32 : 18), matNegro); borde.rotation.x = Math.PI / 2; borde.scale.set(1.12, 0.92, 1); borde.position.y = -0.085; g.add(borde);
+  for (let k = -1; k <= 1; k++) { const t = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.006, 0.025), matNegro); t.position.set(0.155, -0.045 + k * 0.012, 0); g.add(t); }
   return g;
 }
 
@@ -91,6 +101,9 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
   const hans = new THREE.Mesh(new THREE.TorusGeometry(0.095, 0.03, 8, 20, Math.PI * 1.3), matNegro);
   hans.rotation.set(Math.PI / 2, 0, Math.PI * 0.85); hans.position.set(0.02, 0.70, 0);
   grupo.add(hans);
+  // collarín trasero del HANS (sube por la nuca) y las correas que lo unen al casco
+  const nuca = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.09, 0.12), matNegro); nuca.position.set(-0.075, 0.74, 0); nuca.rotation.z = 0.25; grupo.add(nuca);
+  for (const l of [-1, 1]) { const correa = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.075, 0.018), matNegro); correa.position.set(-0.035, 0.775, l * 0.105); correa.rotation.z = -0.5; grupo.add(correa); }
   const cuello = new THREE.Group();
   cuello.position.set(0.04, 0.72, 0);
   const matCasco = new THREE.MeshPhysicalMaterial({ map: texturaCasco(equipado.casco || 'clasico', equipado.cascoColores || { base: colores.tercero || '#ffffff', acento: colores.base || '#0d47ff' }), roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.04 });
