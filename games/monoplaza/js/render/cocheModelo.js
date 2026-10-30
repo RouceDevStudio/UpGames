@@ -356,6 +356,7 @@ export function crearModelo(opc) {
   const goma = matComun('goma');
 
   const geo = { librea: [], carbono: [], negro: [], metal: [] };
+  const piezas = [];
 
   // ── Carrocería de un monoplaza de efecto suelo (secciones medidas sobre un coche real) ──
   // Monocasco, morro y cubierta motor: [x, semiancho, alto arriba, alto abajo, forma arriba, forma abajo]
@@ -409,11 +410,10 @@ export function crearModelo(opc) {
     geo.librea.push(loftS(pont, fisico ? 28 : 18));
     // boca de entrada (oscura y hundida)
     geo.negro.push(loftS([S(0.805, 0.112, 0.50, 0.318, 6, 6, sg * 0.555), S(0.79, 0.112, 0.50, 0.318, 6, 6, sg * 0.555)], 16));
-    // retrovisores sobre el pontón
-    geo.librea.push(loftS([S(0.80, 0.045, 0.705, 0.665, 3, 3, sg * 0.50), S(0.76, 0.062, 0.712, 0.656, 3, 3, sg * 0.50), S(0.72, 0.062, 0.712, 0.656, 3, 3, sg * 0.50)], 12));
-    geo.carbono.push(barra([0.76, 0.55, sg * 0.46], [0.76, 0.665, sg * 0.49], 0.007), barra([0.70, 0.60, sg * 0.30], [0.75, 0.68, sg * 0.45], 0.006));
-    // deflectores laterales (bargeboards) delante del pontón
-    for (let k = 0; k < 3; k++) geo.carbono.push(caja(0.34 - k * 0.06, 0.20 - k * 0.04, 0.008, 1.10 - k * 0.12, 0.17, sg * (0.40 + k * 0.07), 0, sg * 0.10, 0));
+    // retrovisores sobre el pontón y deflectores laterales (bargeboards): piezas que se rompen
+    piezas.push({ tipo: 'espejo', sg, lib: [loftS([S(0.80, 0.045, 0.705, 0.665, 3, 3, sg * 0.50), S(0.76, 0.062, 0.712, 0.656, 3, 3, sg * 0.50), S(0.72, 0.062, 0.712, 0.656, 3, 3, sg * 0.50)], 12)],
+      carb: [barra([0.76, 0.55, sg * 0.46], [0.76, 0.665, sg * 0.49], 0.007), barra([0.70, 0.60, sg * 0.30], [0.75, 0.68, sg * 0.45], 0.006)], centro: [0.76, 0.66, sg * 0.48] });
+    piezas.push({ tipo: 'deflector', sg, lib: [], carb: [0, 1, 2].map(k => caja(0.34 - k * 0.06, 0.20 - k * 0.04, 0.008, 1.10 - k * 0.12, 0.17, sg * (0.40 + k * 0.07), 0, sg * 0.10, 0)), centro: [1.0, 0.17, sg * 0.47] });
   }
   // fondo plano con bordes curvados, difusor y vigas de soporte
   {
@@ -439,12 +439,12 @@ export function crearModelo(opc) {
   // halo de titanio (elevado para despejar la vista del piloto) con su pilar central
   {
     const curva = new THREE.CatmullRomCurve3([
-      [-0.20, 0.72, -0.30], [-0.10, 0.88, -0.33], [0.10, 0.985, -0.30], [0.36, 1.03, -0.20], [0.52, 1.035, -0.06],
-      [0.52, 1.035, 0.06], [0.36, 1.03, 0.20], [0.10, 0.985, 0.30], [-0.10, 0.88, 0.33], [-0.20, 0.72, 0.30],
+      [-0.20, 0.72, -0.30], [-0.10, 0.865, -0.33], [0.10, 0.955, -0.30], [0.36, 0.995, -0.20], [0.52, 1.0, -0.06],
+      [0.52, 1.0, 0.06], [0.36, 0.995, 0.20], [0.10, 0.955, 0.30], [-0.10, 0.865, 0.33], [-0.20, 0.72, 0.30],
     ].map(p => new THREE.Vector3(...p)));
     const tubo = new THREE.TubeGeometry(curva, 48, 0.026, 10, false);
     geo.librea.push(tubo);
-    const pilar = new THREE.CatmullRomCurve3([[0.82, 0.645, 0], [0.72, 0.80, 0], [0.60, 1.0, 0], [0.53, 1.03, 0]].map(p => new THREE.Vector3(...p)));
+    const pilar = new THREE.CatmullRomCurve3([[0.82, 0.645, 0], [0.72, 0.79, 0], [0.60, 0.97, 0], [0.53, 0.995, 0]].map(p => new THREE.Vector3(...p)));
     geo.librea.push(new THREE.TubeGeometry(pilar, 16, 0.021, 8, false));
   }
   // suspensión: triángulos y bieletas con perfil aerodinámico
@@ -476,13 +476,22 @@ export function crearModelo(opc) {
   carroceria.add(unir(geo.carbono, carbono));
   carroceria.add(unir(geo.negro, negro));
   if (geo.metal.length) carroceria.add(unir(geo.metal, metal));
-  // cristal de los retrovisores (refleja el entorno)
+  // piezas sueltas (con su pivote en el centro para que salgan volando al romperse)
   const matEspejo = matComun('espejo', () => new THREE.MeshStandardMaterial({ color: 0xaab6c4, metalness: 1, roughness: 0.04 }));
-  for (const sg of [-1, 1]) {
-    const espejo = new THREE.Mesh(new THREE.PlaneGeometry(0.11, 0.045), matEspejo);
-    espejo.rotation.y = -Math.PI / 2; espejo.position.set(0.715, 0.684, sg * 0.50);
-    carroceria.add(espejo);
-  }
+  const gruposPieza = piezas.map(pz => {
+    const g = new THREE.Group();
+    const c = new THREE.Vector3(...pz.centro);
+    if (pz.lib.length) { const m = unir(pz.lib, pintura, true); m.position.sub(c); g.add(m); }
+    if (pz.carb.length) { const m = unir(pz.carb, carbono); m.position.sub(c); g.add(m); }
+    if (pz.tipo === 'espejo') {
+      const espejo = new THREE.Mesh(new THREE.PlaneGeometry(0.11, 0.045), matEspejo);
+      espejo.rotation.y = -Math.PI / 2; espejo.position.set(0.715 - c.x, 0.684 - c.y, pz.sg * 0.50 - c.z);
+      g.add(espejo);
+    }
+    g.position.copy(c);
+    carroceria.add(g);
+    return { ...pz, g, rota: false };
+  });
 
   // Alerón delantero de cuatro elementos que suben y se curvan hacia los extremos
   const alaDel = new THREE.Group();
@@ -684,6 +693,14 @@ export function crearModelo(opc) {
       if (dt2 >= 0.95 && !estadoDanos.alaTras) { estadoDanos.alaTras = true; this.alDesprender?.('alaTras', alaTras); }
       if (dt2 < 0.05 && estadoDanos.alaTras) estadoDanos.alaTras = false;
       alaTras.visible = !estadoDanos.alaTras;
+      // espejos y deflectores se rompen con los golpes (orden fijo: primero un espejo, luego deflectores)
+      const pz = d?.piezas || 0;
+      gruposPieza.forEach((g, k) => {
+        const umbral = [0.35, 0.55, 0.7, 0.9][k] ?? 1;
+        if (pz >= umbral && !g.rota) { g.rota = true; this.alDesprender?.(g.tipo, g.g); }
+        if (pz < 0.05 && g.rota) g.rota = false;
+        g.g.visible = !g.rota;
+      });
       const objDrs = car.drsAbierto ? 1.05 : 0.45;
       pivDrs.rotation.z += (objDrs - pivDrs.rotation.z) * Math.min(1, dt * 18);
       luzLluvia.material.emissiveIntensity = car.ersPotenciaActual < -1000 ? (Math.sin(performance.now() / 70) > 0 ? 6 : 0) : 0;
@@ -728,6 +745,7 @@ export function crearModelo(opc) {
     reponerPiezas() {
       for (const m of ruedas) { m.suelta = false; }
       estadoDanos.alaDel = false; estadoDanos.alaTras = false;
+      for (const g of gruposPieza) g.rota = false;
     },
   };
   return modelo;

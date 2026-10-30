@@ -368,7 +368,7 @@ export class Sesion {
             // los contactos entre coches rebotan: cuentan algo menos que un muro
             // (entre dos coches de la IA aún menos: no frenan tan fino como una persona en el tráfico)
             A.fuenteGolpe = B.fuenteGolpe = 'coche';
-            const fDano = lista[a].jugador || lista[b].jugador || lista[a].remoto || lista[b].remoto ? 0.75 : 0.5;
+            const fDano = lista[a].jugador || lista[b].jugador || lista[a].remoto || lista[b].remoto ? 0.95 : 0.55;
             A.aplicarGolpe(oa + 0.9 * Math.sign(oa), Math.sign(latA) * (Math.abs(latA) > 0.5 ? 1 : 0.5), -vn * fDano);
             B.aplicarGolpe(ob + 0.9 * Math.sign(ob), Math.sign(latB) * (Math.abs(latB) > 0.5 ? 1 : 0.5), -vn * fDano);
             // quien embiste con el morro la parte trasera o el lateral del otro provoca el choque

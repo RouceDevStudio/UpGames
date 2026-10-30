@@ -83,7 +83,8 @@ export class Monoplaza {
   // Daños: alerones (0..1), suspensión doblada por rueda (0..1), pinchazos y ruedas sueltas
   repararTodo() {
     this.danoAleron = 0;
-    this.dano = { aleronTras: 0, susp: [0, 0, 0, 0], pinchazo: [false, false, false, false], suelta: [false, false, false, false] };
+    // fondo/pontones (pierden carga), motor (pierde potencia) y piezas sueltas visibles
+    this.dano = { aleronTras: 0, susp: [0, 0, 0, 0], pinchazo: [false, false, false, false], suelta: [false, false, false, false], fondo: 0, motor: 0, piezas: 0 };
     this.terminal = false; this.abandono = false; this.motivoAbandono = ''; this.tTerminal = 0;
   }
 
@@ -97,30 +98,39 @@ export class Monoplaza {
     const delante = ex > 1.2, detras = ex < -1.4;
     const k = (ex > 0 ? 0 : 2) + (ey > 0 ? 1 : 0);   // rueda más cercana
     const avisar = (e) => this.eventos.push('dano:' + e);
-    if (delante && vn > 6) {
+    // cualquier golpe fuerte rompe algo: fondo y pontones (carga), espejos y deflectores (piezas)
+    if (vn > 4.5) {
+      const antes = d.fondo;
+      d.fondo = Math.min(1, d.fondo + (vn - 4.5) * 0.045);
+      d.piezas = Math.min(1, d.piezas + (vn - 4.5) * 0.08);
+      if (antes < 0.35 && d.fondo >= 0.35) avisar('fondo');
+    }
+    if (delante && vn > 4.5) {
       const antes = this.danoAleron;
-      this.danoAleron = Math.min(1, this.danoAleron + (vn - 6) * 0.07);
+      this.danoAleron = Math.min(1, this.danoAleron + (vn - 4.5) * 0.10);
       if (antes < 1 && this.danoAleron >= 1) avisar('aleronDel');
       else if (antes < 0.3 && this.danoAleron >= 0.3) avisar('aleronDelTocado');
     }
-    if (detras && vn > 7) {
+    if (detras && vn > 5.5) {
       const antes = d.aleronTras;
-      d.aleronTras = Math.min(1, d.aleronTras + (vn - 7) * 0.06);
+      d.aleronTras = Math.min(1, d.aleronTras + (vn - 5.5) * 0.09);
       if (antes < 0.5 && d.aleronTras >= 0.5) avisar('aleronTras');
+      // un golpe trasero fuerte toca la caja de cambios y el motor
+      if (vn > 9) { const am = d.motor; d.motor = Math.min(1, d.motor + (vn - 9) * 0.08); if (am < 0.3 && d.motor >= 0.3) avisar('motor'); }
     }
     // la rueda del lado del golpe: suspensión, pinchazo o arrancada
     const lateral = Math.abs(ey) > 0.8 || Math.abs(ex - this.ruedas[k].px) < 0.8;
     if (!lateral && !delante && !detras) return;
     if (d.suelta[k]) return;
-    if (vn > 9) {
-      d.susp[k] = Math.min(1, d.susp[k] + (vn - 9) * 0.07);
+    if (vn > 7) {
+      d.susp[k] = Math.min(1, d.susp[k] + (vn - 7) * 0.10);
       if (d.susp[k] > 0.25) avisar('susp' + k);
     }
-    if (vn > 17.5 || d.susp[k] >= 1) {
+    if (vn > 15 || d.susp[k] >= 1) {
       d.suelta[k] = true; d.pinchazo[k] = true;
       this.terminal = true; this.motivoAbandono = 'Rueda arrancada'; this.debugGolpe = { fuente: this.fuenteGolpe, vn, v: this.velocidad, s: this.proj.s, d: this.proj.d };
       this.eventos.push('rueda:' + k);
-    } else if (!d.pinchazo[k] && vn > 6.5 && azar() < Math.min(0.6, (vn - 6.5) * 0.06)) {
+    } else if (!d.pinchazo[k] && vn > 5 && azar() < Math.min(0.7, (vn - 5) * 0.08)) {
       d.pinchazo[k] = true; avisar('pinchazo' + k);
     }
   }
@@ -205,7 +215,9 @@ export class Monoplaza {
     clTras *= suelo * clamp(1 + 1.6 * (hTrasRef - this.alturaTras), 0.88, 1.12);
     clDel *= (1 - 0.35 * this.danoAleron) * this.ef.cl;
     clTras *= (1 - 0.55 * this.dano.aleronTras) * this.ef.cl;
-    cdA = cdA * this.ef.cd + 0.06 * this.dano.aleronTras + 0.03 * this.danoAleron;
+    // fondo y pontones rotos: hasta un 30 % menos de carga y más resistencia
+    clDel *= 1 - 0.22 * (this.dano.fondo || 0); clTras *= 1 - 0.30 * (this.dano.fondo || 0);
+    cdA = cdA * this.ef.cd + 0.06 * this.dano.aleronTras + 0.03 * this.danoAleron + 0.05 * (this.dano.fondo || 0);
     // aire sucio y rebufo
     clDel *= 1 - 0.24 * this.aireSucio; clTras *= 1 - 0.14 * this.aireSucio;
     cdA *= 1 - 0.28 * this.rebufo;
@@ -333,7 +345,7 @@ export class Monoplaza {
     }
     this.limitador = false;
     if (relacion !== 0 && !cambiando && (embragado || acel > 0.02)) {
-      const pT = parMotor(this.rpm) * this.ef.potencia;
+      const pT = parMotor(this.rpm) * this.ef.potencia * (1 - 0.35 * (this.dano.motor || 0));
       const fm = COCHE.frenoMotor[0] + COCHE.frenoMotor[1] * this.rpm;
       parCig = pT * acel - fm * (1 - acel) * (embragado ? 1 : 0);
       if (this.rpm > COCHE.rpmLimite) { parCig = Math.min(parCig, -fm); this.limitador = true; }

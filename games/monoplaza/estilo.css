@@ -374,3 +374,5 @@ body.en-red #bRecolocar { display: none; }
 
 .qred { position: absolute; top: calc(44px + var(--sa-t)); left: 50%; transform: translateX(-50%); display: none; background: rgba(184,77,255,.85); color: #fff; font-weight: 900; font-size: 13px; letter-spacing: 1px; padding: 3px 10px; border-radius: 6px; }
 .qred.visible { display: block; }
+.logo-carga { width: min(440px, 70vw); height: auto; border-radius: 18px; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
+@media (max-height: 420px) { .logo-carga { width: min(300px, 50vw); } }

@@ -722,6 +722,8 @@ function actualizarHud(dt) {
   marcar(1, c.dano.aleronTras > 0.05, c.dano.aleronTras < 0.5);
   const sm = Math.max(...c.dano.susp);
   marcar(2, sm > 0.15, sm < 0.5);
+  marcar(5, (c.dano.fondo || 0) > 0.1, (c.dano.fondo || 0) < 0.4);
+  marcar(6, (c.dano.motor || 0) > 0.1, (c.dano.motor || 0) < 0.4);
   marcar(3, c.dano.pinchazo.some((x, k) => x && !c.dano.suelta[k]), false);
   marcar(4, c.limitadorPit, false); dn[4].classList.toggle('pit', true);
   $('#bBox').classList.toggle('activo', !!p.solicitudBox);
@@ -1133,6 +1135,8 @@ function avisoDano(e) {
   if (det === 'aleronDel') mensaje('ALERÓN DELANTERO ROTO', 'Entra a boxes a cambiar el morro', 2.5);
   else if (det === 'aleronDelTocado') mensaje('ALERÓN DELANTERO TOCADO', 'Menos carga delante', 1.8);
   else if (det === 'aleronTras') mensaje('ALERÓN TRASERO DAÑADO', 'El coche pierde estabilidad', 2.2);
+  else if (det === 'fondo') { mensaje('FONDO DAÑADO', 'Menos carga aerodinámica', 2.2); radio.decir('Has roto el fondo. El coche tiene menos carga, frena antes.', { clave: 'fondo', cada: 60 }); }
+  else if (det === 'motor') { mensaje('MOTOR TOCADO', 'Pierdes potencia', 2.2); radio.decir('El golpe ha tocado la caja de cambios y el motor. Perdemos potencia.', { clave: 'motorD', cada: 60 }); }
   else if (det.startsWith('pinchazo')) mensaje('¡PINCHAZO!', `Rueda ${NOMBRE_RUEDA[+det.slice(8)]} · entra a boxes`, 2.8);
   else if (det.startsWith('susp')) mensaje('SUSPENSIÓN DAÑADA', `Rueda ${NOMBRE_RUEDA[+det.slice(4)]} · el coche tira hacia un lado`, 2.4);
 }

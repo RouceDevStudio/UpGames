@@ -1,7 +1,7 @@
 // Caché para jugar sin conexión. Cambia VERSION al publicar archivos nuevos.
 const VERSION = 'apexgp-v8';
 const ARCHIVOS = [
-  './', './index.html', './estilo.css', './manifest.webmanifest', './icono.svg', './icono-512.png',
+  './', './index.html', './estilo.css', './manifest.webmanifest', './icono.svg', './logo.svg', './icono-512.png',
   './lib/three.module.min.js', './lib/addons/objects/Sky.js', './lib/addons/utils/BufferGeometryUtils.js',
   './lib/addons/postprocessing/EffectComposer.js', './lib/addons/postprocessing/RenderPass.js',
   './lib/addons/postprocessing/ShaderPass.js', './lib/addons/postprocessing/UnrealBloomPass.js',
