@@ -15,7 +15,8 @@ import { Grabadora, crearProxy, CamarasTV, CAMARAS_REPE, NOMBRES_REPE } from './
 import { Telemetria } from './telemetria.js';
 import { Lluvia } from './render/lluvia.js';
 import { Barreras } from './render/barreras.js';
-import { construirEscenario } from './render/escenario.js';
+import { Comisarios, CapaCamara, CocheSeguridad } from './render/vida.js';
+import { construirEscenario, ponerHora, ponerAgua } from './render/escenario.js';
 import { crearModelo, dibujarPlantilla } from './render/cocheModelo.js';
 import { GestorBoxes, Escombros } from './render/equipo.js';
 import { NOMBRES_PATRON, NOMBRES_CASCO } from './render/librea.js';
@@ -36,7 +37,7 @@ const AJ_DEF = {
   tc: 2, abs: true, cambioAuto: true, direccion: true, estabilidad: false, trazada: true,
   calidad: 'auto', fps: false, volumen: 0.8, unidades: 'kmh', camara: 'persecucion', radio: true, ambiente: true, averias: true,
 };
-const OPC_CARRERA_DEF = { vueltas: 5, rivales: 7, dificultad: 'normal', posSalida: 0, compuesto: 'medio', clima: 'seco' };
+const OPC_CARRERA_DEF = { vueltas: 5, rivales: 7, dificultad: 'normal', posSalida: 0, compuesto: 'medio', clima: 'seco', hora: 'dia', formacion: 0 };
 function cargar() {
   try { return JSON.parse(localStorage.getItem(CLAVE)) || {}; } catch { return {}; }
 }
@@ -100,7 +101,9 @@ let renderer, scene, composer, camara, efectos, escenario, circuito;
 const sonido = new Sonido();
 const entrada = new Entrada(ajustes);
 let sesion = null, modelos = [], modeloFantasma = null, lineaIdeal = null;
-let gestorBoxes = null, escombros = null, lluviaFx = null, camarasTV = null, barreras = null;
+let gestorBoxes = null, escombros = null, lluviaFx = null, camarasTV = null, barreras = null, comisarios = null, cocheSeg = null;
+let capaCamara = null;
+const _vSol = new THREE.Vector3();
 let grabadora = null, telemetria = null, repe = null;
 let qActual = null, carreraCamp = null, fichaCrono = null;
 const multi = new Multijugador();
@@ -159,6 +162,8 @@ async function cargarCircuito(id) {
   escombros = new Escombros(scene, (x, z) => { const p = circuito.proyectar(x, z, -1, {}); return p.y + circuito.caida(p.i, p.d); });
   lluviaFx = new Lluvia(scene, escenario, calidad);
   barreras = new Barreras(scene, circuito, { escombros, efectos, calidad });
+  comisarios = new Comisarios(scene, circuito, calidad);
+  cocheSeg = new CocheSeguridad(scene);
   camarasTV = new CamarasTV(circuito);
   camara.tv = camarasTV;
   modelos = []; modeloFantasma = null;
@@ -177,6 +182,24 @@ async function cargarCircuito(id) {
   $('#carga').classList.remove('visible');
   if (visible && visible !== 'carga') mostrar(visible);
   cargando = null; fin();
+}
+
+// gotas en la lente, destello del sol y viñeta de velocidad (capa 2D sobre el render)
+function actualizarCapaCamara(dt, j) {
+  capaCamara ??= new CapaCamara($('#capaCamara'));
+  if (!jugando || ajustes.efectosCamara === false) { if (capaCamara.activa) capaCamara.actualizar(dt, {}); return; }
+  _vSol.copy(escenario.sol).multiplyScalar(5000).add(camara.cam.position).project(camara.cam);
+  const sol = _vSol.z < 1 && escenario.sol.y > 0 ? [(_vSol.x + 1) / 2 * innerWidth, (1 - _vSol.y) / 2 * innerHeight] : null;
+  capaCamara.actualizar(dt, {
+    lluvia: sesion.clima.lluvia, aBordo: ['cabina', 'cara', 'tcam'].includes(camara.modo),
+    velocidad: j.velocidad, solPantalla: calidad >= 1 ? sol : null, hora: escenario.hora,
+  });
+}
+
+function aplicarHora(hora) {
+  if (!escenario || escenario.hora === hora) return;
+  ponerHora(escenario, scene, renderer, hora);
+  lluviaFx?.forzar();
 }
 
 function liberarEscena() {
@@ -297,6 +320,7 @@ function crearModelos() {
     const eq = equipadoDe(p, k);
     const imagen = p.jugador ? (eq.propia ? imagenLibrea : null) : (p.idRed && imagenesRed.get(p.idRed)) || null;
     const m = crearModelo({ equipo: p.equipo, equipado: eq, imagen, compuesto: p.coche.reglaje.compuesto, calidad, cabina: p.jugador });
+    m.luzTrasera = () => escenario?.hora === 'noche' || (sesion?.clima?.lluvia || 0) > 0.05;
     // piezas que se desprenden en los choques
     m.alDesprender = (tipo, obj) => {
       const c = p.coche;
@@ -340,11 +364,11 @@ function empezar(modo, extra = {}) {
   modoActual = modo;
   sonido.iniciar();
   sonido.ponerVolumen(ajustes.volumen);
-  const opc = { ...opcBase(modo), ...extra, averias: ajustes.averias ? 1 : 0 };
+  const opc = { ...opcBase(modo), ...extra, averias: ajustes.averias ? 1 : 0, formacion: opcCarrera.formacion === 1 };
   carreraCamp = extra.campeonato || null;
   if (modo === 'carrera' && !extra.pilotos) {
     // carrera rápida: con clasificación la parrilla la decide Q1-Q2-Q3
-    if (+opcCarrera.posSalida === 0 && !extra.sinClasif) { empezarClasificacion({ rivales: opcCarrera.rivales, dificultad: opcCarrera.dificultad, clima: opcCarrera.clima }); return; }
+    if (+opcCarrera.posSalida === 0 && !extra.sinClasif) { empezarClasificacion({ rivales: opcCarrera.rivales, dificultad: opcCarrera.dificultad, clima: opcCarrera.clima, hora: opcCarrera.hora }); return; }
     Object.assign(opc, { vueltas: opcCarrera.vueltas, rivales: opcCarrera.rivales, dificultad: opcCarrera.dificultad, posSalida: opcCarrera.posSalida || 1, clima: opcCarrera.clima });
   }
   if (modo === 'carrera') {
@@ -361,12 +385,14 @@ function empezar(modo, extra = {}) {
   }
   if (modo === 'practica') opc.clima = extra.clima || opcCarrera.clima;
   sesion = new Sesion(circuito, opc);
+  sesion.hora = extra.hora || opcCarrera.hora || 'dia';
   arrancarSesion(modo);
 }
 
 // Parte común de empezar una sesión local o en línea
 function arrancarSesion(modo) {
   enGaraje = false;
+  aplicarHora(sesion.hora || 'dia');
   crearModelos();
   camara.iniciada = false;
   if (camara.modo === 'orbita') camara.modo = ajustes.camara || 'persecucion';
@@ -388,6 +414,7 @@ function arrancarSesion(modo) {
   // repetición, telemetría, radio y estado de la carrera
   grabadora = new Grabadora(sesion.participantes.length);
   telemetria = new Telemetria(circuito.largo);
+  if (sesion.estado === 'formacion') { mensaje('VUELTA DE FORMACIÓN', 'Sigue al de delante y vuelve a tu casilla', 3); radio.decir('Vuelta de formación. Calienta neumáticos y frenos, y vuelve a tu casilla.', { clave: 'form', cada: 5 }); }
   estadoRadio = { clima: sesion.clima.agua > 0.13 ? 'mojado' : 'seco', lluvia: sesion.clima.lluvia > 0.05, lider: null, avisoDesg: false, vsc: false, ultimaPos: null };
   radio.voz = !!ajustes.radio;
   sonido.ponerAmbiente(!!ajustes.ambiente);
@@ -437,6 +464,7 @@ function pausar(si) {
 
 function salirAlMenu() {
   if (enRed) { multi.salir(); enRed = false; }
+  aplicarHora('dia');
   qRed = null;
   qActual = null; carreraCamp = null; radio.callar();
   jugando = false; pausado = false;
@@ -800,6 +828,14 @@ function procesarEventos() {
         else if (e.averia === 'ers') { mensaje('ERS SOBRECALENTADO', 'Sin despliegue unos segundos', 2.2); radio.decir('El ERS se ha sobrecalentado. Sin batería unos veinte segundos.', { prioridad: true }); }
       } else if (e.averia === 'motor') radio.decir(`¡Humo en el coche de ${e.p.nombre.replace('@', '')}! Parece el motor.`, { tipo: 'megafonia', clave: 'av:' + e.p.nombre, cada: 999 });
     }
+    else if (e.tipo === 'sc') {
+      if (e.activo) { mensaje('SAFETY CAR', 'Agrúpate detrás del coche de seguridad · prohibido adelantar', 3); radio.decir('Safety car, safety car. Agrúpate detrás y no adelantes. Mantén calor en los neumáticos.', { clave: 'sc', cada: 5, prioridad: true }); radio.decir('Sale el coche de seguridad.', { tipo: 'megafonia', clave: 'scM', cada: 30 }); }
+      else if (e.entra) { mensaje('SAFETY CAR EN BOXES ESTA VUELTA', 'Prepárate para la relanzada', 2.5); radio.decir('El safety car entra esta vuelta. Prepárate, el líder marca el ritmo.', { clave: 'scIn', cada: 5, prioridad: true }); }
+      else { mensaje('PISTA LIBRE', 'Fin del Safety Car', 1.8); estadoRadio.tVerde = 4; radio.decir('Verde, verde, verde. ¡Vamos!', { clave: 'scFin', cada: 5, prioridad: true }); }
+    }
+    else if (e.tipo === 'roja') { mensaje('BANDERA ROJA', 'Carrera detenida · todos a la parrilla', 4); sonido.evento('golpe', 2); radio.decir('Bandera roja, bandera roja. Carrera detenida. Reduce y vuelve despacio, reparamos el coche en la parrilla.', { clave: 'roja', cada: 5, prioridad: true }); radio.decir('Bandera roja. La carrera queda detenida.', { tipo: 'megafonia', clave: 'rojaM', cada: 30 }); }
+    else if (e.tipo === 'relanzada') { mensaje('SALIDA PARADA', 'Relanzada desde la parrilla', 2.5); radio.decir('Hemos reparado alerones y pinchazos. Salida parada, concéntrate en las luces.', { clave: 'relanzada', cada: 5, prioridad: true }); }
+    else if (e.tipo === 'finFormacion') { mensaje('EN PARRILLA', 'Atento al semáforo', 1.5); radio.decir('Todos en la parrilla. Embrague listo, atento a las luces.', { clave: 'finForm', cada: 5 }); }
     else if (e.tipo === 'vsc') {
       if (e.activo) { mensaje('VSC', 'Coche de seguridad virtual · ritmo limitado y sin DRS', 2.5); radio.decir('VSC, VSC. Coche de seguridad virtual, levanta y respeta el delta.', { clave: 'vsc', cada: 5, prioridad: true }); radio.decir('Coche de seguridad virtual desplegado.', { tipo: 'megafonia', clave: 'vscM', cada: 30 }); }
       else { mensaje('PISTA LIBRE', 'Fin del VSC', 1.8); estadoRadio.tVerde = 4; radio.decir('Fin del VSC, fin del VSC. ¡A fondo!', { clave: 'vscFin', cada: 5, prioridad: true }); }
@@ -894,6 +930,8 @@ function procesarEventos() {
     else if (e.startsWith('golpe:')) { const f = +e.slice(6); sonido.evento('golpe', f); entrada.vibrar(Math.min(250, 40 + f * 12), 1); }
     else if (e === 'reduccionDenegada') mensaje('REDUCCIÓN DENEGADA', 'Se pasaría de vueltas', 0.9);
     else if (e.startsWith('dano:') || e.startsWith('rueda:')) avisoDano(e);
+    else if (e === 'aquaplaning') { mensaje('¡AQUAPLANING!', 'Charco: levanta el pie', 1.2); entrada.vibrar(160, 0.6); radio.decir('Cuidado con los charcos, hay mucha agua acumulada.', { clave: 'charco', cada: 90 }); }
+    else if (e.startsWith('plano')) { const k = +e.slice(5); mensaje('PLANO EN EL NEUMÁTICO', k < 2 ? 'Rueda delantera' : 'Rueda trasera', 1.6); radio.decir('Has hecho un plano bloqueando. Notarás vibraciones; cuida las frenadas.', { clave: 'plano', cada: 60 }); }
   }
   c.eventos.length = 0;
   for (const p of sesion.participantes) if (!p.jugador) p.coche.eventos.length = 0;
@@ -1091,10 +1129,14 @@ function bucle(ahora) {
       if (e.tipo === 'bidon' && jugando) { sonido.evento('golpe', 4); if (e.jugador) { mensaje('¡BIDONES DE AGUA!', '', 1.2); entrada.vibrar(120, 0.8); } }
     }
     gestorBoxes.actualizar(dt);
+    comisarios.actualizar(dt, sesion);
+    cocheSeg.actualizar(dt, sesion.sc);
   }
+  actualizarCapaCamara(dt, j);
   for (const f of escenario.actualizables) f(dt);
   // lluvia, spray y asfalto mojado
   efectos.agua = sesion.clima.agua;
+  ponerAgua(escenario, sesion.clima.agua);
   lluviaFx.actualizar(dt, camara.cam.position, sesion.clima.lluvia, sesion.clima.agua, renderer);
   nivelDetalle();
   if (efectos._escala !== camara.cam.fov) { efectos.ajustarEscala(innerHeight * renderer.getPixelRatio(), camara.cam.fov); efectos._escala = camara.cam.fov; }
@@ -1808,6 +1850,7 @@ function salirAPistaQ() {
   opc.clima = q.cfg.climaQ;
   opc.reglaje.compuesto = q.cfg.climaQ === 'lluvia' ? 'lluvia' : 'blando';
   sesion = new Sesion(circuito, opc);
+  sesion.hora = q.cfg.hora || opcCarrera.hora || 'dia';
   arrancarSesion('contrarreloj');
   mensaje(NOMBRE_Q[q.clasif.tanda], 'Vuelta de salida · 2 vueltas lanzadas', 3);
 }
@@ -1839,7 +1882,7 @@ function empezarCarreraTrasQ() {
   const parrilla = q.clasif.parrilla();
   const cfg = q.cfg;
   empezar('carrera', {
-    pilotos: parrilla, vueltas: cfg.vueltas ?? opcCarrera.vueltas, clima: cfg.clima, semilla: cfg.semilla,
+    pilotos: parrilla, vueltas: cfg.vueltas ?? opcCarrera.vueltas, clima: cfg.clima, semilla: cfg.semilla, hora: cfg.hora,
     campeonato: cfg.campeonato ? { ronda: temporada.ronda } : null,
     compuesto: cfg.clima === 'lluvia' ? 'lluvia' : opcCarrera.compuesto,
   });
@@ -1892,7 +1935,8 @@ $('#bCampSeguir').addEventListener('click', async () => {
   const t = temporada;
   await cargarCircuito(t.rondas[t.ronda]);
   const cl = CAMP.climaRonda(t);
-  empezarClasificacion({ pilotos: t.pilotos.map(p => ({ id: p.id, nombre: p.nombre, ie: p.ie, ip: p.ip, hab: p.hab, jugador: p.jugador })), clima: cl, vueltas: t.opc.vueltas, semilla: t.semilla + t.ronda, campeonato: true });
+  empezarClasificacion({ pilotos: t.pilotos.map(p => ({ id: p.id, nombre: p.nombre, ie: p.ie, ip: p.ip, hab: p.hab, jugador: p.jugador })), clima: cl, vueltas: t.opc.vueltas, semilla: t.semilla + t.ronda, campeonato: true,
+    hora: t.rondas[t.ronda] === 'puerto' ? 'noche' : t.rondas[t.ronda] === 'veloz' ? 'atardecer' : 'dia' });
 });
 $('#bCampAbandonar').addEventListener('click', () => {
   if (!confirm('¿Empezar una temporada nueva? Se pierde la clasificación actual.')) return;

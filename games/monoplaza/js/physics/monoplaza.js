@@ -346,6 +346,8 @@ export class Monoplaza {
     // limitador de velocidad de la calle de boxes (80 km/h)
     if (this.limitadorPit) acel = Math.min(acel, clamp((this.limitePit - this.vx) * 0.6, 0, 1));
     if (this.limiteVsc > 0) acel = Math.min(acel, clamp((this.limiteVsc - this.vx) * 0.4, 0, 1));
+    // ritmo neutralizado (VSC, Safety Car, formación): frena solo si va claramente por encima
+    if (this.limiteVsc > 0 && this.vx > this.limiteVsc + 2) freno = Math.max(freno, clamp((this.vx - this.limiteVsc - 2) * 0.2, 0, 1));
     const relacion = this.marcha > 0 ? COCHE.relaciones[this.marcha - 1] : (this.marcha < 0 ? COCHE.relacionReversa : 0);
     const rl = this.ruedas[2], rr = this.ruedas[3];
     const omegaEje = (rl.omega + rr.omega) / 2;
@@ -416,7 +418,7 @@ export class Monoplaza {
 
     // --- Ruedas -----------------------------------------------------------
     let fxT = 0, fyT = 0, mzT = 0;
-    let deslizMax = 0, bordillo = 0, fuera = 0, superficieMala = 0, salchicha = 0;
+    let deslizMax = 0, bordillo = 0, fuera = 0, superficieMala = 0, salchicha = 0, charcoFuerte = 0, planos = 0;
     const kRelax = 0.38;
     // diferencial autoblocante
     const dOmega = rl.omega - rr.omega;
@@ -446,6 +448,8 @@ export class Monoplaza {
         const fase = Math.sin((p.s + k * 0.7) * (w.sup === SUP_BORDILLO ? 2.6 : 5.1));
         w.fz *= 1 + 0.22 * sp.vib * fase;
       }
+      // un plano golpea una vez por vuelta de la rueda
+      if (w.neum.bloqueo > 0.05 && v > 5) { planos = Math.max(planos, w.neum.bloqueo); w.fz *= 1 + 0.18 * w.neum.bloqueo * Math.sin(w.giro); }
       // velocidad del punto de contacto en ejes coche
       const vcx = this.vx - this.r * w.py;
       const vcy = this.vy + this.r * w.px;
@@ -462,6 +466,16 @@ export class Monoplaza {
       // agua en la pista (fuera del asfalto, la hierba mojada es una pista de hielo)
       const agua = c.agua || 0;
       if (agua > 0) mu *= factorAgua(nm.c, agua) * (w.sup > SUP_ESCAPE ? 1 - 0.35 * agua : 1);
+      // canicas fuera de la trazada en seco: casi como pisar rodamientos
+      if (w.sup === SUP_ASFALTO && agua < 0.2 && c.enCanicas?.(iw, w.d)) mu *= 0.86;
+      // charco: aquaplaning que crece con la velocidad y la profundidad (y menos con los de lluvia)
+      w.charco = c.charco ? c.charco(iw, w.d, agua) : 0;
+      if (w.charco > 0) {
+        const vAqua = nm.c.nombre === 'Lluvia' ? 62 : nm.c.nombre === 'Intermedio' ? 50 : 38;
+        const aqua = Math.min(0.88, w.charco * Math.max(0, (v - vAqua * 0.5) / (vAqua * 0.6)) ** 1.6);
+        mu *= 1 - aqua;
+        if (aqua > 0.3) charcoFuerte = Math.max(charcoFuerte, aqua);
+      }
       const den = Math.max(Math.abs(vl), 3);
       let R = w.radio;
       const d = this.dano;
@@ -533,6 +547,12 @@ export class Monoplaza {
       // el agua enfría la goma: los lisos en mojado no llegan a temperatura y los de lluvia en seco se cuecen
       nm.termico(dt, Math.abs(fxw) * Math.abs(w.omega * R - vl) + Math.abs(fyw * vt), w.fz, Math.abs(vl), this.tAmb - 12 * agua, agua);
       if (!w.delantera) maxKappaTras = Math.max(maxKappaTras, w.kappa / nm.picoKappa);
+      // plano: rueda bloqueada (gira casi nada) arrastrándose por el asfalto
+      if (v > 12 && Math.abs(w.omega * R) < 0.15 * Math.abs(vl) && w.sup <= SUP_BORDILLO && w.fz > 500) {
+        const antes = nm.bloqueo;
+        nm.bloqueo = Math.min(1, nm.bloqueo + dt * Math.abs(vl) * 0.0045 * (1 - 0.6 * agua));
+        if (antes < 0.25 && nm.bloqueo >= 0.25) this.eventos.push('plano' + k);
+      }
       // a ejes del coche
       const fxc = fxw * ca - fyw * sa;
       const fyc = fxw * sa + fyw * ca;
@@ -572,8 +592,10 @@ export class Monoplaza {
     this.limitesExcedidos = fuera === 4;
     this.enBordillo = bordillo > 0;
     this.enTierra = superficieMala > 0;
+    if (charcoFuerte > 0 && !this._aquaplaning) this.eventos.push('aquaplaning');
+    this._aquaplaning = charcoFuerte > 0;
     this.deslizMax = deslizMax;
-    this.vibracion = bordillo * 0.25 + superficieMala * 0.2 + this.fondoToca + salchicha * 0.5;
+    this.vibracion = bordillo * 0.25 + superficieMala * 0.2 + this.fondoToca + salchicha * 0.5 + planos * 0.35;
     // bordillo alto (salchicha): el coche salta, se descoloca y, deprisa, rompe el fondo
     this._tSalchicha = Math.max(0, (this._tSalchicha || 0) - dt);
     if (salchicha && this._tSalchicha <= 0 && v > 6) {

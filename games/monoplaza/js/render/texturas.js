@@ -236,13 +236,47 @@ export function texturaGrava(tam = 256) {
 }
 
 export function texturaBordillo() {
-  const c = lienzo(64, 128), ctx = c.getContext('2d');
-  ctx.fillStyle = '#d9161c'; ctx.fillRect(0, 0, 64, 64);
-  ctx.fillStyle = '#f4f4f4'; ctx.fillRect(0, 64, 64, 64);
+  const c = lienzo(128, 256), ctx = c.getContext('2d');
+  const rnd = aleatorio(53);
+  ctx.fillStyle = '#d9161c'; ctx.fillRect(0, 0, 128, 128);
+  ctx.fillStyle = '#f4f4f4'; ctx.fillRect(0, 128, 128, 128);
   // estrías
   ctx.globalAlpha = 0.18; ctx.fillStyle = '#000';
-  for (let y = 0; y < 128; y += 8) ctx.fillRect(0, y, 64, 2);
+  for (let y = 0; y < 256; y += 16) ctx.fillRect(0, y, 128, 4);
+  // desgaste: pintura saltada y goma de las ruedas en el lado de la pista (u = 0)
+  ctx.globalAlpha = 1;
+  for (let k = 0; k < 160; k++) {
+    const x = rnd() ** 2 * 128, y = rnd() * 256, r = 1 + rnd() * 3;
+    ctx.fillStyle = rnd() < 0.5 ? 'rgba(60,60,62,0.7)' : 'rgba(200,190,180,0.5)';
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  const g = ctx.createLinearGradient(0, 0, 70, 0);
+  g.addColorStop(0, 'rgba(15,15,15,0.55)'); g.addColorStop(1, 'rgba(15,15,15,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 70, 256);
   return aTextura(c);
+}
+
+// Canicas: bolitas de goma sueltas fuera de la trazada
+export function texturaCanicas() {
+  const c = lienzo(128, 256), ctx = c.getContext('2d');
+  const rnd = aleatorio(61);
+  for (let k = 0; k < 900; k++) {
+    const u = rnd(), x = u * 128, y = rnd() * 256;
+    if (rnd() > Math.sin(u * Math.PI) ** 0.5) continue;    // más densas en el centro de la franja
+    ctx.fillStyle = `rgba(10,10,10,${0.5 + rnd() * 0.4})`;
+    ctx.beginPath(); ctx.arc(x, y, 0.8 + rnd() * 1.8, 0, Math.PI * 2); ctx.fill();
+  }
+  return aTextura(c);
+}
+
+// Parche de asfalto reparado: más oscuro y liso, con juntas de sellado
+export function texturaParche() {
+  const c = lienzo(128), ctx = c.getContext('2d');
+  const rnd = aleatorio(71);
+  ctx.fillStyle = 'rgba(28,28,30,0.85)'; ctx.fillRect(4, 4, 120, 120);
+  for (let k = 0; k < 600; k++) { ctx.fillStyle = `rgba(${rnd() < 0.5 ? '70,70,72' : '15,15,16'},0.4)`; ctx.fillRect(4 + rnd() * 120, 4 + rnd() * 120, 1.5, 1.5); }
+  ctx.strokeStyle = 'rgba(8,8,8,0.9)'; ctx.lineWidth = 3; ctx.strokeRect(4, 4, 120, 120);
+  return aTextura(c, false);
 }
 
 export function texturaMuro(texto = 'UPGAMES') {

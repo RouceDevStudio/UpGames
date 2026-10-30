@@ -259,6 +259,7 @@ export class Circuito {
     this.sectores = [this.largo / 3, 2 * this.largo / 3];
     this._calleBoxes();
     this._protecciones();
+    this._superficieViva();
   }
 
   // Perfil con el agarre multiplicado por f (pista mojada). Se calcula al pedirlo y se guarda
@@ -722,6 +723,57 @@ Circuito.prototype._protecciones = function () {
 Circuito.prototype.enSalchicha = function (i, d) {
   const lado = d >= 0 ? 1 : 0, ad = Math.abs(d), hw = this.semiAncho[i];
   return this.salchicha[lado][i] && ad > hw + 1.35 && ad < hw + 2.1;
+};
+
+// Canicas (bolitas de goma) fuera de la trazada en las curvas, y charcos en los puntos
+// bajos de la pista que aparecen con lluvia fuerte.
+Circuito.prototype._superficieViva = function () {
+  const n = this.n, k = this.curvSuave;
+  this.canicas = new Uint8Array(n);
+  for (let i = 0; i < n; i++) if (Math.abs(k[i]) > 0.006 && !this.enZonaPit[i]) this.canicas[i] = 1;
+  // charcos: puntos bajos locales (o cada ~700 m si la pista es llana), deterministas
+  let sem = 97 + n;
+  const rnd = () => ((sem = (sem * 16807) % 2147483647) / 2147483647);
+  this.charcos = [];
+  this.charcoEn = new Int16Array(n).fill(-1);
+  const vent = Math.round(120 / this.paso);
+  const cand = [];
+  for (let i = 0; i < n; i += Math.max(1, Math.round(10 / this.paso))) {
+    if (this.enZonaPit[i] || i < vent) continue;
+    let bajo = 0;
+    for (let j = -vent; j <= vent; j += 4) bajo += this.y[(i + j + n) % n] - this.y[i];
+    cand.push({ i, bajo: bajo + rnd() * 2 });
+  }
+  cand.sort((a, b) => b.bajo - a.bajo);
+  const cuantos = Math.max(4, Math.round(this.largo / 700));
+  for (const c of cand) {
+    if (this.charcos.length >= cuantos) break;
+    if (this.charcos.some(o => Math.abs(this.envolver(o.s - c.i * this.paso + this.largo / 2) - this.largo / 2) < 250)) continue;
+    const hw = this.semiAncho[c.i];
+    const largo = 6 + rnd() * 8, ancho = 2 + rnd() * 2.5;
+    const d = (rnd() * 2 - 1) * (hw - ancho * 0.5);
+    const id = this.charcos.length;
+    this.charcos.push({ s: c.i * this.paso, i: c.i, d, largo, ancho, prof: 0.6 + rnd() * 0.4 });
+    const m = Math.ceil(largo / 2 / this.paso);
+    for (let j = -m; j <= m; j++) this.charcoEn[(c.i + j + n) % n] = id;
+  }
+};
+
+// Profundidad relativa del charco en (i, d) con la pista a nivel de agua 'agua' (0 = seco)
+Circuito.prototype.charco = function (i, d, agua) {
+  if (agua < 0.35) return 0;
+  const id = this.charcoEn[i];
+  if (id < 0) return 0;
+  const ch = this.charcos[id];
+  const ds = Math.abs(this.envolver(i * this.paso - ch.s + this.largo / 2) - this.largo / 2) / (ch.largo / 2);
+  const dd = Math.abs(d - ch.d) / (ch.ancho / 2);
+  const r = ds * ds + dd * dd;
+  return r < 1 ? ch.prof * (1 - r) * Math.min(1, (agua - 0.35) / 0.25) : 0;
+};
+
+// ¿Rueda sobre las canicas? (asfalto en curva, a más de 3.5 m de la trazada)
+Circuito.prototype.enCanicas = function (i, d) {
+  return this.canicas[i] && Math.abs(d) < this.semiAncho[i] && Math.abs(d - this.trazada.off[i]) > 3.5;
 };
 
 export const SUP_ASFALTO = 0, SUP_BORDILLO = 1, SUP_ESCAPE = 2, SUP_HIERBA = 3, SUP_GRAVA = 4;

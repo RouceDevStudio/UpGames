@@ -32,6 +32,8 @@ export class Lluvia {
     this.intensidad = -1;
   }
 
+  forzar() { this.intensidad = -1; }
+
   actualizar(dt, camPos, lluvia, agua, renderer) {
     this.t += dt;
     const on = lluvia > 0.02;
@@ -54,11 +56,13 @@ export class Lluvia {
     if (clave === this.intensidad) return;
     this.intensidad = clave;
     const nube = Math.min(1, lluvia * 1.4 + agua * 0.3);
-    this.scene.fog.color.copy(this.fogColor).lerp(new THREE.Color(0x6f7a86), nube);
-    this.scene.fog.far = this.fogFar * (1 - 0.55 * lluvia);
-    this.esc.luzSol.intensity = this.sol * (1 - 0.7 * nube);
-    if (this.esc.hemi) this.esc.hemi.intensity = 0.55 + 0.35 * nube;
-    if (renderer) renderer.toneMappingExposure = 0.92 - 0.12 * nube;
+    const b = this.esc.base || { sol: this.sol, fogColor: this.fogColor, fogFar: this.fogFar, exp: 0.92, hemi: 0.55 };
+    const noche = this.esc.hora === 'noche';
+    this.scene.fog.color.copy(b.fogColor).lerp(new THREE.Color(noche ? 0x0c1220 : 0x6f7a86), nube);
+    this.scene.fog.far = b.fogFar * (1 - 0.55 * lluvia);
+    this.esc.luzSol.intensity = b.sol * (1 - (noche ? 0.25 : 0.7) * nube);
+    if (this.esc.hemi) this.esc.hemi.intensity = b.hemi + (noche ? 0 : 0.35) * nube;
+    if (renderer) renderer.toneMappingExposure = b.exp - 0.12 * nube;
     if (this.asf) {
       // asfalto mojado: más oscuro y con reflejos
       const m = this.esc.matAsfalto;

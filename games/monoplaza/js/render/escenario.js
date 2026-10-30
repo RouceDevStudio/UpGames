@@ -171,6 +171,8 @@ export function construirEscenario(scene, renderer, c, calidad) {
   res.luzSol = luzSol;
   res.hemi = new THREE.HemisphereLight(0xcfe3ff, 0x55603f, 0.55);
   scene.add(res.hemi);
+  res.cielo = cielo;
+  res.base = { sol: luzSol.intensity, fogColor: scene.fog.color.clone(), fogFar: scene.fog.far, exp: 0.92, hemi: 0.55 };
 
   // --- Materiales ---------------------------------------------------------
   const asf = TX.texturasAsfalto(calidad >= 2 ? 512 : 256);
@@ -229,6 +231,57 @@ export function construirEscenario(scene, renderer, c, calidad) {
   const goma = new THREE.Mesh(cinta(c, (i) => [[t.off[i] - 1.6, 0.006], [t.off[i] + 1.6, 0.006]], { escalaV: 30 }), matGoma);
   goma.receiveShadow = true;
   scene.add(goma);
+
+  // canicas fuera de la trazada en las curvas (exterior de la goma)
+  const matCanicas = new THREE.MeshStandardMaterial({ map: TX.texturaCanicas(), transparent: true, roughness: 0.9, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  for (const sg of [-1, 1]) {
+    // franja entre la goma (+-3.6 m de la trazada) y el borde, ordenada de izquierda a derecha
+    const franja = (i) => { const a = t.off[i] + sg * 3.6, b = sg * (hw(i) - 0.7); return sg > 0 ? [a, b] : [b, a]; };
+    const g = cinta(c, (i) => franja(i).map(d => [d, 0.007]),
+      { filtro: (i) => { const [a, b] = franja(i); return c.canicas[i] && b - a > 1; }, escalaV: 12 });
+    const m = new THREE.Mesh(g, matCanicas); m.receiveShadow = true; scene.add(m);
+  }
+  // parches de asfalto reparado
+  if (calidad >= 1) {
+    const matParche = new THREE.MeshStandardMaterial({ map: TX.texturaParche(), transparent: true, roughness: 0.7, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1.5, polygonOffsetUnits: -1.5 });
+    let sem = 11;
+    const rnd = () => ((sem = (sem * 16807) % 2147483647) / 2147483647);
+    const pos = [], uv = [], idx = [];
+    for (let s0 = 300; s0 < c.largo - 100; s0 += 260 + rnd() * 400) {
+      const i0 = Math.floor(s0 / c.paso), largo = 4 + rnd() * 10, filas = Math.max(2, Math.ceil(largo / c.paso));
+      const ancho = 2 + rnd() * 4, d0 = (rnd() * 2 - 1) * (hw(i0) - ancho / 2 - 0.5);
+      const base = pos.length / 3;
+      for (let r = 0; r <= filas; r++) {
+        const i = (i0 + r) % c.n, nx = -c.tz[i], nz = c.tx[i];
+        for (const [j, d] of [[0, d0 - ancho / 2], [1, d0 + ancho / 2]]) {
+          pos.push(c.x[i] + nx * d, c.y[i] + 0.005, c.z[i] + nz * d);
+          uv.push(j, r / filas);
+        }
+        if (r < filas) { const a = base + r * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(idx); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, matParche); m.receiveShadow = true; scene.add(m);
+  }
+  // charcos: espejos de agua que sólo se ven con la pista muy mojada (ver ponerAgua)
+  {
+    const matCharco = new THREE.MeshStandardMaterial({ color: 0x1a2028, roughness: 0.03, metalness: 0.9, transparent: true, opacity: 0, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+    const geo = new THREE.CircleGeometry(0.5, 24); geo.rotateX(-Math.PI / 2);
+    res.charcos = [];
+    for (const ch of c.charcos) {
+      const i = ch.i, nx = -c.tz[i], nz = c.tx[i];
+      const m = new THREE.Mesh(geo, matCharco);
+      m.position.set(c.x[i] + nx * ch.d, c.y[i] + 0.012, c.z[i] + nz * ch.d);
+      m.rotation.y = -Math.atan2(c.tz[i], c.tx[i]);
+      m.scale.set(ch.largo, 1, ch.ancho);
+      m.visible = false;
+      scene.add(m); res.charcos.push(m);
+    }
+    res.matCharco = matCharco;
+  }
 
   // --- Bordillos -----------------------------------------------------------
   for (const sg of [-1, 1]) {
@@ -338,12 +391,100 @@ export function construirEscenario(scene, renderer, c, calidad) {
 
   res.actualizables.push(...publicidad(scene, c, terreno, calidad));
 
+  // --- Focos para las carreras de noche (solo se ven de noche) ---------------
+  res.focos = focos(scene, c, calidad);
+  res.matGrada = matGrada; res.texPublico = texPublico;
+  // público que se mueve: la textura de la grada tiembla un poco
+  let tPub = 0;
+  res.actualizables.push((dt) => { tPub += dt; texPublico.offset.x = (Math.floor(tPub * 5) % 2) * 0.0035; texPublico.offset.y = (Math.floor(tPub * 3) % 2) * 0.004; });
+
   // --- Vegetación o ciudad ---------------------------------------------------
   if (urbano) ciudad(scene, c, terreno, calidad, matHormigon);
   arboles(scene, c, terreno, calidad, urbano ? 140 : 48);
   montanas(scene, terreno);
 
   return res;
+}
+
+// Los charcos aparecen poco a poco cuando el agua en pista supera ~0.35
+export function ponerAgua(esc, agua) {
+  const o = Math.max(0, Math.min(0.85, (agua - 0.35) / 0.35));
+  if (!esc.matCharco || esc._aguaO === o) return;
+  esc._aguaO = o;
+  esc.matCharco.opacity = o;
+  for (const m of esc.charcos) m.visible = o > 0.01;
+}
+
+// Torres de focos a lo largo del circuito y manchas de luz en el asfalto
+function focos(scene, c, calidad) {
+  const g = new THREE.Group(); g.visible = false;
+  const paso = calidad >= 2 ? 60 : 90;
+  const n = Math.ceil(c.largo / paso) * 2;
+  const geoPoste = new THREE.CylinderGeometry(0.18, 0.25, 16, 6); geoPoste.translate(0, 8, 0);
+  const geoCabeza = new THREE.BoxGeometry(0.6, 1.0, 2.6); geoCabeza.translate(0, 16.2, 0);
+  const postes = new THREE.InstancedMesh(geoPoste, new THREE.MeshStandardMaterial({ color: 0x55585e, metalness: 0.6, roughness: 0.5 }), n);
+  const cabezas = new THREE.InstancedMesh(geoCabeza, new THREE.MeshStandardMaterial({ color: 0x222222, emissive: 0xfff4dc, emissiveIntensity: 3 }), n);
+  // mancha de luz: un círculo aditivo sobre la pista
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  const x = cv.getContext('2d'); const gr = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(255,244,220,0.55)'); gr.addColorStop(1, 'rgba(255,244,220,0)'); x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
+  const texM = new THREE.CanvasTexture(cv);
+  const geoM = new THREE.PlaneGeometry(1, 1); geoM.rotateX(-Math.PI / 2);
+  const manchas = new THREE.InstancedMesh(geoM, new THREE.MeshBasicMaterial({ map: texM, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6 }), n);
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sc = new THREE.Vector3(), p = new THREE.Vector3();
+  let k = 0;
+  for (let s = 0; s < c.largo && k < n; s += paso) {
+    const mm = c.muestra(s), i = mm.i;
+    for (const sg of [-1, 1]) {
+      const lado = sg > 0 ? 1 : 0;
+      if (lado === 1 && c.enZonaPit[i]) continue;
+      const d = sg * (c.muro[lado][i] + 3);
+      e.set(0, -Math.atan2(mm.tz, mm.tx), 0); q.setFromEuler(e);
+      p.set(mm.x - mm.tz * d, mm.y - 0.3, mm.z + mm.tx * d); sc.set(1, 1, 1);
+      m4.compose(p, q, sc); postes.setMatrixAt(k, m4); cabezas.setMatrixAt(k, m4);
+      const dm = sg * c.semiAncho[i] * 0.35;
+      p.set(mm.x - mm.tz * dm, mm.y + 0.02, mm.z + mm.tx * dm); sc.set(30, 1, 30);
+      m4.compose(p, q, sc); manchas.setMatrixAt(k, m4);
+      k++;
+    }
+  }
+  for (const im of [postes, cabezas, manchas]) { im.count = k; im.frustumCulled = false; g.add(im); }
+  scene.add(g);
+  return g;
+}
+
+/** Hora de la carrera: 'dia' | 'atardecer' | 'noche'. Cambia el cielo, las luces y los focos. */
+export function ponerHora(esc, scene, renderer, hora = 'dia') {
+  const u = esc.cielo.material.uniforms;
+  const [elev, azim] = hora === 'noche' ? [-8, 215] : hora === 'atardecer' ? [5, 250] : [SOL_ELEVACION, SOL_AZIMUT];
+  const sol = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - elev), THREE.MathUtils.degToRad(azim));
+  u.sunPosition.value.copy(sol);
+  u.turbidity.value = hora === 'atardecer' ? 9 : 5.5; u.rayleigh.value = hora === 'atardecer' ? 2.6 : 1.4;
+  esc.focos.visible = hora === 'noche';
+  esc.hora = hora;
+  if (hora === 'noche') {
+    // de noche la "luz del sol" son los focos: desde arriba, blanca y fuerte
+    esc.sol = new THREE.Vector3(0.15, 1, 0.1).normalize();
+    esc.luzSol.color.set(0xeaf0ff);
+    esc.base = { sol: 2.2, fogColor: new THREE.Color(0x0a1020), fogFar: 2600, exp: 1.0, hemi: 0.75 };
+    esc.hemi.color.set(0x5a6a90); esc.hemi.groundColor.set(0x202018);
+    scene.environmentIntensity = 0.35;
+  } else if (hora === 'atardecer') {
+    esc.sol = sol;
+    esc.luzSol.color.set(0xffb070);
+    esc.base = { sol: 2.4, fogColor: new THREE.Color(0xe0a080), fogFar: 4200, exp: 0.95, hemi: 0.5 };
+    esc.hemi.color.set(0xffc8a0); esc.hemi.groundColor.set(0x504030);
+    scene.environmentIntensity = 0.7;
+  } else {
+    esc.sol = sol;
+    esc.luzSol.color.set(0xfff1dc);
+    esc.base = { sol: 3.2, fogColor: new THREE.Color(0xb9c8d6), fogFar: scene.fog.far > 4000 ? 5200 : 3200, exp: 0.92, hemi: 0.55 };
+    esc.hemi.color.set(0xcfe3ff); esc.hemi.groundColor.set(0x55603f);
+    scene.environmentIntensity = 1;
+  }
+  esc.luzSol.intensity = esc.base.sol; esc.hemi.intensity = esc.base.hemi;
+  scene.fog.color.copy(esc.base.fogColor); scene.fog.far = esc.base.fogFar;
+  if (renderer) renderer.toneMappingExposure = esc.base.exp;
 }
 
 function cuadros() {

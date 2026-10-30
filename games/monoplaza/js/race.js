@@ -40,6 +40,12 @@ export class Sesion {
 
     const mp = opc.multijugador || null;
     this.mp = mp;
+    // coche de seguridad real, bandera roja y vuelta de formación (sólo contra la IA)
+    this.permitirSc = this.permitirVsc && !mp;
+    this.sc = null;
+    this.abandonosRecientes = [];
+    this.formacion = this.modo === 'carrera' && !mp && !!opc.formacion;
+    if (this.formacion) this.estado = 'formacion';
     const combustible = this.modo === 'carrera' ? 12 + this.vueltasTotales * 1.45 : 20;
     const plantilla = () => ({
       vuelta: 0, tVuelta: 0, tiempos: [], mejor: Infinity, sectores: [null, null, null],
@@ -152,6 +158,12 @@ export class Sesion {
     this.jugador = this.participantes.find(p => p.jugador);
     this.mejorVueltaSesion = Infinity;
     this.mejoresSectoresSesion = [Infinity, Infinity, Infinity];
+    // vuelta de formación: cada coche recuerda su casilla de salida
+    if (this.formacion) {
+      [...this.participantes].sort((a, b) => b.coche.proj.s - a.coche.proj.s).forEach((p, k) => {
+        p.slot = k; p.slotS = p.coche.proj.s; p.slotD = p.coche.proj.d;
+      });
+    }
   }
 
   // Boxes: el jugador o la IA piden parar; se entra la próxima vez que se pase por la entrada
@@ -260,6 +272,8 @@ export class Sesion {
     this.clima.actualizar(dt);
     this.c.agua = this.clima.agua;
     this._banderas(dt);
+    this._moverSc(dt);
+    this._neutralizar(dt);
     this._aerodinamicaRelativa();
     for (const p of lista) {
       if (p.remoto) continue;           // lo mueve la red
@@ -276,7 +290,15 @@ export class Sesion {
           // coche parado en pista: amarilla en la zona y, si está en la trazada, coche de seguridad virtual
           if (this.modo === 'carrera' && this.estado === 'carrera') {
             this.amarilla(car.proj.s, 30);
-            if (this.permitirVsc && Math.abs(car.proj.d) < this.c.semiAncho[car.proj.i] + 6 && !this.c.enZonaPit[car.proj.i]) this.ponerVsc(true);
+            this.abandonosRecientes = this.abandonosRecientes.filter(t => this.tiempo - t < 12);
+            this.abandonosRecientes.push(this.tiempo);
+            const enPista = Math.abs(car.proj.d) < this.c.semiAncho[car.proj.i] + 6 && !this.c.enZonaPit[car.proj.i];
+            const lider = this.orden?.[0];
+            const quedan = lider ? this.vueltasTotales - lider.vuelta : 0;
+            // choque múltiple: bandera roja; coche en la trazada: Safety Car (o VSC)
+            if (this.abandonosRecientes.length >= 3 && !this.mp && quedan > 2) this.banderaRoja();
+            else if (enPista && this.permitirSc && !this.sc && lider && lider.vuelta >= 1 && quedan > 2 && (car.impacto > 22 || Math.random() < 0.5)) this.desplegarSc();
+            else if (enPista && this.permitirVsc && !this.sc) this.ponerVsc(true);
           }
         }
         // la grúa lo retira a los 20 s
@@ -287,7 +309,7 @@ export class Sesion {
         if (p.terminado) { car.mandos.acelerador *= 0.5; car.mandos.drs = false; }
       }
       // coche de seguridad virtual: todos limitados a un ritmo lento (~35 % más lento) sin DRS
-      car.limiteVsc = this.vsc && !p.box ? this.c.perfil[car.proj.i] * 0.64 : 0;
+      car.limiteVsc = p.box ? 0 : (this._lim.get(p) || (this.vsc ? this.c.perfil[car.proj.i] * 0.64 : 0));
       car.paso(dt);
       // averías mecánicas (solo en carreras contra la IA, si están activadas)
       if (this.tasaAverias > 0 && this.estado === 'carrera') {
@@ -329,7 +351,7 @@ export class Sesion {
         enZona ||= z.ini < z.fin ? (s >= z.ini && s <= z.fin) : (s >= z.ini || s <= z.fin);
       }
       const habil = this.modo !== 'carrera' || (p.drsHabil && p.vuelta >= 3);
-      c.drsPermitido = enZona && habil && !this.vsc && !this.enAmarilla(c.proj.s);
+      c.drsPermitido = enZona && habil && !this.vsc && !this.sc && this.estado === 'carrera' && !this.enAmarilla(c.proj.s);
       c.zonaDrs = enZona;
     }
   }
@@ -400,6 +422,8 @@ export class Sesion {
 
   _cronometrar(p, dt) {
     const c = p.coche, L = this.c.largo, s = c.proj.s;
+    // formación: no cuenta vueltas; 'formFinal' = ya cruzó la meta y vuelve a la mitad final de la pista
+    if (this.estado === 'formacion') { if (s < L / 2) p.formSalio = true; else if (p.formSalio) p.formFinal = true; p.sAnterior = s; return; }
     p.tVuelta += dt; p.tSector += dt;
     if (c.limitesExcedidos && p.vuelta > 0) {
       if (p.valida) {
@@ -481,6 +505,111 @@ export class Sesion {
       if (this.tVsc <= 0 && !parados) this.ponerVsc(false);
     }
   }
+  // ─── Safety Car, bandera roja y vuelta de formación ──────────────────
+  desplegarSc() {
+    if (this.sc || this.estado !== 'carrera') return;
+    this.vsc = false; this.tVsc = 0;
+    const lider = this.orden?.find(p => !p.abandono && !p.box) || this.participantes[0];
+    this.sc = { s: this.c.envolver(lider.coche.proj.s + 200), v: Math.max(25, lider.coche.velocidad * 0.6), t: 0, entra: false, x: 0, y: 0, z: 0, psi: 0 };
+    this._moverSc(0);
+    this.eventos.push({ tipo: 'sc', activo: true });
+  }
+  _moverSc(dt) {
+    const sc = this.sc;
+    if (!sc) return;
+    const c = this.c, L = c.largo;
+    sc.t += dt;
+    const i = Math.floor(sc.s / c.paso) % c.n;
+    // espera al líder si va muy lejos para que el pelotón se agrupe
+    const lider = this.orden?.find(p => !p.abandono && !p.box && !p.retirado);
+    const hueco = lider ? c.envolver(sc.s - lider.coche.proj.s) : 0;
+    let vObj = c.perfil[i] * 0.5;
+    if (hueco > 220 && hueco < L / 2) vObj *= 0.65;
+    sc.v += Math.max(-8 * dt, Math.min(5 * dt, vObj - sc.v));
+    const s0 = sc.s;
+    sc.s = c.envolver(sc.s + sc.v * dt);
+    const m = c.muestra(sc.s), d = c.trazada.off[i] * 0.4;
+    sc.x = m.x - m.tz * d; sc.z = m.z + m.tx * d; sc.y = m.y; sc.psi = Math.atan2(m.tz, m.tx);
+    const parados = this.participantes.some(p => p.abandono && !p.retirado && !p.jugador);
+    if (!sc.entra && sc.t > Math.max(60, c.vueltaTeorica(1) * 1.6) && !parados) { sc.entra = true; this.eventos.push({ tipo: 'sc', entra: true }); }
+    if (sc.entra && this._cruza(s0, sc.s, c.pit.entrada)) { this.sc = null; this.eventos.push({ tipo: 'sc', activo: false }); }
+  }
+  // Ritmo neutralizado: cada coche sigue al de delante (o al SC) sin adelantar
+  _neutralizar(dt) {
+    const lim = this._lim || (this._lim = new Map());
+    lim.clear();
+    const form = this.estado === 'formacion', roja = this.estado === 'roja';
+    if (!this.sc && !form && !roja) return;
+    const c = this.c, L = c.largo;
+    if (roja) {
+      for (const p of this.participantes) lim.set(p, c.perfil[p.coche.proj.i] * 0.4);
+      this.tRoja += dt;
+      if (this.tRoja > 8) this._relanzar();
+      return;
+    }
+    const fila = this.participantes.filter(p => !p.abandono && !p.retirado && !p.box && !p.terminado && !p.enSlot && !p.remoto);
+    if (form) fila.sort((a, b) => a.slot - b.slot);
+    else fila.sort((a, b) => b.distancia - a.distancia);
+    let delante = this.sc ? { s: this.sc.s, v: this.sc.v, p: null } : null;
+    fila.forEach((p, k) => {
+      const car = p.coche;
+      let l = c.perfil[car.proj.i] * (form ? (k ? 0.6 : 0.5) : 0.62);
+      if (delante) {
+        const ds = c.envolver(delante.s - car.proj.s);
+        if (ds < L / 2) l = Math.min(l, Math.max(0.5, delante.v + (ds - (delante.p ? 20 : 35)) * 0.3));
+      }
+      if (form && p.formFinal) {
+        const dSlot = c.envolver(p.slotS - car.proj.s);
+        if (dSlot < L / 2) l = Math.min(l, Math.max(0.3, Math.sqrt(10 * Math.max(0, dSlot - 1))));
+        // en su casilla: se coloca y espera
+        if ((dSlot < 2.5 && car.velocidad < 4) || (dSlot > L - 25)) { car.colocar(p.slotS, p.slotD); car.retenido = true; p.enSlot = true; }
+      }
+      // adelantar con el Safety Car: sanción (sólo al jugador; la IA no adelanta)
+      if (this.sc && p.jugador) {
+        if (p._delanteSc && fila.indexOf(p._delanteSc) > k) this.sancionar(p, 'Adelantar con Safety Car');
+        p._delanteSc = delante?.p || null;
+      }
+      lim.set(p, l);
+      delante = { s: car.proj.s, v: car.velocidad, p };
+    });
+    if (form && this.participantes.every(p => p.enSlot || p.abandono || p.retirado)) this._finFormacion();
+  }
+  _finFormacion() {
+    for (const p of this.participantes) {
+      if (p.retirado) continue;
+      p.enSlot = false; p.coche.retenido = false;
+      p.sAnterior = p.coche.proj.s; p.tVuelta = 0;
+    }
+    this.estado = 'parrilla'; this.luces = 0; this.tLuces = 0; this.tApagar = 0;
+    this.tiempo = 0; this.amarillas = [];
+    this.eventos.push({ tipo: 'finFormacion' });
+  }
+  banderaRoja() {
+    if (this.estado !== 'carrera' || this.mp) return;
+    this.estado = 'roja'; this.tRoja = 0;
+    this.sc = null; this.vsc = false;
+    this.eventos.push({ tipo: 'roja' });
+  }
+  // Tras la bandera roja: todos a la parrilla en el orden de carrera y salida parada
+  _relanzar() {
+    const L = this.c.largo;
+    const fila = (this.orden || this.participantes).filter(p => !p.abandono && !p.retirado && !p.terminado);
+    fila.forEach((p, k) => {
+      const car = p.coche;
+      if (p.box) { p.box._devolver?.(); p.box = null; }
+      car.retenido = false;
+      car.colocar(L - 12 - 7 * k, k % 2 === 0 ? -2.6 : 2.6);
+      // en la bandera roja se pueden reparar alerones y cambiar ruedas pinchadas
+      car.danoAleron = 0; car.dano.aleronTras = 0; car.dano.pinchazo = [false, false, false, false];
+      p.valida = false; p.drsHabil = false;
+      p.sAnterior = car.proj.s;
+      p.distancia = (p.vuelta - 1) * L + car.proj.s;
+    });
+    this.estado = 'parrilla'; this.luces = 0; this.tLuces = 0; this.tApagar = 0;
+    this.amarillas = []; this.abandonosRecientes = [];
+    this.eventos.push({ tipo: 'relanzada' });
+  }
+
   sancionar(p, motivo) {
     if (this.tiempo - p.tUltimaSancion < 8 || p.terminado) return;
     p.tUltimaSancion = this.tiempo;

@@ -63,7 +63,8 @@ export class Neumatico {
     const termico = 0.80 + 0.20 * Math.exp(-x * x);
     const w = this.desgaste;
     const desg = w < 0.75 ? 1 - 0.12 * w : 1 - 0.09 - 0.6 * (w - 0.75);
-    return termico * Math.max(0.55, desg) * this.factorMuPresion * this.mejoraMu;
+    // un plano deja la goma irregular: algo menos de agarre y más desgaste
+    return termico * Math.max(0.55, desg) * this.factorMuPresion * this.mejoraMu * (1 - 0.05 * this.bloqueo);
   }
 
   // potenciaDeslizamiento en W, fz en N, v en m/s

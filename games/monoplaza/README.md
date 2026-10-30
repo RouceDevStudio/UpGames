@@ -21,6 +21,10 @@ Juego de carreras de monoplazas en 3D que corre en el navegador (WebGL con Three
 - Tres trazados (`js/track.js`, `CIRCUITOS`): técnico de montaña, urbano estrecho con guardarraíles, edificios y túnel, y rápido de rectas largas. El reglaje, los récords y el fantasma se guardan por circuito.
 - Clima seco, lluvia o variable (`js/clima.js`): el agua se acumula y se seca; neumáticos intermedios y de lluvia, agarre según el agua (`factorAgua`), spray, gotas, asfalto que brilla. La IA cambia de neumáticos con su propio criterio.
 - Banderas amarillas, coche de seguridad virtual (VSC) tras un abandono en pista, bandera azul, 3 avisos por límites de pista y +5 s desde el cuarto, +5 s por provocar un choque.
+- Contra la IA: **Safety Car** real (un deportivo con barra de luces que agrupa al pelotón; adelantarle a otro coche cuesta +5 s; entra a boxes al final de la vuelta), **bandera roja** tras un choque múltiple (todos a la parrilla, se reparan alerones y pinchazos y salida parada) y **vuelta de formación** opcional en las opciones de carrera.
+- Carreras de **día, atardecer o noche** (focos, luces traseras encendidas, asfalto mojado que refleja). En el campeonato, Puerto Real es de noche y el Autódromo Veloz al atardecer.
+- Pista viva: goma en la trazada, **canicas** fuera de ella en las curvas (menos agarre en seco), parches de asfalto, bordillos gastados, bordillos altos, **charcos** en los puntos bajos con lluvia fuerte (aquaplaning según velocidad, profundidad y neumático), muros de hormigón, de neumáticos y TecPro, bidones de agua, restos que pinchan y comisarios que agitan banderas.
+- Efectos de cámara: gotas en la lente a bordo cuando llueve, destello del sol y viñeta de velocidad.
 - Radio del ingeniero y megafonía con la síntesis de voz del navegador, público y lluvia sintetizados. Sonidos grabados reales requerirían archivos de audio con licencia.
 - Repetición de los últimos 5 minutos con cámaras de TV, helicóptero y a bordo; modo foto (PNG). Telemetría de velocidad por vuelta contra la mejor.
 - Rendimiento: coches lejanos sin piezas pequeñas y sombras solo de los cercanos.
@@ -41,6 +45,8 @@ Todo corre a 300 Hz con paso fijo, independiente de los FPS.
 | Frenos | Reparto ajustable, temperatura de los discos de carbono con pérdida de eficacia fuera de ventana, ABS opcional |
 | Pista | Relieve con pendientes y cambios de rasante (que cargan o descargan el coche), bordillos que hacen vibrar la carga, hierba y grava con menos agarre y más resistencia, muros con choques por impulsos |
 | Daños | Por zona del golpe: alerones que se doblan y se desprenden, suspensión doblada (el coche tira hacia un lado), pinchazos y ruedas arrancadas que dejan fuera de carrera |
+| Averías | Motor (humo, pérdida de potencia, rotura), caja bloqueada en una marcha y ERS que se apaga; se pueden desactivar en ajustes |
+| Planos | Una rueda bloqueada sobre el asfalto deja un plano: vibración en cada vuelta de la rueda y algo menos de agarre |
 | Boxes | Calle de boxes con limitador de 80 km/h, muro, 11 garajes; la parada la conduce el ingeniero y el equipo cambia ruedas (y el morro si está roto) |
 
 Las ayudas (control de tracción, ABS, cambio automático, dirección asistida, estabilidad, trazada) se pueden apagar todas.

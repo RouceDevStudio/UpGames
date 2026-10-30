@@ -738,7 +738,9 @@ export function crearModelo(opc) {
       if (matCalor.map) { matCalor.map.offset.y = (matCalor.map.offset.y + dt * 1.7) % 1; calor.scale.x = 1 + Math.sin(performance.now() / 60) * 0.06; }
       const objDrs = car.drsAbierto ? 1.05 : 0.45;
       pivDrs.rotation.z += (objDrs - pivDrs.rotation.z) * Math.min(1, dt * 18);
-      luzLluvia.material.emissiveIntensity = car.ersPotenciaActual < -1000 ? (Math.sin(performance.now() / 70) > 0 ? 6 : 0) : 0;
+      // luz trasera: parpadea al recuperar energía; fija de noche y con lluvia
+      const fija = this.luzTrasera?.() ? 2 : 0;
+      luzLluvia.material.emissiveIntensity = car.ersPotenciaActual < -1000 ? (Math.sin(performance.now() / 70) > 0 ? 6 : 0.5) : fija;
       // volante: ~9 vueltas de volante por radián de rueda (bloqueo ≈ ±170°)
       // girar a la derecha (ángulo positivo) lleva la parte de arriba del volante hacia la derecha (+Z)
       const angVol = (car.anguloVolante || 0) * 9;
