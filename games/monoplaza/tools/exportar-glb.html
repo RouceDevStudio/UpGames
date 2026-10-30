@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"><title>Exportar a GLB</title>
+<style>html,body{margin:0;height:100%;background:#3a3a3a;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{ "imports": { "three": "../lib/three.module.min.js", "three/addons/": "../lib/addons/" } }</script>
+</head><body>
+<script type="module">
+// Exporta los modelos del juego a .glb: ?modelo=coche|sentado|de_pie&gris=1 (arcilla gris, como
+// en un editor 3D)&vista=3q|lado. La función window.exportar() devuelve el .glb en base64
+// (la usa tools/exportar-glb.mjs para guardar los archivos).
+import * as THREE from 'three';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { crearModelo } from '../js/render/cocheModelo.js';
+import { Persona, POSES } from '../js/render/personas.js';
+import { casco } from '../js/render/piloto.js';
+import { EQUIPOS } from '../js/config.js';
+const q = new URLSearchParams(location.search);
+const modelo = q.get('modelo') || 'coche', gris = !!q.get('gris');
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+r.setSize(innerWidth, innerHeight); r.setPixelRatio(1);
+r.toneMapping = THREE.ACESFilmicToneMapping; r.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x3a3a3a);
+const pm = new THREE.PMREMGenerator(r), env = new THREE.Scene(); env.add(new THREE.HemisphereLight(0xffffff, 0x444444, 3));
+scene.environment = pm.fromScene(env).texture;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x333333, 1.2));
+const sol = new THREE.DirectionalLight(0xffffff, 2.5); sol.position.set(4, 8, 5); scene.add(sol);
+scene.add(new THREE.GridHelper(20, 40, 0x555555, 0x4a4a4a));
+
+// sentado al volante, recostado como en el habitáculo, con las piernas casi estiradas
+POSES.conduce = { y: 0.6, tronco: [0, 0, 0.05], cabeza: [0, 0, -0.1], hI: [0.12, 0, 1.0], hD: [-0.12, 0, 1.0], cI: [-0.15, 0, 0.75], cD: [0.15, 0, 0.75], mI: [0, 0, -0.25], mD: [0, 0, -0.25], kI: [0.1, 0, 1.75], kD: [-0.04, 0, 1.6], rI: [0, 0, -0.55], rD: [0, 0, -0.75] };
+
+const raiz = new THREE.Group(); raiz.name = modelo;
+const eq = EQUIPOS[0];
+if (modelo === 'coche') {
+  const m = crearModelo({ equipo: eq, equipado: { patron: eq.patron, numero: 7, casco: 'rayas' }, calidad: 3 });
+  m.piloto.grupo.visible = false;                 // como en la referencia: habitáculo vacío
+  raiz.add(m.raiz);
+} else {
+  const p = new Persona({ color: eq.base, texto: 'UPGAMES', numero: 7, rol: 'piloto', calidad: 3 });
+  const c = casco(new THREE.MeshPhysicalMaterial({ color: 0xf2f4f8, roughness: 0.2, clearcoat: 1 }), new THREE.MeshStandardMaterial({ color: 0x111111 }), 3);
+  c.position.set(0.035, 0.06, 0); c.scale.setScalar(1.08); p.cabeza.add(c);
+  p.volante.visible = true;
+  if (modelo === 'sentado') {
+    // el volante delante del pecho, cogido con las dos manos
+    p.volante.removeFromParent(); p.tronco.add(p.volante);
+    p.volante.position.set(0.43, 0.27, 0); p.volante.rotation.set(0, 0, 0.55);
+    p.poner('conduce', 0.01);
+  } else p.poner('jarra', 0.01);
+  for (let i = 0; i < 80; i++) p.actualizar(0.05);
+  p.t = 0; p.actualizar(0);
+  if (modelo === 'sentado') { p.raiz.rotation.z = 0.42; p.raiz.position.y = 0.35; }
+  raiz.add(p.raiz);
+}
+raiz.updateMatrixWorld(true);
+const vistos = []; raiz.traverse(o => {
+  // también los efectos del juego: sombra de contacto, calor del escape, llanta borrosa
+  const mt = o.material && (Array.isArray(o.material) ? o.material[0] : o.material);
+  if (!o.visible || (o.isMesh && mt.transparent)) vistos.push(o);
+});
+for (const o of vistos) o.removeFromParent();      // lo oculto no se exporta
+if (gris) raiz.traverse(o => {
+  if (!o.isMesh) return;
+  const arcilla = (mt) => new THREE.MeshStandardMaterial({ color: 0xb4b4b4, roughness: 0.6, normalMap: mt.normalMap || null, normalScale: mt.normalScale, side: mt.side, name: 'arcilla' });
+  o.material = Array.isArray(o.material) ? o.material.map(arcilla) : arcilla(o.material);
+});
+scene.add(raiz);
+
+const caja = new THREE.Box3().setFromObject(raiz), cen = caja.getCenter(new THREE.Vector3()), tam = caja.getSize(new THREE.Vector3()).length();
+const cam = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.05, 200);
+const dir = { '3q': [0.9, 0.55, 1.0], lado: [0, 0.15, 1], frente: [1, 0.2, 0], arriba: [0.6, 1.4, 0.8] }[q.get('vista') || '3q'];
+cam.position.copy(cen).add(new THREE.Vector3(...dir).normalize().multiplyScalar(tam * 1.6)); cam.lookAt(cen);
+r.render(scene, cam);
+
+window.exportar = () => new Promise((ok, mal) => new GLTFExporter().parse(raiz, (buf) => {
+  const b = new Uint8Array(buf); let s = '';
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+  ok(btoa(s));
+}, mal, { binary: true, onlyVisible: true, maxTextureSize: 1024 }));
+window.listo = true;
+</script></body></html>
