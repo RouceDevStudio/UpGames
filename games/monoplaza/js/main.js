@@ -1981,7 +1981,15 @@ multi.on('salida', async (d) => {
   if (espectando) iniciarEspectador();
 });
 multi.on('resultados', (r) => { if (carreraRed) carreraRed.resultados = r; setTimeout(() => { if (enRed) mostrarResultadosRed(r); }, 2500); });
-multi.on('desconectado', () => { if (enRed && jugando) mensaje('CONEXIÓN PERDIDA', 'Reintentando…', 3); });
+multi.on('desconectado', () => { if (enRed && jugando) mensaje('CONEXIÓN PERDIDA', cuenta.conectado() ? 'Tienes 30 s para volver…' : 'Reintentando…', 3); });
+// vuelve la conexión a mitad de carrera: se recupera el mismo coche y la misma posición
+multi.on('reconectado', async () => {
+  if (!enRed || !jugando || espectando || !salaActual || !carreraRed) return;
+  const r = await multi.reanudar(salaActual.codigo);
+  if (r.ok) { mensaje('RECONECTADO', 'Sigues en carrera', 2); radio.decir('Te tenemos otra vez. Seguimos.', { clave: 'reconex', cada: 10 }); }
+  else { mensaje('FUERA DE LA CARRERA', r.error || 'No se pudo volver', 3); }
+});
+multi.on('reid', (d) => { for (const p of sesion?.participantes || []) if (p.idRed === d.viejo) p.idRed = d.nuevo; });
 
 function actualizarRed(dt) {
   // semáforo sincronizado con el reloj del servidor

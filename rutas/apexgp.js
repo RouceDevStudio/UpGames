@@ -461,7 +461,24 @@ function registrar(app, deps) {
         function enviarLibreas(sk, s) { for (const j of s.jugadores.values()) if (j.id !== sk.id && j.livery) sk.emit('livery', { id: j.id, livery: j.livery }); }
 
         socket.on('salir', dejar);
-        socket.on('disconnect', () => { emparejador.salir(id); dejar(); dejarDeMirar(); });
+        // conexión perdida: en carrera, el piloto con cuenta tiene 30 s para volver
+        socket.on('disconnect', () => {
+            emparejador.salir(id); dejarDeMirar();
+            const r = salas.desconectar(id);
+            if (!r) return;
+            socket.leave(rid(r.sala.codigo));
+            if (!r.borrada) { emitirSala(r.sala); if (r.sala.estado === 'fin') cerrarCarrera(r.sala); }
+            emitirLista();
+        });
+        socket.on('reanudar', (d, cb) => {
+            if (!acc()) return cb?.({ ok: false, error: 'Vas muy rápido' });
+            const r = salas.reanudar(id, d?.codigo, socket.data.usuario);
+            if (!r.ok) return cb?.(r);
+            socket.join(rid(r.sala.codigo));
+            socket.to(rid(r.sala.codigo)).emit('reid', { viejo: r.viejo, nuevo: id });
+            cb?.({ ok: true, sala: salas.publico(r.sala), yo: id, viejo: r.viejo, tSalida: r.sala.tSalida, ahora: Date.now() });
+            emitirSala(r.sala);
+        });
 
         // espectadores (y el juez de un torneo): reciben todo en tiempo real sin correr
         socket.on('espectar', (d, cb) => {

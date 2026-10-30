@@ -134,7 +134,12 @@ export class Multijugador {
     return new Promise((resolve, reject) => {
       const s = this.socket = io(API + '/apexgp', { auth: { token: token() }, transports: ['websocket', 'polling'], reconnectionAttempts: 5 });
       const t = setTimeout(() => reject(new Error('No se pudo conectar con el servidor')), 12000);
-      s.on('connect', async () => { clearTimeout(t); await this.sincronizarReloj(); resolve(); });
+      s.on('connect', async () => {
+        clearTimeout(t); await this.sincronizarReloj();
+        // tras un corte, socket.io vuelve a conectar con otro id: el juego intenta reanudar la carrera
+        if (this._conectado) this._emitirLocal('reconectado');
+        this._conectado = true; resolve();
+      });
       s.on('connect_error', (e) => { this._emitirLocal('aviso', 'Conexión inestable: ' + (e?.message || 'reintentando')); });
       s.on('lista', (l) => this._emitirLocal('lista', l));
       s.on('sala', (sala) => { this.sala = sala; this._emitirLocal('sala', sala); });
@@ -148,6 +153,10 @@ export class Multijugador {
       s.on('clasif', (d) => this._emitirLocal('clasif', { ...d, tFinLocal: d.tFin - this.offset }));
       s.on('tablaQ', (t) => this._emitirLocal('tablaQ', t));
       s.on('elo', (d) => this._emitirLocal('elo', d));
+      s.on('reid', (d) => {
+        for (const m of [this.buffers, this.libreas]) if (m.has(d.viejo)) { m.set(d.nuevo, m.get(d.viejo)); m.delete(d.viejo); }
+        this._emitirLocal('reid', d);
+      });
       s.on('licencia', (d) => this._emitirLocal('licencia', d));
       s.on('error_sala', (e) => this._emitirLocal('aviso', e));
       s.on('disconnect', () => this._emitirLocal('desconectado'));
@@ -186,6 +195,7 @@ export class Multijugador {
   desconectar() { this.salir(); this.socket?.disconnect(); this.socket = null; }
   enviarEstado(arr) { this.socket?.volatile.emit('estado', arr.map(v => Math.round(v * 1000) / 1000)); }
   vuelta(t) { this.socket?.emit('vuelta', t); }
+  reanudar(codigo) { return new Promise(r => this.socket.emit('reanudar', { codigo }, (x) => { if (x?.ok) { this.yo = x.yo; if (x.sala) this.sala = x.sala; } r(x || { ok: false }); })); }
   meta(inc) { this.socket?.emit('meta', inc); }
   abandono(inc) { this.socket?.emit('abandono', inc); }
 
@@ -196,6 +206,9 @@ export class Multijugador {
       if (!b) { b = []; this.buffers.set(id, b); }
       b.push({ t: p.t, e });
       if (b.length > 30) b.shift();
+      // irregularidad de la llegada de paquetes (para ajustar el retraso de la interpolación)
+      const n = b.length;
+      if (n > 1) { const dt = b[n - 1].t - b[n - 2].t; b.media = (b.media ?? dt) * 0.9 + dt * 0.1; b.jitter = (b.jitter ?? 0) * 0.9 + Math.abs(dt - b.media) * 0.1; }
     }
   }
 
@@ -203,7 +216,18 @@ export class Multijugador {
   interpolado(id) {
     const b = this.buffers.get(id);
     if (!b || !b.length) return null;
-    const t = this.ahoraServidor() - 120;
+    // retraso adaptado a la conexión: ~2 paquetes más el doble de la irregularidad (80-300 ms)
+    const retraso = Math.max(80, Math.min(300, (b.media ?? 66) * 1.6 + (b.jitter ?? 0) * 2));
+    const t = this.ahoraServidor() - retraso;
+    const ult = b[b.length - 1];
+    if (t > ult.t) {
+      // faltan paquetes: se extrapola con la velocidad del coche (hasta 0,4 s)
+      const dt = Math.min(0.4, (t - ult.t) / 1000), e = ult.e.slice();
+      const c = Math.cos(e[3]), s = Math.sin(e[3]);
+      e[0] += (e[4] * c - e[5] * s) * dt; e[1] += (e[4] * s + e[5] * c) * dt; e[3] += e[6] * dt;
+      e[10] += e[4] * dt; e[11] += e[4] * dt;
+      return e;
+    }
     let i = b.length - 1;
     while (i > 0 && b[i - 1].t > t) i--;
     const a = b[Math.max(0, i - 1)], c = b[i];

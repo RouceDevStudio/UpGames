@@ -116,6 +116,9 @@ const LETRAS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const ESTADO_LARGO = 18;               // números por paquete de estado
 const VUELTA_MIN_S = 45;               // ninguna vuelta de ningún circuito baja de esto
 const ESPERA_FIN_MS = 90000;           // tras el primero en meta
+const VEL_MAX = 115;                   // m/s (414 km/h): nadie va más rápido
+const GRACIA_MS = 30000;               // tiempo para volver tras perder la conexión en carrera
+const SOSPECHAS_MAX = 25;              // paquetes imposibles antes de descalificar
 
 function limpiarNombre(n) {
     return String(n || '').replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 18) || 'Piloto';
@@ -372,6 +375,20 @@ class Salas {
             if (!Number.isFinite(v) || Math.abs(v) > 1e6) return null;
             limpio[i] = Math.round(v * 1000) / 1000;
         }
+        // anti-trampas: posición y distancia recorrida tienen que ser físicamente posibles
+        const ahora = this.ahora();
+        if (j.tEstado) {
+            const dt = Math.max(0.02, (ahora - j.tEstado) / 1000);
+            const salto = Math.hypot(limpio[0] - (j.estado?.[0] ?? limpio[0]), limpio[1] - (j.estado?.[1] ?? limpio[1]));
+            if (salto > VEL_MAX * dt * 1.3 + 25) {
+                j.sospechas = (j.sospechas || 0) + 1;
+                if (j.sospechas > SOSPECHAS_MAX && !j.terminado) { j.abandono = true; j.descalificado = true; this._quizasTerminar(sala); }
+                return null;
+            }
+            // la distancia de carrera solo puede crecer a ritmo de coche
+            if (Number.isFinite(limpio[11])) j.dist = Math.max(j.dist || 0, Math.min(limpio[11], (j.dist || 0) + VEL_MAX * dt * 1.3 + 30));
+        } else if (Number.isFinite(limpio[11]) && j.dist == null) j.dist = Math.min(limpio[11], 400);
+        j.tEstado = ahora;
         j.estado = limpio;
         return sala;
     }
@@ -380,7 +397,8 @@ class Salas {
         const sala = this.salaDe(id);
         const j = sala?.jugadores.get(id);
         const s = +t;
-        if (!j || sala.estado !== 'carrera' || !(s >= VUELTA_MIN_S && s < 3600)) return null;
+        const min = Math.max(VUELTA_MIN_S, CIRCUITOS[sala?.circuito]?.minVuelta || 0);
+        if (!j || sala.estado !== 'carrera' || !(s >= min && s < 3600)) return null;
         if (j.mejor == null || s < j.mejor) j.mejor = Math.round(s * 1000) / 1000;
         return sala;
     }
@@ -392,6 +410,9 @@ class Salas {
         if (!j || sala.estado !== 'carrera' || j.terminado) return null;
         const t = (this.ahora() - sala.tSalida) / 1000;
         if (t < sala.vueltas * Math.max(VUELTA_MIN_S, CIRCUITOS[sala.circuito]?.minVuelta || 0)) return null;
+        // tiene que haber recorrido (de forma creíble) casi toda la distancia de la carrera
+        const largo = CIRCUITOS[sala.circuito]?.largo;
+        if (largo && j.tEstado && (j.dist || 0) < largo * sala.vueltas * 0.95) return null;
         j.terminado = true; j.tiempo = Math.round(t * 1000) / 1000;
         if (!sala.tPrimero) sala.tPrimero = this.ahora();
         this._quizasTerminar(sala);
@@ -407,7 +428,42 @@ class Salas {
         return sala;
     }
 
+    /**
+     * Conexión perdida: en carrera, un piloto con cuenta tiene GRACIA_MS para volver (su coche
+     * sigue en la parrilla); los invitados o fuera de carrera salen como siempre.
+     */
+    desconectar(id) {
+        const sala = this.salaDe(id);
+        const j = sala?.jugadores.get(id);
+        if (!sala || !j || sala.estado !== 'carrera' || j.terminado || j.abandono || !j.usuario) return this.salir(id);
+        j.desconectado = true; j.tDesc = this.ahora();
+        this.de.delete(id);
+        return { sala, borrada: false, gracia: true };
+    }
+
+    /** Vuelve a la carrera con otra conexión: el piloto conserva coche, posición y tiempos. */
+    reanudar(nuevoId, codigo, usuario) {
+        const sala = this.salas.get(String(codigo || '').toUpperCase().trim());
+        if (!usuario) return { ok: false, error: 'Solo los pilotos con cuenta pueden volver a la carrera' };
+        if (!sala || sala.estado !== 'carrera') return { ok: false, error: 'La carrera ya no está en marcha' };
+        const j = [...sala.jugadores.values()].find(x => x.usuario === usuario && x.desconectado && !x.abandono);
+        if (!j || this.ahora() - j.tDesc > GRACIA_MS) return { ok: false, error: 'Ha pasado demasiado tiempo' };
+        const viejo = j.id;
+        if (this.de.has(nuevoId)) this.salir(nuevoId);
+        sala.jugadores.delete(viejo);
+        j.id = nuevoId; j.desconectado = false; j.tDesc = 0; j.tEstado = 0;
+        // el orden de la parrilla (y el resto de la sala) se conserva con el id nuevo
+        const m = new Map(); for (const [k, v] of sala.jugadores) m.set(k, v);
+        sala.jugadores = new Map([...m, [nuevoId, j]]);
+        sala.parrilla = sala.parrilla.map(x => x === viejo ? nuevoId : x);
+        if (sala.host === viejo) sala.host = nuevoId;
+        this.de.set(nuevoId, sala.codigo);
+        return { ok: true, sala, viejo };
+    }
+
     _quizasTerminar(sala) {
+        // quien no volvió a tiempo tras perder la conexión queda como abandono
+        for (const j of sala.jugadores.values()) if (j.desconectado && j.tDesc && !j.abandono && this.ahora() - j.tDesc > GRACIA_MS) j.abandono = true;
         const todos = [...sala.jugadores.values()].every(j => j.terminado || j.abandono);
         const tarde = sala.tPrimero && this.ahora() - sala.tPrimero > ESPERA_FIN_MS;
         if (todos || tarde) sala.estado = 'fin';
@@ -417,7 +473,7 @@ class Salas {
     /** Revisa salas cuyo plazo tras el ganador venció. Devuelve las que acaban de terminar. */
     revisarPlazos() {
         const out = [];
-        for (const s of this.salas.values()) if (s.estado === 'carrera' && s.tPrimero && this._quizasTerminar(s)) out.push(s);
+        for (const s of this.salas.values()) if (s.estado === 'carrera' && (s.tPrimero || [...s.jugadores.values()].some(j => j.tDesc)) && this._quizasTerminar(s)) out.push(s);
         return out;
     }
 
@@ -434,7 +490,7 @@ class Salas {
         const js = [...sala.jugadores.values(), ...sala.bots.map(b => ({ ...b, bot: b.k, nombre: null, usuario: null, mejor: null }))];
         const fin = js.filter(j => j.terminado).sort((a, b) => a.tiempo - b.tiempo);
         const resto = js.filter(j => !j.terminado);
-        return [...fin, ...resto].map((j, i) => ({ pos: i + 1, id: j.id, nombre: j.nombre, usuario: j.usuario, bot: j.bot ?? null, tiempo: j.tiempo, mejor: j.mejor, abandono: !j.terminado, desconectado: !!j.desconectado, inc: j.inc || null, licencia: j.licencia || null }));
+        return [...fin, ...resto].map((j, i) => ({ pos: i + 1, id: j.id, nombre: j.nombre, usuario: j.usuario, bot: j.bot ?? null, tiempo: j.tiempo, mejor: j.mejor, abandono: !j.terminado, desconectado: !!j.desconectado, descalificado: !!j.descalificado, inc: j.inc || null, licencia: j.licencia || null }));
     }
 
     publico(sala) {
@@ -471,20 +527,20 @@ class Salas {
 // Vuelta mínima plausible por circuito (s): el mejor tiempo posible con todas
 // las mejoras, con margen. Por debajo, el tiempo se rechaza.
 const CIRCUITOS = {
-    valle:  { nombre: 'Valle Andino',      minVuelta: 62 },
-    puerto: { nombre: 'Puerto Real',       minVuelta: 48 },
-    veloz:  { nombre: 'Autódromo Veloz',   minVuelta: 50 },
+    valle:  { nombre: 'Valle Andino',      minVuelta: 62, largo: 4356 },
+    puerto: { nombre: 'Puerto Real',       minVuelta: 48, largo: 2949 },
+    veloz:  { nombre: 'Autódromo Veloz',   minVuelta: 50, largo: 4097 },
     // trazados reales con otros nombres (vuelta mínima ≈ 78 % del ritmo de la IA)
-    principado:  { nombre: 'Circuito Urbano del Principado', minVuelta: 63 },
-    parque_real: { nombre: 'Autódromo del Parque Real',      minVuelta: 72 },
-    ardenas:     { nombre: 'Circuito de las Ardenas',        minVuelta: 96 },
-    aerodromo:   { nombre: 'Circuito del Viejo Aeródromo',   minVuelta: 88 },
-    levante:     { nombre: 'Circuito de Levante',            minVuelta: 71 },
-    alpino:      { nombre: 'Anillo Alpino',                  minVuelta: 62 },
-    danubio:     { nombre: 'Circuito del Danubio',           minVuelta: 75 },
-    dunas:       { nombre: 'Circuito de las Dunas',          minVuelta: 70 },
-    desierto:    { nombre: 'Circuito del Desierto',          minVuelta: 85 },
-    isla:        { nombre: 'Circuito de la Isla',            minVuelta: 66 },
+    principado:  { nombre: 'Circuito Urbano del Principado', minVuelta: 63, largo: 3343 },
+    parque_real: { nombre: 'Autódromo del Parque Real',      minVuelta: 72, largo: 5795 },
+    ardenas:     { nombre: 'Circuito de las Ardenas',        minVuelta: 96, largo: 7010 },
+    aerodromo:   { nombre: 'Circuito del Viejo Aeródromo',   minVuelta: 88, largo: 5897 },
+    levante:     { nombre: 'Circuito de Levante',            minVuelta: 71, largo: 4658 },
+    alpino:      { nombre: 'Anillo Alpino',                  minVuelta: 62, largo: 4322 },
+    danubio:     { nombre: 'Circuito del Danubio',           minVuelta: 75, largo: 4384 },
+    dunas:       { nombre: 'Circuito de las Dunas',          minVuelta: 70, largo: 4266 },
+    desierto:    { nombre: 'Circuito del Desierto',          minVuelta: 85, largo: 5418 },
+    isla:        { nombre: 'Circuito de la Isla',            minVuelta: 66, largo: 4365 },
 };
 const CLIMAS = ['seco', 'lluvia', 'variable'];
 const circuitoOk = c => Object.prototype.hasOwnProperty.call(CIRCUITOS, c) ? c : 'valle';

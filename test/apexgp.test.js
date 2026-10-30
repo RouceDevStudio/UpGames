@@ -476,6 +476,40 @@ function crearMundo(monedas) {
         t = 5000; assert.strictEqual(E.emparejar().length, 0);
         t = 61000; assert.strictEqual(E.emparejar().length, 1);
     });
+    await test('anti-trampas y reconexión: saltos imposibles, distancia mínima en meta y 30 s para volver', () => {
+        let ahora = 1000;
+        const S = new A.Salas({ ahora: () => ahora });
+        const { sala } = S.crear('a', { nombre: 'Ana', usuario: 'ana' }, { vueltas: 1, circuito: 'puerto' });
+        S.unirse('b', sala.codigo, { nombre: 'Beto', usuario: 'beto' });
+        S.listo('b', true);
+        assert.ok(S.iniciar('a').ok);
+        ahora = sala.tSalida + 100;
+        const est = (x, z, dist) => [x, z, 0, 0, 0, 0, 0, 0, 9000, 3, 0, dist, 0, 0, 0, 0, 0, 0];
+        assert.ok(S.estado('a', est(0, 0, 0)));
+        ahora += 100;
+        assert.strictEqual(S.estado('a', est(500, 0, 500)), null);          // 500 m en 0,1 s: imposible
+        assert.ok(S.estado('a', est(8, 0, 8)));
+        // meta sin haber recorrido la distancia: rechazada aunque el tiempo cuadre
+        ahora = sala.tSalida + 60000;
+        assert.strictEqual(S.meta('a'), null);
+        // reconexión: Beto pierde la conexión y vuelve con otro id dentro de la gracia
+        S.estado('b', est(0, 0, 0));
+        const d = S.desconectar('b');
+        assert.ok(d.gracia);
+        assert.strictEqual(sala.jugadores.get('b').abandono, false);
+        ahora += 10000;
+        const r = S.reanudar('b2', sala.codigo, 'beto');
+        assert.ok(r.ok, r.error);
+        assert.strictEqual(r.viejo, 'b');
+        assert.ok(sala.jugadores.has('b2') && !sala.jugadores.has('b'));
+        assert.ok(sala.parrilla.includes('b2'));
+        // si tarda más de 30 s, queda fuera
+        S.desconectar('b2');
+        ahora += 31000;
+        S._quizasTerminar(sala);
+        assert.strictEqual(sala.jugadores.get('b2').abandono, true);
+        assert.strictEqual(S.reanudar('b3', sala.codigo, 'beto').ok, false);
+    });
     await test('limpiarNombre: sin HTML ni nombres larguísimos', () => {
         assert.strictEqual(A.limpiarNombre('<b>Ana</b>'), 'bAnab');
         assert.strictEqual(A.limpiarNombre('x'.repeat(60)).length, 18);
