@@ -109,6 +109,34 @@ function registrar(app, deps) {
 
     app.get('/apexgp/catalogo', (req, res) => { res.set('Cache-Control', 'public, max-age=300'); ok(res, A.catalogo()); });
 
+    // APK de Android con un enlace estable: el de GitHub redirige a una URL firmada que
+    // caduca y que algunos gestores de descarga de Android no consiguen reanudar
+    const APK_ORIGEN = 'https://github.com/RouceDevStudio/UpGames/releases/download/apex-gp-latest/APEX-GP.apk';
+    let apk = { buf: null, t: 0, cargando: null };
+    async function cargarApk() {
+        if (apk.buf && Date.now() - apk.t < 10 * 60 * 1000) return apk.buf;
+        if (!apk.cargando) apk.cargando = (async () => {
+            const r = await fetch(APK_ORIGEN, { redirect: 'follow' });
+            if (!r.ok) throw new Error(`GitHub ${r.status}`);
+            const buf = Buffer.from(await r.arrayBuffer());
+            if (buf.length < 100000 || buf.readUInt32BE(0) !== 0x504b0304) throw new Error('el APK descargado no es válido');
+            apk = { buf, t: Date.now(), cargando: null };
+            return buf;
+        })().finally(() => { apk.cargando = null; });
+        return apk.cargando;
+    }
+    app.get('/apexgp/apk', async (req, res) => {
+        try {
+            const buf = await cargarApk();
+            res.set({ 'Content-Type': 'application/vnd.android.package-archive', 'Content-Length': buf.length, 'Content-Disposition': 'attachment; filename="APEX-GP.apk"', 'Cache-Control': 'public, max-age=300', 'Accept-Ranges': 'none' });
+            res.end(buf);
+        } catch (e) {
+            logger.error(`[apexgp] apk: ${e.message}`);
+            if (apk.buf) { res.set({ 'Content-Type': 'application/vnd.android.package-archive', 'Content-Disposition': 'attachment; filename="APEX-GP.apk"' }); return res.end(apk.buf); }
+            res.redirect(302, APK_ORIGEN);
+        }
+    });
+
     app.get('/apexgp/perfil', verificarToken, async (req, res) => {
         try { ok(res, { usuario: req.usuario, ...publico(await perfilDe(req.usuario)), upcoins: await totalUC(req.usuario) }); }
         catch (e) { logger.error(`[apexgp] perfil: ${e.message}`); err(res, 500, 'No se pudo cargar tu garaje'); }

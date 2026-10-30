@@ -18,7 +18,7 @@ import { construirEscenario } from './render/escenario.js';
 import { crearModelo, dibujarPlantilla } from './render/cocheModelo.js';
 import { GestorBoxes, Escombros } from './render/equipo.js';
 import { NOMBRES_PATRON, NOMBRES_CASCO } from './render/librea.js';
-import { cuenta, Multijugador, empaquetar, aplicarEstado, fantasmaAServidor, fantasmaDeServidor } from './red.js';
+import { cuenta, Multijugador, empaquetar, aplicarEstado, fantasmaAServidor, fantasmaDeServidor, API } from './red.js';
 import { Efectos } from './render/efectos.js';
 import { Camara, NOMBRES_CAMARA } from './render/camara.js';
 import { Sonido } from './audio.js';
@@ -1956,6 +1956,8 @@ $('#bRkFantasma').addEventListener('click', async () => {
 window.apexDebug = { get sesion() { return sesion; }, get camara() { return camara; }, circuito: () => circuito, multi, get modelos() { return modelos; }, cargarCircuito, get qActual() { return qActual; }, get temporada() { return temporada; }, get repe() { return repe; }, terminarTandaQ, radio };
 actualizarCuentaMenu();
 refrescarPerfil().then(actualizarCuentaMenu);
+// enlace estable al APK (servido por el servidor de UpGames); dentro de la app no hace falta
+if (window.Capacitor) $('#lnkApk').remove(); else $('#lnkApk').href = API + '/apexgp/apk';
 
 // --- Arranque -----------------------------------------------------------------------
 if ('serviceWorker' in navigator && location.protocol === 'https:' && !window.Capacitor) {
