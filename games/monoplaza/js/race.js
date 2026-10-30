@@ -155,7 +155,9 @@ export class Sesion {
     // desgaste proporcional a la distancia: una carrera da para ~1,5 juegos de neumáticos
     this.multDesgaste = this.modo === 'carrera' ? Math.max(1, Math.min(3, 30 / this.vueltasTotales)) : 1;
     for (const p of this.participantes) p.coche.ponerMultDesgaste(this.multDesgaste);
-    this.jugador = this.participantes.find(p => p.jugador);
+    // espectador: no hay coche propio; se sigue a uno cualquiera (el 'foco' de la cámara)
+    this.jugador = this.participantes.find(p => p.jugador) || this.participantes[0];
+    this.espectador = !!mp?.espectador;
     this.mejorVueltaSesion = Infinity;
     this.mejoresSectoresSesion = [Infinity, Infinity, Infinity];
     // vuelta de formación: cada coche recuerda su casilla de salida

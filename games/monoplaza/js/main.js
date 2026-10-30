@@ -1043,7 +1043,8 @@ function bucle(ahora) {
   // en la repetición el teclado y los toques los gestiona su propia interfaz
   if (repe) { actualizarRepe(dt); return; }
   const j = sesion.jugador.coche;
-  if (jugando) {
+  if (jugando && espectando) { /* sin mandos: lo maneja su propia barra */ }
+  else if (jugando) {
     for (const e of evs) {
       if (e === 'pausa') pausar(!pausado);
       else if (pausado) continue;
@@ -1083,7 +1084,7 @@ function bucle(ahora) {
       grabadora?.grabar(dt, sesion.coches, sesion.tiempo);
       const pj = sesion.jugador;
       if (pj.vuelta > 0) telemetria?.registrar(pj.coche.proj.s, pj.coche, pj.tVuelta);
-      radioPeriodica(dt);
+      if (!espectando) radioPeriodica(dt);
     }
   }
   // semáforo
@@ -1135,8 +1136,9 @@ function bucle(ahora) {
   // cámara, luz y efectos
   const mJ = modelos[sesion.participantes.indexOf(sesion.jugador)];
   camara.actualizar(dt, j, mJ);
+  if (jugando && espectando && camEsp) actualizarEspectador(dt, j, mJ);
   // durante la parada del jugador, plano de televisión del equipo trabajando (como en la tele)
-  if (jugando && paradaJugador && sesion.jugador.paradaInfo && ajustes.camParada !== false && !repe) {
+  if (jugando && !espectando && paradaJugador && sesion.jugador.paradaInfo && ajustes.camParada !== false && !repe) {
     const tp = sesion.tiempo - sesion.jugador.paradaInfo.inicio, cs = Math.cos(j.psi), sn = Math.sin(j.psi);
     const lx = 6.2 - tp * 0.3, lz = -5.4 + tp * 0.3;        // un travelling lento por encima del equipo
     camara.cam.position.set(j.x + cs * lx - sn * lz, j.y + 3.4, j.z + sn * lx + cs * lz);
@@ -1211,6 +1213,80 @@ function bucle(ahora) {
     fpsAcum = 0; fpsN = 0;
   }
 }
+
+// --- Espectador / juez -------------------------------------------------------------
+const CAMS_ESPECT = ['tv', 'persecucion', 'cercana', 'helicoptero', 'dron', 'lateral', 'suelo', 'cabina', 'tcam', 'morro', 'orbita'];
+function iniciarEspectador() {
+  document.body.classList.add('espectando');
+  camEsp = new CamaraRepe(circuito, camarasTV, camara);
+  esp.cam = 'tv'; esp.auto = true; esp.tCambio = 0;
+  $('#espAuto').classList.add('on');
+  pintarEspectador();
+  mensaje('MODO ESPECTADOR', 'Toca un piloto de la lista para seguirlo', 2.5);
+}
+function focoEsp(p) {
+  if (!p || p === sesion.jugador) return;
+  sesion.jugador = p; camara.iniciada = false; camEsp?.poner(esp.cam, camara.cam);
+  pintarEspectador();
+}
+function pintarEspectador() {
+  const p = sesion.jugador;
+  $('#espCoche').textContent = `P${p.posicion} ${p.nombre.replace('@', '')}`;
+  $('#espCam').textContent = '🎥 ' + (NOMBRES_REPE[esp.cam] || esp.cam);
+}
+function actualizarEspectador(dt, j, mJ) {
+  // realización automática: cada ~12 s busca la batalla más apretada y cambia de plano
+  esp.tCambio += dt;
+  if (esp.auto && esp.tCambio > 12) {
+    esp.tCambio = 0;
+    const orden = (sesion.orden || sesion.participantes).filter(p => !p.abandono && !p.terminado);
+    let mejor = orden[0], gap = Infinity;
+    for (let k = 1; k < orden.length; k++) { const g = orden[k - 1].distancia - orden[k].distancia; if (g < gap && g > 0) { gap = g; mejor = orden[k]; } }
+    if (Math.random() < 0.25) mejor = orden[0];                // a veces, el líder
+    esp.cam = ['tv', 'persecucion', 'helicoptero', 'lateral', 'dron', 'cabina', 'suelo', 'tv', 'tcam'][Math.floor(Math.random() * 9)];
+    if (mejor && mejor !== sesion.jugador) focoEsp(mejor); else { camEsp.poner(esp.cam, camara.cam); pintarEspectador(); }
+  }
+  camEsp.actualizar(camara.cam, j, mJ, esp.cam, dt);
+  // torre de posiciones (4 veces por segundo)
+  esp.tTorre -= dt;
+  if (esp.tTorre > 0) return;
+  esp.tTorre = 0.25;
+  const orden = sesion.orden || sesion.participantes, lider = orden[0];
+  $('#espTorre').innerHTML = orden.map((p, k) => {
+    const g = k === 0 ? `V${Math.max(1, Math.min(p.vuelta, sesion.vueltasTotales))}/${sesion.vueltasTotales}` : p.abandono ? 'FUERA' : p.terminado ? 'META' : '+' + ((lider.distancia - p.distancia) / Math.max(25, p.coche.velocidad || 25)).toFixed(1);
+    return `<div data-i="${sesion.participantes.indexOf(p)}" class="${p === sesion.jugador ? 'foco' : ''} ${p.abandono ? 'fuera' : ''}"><b>${k + 1}</b><i style="background:${p.equipo?.base || '#888'}"></i><span>${p.nombre.replace('@', '').replace(/</g, '')}</span><span class="g">${g}</span></div>`;
+  }).join('');
+  $('#espInfo').textContent = `${salaActual?.nombre || ''} · 👁 ${salaActual?.espectadores || 1}`;
+  if (esp.tTorre === 0.25 && $('#espCoche').textContent.split(' ')[0] !== 'P' + sesion.jugador.posicion) pintarEspectador();
+}
+function salirEspectador() {
+  document.body.classList.remove('espectando');
+  camEsp = null;
+  multi.dejarEspectar();
+  espectando = false;
+  salirAlMenu();
+  abrirMulti();
+}
+$('#espTorre').addEventListener('click', (e) => { const d = e.target.closest('[data-i]'); if (d) { esp.auto = false; $('#espAuto').classList.remove('on'); focoEsp(sesion.participantes[+d.dataset.i]); } });
+const pasoCocheEsp = (paso) => {
+  const orden = sesion.orden || sesion.participantes, i = orden.indexOf(sesion.jugador);
+  esp.auto = false; $('#espAuto').classList.remove('on');
+  focoEsp(orden[(i + paso + orden.length) % orden.length]);
+};
+$('#espPrev').addEventListener('click', () => pasoCocheEsp(-1));
+$('#espSig').addEventListener('click', () => pasoCocheEsp(1));
+$('#espCoche').addEventListener('click', () => pasoCocheEsp(1));
+$('#espCam').addEventListener('click', () => { esp.cam = CAMS_ESPECT[(CAMS_ESPECT.indexOf(esp.cam) + 1) % CAMS_ESPECT.length]; esp.auto = false; $('#espAuto').classList.remove('on'); camEsp?.poner(esp.cam, camara.cam); pintarEspectador(); });
+$('#espAuto').addEventListener('click', () => { esp.auto = !esp.auto; esp.tCambio = 99; $('#espAuto').classList.toggle('on', esp.auto); });
+$('#espSalir').addEventListener('click', salirEspectador);
+addEventListener('keydown', (e) => {
+  if (!espectando || !jugando || e.target.tagName === 'INPUT') return;
+  const k = e.key.toLowerCase();
+  if (k === 'c') $('#espCam').click();
+  else if (k === 'v' || k === 'arrowright') pasoCocheEsp(1);
+  else if (k === 'arrowleft') pasoCocheEsp(-1);
+  else if (k === 'a') $('#espAuto').click();
+});
 
 // --- Equipo de boxes -------------------------------------------------------------
 let paradaJugador = null;
@@ -1524,18 +1600,35 @@ multi.on('elo', (d) => {
   if ($('#resultados').classList.contains('visible')) $('#resPremio').textContent = textoElo(d);
 });
 multi.on('lista', (l) => {
-  $('#listaSalas').innerHTML = l.length ? '<h3>Salas abiertas</h3>' + l.map(x => `<div class="sala-pub" data-codigo="${x.codigo}"><span><b>${x.nombre.replace(/</g, '')}</b> · ${x.tipo === '1v1' ? 'Duelo' : 'Abierta'} · ${CIRCUITOS[x.circuito]?.corto || 'Valle Andino'} · ${x.vueltas} vueltas${x.clima && x.clima !== 'seco' ? ' · ' + CLIMAS[x.clima] : ''}${x.mejoras ? ' · con mejoras' : ''}</span><span>${x.jugadores}/${x.max}</span></div>`).join('') : '<p class="nota">No hay salas abiertas ahora mismo. ¡Crea una y comparte el código!</p>';
-  document.querySelectorAll('.sala-pub').forEach(el => el.onclick = () => unirse(el.dataset.codigo));
+  $('#listaSalas').innerHTML = l.length ? '<h3>Salas abiertas y carreras en directo</h3>' + l.map(x => {
+    const enVivo = x.estado && x.estado !== 'espera';
+    return `<div class="sala-pub" data-codigo="${x.codigo}" data-vivo="${enVivo ? 1 : ''}"><span>${enVivo ? '<b style="color:var(--rojo)">● EN DIRECTO</b> · ' : ''}<b>${x.nombre.replace(/</g, '')}</b>${x.juez ? ' · 🏆 torneo con juez' : ''} · ${x.tipo === '1v1' ? 'Duelo' : 'Abierta'} · ${CIRCUITOS[x.circuito]?.corto || 'Valle Andino'} · ${x.vueltas} vueltas${x.clima && x.clima !== 'seco' ? ' · ' + CLIMAS[x.clima] : ''}${x.mejoras ? ' · con mejoras' : ''}${x.espectadores ? ` · 👁 ${x.espectadores}` : ''}</span><span>${x.jugadores}/${x.max} <button class="btn mini ver" data-ver="${x.codigo}">👁 Ver</button></span></div>`;
+  }).join('') : '<p class="nota">No hay salas abiertas ahora mismo. ¡Crea una y comparte el código!</p>';
+  document.querySelectorAll('.sala-pub').forEach(el => el.onclick = (e) => {
+    if (e.target.closest('[data-ver]') || el.dataset.vivo) espectarSala(el.dataset.codigo); else unirse(el.dataset.codigo);
+  });
 });
 multi.on('aviso', (t) => { if ($('#sala').classList.contains('visible')) $('#salaInfo').textContent = t; else $('#mEstado').textContent = t; });
 const datosJugador = () => ({ nombre: cuenta.usuario() || 'Invitado', equipado: { ...equipado }, livery: libreaParaRed() });
 $('#bCrearSala').addEventListener('click', async () => {
-  const r = await multi.crear({ ...datosJugador(), opciones: { tipo: opcMulti.tipo, max: opcMulti.max, vueltas: opcMulti.vueltas, publica: $('#mpPublica').checked, mejoras: $('#mpMejoras').checked, circuito: opcMulti.circuito, clima: opcMulti.clima } });
+  const juez = $('#mpJuez').checked;
+  const r = await multi.crear({ ...datosJugador(), opciones: { tipo: opcMulti.tipo, max: opcMulti.max, vueltas: opcMulti.vueltas, publica: $('#mpPublica').checked, mejoras: $('#mpMejoras').checked, circuito: opcMulti.circuito, clima: opcMulti.clima, juez } });
   if (!r.ok) { $('#mEstado').textContent = r.error; return; }
+  espectando = juez;
   entrarSala(r.sala);
 });
 $('#bUnirse').addEventListener('click', () => unirse($('#mpCodigo').value));
+$('#bVerSala').addEventListener('click', () => espectarSala($('#mpCodigo').value));
+// entrar a una sala sin correr: se ve la carrera en directo con todas las cámaras
+async function espectarSala(codigo) {
+  try { await multi.conectar(); } catch (e) { $('#mEstado').textContent = e.message; return; }
+  const r = await multi.espectar(String(codigo || '').toUpperCase().trim());
+  if (!r.ok) { $('#mEstado').textContent = r.error; return; }
+  espectando = true;
+  entrarSala(r.sala);
+}
 async function unirse(codigo) {
+  espectando = false;
   const r = await multi.unirse({ ...datosJugador(), codigo: String(codigo || '').toUpperCase().trim() });
   if (!r.ok) { $('#mEstado').textContent = r.error; return; }
   entrarSala(r.sala);
@@ -1555,13 +1648,14 @@ function pintarSala() {
   if (s.circuito && s.circuito !== circuito.id && !cargando && s.estado === 'espera') cargarCircuito(s.circuito);
   $('#salaPilotos').innerHTML = s.jugadores.map((j, k) => `<div class="sala-fila"><b>${k + 1}</b><span><i class="eq" style="display:inline-block;width:4px;height:16px;border-radius:2px;margin-right:8px;vertical-align:middle;background:${j.equipado?.colores?.base || '#888'}"></i>${j.nombre.replace(/</g, '')}${j.id === yo ? ' (tú)' : ''}</span><span class="host">${j.id === s.host ? 'ANFITRIÓN' : ''}</span><span class="listo">${j.listo || j.id === s.host ? 'LISTO' : ''}</span></div>`).join('');
   $('#bSalaEmpezar').classList.toggle('oculto', !soyHost);
-  $('#bSalaListo').classList.toggle('oculto', soyHost);
+  $('#bSalaListo').classList.toggle('oculto', soyHost || espectando);
+  if (espectando) $('#salaInfo').innerHTML += `<br>👁 <b>${s.juez === yo ? 'Eres el juez: das la salida y lo ves todo en directo' : 'Modo espectador'}</b> · ${s.espectadores || 1} mirando${s.estado === 'clasif' ? ' · <b>clasificación en curso</b>' : ''}`;
   const yoJ = s.jugadores.find(j => j.id === yo);
   $('#bSalaListo').textContent = yoJ?.listo ? 'No estoy listo' : 'Estoy listo';
 }
 $('#bSalaListo').addEventListener('click', () => { const j = salaActual?.jugadores.find(x => x.id === multi.yo); multi.listo(!j?.listo); });
 $('#bSalaEmpezar').addEventListener('click', async () => { const r = await multi.iniciar(); if (!r?.ok) $('#salaInfo').textContent = r?.error || 'No se pudo empezar'; });
-$('#bSalaSalir').addEventListener('click', () => { multi.salir(); salaActual = null; abrirMulti(); });
+$('#bSalaSalir').addEventListener('click', () => { if (espectando) multi.dejarEspectar(); multi.salir(); espectando = false; salaActual = null; abrirMulti(); });
 $('#bSalaCompartir').addEventListener('click', async () => {
   const t = `¡Corre contra mí en APEX GP! Código de sala: ${salaActual?.codigo} · https://upgames.games/games/monoplaza/`;
   try { if (navigator.share) await navigator.share({ title: 'APEX GP', text: t }); else { await navigator.clipboard.writeText(t); $('#salaInfo').textContent = 'Código copiado'; } } catch { /* cancelado */ }
@@ -1578,13 +1672,14 @@ multi.on('salida', async (d) => {
   if (s.clima === 'lluvia' && !COMPUESTOS[rc.compuesto]?.lluvia) rc.compuesto = 'lluvia';
   sesion = new Sesion(circuito, {
     modo: 'carrera', vueltas: s.vueltas, reglaje: rc, ayudas: ayudasDe(), clima: s.clima, semilla: s.semilla,
-    multijugador: { parrilla: d.parrilla, yo: multi.yo, jugadores: s.jugadores.map(j => j.id === multi.yo ? { ...j, mejoras: perfilApex.mejoras } : j), mejoras: s.mejoras,
-      bots: s.bots || [], soyHost: s.host === multi.yo },
+    multijugador: { parrilla: d.parrilla, yo: espectando ? null : multi.yo, jugadores: s.jugadores.map(j => j.id === multi.yo ? { ...j, mejoras: perfilApex.mejoras } : j), mejoras: s.mejoras,
+      bots: s.bots || [], soyHost: !espectando && s.host === multi.yo, espectador: espectando },
   });
   qRed = null;
   sesion.tSalidaLocal = d.tSalidaLocal;
   carreraRed = { resultados: null };
   arrancarSesion('carrera');
+  if (espectando) iniciarEspectador();
 });
 multi.on('resultados', (r) => { if (carreraRed) carreraRed.resultados = r; setTimeout(() => { if (enRed) mostrarResultadosRed(r); }, 2500); });
 multi.on('desconectado', () => { if (enRed && jugando) mensaje('CONEXIÓN PERDIDA', 'Reintentando…', 3); });
@@ -1609,6 +1704,7 @@ function actualizarRed(dt) {
     const j = salaActual?.jugadores.find(x => x.id === p.idRed) || salaActual?.bots?.find(x => x.id === p.idRed);
     if (j) { p.terminado = j.terminado; p.abandono = j.abandono; if (j.terminado) sesion.banderaFinal = true; }
   }
+  if (espectando) return;
   // mi coche, ~15 veces por segundo (y los bots si soy el anfitrión)
   // (los bots van en otro fotograma: dos paquetes volátiles seguidos hacen que se pierda el segundo)
   tEnvio += dt; tEnvioBots += dt;
@@ -1638,6 +1734,7 @@ function tomarBots() {
 // ─── Clasificación en línea (partida rápida): cada piloto marca vueltas solo en pista ───
 let qRed = null;
 multi.on('clasif', async (d) => {
+  if (espectando) { pintarSala(); return; }
   const s = salaActual;
   if (s?.circuito && s.circuito !== circuito?.id) await cargarCircuito(s.circuito);
   enRed = true; modoActual = 'red'; carreraCamp = null; qActual = null;
@@ -1653,7 +1750,11 @@ multi.on('clasif', async (d) => {
   radio.decir(`Clasificación: ${Math.round(d.seg / 60)} minutos. Busca una vuelta limpia.`, { clave: 'qRed', cada: 10 });
   radio.decir(`Clasificación de ${Math.round(d.seg / 60)} minutos. Tu mejor vuelta decide la parrilla de la carrera.`, { prioridad: true });
 });
-multi.on('tablaQ', (t) => { if (qRed) qRed.tabla = t; });
+multi.on('tablaQ', (t) => {
+  if (qRed) qRed.tabla = t;
+  // el espectador ve la tabla de la clasificación en la pantalla de la sala
+  if (espectando && $('#sala').classList.contains('visible')) $('#salaPilotos').innerHTML = '<h3>Clasificación</h3>' + t.map((x, k) => `<div class="sala-fila"><b>${k + 1}</b><span>${nombreQ(x)}</span><span>${x.t ? fmt(x.t) : 'sin tiempo'}</span></div>`).join('');
+});
 function nombreQ(x) {
   if (x.bot != null) { const ie = x.bot % EQUIPOS.length, ip = Math.floor(x.bot / EQUIPOS.length) % 2; return EQUIPOS[ie].pilotos[ip]; }
   return String(x.nombre || '').replace(/</g, '');
@@ -1698,7 +1799,8 @@ function mostrarResultadosRed(r) {
   document.body.classList.remove('jugando');
   sonido.silenciar(true);
   const yo = r.find(x => x.id === multi.yo);
-  $('#resTitulo').textContent = yo?.pos === 1 && !yo.abandono ? '🏆 ¡Victoria en línea!' : `Resultado: P${yo?.pos ?? '-'}`;
+  $('#resTitulo').textContent = espectando ? '🏁 Resultados de la carrera' : yo?.pos === 1 && !yo.abandono ? '🏆 ¡Victoria en línea!' : `Resultado: P${yo?.pos ?? '-'}`;
+  document.body.classList.remove('espectando');
   const ganador = r[0];
   $('#resPremio').textContent = ultimoElo ? textoElo(ultimoElo) : cuenta.conectado() ? 'Calculando ELO…' : '';
   $('#resLista').innerHTML = r.map(x => `<div class="fila-res ${x.id === multi.yo ? 'yo' : ''}"><b>${x.pos}</b><span>${nombreQ(x)}${x.bot != null ? ' <small style="color:var(--tenue)">IA</small>' : ''}</span><span>${x.abandono ? 'Abandono' : x === ganador ? fmt(x.tiempo) : '+' + (x.tiempo - ganador.tiempo).toFixed(3)}</span><span>${fmt(x.mejor)}</span></div>`).join('');
@@ -1708,8 +1810,8 @@ function mostrarResultadosRed(r) {
 $('#bResOtra').addEventListener('click', (e) => {
   if (!enRed) return;
   e.stopImmediatePropagation();
-  enRed = false; carreraRed = null;
-  multi.revancha();
+  enRed = false; carreraRed = null; camEsp = null;
+  if (!espectando || salaActual?.host === multi.yo) multi.revancha();
   $('#bResOtra').textContent = 'Otra vez';
   sesion = new Sesion(circuito, { modo: 'practica', reglaje, ayudas: ayudasDe() }); crearModelos();
   mostrar('sala'); pintarSala();
@@ -1744,6 +1846,8 @@ function nivelDetalle() {
 // --- Repetición y modo foto ------------------------------------------------------------
 let fotoPendiente = false;
 let camRepe = null, cine = null, grabVideo = null;
+let espectando = false, camEsp = null;
+const esp = { cam: 'tv', auto: true, tCambio: 0, tTorre: 0 };
 const VELS_REPE = [0.1, 0.25, 0.5, 1, 2, 4];
 function abrirRepe(desde) {
   if (!grabadora || grabadora.cuantos < 10) { mensaje('SIN REPETICIÓN', 'Aún no hay nada grabado', 1.5); return; }

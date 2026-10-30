@@ -421,6 +421,36 @@ function crearMundo(monedas) {
         assert.strictEqual(res[0].bot, 3);
         assert.strictEqual(res.find(x => x.id === 'a').abandono, true);
     });
+    await test('espectadores y juez: miran sin ocupar plaza y el juez dirige la sala', () => {
+        const S = new A.Salas();
+        const { sala } = S.crear('juez', { nombre: 'Juez' }, { juez: true, max: 20, vueltas: 5 });
+        assert.strictEqual(sala.juez, 'juez');
+        assert.strictEqual(sala.jugadores.size, 0);
+        assert.ok(S.unirse('a', sala.codigo, { nombre: 'Ana' }).ok);
+        assert.ok(S.unirse('b', sala.codigo, { nombre: 'Beto' }).ok);
+        assert.ok(S.espectar('v1', sala.codigo).ok);
+        assert.ok(S.espectar('v2', sala.codigo).ok);
+        assert.strictEqual(S.publico(sala).espectadores, 3);      // dos espectadores y el juez
+        assert.strictEqual(sala.jugadores.size, 2);
+        S.listo('a', true); S.listo('b', true);
+        const r = S.iniciar('juez');
+        assert.ok(r.ok, r.error);
+        assert.strictEqual(sala.parrilla.length, 2);               // el juez no tiene casilla
+        assert.ok(!sala.parrilla.includes('juez'));
+        assert.strictEqual(S.estado('v1', [1, 2, 3]), null);       // un espectador no puede mandar estados
+        // la sala en carrera aparece en la lista para verla
+        const l = S.listaPublica().find(x => x.codigo === sala.codigo);
+        assert.strictEqual(l.estado, 'carrera');
+        assert.strictEqual(l.espectadores, 3);
+        S.dejarEspectar('v1');
+        assert.strictEqual(S.publico(sala).espectadores, 2);
+        // si se van los pilotos, la sala sigue mientras esté el juez
+        S.salir('a'); S.salir('b');
+        assert.ok(S.salas.has(sala.codigo));
+        S.salir('juez');
+        assert.ok(!S.salas.has(sala.codigo));
+        assert.ok(!S.espect.has('v2'));
+    });
     await test('limpiarNombre: sin HTML ni nombres larguísimos', () => {
         assert.strictEqual(A.limpiarNombre('<b>Ana</b>'), 'bAnab');
         assert.strictEqual(A.limpiarNombre('x'.repeat(60)).length, 18);

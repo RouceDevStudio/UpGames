@@ -111,6 +111,7 @@ function nivelesMejoras(perfil) {
 
 // ─── Salas multijugador ─────────────────────────────────────────────────────
 const MAX_JUGADORES = 22;
+const MAX_ESPECTADORES = 50;
 const LETRAS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const ESTADO_LARGO = 18;               // números por paquete de estado
 const VUELTA_MIN_S = 45;               // ninguna vuelta de ningún circuito baja de esto
@@ -124,6 +125,7 @@ class Salas {
     constructor({ ahora = () => Date.now(), azar = Math.random } = {}) {
         this.salas = new Map();       // código → sala
         this.de = new Map();          // socketId → código
+        this.espect = new Map();      // socketId → código de la sala que mira (espectadores)
         this.ahora = ahora;
         this.azar = azar;
     }
@@ -165,7 +167,9 @@ class Salas {
             nombre: limpiarNombre(opc.nombre || `Sala de ${limpiarNombre(jugador?.nombre)}`).slice(0, 24),
             host: id, estado: 'espera', jugadores: new Map(), parrilla: [], tSalida: 0, tPrimero: 0, creada: this.ahora(),
         };
-        sala.jugadores.set(id, this._jugador(id, jugador));
+        // juez: crea la sala y la dirige (empezar) pero no corre; la ve como espectador
+        if (opc.juez) { sala.juez = id; sala.nombre = limpiarNombre(opc.nombre || `Torneo de ${limpiarNombre(jugador?.nombre)}`).slice(0, 24); }
+        else sala.jugadores.set(id, this._jugador(id, jugador));
         this.salas.set(sala.codigo, sala);
         this.de.set(id, sala.codigo);
         return { ok: true, sala };
@@ -185,6 +189,29 @@ class Salas {
 
     salaDe(id) { return this.salas.get(this.de.get(id)); }
 
+    /** Mirar una sala sin correr: no ocupa plaza ni casilla. */
+    espectar(id, codigo) {
+        const sala = this.salas.get(String(codigo || '').toUpperCase().trim());
+        if (!sala) return { ok: false, error: 'No existe ninguna sala con ese código' };
+        if (this.de.get(id) === sala.codigo && sala.juez === id) return { ok: true, sala };
+        if (this.numEspectadores(sala) >= MAX_ESPECTADORES) return { ok: false, error: 'No caben más espectadores' };
+        if (this.de.has(id)) this.salir(id);
+        this.espect.set(id, sala.codigo);
+        return { ok: true, sala };
+    }
+
+    dejarEspectar(id) {
+        const c = this.espect.get(id);
+        this.espect.delete(id);
+        return c ? this.salas.get(c) || null : null;
+    }
+
+    numEspectadores(sala) {
+        let n = sala.juez && this.de.get(sala.juez) === sala.codigo ? 1 : 0;
+        for (const c of this.espect.values()) if (c === sala.codigo) n++;
+        return n;
+    }
+
     salir(id) {
         const sala = this.salaDe(id);
         this.de.delete(id);
@@ -195,10 +222,16 @@ class Salas {
             j.abandono = true; j.desconectado = true;
             this._quizasTerminar(sala);
         } else sala.jugadores.delete(id);
-        if (![...sala.jugadores.values()].some(x => !x.desconectado)) { this.salas.delete(sala.codigo); return { sala, borrada: true }; }
+        // la sala sigue viva mientras quede algún piloto o el juez que la dirige
+        const juezDentro = sala.juez && sala.juez !== id && this.de.get(sala.juez) === sala.codigo;
+        if (![...sala.jugadores.values()].some(x => !x.desconectado) && !juezDentro) {
+            this.salas.delete(sala.codigo);
+            for (const [e, c] of this.espect) if (c === sala.codigo) this.espect.delete(e);
+            return { sala, borrada: true };
+        }
         if (sala.host === id) {
             const sig = [...sala.jugadores.values()].find(x => !x.desconectado);
-            sala.host = sig.id;
+            sala.host = sig ? sig.id : sala.juez;
         }
         return { sala, borrada: false };
     }
@@ -399,15 +432,18 @@ class Salas {
             circuito: sala.circuito, clima: sala.clima, semilla: sala.semilla, rapida: sala.rapida,
             clasifSeg: sala.clasifSeg, tFinQ: sala.tFinQ, bots: sala.bots.map(b => ({ id: b.id, k: b.k, hab: b.hab, terminado: b.terminado, abandono: b.abandono })),
             nombre: sala.nombre, host: sala.host, estado: sala.estado, parrilla: sala.parrilla, tSalida: sala.tSalida,
+            juez: sala.juez || null, espectadores: this.numEspectadores(sala),
             jugadores: [...sala.jugadores.values()].map(j => ({ id: j.id, nombre: j.nombre, usuario: j.usuario, equipado: j.equipado,
                 mejoras: sala.mejoras ? j.mejoras : {}, listo: j.listo, terminado: j.terminado, abandono: j.abandono })),
         };
     }
 
     listaPublica() {
-        return [...this.salas.values()].filter(s => s.publica && s.estado === 'espera' && s.jugadores.size < s.max)
-            .sort((a, b) => b.jugadores.size - a.jugadores.size).slice(0, 30)
-            .map(s => ({ codigo: s.codigo, nombre: s.nombre, tipo: s.tipo, jugadores: s.jugadores.size, max: s.max, vueltas: s.vueltas, mejoras: s.mejoras, circuito: s.circuito, clima: s.clima }));
+        // abiertas con sitio (para unirse) y en marcha (para verlas como espectador)
+        return [...this.salas.values()].filter(s => s.publica && ((s.estado === 'espera' && s.jugadores.size < s.max) || s.estado === 'carrera' || s.estado === 'clasif'))
+            .sort((a, b) => (a.estado === 'espera' ? 0 : 1) - (b.estado === 'espera' ? 0 : 1) || b.jugadores.size - a.jugadores.size).slice(0, 30)
+            .map(s => ({ codigo: s.codigo, nombre: s.nombre, tipo: s.tipo, jugadores: s.jugadores.size + s.bots.length, max: s.max, vueltas: s.vueltas, mejoras: s.mejoras, circuito: s.circuito, clima: s.clima,
+                estado: s.estado, espectadores: this.numEspectadores(s), juez: !!s.juez }));
     }
 
     /** Paquete con los estados de todos los coches de la sala. */

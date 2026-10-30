@@ -167,6 +167,8 @@ export class Multijugador {
   pedirLista() { this.socket?.emit('lista'); }
   crear(datos) { return new Promise(r => this.socket.emit('crear', datos, (x) => { if (x.ok) { this.sala = x.sala; this.yo = x.yo; } r(x); })); }
   unirse(datos) { return new Promise(r => this.socket.emit('unirse', datos, (x) => { if (x.ok) { this.sala = x.sala; this.yo = x.yo; } r(x); })); }
+  espectar(codigo) { return new Promise(r => this.socket.emit('espectar', { codigo }, (x) => { if (x.ok) { this.sala = x.sala; this.yo = x.yo; } r(x); })); }
+  dejarEspectar() { this.socket?.emit('dejarEspectar'); this.sala = null; this.buffers.clear(); }
   listo(v) { this.socket?.emit('listo', v); }
   iniciar() { return new Promise(r => this.socket.emit('iniciar', r)); }
   revancha() { this.socket?.emit('revancha'); }

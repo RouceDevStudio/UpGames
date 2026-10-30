@@ -238,9 +238,10 @@
     <div class="opcion"><label>Vueltas</label><div class="segm" data-mp="vueltas"><b data-v="2">2</b><b data-v="3">3</b><b data-v="5">5</b><b data-v="10">10</b></div></div>
     <div class="opcion"><label>Mejoras de UpCoins<span class="desc">Si las desactivas, todos corren con el mismo coche</span></label><input type="checkbox" id="mpMejoras"></div>
     <div class="opcion"><label>Sala pública</label><input type="checkbox" id="mpPublica" checked></div>
+    <div class="opcion"><label>Soy el juez (no corro)<span class="desc">Para torneos: diriges la sala, das la salida y lo ves todo en directo</span></label><input type="checkbox" id="mpJuez"></div>
     <div class="acciones"><button class="btn primario" id="bCrearSala">Crear sala</button></div>
     <h3>Unirse</h3>
-    <div class="opcion"><label>Código de la sala</label><input id="mpCodigo" class="campo" maxlength="5" placeholder="ABCDE" style="text-transform:uppercase"><button class="btn" id="bUnirse">Unirse</button></div>
+    <div class="opcion"><label>Código de la sala</label><input id="mpCodigo" class="campo" maxlength="5" placeholder="ABCDE" style="text-transform:uppercase"><button class="btn" id="bUnirse">Unirse</button><button class="btn" id="bVerSala">👁 Ver</button></div>
     <div id="listaSalas" class="lista"></div>
     <div class="acciones"><button class="btn" id="bSalirMulti">Atrás</button></div>
   </div>
@@ -413,6 +414,18 @@
     </div>
   </div>
   <div class="repe-ayuda" id="repeAyuda"></div>
+</div>
+<div id="espect" class="espect">
+  <div class="esp-torre" id="espTorre"></div>
+  <div class="esp-bot">
+    <span class="esp-vivo">● EN DIRECTO</span><span id="espInfo"></span>
+    <button class="ic" id="espPrev" title="Coche anterior">◀</button>
+    <button class="ic txt" id="espCoche" title="Coche que sigues"></button>
+    <button class="ic" id="espSig" title="Coche siguiente">▶</button>
+    <button class="ic txt" id="espCam" title="Cámara (C)">🎥</button>
+    <button class="ic txt" id="espAuto" title="Realización automática: busca las batallas">🎬 Auto</button>
+    <button class="ic" id="espSalir" title="Salir">✕</button>
+  </div>
 </div>
 <div id="flash" class="flash"></div>
 

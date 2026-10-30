@@ -410,7 +410,28 @@ function registrar(app, deps) {
         function enviarLibreas(sk, s) { for (const j of s.jugadores.values()) if (j.id !== sk.id && j.livery) sk.emit('livery', { id: j.id, livery: j.livery }); }
 
         socket.on('salir', dejar);
-        socket.on('disconnect', () => { emparejador.salir(id); dejar(); });
+        socket.on('disconnect', () => { emparejador.salir(id); dejar(); dejarDeMirar(); });
+
+        // espectadores (y el juez de un torneo): reciben todo en tiempo real sin correr
+        socket.on('espectar', (d, cb) => {
+            if (!acc()) return cb?.({ ok: false, error: 'Vas muy rápido' });
+            const r = salas.espectar(id, d?.codigo);
+            if (!r.ok) return cb?.(r);
+            const s = r.sala;
+            socket.join(rid(s.codigo)); socket.leave('apex:lobby');
+            cb?.({ ok: true, sala: salas.publico(s), yo: id, espectador: true });
+            enviarLibreas(socket, s);
+            if (s.estado === 'carrera') socket.emit('salida', { tSalida: s.tSalida, ahora: Date.now(), parrilla: s.parrilla });
+            else if (s.estado === 'clasif') socket.emit('tablaQ', salas.tablaQ(s));
+            emitirSala(s); emitirLista();
+        });
+        const dejarDeMirar = () => {
+            const s = salas.dejarEspectar(id);
+            if (!s) return;
+            socket.leave(rid(s.codigo));
+            emitirSala(s); emitirLista();
+        };
+        socket.on('dejarEspectar', dejarDeMirar);
         socket.on('buscar', async (d, cb) => {
             if (!acc()) return cb?.({ ok: false, error: 'Vas muy rápido' });
             dejar();

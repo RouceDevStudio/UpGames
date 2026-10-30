@@ -412,3 +412,22 @@ body.en-red #bRecolocar { display: none; }
 .hparada .rp { width: 14px; height: 18px; border-radius: 4px; background: #333; border: 1px solid #555; }
 .hparada .rp.en { background: #f5c518; }
 .hparada .rp.ok { background: #18c45a; }
+
+/* modo espectador / juez */
+.espect { position: fixed; inset: 0; z-index: 25; display: none; pointer-events: none; }
+body.espectando .espect { display: block; }
+body.espectando #tactil, body.espectando #hudIzq, body.espectando #volanteHud, body.espectando #bBox, body.espectando #hRadio, body.espectando #hDelta, body.espectando #hTiemposMini { display: none !important; }
+.esp-torre { position: absolute; top: calc(10px + var(--sa-t)); left: calc(10px + var(--sa-l)); width: 230px; max-height: calc(100% - 90px); overflow: auto; pointer-events: auto; background: rgba(6,8,14,.72); border-radius: 10px; padding: 4px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.esp-torre div { display: grid; grid-template-columns: 22px 6px 1fr 64px; gap: 6px; align-items: center; padding: 3px 6px; border-radius: 6px; cursor: pointer; }
+.esp-torre div:hover { background: rgba(255,255,255,.08); }
+.esp-torre div.foco { background: rgba(232,32,42,.35); }
+.esp-torre i { width: 4px; height: 14px; border-radius: 2px; }
+.esp-torre .g { text-align: right; opacity: .8; }
+.esp-torre .fuera { opacity: .45; }
+.esp-bot { position: absolute; left: 50%; bottom: calc(10px + var(--sa-b)); transform: translateX(-50%); display: flex; gap: 4px; align-items: center; pointer-events: auto; background: rgba(6,8,14,.7); border-radius: 12px; padding: 6px 10px; flex-wrap: wrap; justify-content: center; max-width: calc(100% - 20px); }
+.esp-bot .ic { background: none; border: 0; color: #fff; font-size: 16px; min-width: 32px; height: 32px; border-radius: 8px; cursor: pointer; }
+.esp-bot .ic.txt { font-size: 13px; font-weight: 800; padding: 0 8px; }
+.esp-bot .ic.on { background: var(--rojo); }
+.esp-vivo { color: var(--rojo); font-weight: 900; letter-spacing: 1px; font-size: 12px; margin-right: 6px; animation: latido 1.2s infinite; }
+#espInfo { font-size: 12px; opacity: .8; margin-right: 6px; }
+@media (max-width: 700px) { .esp-torre { width: 170px; font-size: 11px; max-height: 45vh; } }
