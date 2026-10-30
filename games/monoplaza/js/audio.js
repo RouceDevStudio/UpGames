@@ -105,6 +105,65 @@ class VozWorklet {
   }
 }
 
+// Motor grabado (V10 a bordo): bucles a rpm fijas, extraídos de la grabación con el tono
+// aplanado. Se reproducen todos a la vez y se funden los dos más cercanos a las rpm del
+// coche (acelerando o reteniendo); la velocidad de reproducción ajusta el tono exacto,
+// así que cada cambio de marcha de la física se oye en el mismo instante.
+const RPM_V10 = 18000 / 15000;          // las rpm del juego (corte a 15 000) a rpm del V10
+class VozMuestras {
+  constructor(ctx, destino, banco, ligero = false) {
+    this.ctx = ctx;
+    this.salida = ctx.createGain(); this.salida.gain.value = 0;
+    this.filtro = ctx.createBiquadFilter(); this.filtro.type = 'lowpass'; this.filtro.frequency.value = 14000; this.filtro.Q.value = 0.5;
+    this.filtro.connect(this.salida);
+    if (destino) this.salida.connect(destino);
+    this.gAcel = ctx.createGain(); this.gRet = ctx.createGain();
+    this.gAcel.connect(this.filtro); this.gRet.connect(this.filtro);
+    const crear = (b, bus) => {
+      const src = ctx.createBufferSource(); src.buffer = banco.buffer; src.loop = true;
+      src.loopStart = b.ini; src.loopEnd = b.fin;
+      const g = ctx.createGain(); g.gain.value = 0;
+      src.connect(g); g.connect(bus);
+      src.start(ctx.currentTime, b.ini + Math.random() * (b.fin - b.ini));
+      return { rpm: b.rpm, src, g };
+    };
+    // los rivales usan la mitad de bucles (suenan lejos y son varios)
+    const acel = banco.bucles.filter(b => b.acel).filter((b, k, a) => !ligero || k % 2 === 0 || k === a.length - 1);
+    const ret = banco.bucles.filter(b => !b.acel);
+    this.acel = acel.map(b => crear(b, this.gAcel));
+    this.ret = ret.map(b => crear(b, this.gRet));
+    this.carga = 0;
+  }
+  _mezclar(lista, rpm, t, tono) {
+    // los dos bucles que rodean a las rpm, con fundido de igual potencia
+    let i = lista.length - 1;
+    for (let k = 0; k < lista.length - 1; k++) if (rpm < lista[k + 1].rpm) { i = k; break; }
+    const a = lista[i], b = lista[Math.min(lista.length - 1, i + 1)];
+    const u = a === b ? 0 : clamp((rpm - a.rpm) / (b.rpm - a.rpm), 0, 1);
+    lista.forEach((v) => {
+      const peso = v === a ? Math.cos(u * Math.PI / 2) : v === b ? Math.sin(u * Math.PI / 2) : 0;
+      v.g.gain.setTargetAtTime(peso, t, 0.015);
+      v.src.playbackRate.setTargetAtTime(clamp(rpm / v.rpm * tono, 0.4, 2.2), t, 0.012);
+    });
+  }
+  ajustar(rpm, carga, volumen, t, tono = 1, brillo = 1, corte = 0) {
+    const r = Math.max(5000, rpm * RPM_V10);
+    this.carga += (carga - this.carga) * 0.35;
+    this._mezclar(this.acel, r, t, tono);
+    this._mezclar(this.ret, r, t, tono);
+    const c = clamp(this.carga, 0, 1);
+    this.gAcel.gain.setTargetAtTime(Math.sqrt(c) * 1.05, t, 0.02);
+    this.gRet.gain.setTargetAtTime(Math.sqrt(1 - c) * 0.75, t, 0.03);
+    // corte de encendido en el cambio de marcha: el sonido cae de golpe y vuelve en la nueva marcha
+    const enCorte = corte ? 0.18 : 1;
+    // limitador: a fondo contra el corte, el encendido tartamudea
+    const limita = rpm > 14850 && carga > 0.6 ? (Math.sin(t * 2 * Math.PI * 22) > 0 ? 1 : 0.45) : 1;
+    const v = volumen * (0.55 + 0.45 * c) * (0.75 + 0.25 * clamp(r / 18000, 0, 1)) * enCorte * limita;
+    this.salida.gain.setTargetAtTime(v, t, corte ? 0.006 : 0.025);
+    this.filtro.frequency.setTargetAtTime(2500 + 13000 * clamp(brillo, 0, 1), t, 0.1);
+  }
+}
+
 export class Sonido {
   constructor() {
     this.ctx = null;
@@ -152,6 +211,8 @@ export class Sonido {
         this.worklet = true;
       }).catch((e) => console.warn('motor por osciladores', e));
     }
+    // sonidos grabados: motor V10, choque y público (si no cargan, sigue el sintetizado)
+    this._cargarGrabaciones();
     // turbo: silbido que sube con la presión y válvula de descarga al levantar
     this.turbo = ctx.createOscillator(); this.turbo.type = 'sine';
     this.gTurbo = ctx.createGain(); this.gTurbo.gain.value = 0;
@@ -189,6 +250,46 @@ export class Sonido {
     this.listo = true;
   }
 
+  async _buffer(nombre) {
+    const r = await fetch(new URL(`../audio/${nombre}`, import.meta.url));
+    if (!r.ok) throw new Error(nombre);
+    return await this.ctx.decodeAudioData(await r.arrayBuffer());
+  }
+
+  async _cargarGrabaciones() {
+    const ctx = this.ctx;
+    try {
+      const [buffer, datos] = await Promise.all([this._buffer('motor_v10.wav'), fetch(new URL('../audio/motor_v10.json', import.meta.url)).then(r => r.json())]);
+      const banco = { buffer, bucles: datos.bucles.sort((a, b) => a.rpm - b.rpm) };
+      // espera a que el worklet (si lo hay) se haya colocado, para sustituirlo después
+      await new Promise(r => setTimeout(r, 300));
+      const viejo = this.motor;
+      this.motor = new VozMuestras(ctx, this.busMotor, banco);
+      viejo.salida.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+      this.rivales.forEach((rv) => { const v = new VozMuestras(ctx, rv.panner, banco, true); rv.voz.salida.gain.setTargetAtTime(0, ctx.currentTime, 0.05); rv.voz = v; });
+      this.muestras = true;
+    } catch (e) { console.warn('motor grabado no disponible', e); }
+    try { this.bufChoque = await this._buffer('choque.mp3'); } catch { /* sintetizado */ }
+    try {
+      const [pub, ova] = await Promise.all([this._buffer('publico.mp3'), this._buffer('ovacion.mp3')]);
+      this.bufOvacion = ova;
+      const s = ctx.createBufferSource(); s.buffer = pub; s.loop = true; s.loopStart = 0.3; s.loopEnd = pub.duration - 0.3;
+      this.gPublicoReal = ctx.createGain(); this.gPublicoReal.gain.value = 0;
+      s.connect(this.gPublicoReal); this.gPublicoReal.connect(this.ambiente); s.start();
+    } catch { /* sintetizado */ }
+  }
+
+  /** Reproduce una grabación (choque, ovación) con volumen y tono. */
+  _muestra(buf, vol, tono = 1, inicio = 0, dur) {
+    if (!buf) return false;
+    const t = this.ctx.currentTime;
+    const s = this.ctx.createBufferSource(); s.buffer = buf; s.playbackRate.value = tono;
+    const g = this.ctx.createGain(); g.gain.value = vol;
+    s.connect(g); g.connect(this.maestro); g.connect(this.envioEco);
+    s.start(t, inicio, dur); s.onended = () => g.disconnect();
+    return true;
+  }
+
   _rival(voz) {
     const ctx = this.ctx;
     const panner = ctx.createPanner();
@@ -210,6 +311,7 @@ export class Sonido {
   ovacion(fuerza = 1) {
     if (!this.listo) return;
     const t = this.ctx.currentTime;
+    if (this._muestra(this.bufOvacion, 0.5 * Math.min(1.4, fuerza), 0.97 + Math.random() * 0.06)) return;
     for (const l of [this.publico, this.publico2]) {
       l.g.gain.cancelScheduledValues(t);
       l.g.gain.setTargetAtTime(0.16 * fuerza, t, 0.25);
@@ -306,6 +408,11 @@ export class Sonido {
       this._impacto(0.12, 140); this._rafaga(0.04, 2600, 'highpass', 0.08);
     } else if (nombre === 'golpe') {
       const f = clamp(valor / 12, 0.15, 1.3);
+      // el golpe grabado (desde el impacto) y encima el crujido de la fibra
+      if (this._muestra(this.bufChoque, 0.35 + 0.5 * Math.min(1, f), 0.92 + Math.random() * 0.16, 2.12, 1.8)) {
+        for (let k = 0; k < 3 + Math.floor(f * 4); k++) this._rafaga(0.03 + Math.random() * 0.05, 2200 + Math.random() * 3500, 'bandpass', 0.18 * f, Math.random() * 0.12, 2);
+        return;
+      }
       this._impacto(0.9 * f, 85);
       this._rafaga(0.4 + f * 0.3, 700, 'lowpass', 0.6 * f);                 // carrocería
       // fibra de carbono que cruje: varias ráfagas agudas muy seguidas
@@ -316,6 +423,7 @@ export class Sonido {
       for (let k = 0; k < p; k++) this._rafaga(0.02 + Math.random() * 0.03, 1500 + Math.random() * 4000, 'bandpass', 0.12 * f * Math.random(), 0.15 + Math.random() * 0.9, 4);
     } else if (nombre === 'contacto') {
       const f = clamp(valor / 15, 0.1, 0.7);
+      if (this._muestra(this.bufChoque, 0.12 + 0.3 * f, 1.25 + Math.random() * 0.2, 2.38, 0.3)) return;
       this._impacto(0.35 * f, 120); this._rafaga(0.12, 900, 'bandpass', f * 0.8); this._rafaga(0.05, 3500, 'bandpass', f * 0.4, 0.02, 2);
     } else if (nombre === 'luz') this.pitido(660, 0.14, 0.18);
     else if (nombre === 'salida') this.pitido(1320, 0.3, 0.2);
@@ -355,7 +463,11 @@ export class Sonido {
     // ambiente: murmullo del público cerca de las gradas, lluvia y agua levantada por las ruedas
     const lluvia = entorno.lluvia || 0, agua = entorno.agua || 0;
     const base = 0.012 + 0.03 * (entorno.grada || 0);
-    if (this.publico.g.gain.value < base + 0.01) { this.publico.g.gain.setTargetAtTime(base, t, 0.6); this.publico2.g.gain.setTargetAtTime(base * 0.5, t, 0.6); }
+    if (this.gPublicoReal) {
+      // público grabado: más fuerte junto a las gradas
+      this.gPublicoReal.gain.setTargetAtTime(0.05 + 0.5 * (entorno.grada || 0), t, 0.6);
+      this.publico.g.gain.setTargetAtTime(0, t, 0.5); this.publico2.g.gain.setTargetAtTime(0, t, 0.5);
+    } else if (this.publico.g.gain.value < base + 0.01) { this.publico.g.gain.setTargetAtTime(base, t, 0.6); this.publico2.g.gain.setTargetAtTime(base * 0.5, t, 0.6); }
     this.lluvia.g.gain.setTargetAtTime(lluvia * 0.09, t, 0.5);
     this.spray.g.gain.setTargetAtTime(agua * Math.min(1, car.velocidad / 60) * 0.12, t, 0.2);
     // eco más fuerte entre muros (urbano, túnel) y algo con las gradas
@@ -369,19 +481,19 @@ export class Sonido {
     this.motor.ajustar(car.rpm, carga, aBordo ? 0.62 : 0.55, t, 1, aBordo ? 0.25 : 1, corte);
     // turbo: la presión sube con carga y vueltas; al levantar, soplido de la válvula
     const pObj = carga * clamp((car.rpm - 6000) / 6000, 0, 1);
-    if (this.presion > 0.5 && pObj < 0.2) {
+    if (this.presion > 0.5 && pObj < 0.2 && !this.muestras) {
       this.soplido.g.gain.cancelScheduledValues(t);
       this.soplido.g.gain.setValueAtTime(0.09 * this.presion, t);
       this.soplido.g.gain.setTargetAtTime(0, t + 0.05, 0.12);
     }
     this.presion += (pObj - this.presion) * Math.min(1, dt * (pObj > this.presion ? 2.5 : 8));
     this.turbo.frequency.setTargetAtTime(2200 + this.presion * 5200, t, 0.06);
-    this.gTurbo.gain.setTargetAtTime(0.018 * this.presion * (aBordo ? 1.4 : 1), t, 0.05);
+    this.gTurbo.gain.setTargetAtTime(this.muestras ? 0 : 0.018 * this.presion * (aBordo ? 1.4 : 1), t, 0.05);   // el V10 grabado no lleva turbo
     // caja de cambios
     this.caja.frequency.setTargetAtTime(60 + v * 34, t, 0.05);
     this.gCaja.gain.setTargetAtTime(clamp(v / 80, 0, 1) * (aBordo ? 0.022 : 0.008) * (0.4 + 0.6 * (1 - carga)), t, 0.1);
     // petardeos al levantar el pie a altas vueltas (el worklet ya los hace solo)
-    if (!this.worklet && this.acelPrevio > 0.6 && acel < 0.15 && car.rpm > 9000) {
+    if ((this.muestras || !this.worklet) && this.acelPrevio > 0.6 && acel < 0.15 && car.rpm > 9000) {
       const n = 2 + Math.floor(Math.random() * 4);
       for (let k = 0; k < n; k++) this._rafaga(0.04 + Math.random() * 0.05, 600 + Math.random() * 900, 'bandpass', 0.25 + Math.random() * 0.3, k * (0.05 + Math.random() * 0.08));
     }
