@@ -174,14 +174,27 @@ const cacheMono = new Map();
 function texturaMono(col) {
   const k = `${col.base}|${col.acento}|${col.tercero}`;
   if (cacheMono.has(k)) return cacheMono.get(k);
-  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 256;
   const x = cv.getContext('2d');
-  x.fillStyle = col.base; x.fillRect(0, 0, 256, 128);
-  x.fillStyle = col.acento; x.fillRect(0, 54, 256, 14);
-  x.fillStyle = col.tercero; x.fillRect(0, 70, 256, 4);
-  x.fillStyle = '#ffffff'; x.font = '900 italic 22px Arial'; x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.fillText('UPGAMES', 64, 30); x.fillText('UPGAMES', 192, 30);
-  x.font = '700 13px Arial'; x.fillText('upgames.games', 128, 98);
+  x.fillStyle = col.base; x.fillRect(0, 0, 512, 256);
+  // tejido ignífugo: trama fina y algo de variación de tono
+  for (let k = 0; k < 2600; k++) { x.fillStyle = `rgba(${Math.random() < 0.5 ? '0,0,0' : '255,255,255'},${0.025 + Math.random() * 0.03})`; x.fillRect(Math.random() * 512, Math.random() * 256, 2, 1); }
+  for (let y = 0; y < 256; y += 3) { x.fillStyle = 'rgba(0,0,0,0.035)'; x.fillRect(0, y, 512, 1); }
+  x.fillStyle = col.acento; x.fillRect(0, 108, 512, 28);
+  x.fillStyle = col.tercero; x.fillRect(0, 140, 512, 8);
+  // costuras acolchadas y cremallera
+  x.strokeStyle = 'rgba(0,0,0,0.25)'; x.lineWidth = 1.5; x.setLineDash([4, 3]);
+  for (const yy of [40, 104, 152, 210]) { x.beginPath(); x.moveTo(0, yy); x.lineTo(512, yy); x.stroke(); }
+  x.setLineDash([]);
+  x.fillStyle = 'rgba(30,30,30,0.6)'; x.fillRect(250, 0, 12, 256);
+  for (let y = 4; y < 256; y += 8) { x.fillStyle = '#9aa0a6'; x.fillRect(252, y, 8, 3); }
+  // parches de patrocinadores
+  const parche = (px, py, w, h, fondo, texto, color) => { x.fillStyle = fondo; x.fillRect(px, py, w, h); x.fillStyle = color; x.font = `900 italic ${h * 0.62}px Arial`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(texto, px + w / 2, py + h / 2 + 1); };
+  parche(40, 44, 170, 50, 'rgba(255,255,255,0.95)', 'UPGAMES', '#0d47ff');
+  parche(302, 44, 170, 50, 'rgba(255,255,255,0.95)', 'UPGAMES', '#0d47ff');
+  parche(60, 164, 130, 34, '#0b0b14', 'NEXUS IA', '#00e5ff');
+  parche(322, 164, 130, 34, '#0b0b14', 'APEX GP', '#ffd23f');
+  x.fillStyle = '#ffffff'; x.font = '700 22px Arial'; x.textAlign = 'center'; x.fillText('upgames.games', 256, 228);
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
   cacheMono.set(k, t);
   return t;
@@ -391,10 +404,11 @@ export function crearModelo(opc) {
   }
   // interior: asiento, piso y salpicadero oscuros
   {
+    // tapa del hueco de las piernas (por delante del pecho, sin cortar el cuerpo del piloto)
     const sh = new THREE.Shape();
-    sh.moveTo(0.66, -0.20); sh.quadraticCurveTo(0.72, 0, 0.66, 0.20); sh.lineTo(0.0, 0.25); sh.quadraticCurveTo(-0.09, 0, 0.0, -0.25); sh.closePath();
-    const g = new THREE.ShapeGeometry(sh); g.rotateX(Math.PI / 2); g.scale(1, 1, -1); g.translate(0, 0.609, 0);
-    geo.negro.push(g);
+    sh.moveTo(0.66, -0.20); sh.quadraticCurveTo(0.72, 0, 0.66, 0.20); sh.lineTo(0.15, 0.25); sh.quadraticCurveTo(0.10, 0, 0.15, -0.25); sh.closePath();
+    const g = new THREE.ShapeGeometry(sh, 12); g.rotateX(Math.PI / 2); g.scale(1, 1, -1); g.translate(0, 0.609, 0);
+    geo.carbono.push(g);
     geo.negro.push(caja(0.04, 0.10, 0.44, 0.64, 0.64, 0, 0, 0, -0.3));      // salpicadero
   }
   // toma de aire sobre la cabeza, arco de seguridad y aleta de tiburón

@@ -48,11 +48,31 @@ function guanteGeo() {
 export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = {}, columna, calidad = 1 }) {
   const grupo = new THREE.Group();
   grupo.name = 'piloto';
-  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.105, 0.16, 6, 12), traje);
-  torso.rotation.x = Math.PI / 2; torso.scale.set(1, 1.15, 0.75); torso.position.set(0.0, 0.62, 0);
+  const hi = calidad >= 2;
+  // pecho (asoma por el habitáculo) con más polígonos para que se vea redondo
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.105, 0.16, hi ? 10 : 6, hi ? 24 : 14), traje);
+  torso.rotation.x = Math.PI / 2; torso.scale.set(1, 1.15, 0.86); torso.position.set(0.0, 0.632, 0);
   grupo.add(torso);
+  // asiento acolchado alrededor del cuerpo: el piloto sale del asiento, no de la carrocería
+  const matAsiento = new THREE.MeshStandardMaterial({ color: 0x24262b, roughness: 0.95 });
+  const asiento = new THREE.Mesh(new THREE.CircleGeometry(1, 28), matAsiento);
+  asiento.rotation.x = -Math.PI / 2; asiento.scale.set(0.15, 0.25, 1); asiento.position.set(0.0, 0.6035, 0);
+  grupo.add(asiento);
+  // arnés de seguridad: dos cintas sobre los hombros, la del abdomen y la hebilla
+  const matCinta = new THREE.MeshStandardMaterial({ color: 0xd9381e, roughness: 0.7 });
+  const geoCinta = new THREE.BoxGeometry(0.045, 1, 0.006);
+  const cintas = [-1, 1].map(l => {
+    const m = new THREE.Mesh(geoCinta, matCinta);
+    const a = new THREE.Vector3(0.02, 0.715, l * 0.085), b = new THREE.Vector3(0.105, 0.612, l * 0.03);
+    const dd = b.clone().sub(a); m.position.copy(a).addScaledVector(dd, 0.5); m.scale.y = dd.length();
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dd.normalize());
+    grupo.add(m); return m;
+  });
+  const hebilla = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.012, 16), new THREE.MeshStandardMaterial({ color: 0xb8bcc4, metalness: 1, roughness: 0.3 }));
+  hebilla.rotation.z = Math.PI / 2 - 0.5; hebilla.position.set(0.108, 0.617, 0); grupo.add(hebilla);
+  void cintas;
   // hombros redondeados (de ellos cuelgan los brazos)
-  const geoHombro = new THREE.SphereGeometry(0.048, 12, 10);
+  const geoHombro = new THREE.SphereGeometry(0.048, hi ? 18 : 12, hi ? 14 : 10);
   const hombros = [-1, 1].map(l => { const m = new THREE.Mesh(geoHombro, traje); m.position.set(0.05, 0.665, l * 0.165); grupo.add(m); return m; });
   const hans = new THREE.Mesh(new THREE.TorusGeometry(0.095, 0.03, 8, 20, Math.PI * 1.3), matNegro);
   hans.rotation.set(Math.PI / 2, 0, Math.PI * 0.85); hans.position.set(0.02, 0.70, 0);
@@ -65,12 +85,16 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
   cuello.add(cabeza);
   grupo.add(cuello);
   // brazos: brazo, codo y antebrazo; manos con guante
-  const geoBrazo = new THREE.CylinderGeometry(0.034, 0.03, 1, 10), geoAnte = new THREE.CylinderGeometry(0.03, 0.024, 1, 10);
-  const geoCodo = new THREE.SphereGeometry(0.031, 10, 8);
+  const seg = hi ? 16 : 10;
+  const geoBrazo = new THREE.CylinderGeometry(0.034, 0.03, 1, seg, 3), geoAnte = new THREE.CylinderGeometry(0.03, 0.024, 1, seg, 3);
+  const geoCodo = new THREE.SphereGeometry(0.031, seg, 10);
+  // puño del guante (manguito) donde termina el antebrazo
+  const geoPuno = new THREE.CylinderGeometry(0.032, 0.034, 0.05, seg);
   const gg = guanteGeo();
   const brazos = [-1, 1].map(() => {
     const b = { brazo: new THREE.Mesh(geoBrazo, traje), ante: new THREE.Mesh(geoAnte, traje), codo: new THREE.Mesh(geoCodo, traje), mano: new THREE.Group() };
     for (const g of gg) b.mano.add(new THREE.Mesh(g, guante));
+    const puno = new THREE.Mesh(geoPuno, guante); puno.rotation.z = Math.PI / 2; puno.position.x = -0.015; b.mano.add(puno);
     grupo.add(b.brazo, b.ante, b.codo, b.mano);
     return b;
   });
