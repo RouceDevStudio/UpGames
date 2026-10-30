@@ -778,7 +778,7 @@ function matSombraContacto(calidad) {
   g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.55, 'rgba(0,0,0,0.75)'); g.addColorStop(1, 'rgba(0,0,0,0)');
   x.fillStyle = g; x.fillRect(0, 0, 64, 64);
   const t = new THREE.CanvasTexture(cv);
-  matSombraC = new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: calidad >= 1 ? 0.45 : 0.7, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, color: 0x000000 });
+  matSombraC = new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: calidad >= 1 ? 0.6 : 0.75, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, color: 0x000000 });
   return matSombraC;
 }
 

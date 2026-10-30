@@ -102,13 +102,14 @@ export function empaquetar(car, p) {
   bits |= Math.round(Math.min(1, d.aleronTras) * 3) << 10;
   const flags = (car.drsAbierto ? 1 : 0) | (car.mandos.freno > 0.1 ? 2 : 0) | (p.box ? 4 : 0) | (car.retenido ? 8 : 0) | (car.abandono ? 16 : 0) | (car.limitadorPit ? 32 : 0);
   return [car.x, car.z, car.y, car.psi, car.vx, car.vy, car.r, car.anguloVolante || 0, car.rpm, car.marcha,
-    car.proj.s, p.distancia, p.vuelta, flags, car.cabeceo, car.balanceo, bits, car.mandos.acelerador];
+    car.proj.s, p.distancia, p.vuelta, flags, car.cabeceo, car.balanceo, bits, car.mandos.acelerador, car.giroCab || 0, car.giroBal || 0];
 }
 
 export function aplicarEstado(car, e, circuito) {
   [car.x, car.z, car.y, car.psi, car.vx, car.vy, car.r] = e;
   car.anguloVolante = e[7]; car.rpm = e[8]; car.marcha = e[9];
   car.cabeceo = e[14]; car.balanceo = e[15];
+  car.giroCab = e[18] || 0; car.giroBal = e[19] || 0;
   const f = e[13], bits = e[16];
   car.drsAbierto = !!(f & 1); car.retenido = !!(f & 8); car.abandono = !!(f & 16); car.limitadorPit = !!(f & 32);
   car.mandos.freno = f & 2 ? 1 : 0; car.mandos.acelerador = e[17] || 0;

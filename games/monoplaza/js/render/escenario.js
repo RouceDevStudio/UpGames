@@ -132,6 +132,22 @@ class Terreno {
       p.setY(k, this.h[k]);
     }
     g.computeVertexNormals();
+    // color por vértice: hondonadas más oscuras y húmedas, lomas más claras y secas, manchas
+    // de hierba distinta (sin esto el terreno es un verde uniforme que parece de papel)
+    const nrm = g.attributes.normal, col = new Float32Array(p.count * 3);
+    const H = this.h, nx = this.nx;
+    for (let iz = 0; iz < this.nz; iz++) for (let ix = 0; ix < nx; ix++) {
+      const k = iz * nx + ix;
+      const vec = (dx, dz) => H[Math.min(this.nz - 1, Math.max(0, iz + dz)) * nx + Math.min(nx - 1, Math.max(0, ix + dx))];
+      const media = (vec(-2, 0) + vec(2, 0) + vec(0, -2) + vec(0, 2)) / 4;
+      const conc = Math.max(-1, Math.min(1, (H[k] - media) * 0.6));     // + loma, - hondonada
+      const x = p.getX(k), z = p.getZ(k);
+      const mancha = Math.sin(x * 0.013 + Math.sin(z * 0.009) * 2) * Math.sin(z * 0.011 + Math.sin(x * 0.007) * 2);
+      const luz = 0.86 + conc * 0.12 + mancha * 0.08 - (1 - nrm.getY(k)) * 0.5;
+      col[k * 3] = luz * (0.97 + mancha * 0.05); col[k * 3 + 1] = luz; col[k * 3 + 2] = luz * (0.92 - mancha * 0.04);
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    material.vertexColors = true;
     const m = new THREE.Mesh(g, material);
     m.receiveShadow = true;
     return m;
@@ -166,22 +182,24 @@ export function construirEscenario(scene, renderer, c, calidad) {
   scene.fog = new THREE.Fog(0xb9c8d6, 700, calidad >= 2 ? 5200 : 3200);
   res.sol = sol;
 
-  const luzSol = new THREE.DirectionalLight(0xfff1dc, 3.2);
+  const luzSol = new THREE.DirectionalLight(0xfff1dc, 5);
   luzSol.position.copy(sol).multiplyScalar(300);
-  if (calidad >= 1) {
+  // sombras en todas las calidades: sin ellas los coches flotan y todo parece plano
+  {
     luzSol.castShadow = true;
     const t = calidad >= 3 ? 4096 : calidad >= 2 ? 2048 : 1024;
     luzSol.shadow.mapSize.set(t, t);
-    const ext = calidad >= 2 ? 42 : 30;
+    const ext = calidad >= 2 ? 42 : calidad >= 1 ? 30 : 22;
     Object.assign(luzSol.shadow.camera, { left: -ext, right: ext, top: ext, bottom: -ext, near: 10, far: 700 });
     luzSol.shadow.bias = -0.00025; luzSol.shadow.normalBias = 0.04;
   }
   scene.add(luzSol); scene.add(luzSol.target);
   res.luzSol = luzSol;
-  res.hemi = new THREE.HemisphereLight(0xcfe3ff, 0x55603f, 0.55);
+  res.hemi = new THREE.HemisphereLight(0xcfe3ff, 0x3a4029, 0.15);
   scene.add(res.hemi);
   res.cielo = cielo;
-  res.base = { sol: luzSol.intensity, fogColor: scene.fog.color.clone(), fogFar: scene.fog.far, exp: 0.92, hemi: 0.55 };
+  res.base = { sol: luzSol.intensity, fogColor: scene.fog.color.clone(), fogFar: scene.fog.far, exp: 0.8, hemi: 0.15 };
+  scene.environmentIntensity = 0.5;
 
   // --- Materiales ---------------------------------------------------------
   const asf = TX.texturasAsfalto(calidad >= 2 ? 512 : 256);
@@ -542,15 +560,15 @@ export function ponerHora(esc, scene, renderer, hora = 'dia') {
   } else if (hora === 'atardecer') {
     esc.sol = sol;
     esc.luzSol.color.set(0xff9a50);
-    esc.base = { sol: 2.7, fogColor: new THREE.Color(0xe0a080), fogFar: 4200, exp: 0.95, hemi: 0.5 };
+    esc.base = { sol: 3.4, fogColor: new THREE.Color(0xe0a080), fogFar: 4200, exp: 0.92, hemi: 0.32 };
     esc.hemi.color.set(0xffc8a0); esc.hemi.groundColor.set(0x504030);
     scene.environmentIntensity = 0.7;
   } else {
     esc.sol = sol;
     esc.luzSol.color.set(0xfff1dc);
-    esc.base = { sol: 3.2, fogColor: new THREE.Color(0xb9c8d6), fogFar: scene.fog.far > 4000 ? 5200 : 3200, exp: 0.92, hemi: 0.55 };
-    esc.hemi.color.set(0xcfe3ff); esc.hemi.groundColor.set(0x55603f);
-    scene.environmentIntensity = 1;
+    esc.base = { sol: 5, fogColor: new THREE.Color(0xb9c8d6), fogFar: scene.fog.far > 4000 ? 5200 : 3200, exp: 0.8, hemi: 0.15 };
+    esc.hemi.color.set(0xcfe3ff); esc.hemi.groundColor.set(0x3a4029);
+    scene.environmentIntensity = 0.5;
   }
   esc.luzSol.intensity = esc.base.sol; esc.hemi.intensity = esc.base.hemi;
   // al atardecer las sombras son larguísimas: la zona de sombras se agranda para que quepan
@@ -818,30 +836,53 @@ function ciudad(scene, c, terreno, calidad, matHormigon) {
 }
 
 function montanas(scene, terreno) {
-  // anillo de montañas lejanas que la niebla azula
+  // cordillera lejana con relieve de verdad: crestas por ruido, laderas sombreadas, roca y nieve
+  // (antes era un anillo de pocas caras planas que parecía un decorado de cartón)
   const cx = terreno.x0 + terreno.ancho / 2, cz = terreno.z0 + terreno.alto / 2;
   const R = Math.max(terreno.ancho, terreno.alto) * 0.5 + 900;
-  const seg = 96;
+  const SEG = 320, FIL = 14, FONDO = 1400;
   const rnd = TX.aleatorio(3);
-  const alturas = [];
-  for (let k = 0; k < seg; k++) alturas.push(180 + rnd() * 420 + Math.sin(k * 0.4) * 120);
-  const pos = [], idx = [];
-  for (let k = 0; k <= seg; k++) {
-    const a = k / seg * Math.PI * 2;
-    const h = alturas[k % seg];
-    const x = Math.cos(a), z = Math.sin(a);
-    pos.push(cx + x * R, -20, cz + z * R, cx + x * (R + 300), h, cz + z * (R + 300), cx + x * (R + 900), h * 0.4, cz + z * (R + 900));
+  // ruido 1D periódico por el ángulo (suma de senos con fases al azar)
+  const ondas = Array.from({ length: 7 }, (_, k) => ({ f: [2, 3, 5, 8, 13, 21, 34][k], fase: rnd() * 6.28, a: 1 / (1 + k * 0.9) }));
+  const perfil = (a, r) => {
+    let v = 0; for (const o of ondas) v += Math.sin(a * o.f + o.fase + r * 0.002 * o.f) * o.a;
+    return v;
+  };
+  const pos = [], col = [], idx = [];
+  const cBase = new THREE.Color(0x4c6141), cRoca = new THREE.Color(0x6b6a66), cNieve = new THREE.Color(0xeef2f6), cOsc = new THREE.Color(0x34432f), tmp = new THREE.Color();
+  for (let k = 0; k <= SEG; k++) {
+    const a = k / SEG * Math.PI * 2;
+    const ca = Math.cos(a), sa = Math.sin(a);
+    const pico = 260 + 260 * (perfil(a, 0) * 0.5 + 0.5) + 160 * Math.max(0, perfil(a * 1.7 + 1, 300));
+    for (let f = 0; f <= FIL; f++) {
+      const t = f / FIL, r = R + t * FONDO;
+      // la altura sube hasta la cresta (a 1/3) y baja detrás; crestas afiladas (ruido "ridged")
+      const forma = t < 0.35 ? Math.sin(t / 0.35 * Math.PI / 2) : Math.cos((t - 0.35) / 0.65 * Math.PI / 2) * 0.85 + 0.15;
+      const ridge = 1 - Math.abs(perfil(a * 3.1 + t * 2, r));
+      const h = f === 0 ? -20 : pico * forma * (0.75 + 0.35 * ridge) + 12 * perfil(a * 9 + t * 7, r);
+      pos.push(cx + ca * r, h, cz + sa * r);
+      // color por altura: pradera abajo, roca arriba, nieve en las cumbres, con vetas
+      const hr = h / 600, veta = 0.5 + 0.5 * Math.sin(a * 140 + t * 30 + perfil(a * 5, r) * 3);
+      if (hr < 0.35) tmp.copy(cOsc).lerp(cBase, Math.min(1, hr / 0.35 + veta * 0.2));
+      else if (hr < 0.62) tmp.copy(cBase).lerp(cRoca, (hr - 0.35) / 0.27);
+      else tmp.copy(cRoca).lerp(cNieve, Math.min(1, (hr - 0.62) / 0.12 + (veta - 0.5) * 0.6));
+      col.push(tmp.r, tmp.g, tmp.b);
+    }
   }
-  for (let k = 0; k < seg; k++) {
-    const a = k * 3, b = (k + 1) * 3;
-    idx.push(a, b, a + 1, b, b + 1, a + 1, a + 1, b + 1, a + 2, b + 1, b + 2, a + 2);
+  const F = FIL + 1;
+  for (let k = 0; k < SEG; k++) for (let f = 0; f < FIL; f++) {
+    const a = k * F + f, b = (k + 1) * F + f;
+    idx.push(a, b, a + 1, b, b + 1, a + 1);
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   g.setIndex(idx);
   g.computeVertexNormals();
-  const mat = new THREE.MeshStandardMaterial({ color: 0x5d6e57, roughness: 1, flatShading: true, side: THREE.DoubleSide });
-  scene.add(new THREE.Mesh(g, mat));
+  const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, side: THREE.DoubleSide });
+  const m = new THREE.Mesh(g, mat);
+  m.frustumCulled = false;
+  scene.add(m);
 }
 
 // ─── Calle de boxes: carril, muro, líneas del limitador, garajes y su equipo ───

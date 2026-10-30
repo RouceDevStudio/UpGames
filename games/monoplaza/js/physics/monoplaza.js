@@ -6,6 +6,9 @@ import { COCHE, COMPUESTOS, G, RHO_AIRE, REGLAJE_DEF, efectosMejoras, factorAgua
 import { SUPERFICIES, SUP_ASFALTO, SUP_BORDILLO, SUP_ESCAPE, BARRERAS } from '../track.js';
 import { Neumatico, fuerzasNeumatico, muCarga } from './neumatico.js';
 
+// altura del centro de giro del coche cuando vuela o vuelca (el modelo gira alrededor de él)
+export const PIVOTE_VUELO = 0.45;
+
 const RPM_A_RAD = Math.PI / 30;
 const tmpF = { fx: 0, fy: 0, sigma: 0 };
 const tmpF2 = { fx: 0, fy: 0, sigma: 0 };
@@ -201,6 +204,7 @@ export class Monoplaza {
     this.alturaDel = 0.03; this.alturaTras = 0.07;
     this.cabeceo = 0; this.balanceo = 0; this.vCabeceo = 0; this.vBalanceo = 0;
     this.fondoToca = 0;
+    this.vuelo = null; this.volcado = null; this.giroCab = 0; this.giroBal = 0;
     this.proj = { i: -1 };
     this.fueraPista = false;
     this.tiempoParado = 0;
@@ -219,6 +223,7 @@ export class Monoplaza {
     this.x = m.x + nx * d; this.z = m.z + nz * d;
     this.psi = Math.atan2(m.tz, m.tx);
     this.vx = this.vy = this.r = 0;
+    this.vuelo = null; this.volcado = null; this.giroCab = 0; this.giroBal = 0;
     this.proj = c.proyectar(this.x, this.z, -1, {});
     this.y = m.y;
     for (const w of this.ruedas) w.omega = 0;
@@ -269,6 +274,7 @@ export class Monoplaza {
   // --- Paso de integración -------------------------------------------------
   paso(dt) {
     this.reloj += dt;
+    if (this.vuelo || this.volcado) { this._pasoSinRuedas(dt); return; }
     const c = this.circuito;
     const m = this.masa;
     const cos = Math.cos(this.psi), sin = Math.sin(this.psi);
@@ -610,6 +616,8 @@ export class Monoplaza {
     this.vx += (axc + this.r * this.vy) * dt;
     this.vy += (ayc - this.r * this.vx) * dt;
     this.r += mzT / COCHE.inerciaYaw * dt;
+    // un monoplaza en trompo no pasa de ~1 vuelta por segundo (con una rueda arrancada el modelo se dispara)
+    if (this.r > 6) this.r = 6; else if (this.r < -6) this.r = -6;
     // a muy baja velocidad sin gas: el coche se detiene del todo
     if (v < 0.4 && acel < 0.02 && freno > 0.05) { this.vx *= 0.9; this.vy *= 0.9; this.r *= 0.9; }
     if (this.retenido || this.abandono) { this.vx *= 0.8; this.vy *= 0.8; this.r *= 0.8; }
@@ -644,12 +652,118 @@ export class Monoplaza {
     }
 
     this._muros(dt);
+    if (this.r > 6) this.r = 6; else if (this.r < -6) this.r = -6;
 
     if (v < 0.5) this.tiempoParado += dt; else this.tiempoParado = 0;
     if (this.terminal && !this.abandono) {
       this.tTerminal += dt;
       if (v < 3 || this.tTerminal > 5) { this.abandono = true; this.eventos.push('abandono'); }
     }
+  }
+
+  /**
+   * Choque rueda con rueda: la rueda de atrás trepa por la de delante y el coche sale despedido.
+   * vh: velocidad vertical (m/s); wCab, wBal, wYaw: giros (rad/s) de cabeceo, balanceo y guiñada.
+   */
+  despegar(vh, wCab, wBal, wYaw = 0) {
+    if (this.volcado) return;
+    if (this.vuelo) { this.vuelo.vh = Math.max(this.vuelo.vh, vh); return; }
+    this.vuelo = { h: 0.02, vh, cab: 0, wCab, bal: 0, wBal, botes: 0 };
+    this.r += wYaw;
+    this.eventos.push('despegue');
+  }
+
+  // En el aire (o volcado, arrastrándose sobre el morro y el arco antivuelco): sin agarre de
+  // los neumáticos; solo gravedad, aire y el roce con el suelo al caer.
+  _pasoSinRuedas(dt) {
+    const c = this.circuito, f = this.vuelo, vol = this.volcado;
+    const v = this.velocidad;
+    // aire (frena poco) y, en el suelo, el roce de la carrocería contra el asfalto
+    let dec = 0.5 * RHO_AIRE * 1.3 * v / this.masa;
+    const enSuelo = !f || f.h <= 0.02;
+    if (enSuelo && v > 0.01) dec += (vol ? 5.5 : 3.5) / v;
+    const k = Math.max(0, 1 - dec * dt);
+    this.vx *= k; this.vy *= k;
+    this.r *= 1 - Math.min(1, (enSuelo ? 2.5 : 0.25) * dt);
+    const vx0 = this.vx;
+    this.vx += this.r * this.vy * dt;
+    this.vy -= this.r * vx0 * dt;
+    const cos = Math.cos(this.psi), sin = Math.sin(this.psi);
+    this.x += (this.vx * cos - this.vy * sin) * dt;
+    this.z += (this.vx * sin + this.vy * cos) * dt;
+    this.psi += this.r * dt;
+    this.ax = this.ay = 0;
+    this.axF *= 0.9; this.ayF *= 0.9;
+    this.proj = c.proyectar(this.x, this.z, this.proj.i, this.proj);
+    const suelo = c.y[this.proj.i] + c.caida(this.proj.i, this.proj.d);
+    // las ruedas siguen girando en el aire y el motor, sin carga, se revoluciona
+    for (const w of this.ruedas) { w.omega *= 1 - 0.4 * dt; w.giro = (w.giro + w.omega * dt) % (Math.PI * 2); w.wy = suelo; }
+    const acel = this.mandos.acelerador || 0;
+    this.rpm += ((this.abandono ? 0 : acel > 0.1 ? COCHE.rpmLimite : COCHE.rpmRalenti) - this.rpm) * Math.min(1, dt * 6);
+    this.vibracion = enSuelo ? 0.6 : 0;
+    this.fueraPista = false; this.enBordillo = false; this.enTierra = false;
+    if (f) {
+      f.vh -= G * dt; f.h += f.vh * dt;
+      f.cab += f.wCab * dt; f.bal += f.wBal * dt;
+      // la carrocería frena un poco los giros en el aire
+      f.wCab *= 1 - 0.15 * dt; f.wBal *= 1 - 0.15 * dt;
+      if (f.h <= 0 && f.vh < 0) this._aterrizar(f);
+      if (this.vuelo) { this.giroCab = f.cab; this.giroBal = f.bal; }
+      // h es la holgura del punto más bajo: girado, el morro o el costado bajan más que las ruedas
+      const sc = Math.abs(Math.sin(f.cab)), cc = Math.abs(Math.cos(f.cab)), sb = Math.abs(Math.sin(f.bal)), cb = Math.abs(Math.cos(f.bal));
+      this.y = suelo + Math.max(0, f.h) + (2.4 * sc + 0.9 * sb * cc + 0.45 * cc * cb) - PIVOTE_VUELO;
+    } else {
+      this.giroCab = vol.cab; this.giroBal = vol.bal;
+      this.y = suelo + 0.1;
+    }
+    this._muros(dt);
+    if (this.r > 6) this.r = 6; else if (this.r < -6) this.r = -6;
+    const v2 = this.velocidad;
+    if (v2 < 0.5) this.tiempoParado += dt; else this.tiempoParado = 0;
+    if (this.terminal && !this.abandono) {
+      this.tTerminal += dt;
+      if (!this.vuelo && (v2 < 3 || this.tTerminal > 6)) { this.abandono = true; this.eventos.push('abandono'); }
+    }
+  }
+
+  _aterrizar(f) {
+    const golpe = -f.vh;
+    const norm = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+    f.cab = norm(f.cab); f.bal = norm(f.bal);
+    const arriba = Math.cos(f.cab) * Math.cos(f.bal);        // 1 = sobre las ruedas, -1 = boca abajo
+    f.h = 0; f.botes++;
+    this.fuenteGolpe = 'vuelo';
+    this.eventos.push('golpe:' + Math.min(9, 2 + golpe * 0.6).toFixed(1));
+    // el golpe contra el suelo se lleva velocidad
+    const roce = arriba > 0.5 ? 0.9 : 0.72;
+    this.vx *= roce; this.vy *= roce;
+    if (arriba > 0.5) {
+      // cae sobre las ruedas: suspensión, alerones y fondo sufren según la altura de la caída
+      this.aplicarGolpe(1.4, f.bal > 0 ? 1 : -1, golpe * 1.4 + 2);
+      this.aplicarGolpe(-1.6, f.bal > 0 ? -1 : 1, golpe * 1.2 + 2);
+      if (golpe > 3.5 && f.botes < 4) { f.vh = golpe * 0.32; f.wCab *= 0.35; f.wBal *= 0.35; return; }
+      // asentado (media vuelta de cabeceo más media de balanceo = de pie mirando hacia atrás)
+      if (Math.cos(f.cab) < 0 && Math.cos(f.bal) < 0) { this.psi += Math.PI; this.vx = -this.vx; this.vy = -this.vy; }
+      this.vuelo = null; this.giroCab = 0; this.giroBal = 0;
+      this.vCabeceo = -golpe * 0.2; this.vBalanceo = f.bal * 3;
+      this.r += f.wBal * 0.1;
+      return;
+    }
+    // de lado o boca abajo: el coche está destrozado
+    if (!this.terminal) { this.terminal = true; this.tTerminal = 0; this.motivoAbandono = 'Vuelco'; }
+    this.danoAleron = 1;
+    const d = this.dano;
+    d.aleronTras = Math.min(1, d.aleronTras + 0.6); d.fondo = 1; d.piezas = 1;
+    if (golpe > 2.5 && f.botes < 6) {
+      // rebota y sigue dando vueltas
+      f.vh = golpe * 0.42; f.wCab *= 0.6; f.wBal = f.wBal * 0.6 + (Math.random() - 0.5) * 3;
+      return;
+    }
+    // queda quieto sobre el arco antivuelco (boca abajo) o vuelve a caer sobre las ruedas
+    this.vuelo = null;
+    if (arriba < -0.2 && Math.cos(f.cab) < 0 && Math.cos(f.bal) < 0) { this.psi += Math.PI; this.vx = -this.vx; this.vy = -this.vy; }
+    if (arriba < -0.2) this.volcado = { cab: Math.abs(f.cab) > Math.PI / 2 ? Math.PI : 0, bal: Math.abs(f.cab) > Math.PI / 2 ? 0 : Math.PI };
+    else { this.giroCab = 0; this.giroBal = 0; }
   }
 
   _cajaAutomatica(dt, acel, freno, v) {

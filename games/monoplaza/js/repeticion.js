@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 
 export const HZ = 15;
-const CAMPOS = 20;
+const CAMPOS = 22;
 const MAX_SEG = 3600;
 const BLOQUE = HZ * 60;                    // fotogramas por bloque de memoria
 const MEMORIA = 40e6;                      // bytes como mucho para la repetición
@@ -69,6 +69,8 @@ export class Grabadora {
       d[o + 14] = dn.aleronTras || 0; d[o + 15] = bits;
       // para el sonido de la repetición
       d[o + 16] = c.mandos?.acelerador || 0; d[o + 17] = c.mandos?.freno || 0; d[o + 18] = c.fondoToca || 0; d[o + 19] = Math.max(c.impacto || 0, c.picoGolpe || 0);
+      // vuelos y vuelcos (choque rueda con rueda)
+      d[o + 20] = c.giroCab || 0; d[o + 21] = c.giroBal || 0;
     }
   }
 
@@ -98,6 +100,9 @@ export class Grabadora {
       p.dano.aleronTras = da[oa + 14];
       for (let r = 0; r < 4; r++) { p.dano.pinchazo[r] = !!(bits & (1 << r)); p.dano.suelta[r] = !!(bits & (16 << r)); }
       p.mandos.acelerador = L(16); p.mandos.freno = L(17); p.fondoToca = da[oa + 18]; p.impacto = Math.max(da[oa + 19], db[ob + 19]);
+      // los giros en el aire pasan de -π a π: se interpolan por el camino corto
+      const angG = (j) => { let d = db[ob + j] - da[oa + j]; d = Math.atan2(Math.sin(d), Math.cos(d)); return da[oa + j] + d * t; };
+      p.giroCab = angG(20); p.giroBal = angG(21);
     }
   }
 
@@ -111,7 +116,7 @@ export class Grabadora {
 /** Objeto con la forma que necesitan los modelos y la cámara (sin física). */
 export function crearProxy(c) {
   return {
-    x: c.x, y: c.y, z: c.z, psi: c.psi, anguloVolante: 0, cabeceo: 0, balanceo: 0, rpm: 6000, marcha: 1, velocidad: 0,
+    x: c.x, y: c.y, z: c.z, psi: c.psi, giroCab: 0, giroBal: 0, anguloVolante: 0, cabeceo: 0, balanceo: 0, rpm: 6000, marcha: 1, velocidad: 0,
     drsAbierto: false, danoAleron: 0, ersPotenciaActual: 0, ayF: 0, axF: 0, vibracion: 0,
     alturaDel: c.alturaDel ?? 0.032, alturaTras: c.alturaTras ?? 0.075, mandos: { acelerador: 0, freno: 0, ersModo: 1 }, fondoToca: 0, impacto: 0,
     dano: { pinchazo: [false, false, false, false], suelta: [false, false, false, false], susp: [0, 0, 0, 0], aleronTras: 0 },

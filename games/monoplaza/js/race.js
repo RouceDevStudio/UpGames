@@ -395,6 +395,8 @@ export class Sesion {
         const A = lista[a].coche, B = lista[b].coche;
         const dx0 = B.x - A.x, dz0 = B.z - A.z;
         if (dx0 * dx0 + dz0 * dz0 > 64) continue;
+        // uno de los dos va por el aire por encima del otro: no se tocan
+        if (Math.abs(A.y - B.y) > 0.9 && (A.vuelo || B.vuelo)) continue;
         const ca = Math.cos(A.psi), sa = Math.sin(A.psi), cb = Math.cos(B.psi), sb = Math.sin(B.psi);
         for (const oa of offs) for (const ob of offs) {
           const ax = A.x + ca * oa, az = A.z + sa * oa;
@@ -418,6 +420,7 @@ export class Sesion {
           const jx = nx * j, jz = nz * j;
           this._impulso(A, -jx, -jz, rax, raz);
           this._impulso(B, jx, jz, rbx, rbz);
+          if (oa * ob < 0 && !A.vuelo && !B.vuelo) this._ruedaConRueda(lista[a], lista[b], oa > 0, -vn);
           if (-vn > 3) {
             this.eventos.push({ tipo: 'contacto', fuerza: -vn, jugador: lista[a].jugador || lista[b].jugador });
             // daños en la zona del contacto de cada coche (lado = proyección de la normal en su eje lateral)
@@ -439,6 +442,44 @@ export class Sesion {
     }
   }
 
+  /**
+   * El morro de un coche alcanza la trasera del otro. Si las ruedas se montan (solape lateral
+   * de 0,5 a 1,9 m) la del coche de atrás trepa por la de delante, que gira en sentido contrario
+   * en el punto de contacto: sale despedido aunque apenas haya diferencia de velocidad, y el de
+   * delante recibe el empujón en una rueda trasera y hace un trompo.
+   */
+  _ruedaConRueda(pa, pb, aDetras, vRel) {
+    const atras = aDetras ? pa : pb, delante = aDetras ? pb : pa;
+    const T = atras.coche, D = delante.coche;
+    const v = T.velocidad;
+    if (v < 20 || vRel < 0.3 || this.estado === 'formacion') return;
+    const cd = Math.cos(D.psi), sd = Math.sin(D.psi);
+    const lat = (T.x - D.x) * -sd + (T.z - D.z) * cd;        // posición del de atrás en el eje lateral del de delante
+    const lon = (T.x - D.x) * cd + (T.z - D.z) * sd;
+    if (lon > -2.2 || lon < -6.5) return;                        // tiene que estar justo detrás
+    const al = Math.abs(lat);
+    if (al < 0.5 || al > 1.9) return;                            // morro contra la caja de cambios o solo un roce lateral
+    if (this.tiempo - (T._tRueda ?? -9) < 1) return;
+    T._tRueda = this.tiempo;
+    const lado = Math.sign(lat);
+    // cuanto más solapan las ruedas y más rápido van, más alto sale
+    const solape = 1 - Math.abs(al - 1.25) / 0.75;
+    const vh = Math.min(7, 2.4 + v * 0.04 + vRel * 0.3) * (0.75 + 0.3 * solape);
+    if (!atras.remoto) {
+      T.despegar(vh, 1.2 + Math.random() * 2.2 + vRel * 0.1, lado * (1.0 + Math.random() * 2.4), lado * (Math.random() * 0.8));
+      T.fuenteGolpe = 'coche';
+      T.aplicarGolpe(2.2, -lado, 6 + vRel);
+    }
+    if (!delante.remoto) {
+      // la rueda trasera del de delante recibe el golpe: trompo hacia el lado contrario
+      D.r += -lado * (1.4 + Math.random() * 1.6) * Math.min(1, v / 50);
+      D.vy += -lado * (1.5 + Math.random() * 2);
+      D.fuenteGolpe = 'coche';
+      D.aplicarGolpe(-2.3, lado, 5 + vRel * 1.2);
+    }
+    this.eventos.push({ tipo: 'despegue', p: atras, otro: delante, jugador: atras.jugador || delante.jugador });
+  }
+
   _impulso(C, jx, jz, rx, rz) {
     const cos = Math.cos(C.psi), sin = Math.sin(C.psi);
     const m = C.masa;
@@ -447,6 +488,8 @@ export class Sesion {
     C.vx = vwx * cos + vwz * sin;
     C.vy = -vwx * sin + vwz * cos;
     C.r += (rx * jz - rz * jx) / COCHE.inerciaYaw;
+    // varios puntos de contacto en el mismo golpe no pueden acumular un giro irreal
+    C.r = Math.max(-5, Math.min(5, C.r));
   }
 
   _cronometrar(p, dt) {

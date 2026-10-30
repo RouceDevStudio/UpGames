@@ -113,7 +113,7 @@ function nivelesMejoras(perfil) {
 const MAX_JUGADORES = 22;
 const MAX_ESPECTADORES = 50;
 const LETRAS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const ESTADO_LARGO = 18;               // números por paquete de estado
+const ESTADO_LARGO = 20;               // números por paquete de estado
 const VUELTA_MIN_S = 45;               // ninguna vuelta de ningún circuito baja de esto
 const ESPERA_FIN_MS = 90000;           // tras el primero en meta
 const VEL_MAX = 115;                   // m/s (414 km/h): nadie va más rápido

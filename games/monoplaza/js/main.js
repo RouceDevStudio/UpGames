@@ -38,6 +38,7 @@ import * as ESTR from './estrategia.js';
 import * as PROG from './progresion.js';
 import * as ED from './editorCircuito.js';
 import { iniciarIdioma } from './idioma.js';
+import { PIVOTE_VUELO } from './physics/monoplaza.js';
 
 const $ = (s) => document.querySelector(s);
 const esTactil = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -127,6 +128,8 @@ let renderer, scene, composer, camara, efectos, escenario, circuito;
 const sonido = new Sonido();
 const entrada = new Entrada(ajustes);
 let sesion = null, modelos = [], modeloFantasma = null, lineaIdeal = null;
+// para pruebas automáticas (?depurar): acceso a la sesión desde la consola
+if (new URLSearchParams(location.search).has("depurar")) window.apex = { get sesion() { return sesion; }, empezar: (...a) => empezar(...a), get escenario() { return escenario; }, scene: () => scene, THREE, get renderer() { return renderer; }, get camara() { return camara; } };
 let gestorBoxes = null, escombros = null, lluviaFx = null, camarasTV = null, barreras = null, comisarios = null, cocheSeg = null;
 let pilotosFuera = null, salidasPendientes = [], tAturdido = 0;
 let capaCamara = null;
@@ -155,6 +158,22 @@ async function iniciar() {
   await cargarCircuito(circuitoId);
   mostrar('menu');
   requestAnimationFrame(bucle);
+}
+
+// Coloca el modelo en el mundo; si vuela o está volcado gira alrededor de su centro (no de las ruedas)
+function colocarModelo(m, c, pend) {
+  const gc = c.giroCab || 0, gb = c.giroBal || 0;
+  if (!gc && !gb) {
+    m.raiz.position.set(c.x, c.y, c.z);
+    m.raiz.rotation.set(0, -c.psi, 0);
+    if (pend) m.raiz.rotateZ(pend);
+    return;
+  }
+  m.raiz.position.set(c.x, c.y + PIVOTE_VUELO, c.z);
+  m.raiz.rotation.set(0, -c.psi, 0);
+  m.raiz.rotateZ(pend + gc);
+  m.raiz.rotateX(gb);
+  m.raiz.translateY(-PIVOTE_VUELO);
 }
 
 // Construye (o reconstruye) el circuito y todo su escenario
@@ -258,7 +277,7 @@ function crearRenderer() {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.92;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.shadowMap.enabled = calidad >= 1;
+  renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = calidad >= 2 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
   camara = new Camara(innerWidth / innerHeight);
   camara.modo = ajustes.camara;
@@ -319,8 +338,8 @@ function cambiarCalidad(nueva) {
   if (nueva === calidad) return;
   calidad = nueva;
   renderer.setPixelRatio(pixelRatio());
-  renderer.shadowMap.enabled = calidad >= 1;
-  escenario.luzSol.castShadow = calidad >= 1;
+  renderer.shadowMap.enabled = true;
+  escenario.luzSol.castShadow = true;
   scene.traverse(o => { if (o.material) { const ms = Array.isArray(o.material) ? o.material : [o.material]; ms.forEach(m => { m.needsUpdate = true; }); } });
   configurarPost();
   redimensionar();
@@ -1002,6 +1021,13 @@ function procesarEventos() {
       if (e.p.jugador) radio.decir('¡Vuelta rápida! Muy bien.', { clave: 'vrJ', cada: 30 });
       escenario.puestosMuro?.[e.p.indiceEquipo ?? -1]?.celebrar(3.5);
     }
+    else if (e.tipo === 'despegue') {
+      const n = (q) => q.nombre.replace('@', '');
+      if (ajustes.ambiente) radio.decir(`¡${n(e.p)} toca la rueda de ${n(e.otro)} y sale volando!`, { tipo: 'megafonia', clave: 'despegue', cada: 8, prioridad: true });
+      if (e.p.jugador) { radio.decir('¡Rueda con rueda! ¿Estás bien?', { clave: 'despegueJ', cada: 10, prioridad: true }); entrada.vibrar(400, 1); }
+      else if (e.otro.jugador) { radio.decir('Te han tocado la rueda trasera, controla el coche.', { clave: 'tocadoJ', cada: 10 }); entrada.vibrar(150, 0.9); }
+      if (e.jugador) sonido.evento('contacto', 12);
+    }
     else if (e.tipo === 'contacto' && e.jugador) {
       sonido.evento('contacto', e.fuerza); entrada.vibrar(60, 0.8);
       // para el safety rating: un contacto fuerte cuenta una vez (no cada paso de física que dure)
@@ -1289,11 +1315,9 @@ function bucle(ahora) {
   // modelos
   sesion.participantes.forEach((p, k) => {
     const c = p.coche, m = modelos[k];
-    m.raiz.position.set(c.x, c.y, c.z);
     // inclinación por la pendiente de la pista
     const pend = Math.atan(circuito.pendiente[c.proj.i] * (Math.cos(c.psi) * c.proj.tx + Math.sin(c.psi) * c.proj.tz));
-    m.raiz.rotation.set(0, -c.psi, 0);
-    m.raiz.rotateZ(pend);
+    colocarModelo(m, c, pend);
     m.actualizar(c, dt);
   });
   // fantasma
@@ -2244,8 +2268,7 @@ function actualizarRepe(dt) {
   sesion.participantes.forEach((p, k) => {
     const c = r.proxies[k], m = modelos[k];
     if (!m) return;
-    m.raiz.position.set(c.x, c.y, c.z);
-    m.raiz.rotation.set(0, -c.psi, 0);
+    colocarModelo(m, c, 0);
     m.actualizar(c, dtR);
   });
   const c = r.proxies[r.coche], m = modelos[r.coche];
