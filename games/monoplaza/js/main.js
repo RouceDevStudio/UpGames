@@ -11,7 +11,10 @@ import { REGLAJE_DEF, COMPUESTOS, COCHE, EQUIPOS, MEJORAS_INFO, compuestoParaAgu
 import { CLIMAS } from './clima.js';
 import * as CAMP from './campeonato.js';
 import { Radio } from './radio.js';
-import { Grabadora, crearProxy, CamarasTV, CAMARAS_REPE, NOMBRES_REPE } from './repeticion.js';
+import { Grabadora, crearProxy, CamarasTV } from './repeticion.js';
+import { CamaraRepe, CAMARAS_REPE, NOMBRES_REPE } from './render/camaraRepe.js';
+import { Cine, FILTROS, NOMBRES_FILTRO } from './render/cine.js';
+import { GrabadorVideo, puedeGrabar, guardarArchivo } from './grabarVideo.js';
 import { Telemetria } from './telemetria.js';
 import { Lluvia } from './render/lluvia.js';
 import { Barreras } from './render/barreras.js';
@@ -405,8 +408,8 @@ function arrancarSesion(modo) {
   jugando = true; pausado = false;
   mensajesMostrados.clear();
   $('#semaforo').classList.toggle('visible', modo === 'carrera');
-  if (modo === 'contrarreloj') mensaje('VUELTA DE SALIDA', 'La vuelta cronometrada empieza en la línea de meta', 3);
-  if (modo === 'practica') mensaje('PRÁCTICA LIBRE', 'Sin límite de tiempo · prueba el reglaje', 3);
+  if (modo === 'contrarreloj') { mensaje('VUELTA DE SALIDA', 'La vuelta cronometrada empieza en la línea de meta', 3); radio.decir('Vuelta de salida. Calienta los neumáticos; el crono empieza en la línea de meta.', { clave: 'salidaCr', cada: 5 }); }
+  if (modo === 'practica') { mensaje('PRÁCTICA LIBRE', 'Sin límite de tiempo · prueba el reglaje', 3); radio.decir('Práctica libre. Sin prisa: prueba el reglaje y dime qué tal va el coche.', { clave: 'practica', cada: 5 }); }
   pantallaCompleta();
   if (ajustes.control === 'inclinacion' && esTactil) entrada.activarInclinacion().then(() => setTimeout(() => entrada.calibrar(), 400));
   pedirWakeLock();
@@ -610,6 +613,11 @@ function aplicarAjustesEnVivo() {
 $('#bContinuar').addEventListener('click', () => pausar(false));
 $('#bReiniciar').addEventListener('click', () => { if (qActual) salirAPistaQ(); else empezar(modoActual, carreraCamp ? { pilotos: sesion.participantes.map(p => ({ id: p.idPiloto, nombre: p.nombre, ie: p.indiceEquipo, ip: p.numeroPiloto, hab: p.ia?.habilidad ?? 1, jugador: p.jugador })), vueltas: sesion.vueltasTotales, clima: sesion.clima.modo, campeonato: carreraCamp } : {}); });
 $('#bSalir').addEventListener('click', salirAlMenu);
+$('#bProbarVoz').addEventListener('click', () => {
+  sonido.iniciar(); radio.voz = true;
+  $('#estadoVoz').textContent = radio.disponible ? (radio.nativa ? 'Voz del sistema Android' : 'Voz del navegador') : 'Este dispositivo no tiene voz: solo subtítulos';
+  radio.decir('Radio comprobada. Te escucho alto y claro, ¿qué tal el coche?', { prioridad: true });
+});
 $('#bCalibrar').addEventListener('click', () => { entrada.calibrar(); mensaje('CENTRADO', '', 1); });
 $('#bResMenu').addEventListener('click', salirAlMenu);
 $('#bResOtra').addEventListener('click', () => { if (carreraCamp) { carreraCamp = null; volverMenuSinSesion(); abrirCampeonato(); } else empezar(modoActual === 'red' ? 'carrera' : modoActual); });
@@ -856,7 +864,7 @@ function procesarEventos() {
       if (e.p.jugador) radio.decir('¡Vuelta rápida! Muy bien.', { clave: 'vrJ', cada: 30 });
     }
     else if (e.tipo === 'contacto' && e.jugador) { sonido.evento('contacto', e.fuerza); entrada.vibrar(60, 0.8); }
-    else if (e.tipo === 'limites' && e.jugador) mensaje('LÍMITES DE PISTA', 'Vuelta anulada', 1.8);
+    else if (e.tipo === 'limites' && e.jugador) { mensaje('LÍMITES DE PISTA', 'Vuelta anulada', 1.8); radio.decir(['Te has pasado de los límites, vuelta anulada.', 'Cuatro ruedas fuera. Esa vuelta no cuenta.', 'Ojo con los límites de pista.'][Math.floor(Math.random() * 3)], { clave: 'limites', cada: 12 }); }
     else if (e.tipo === 'sector') {
       const el = $('#hS' + (e.k + 1)); el.className = e.color;
       if (e.color === 'morado') radio.decir(`Sector ${e.k + 1} morado. ¡Vas volando!`, { clave: 'morado', cada: 40 });
@@ -864,7 +872,7 @@ function procesarEventos() {
     else if (e.tipo === 'vuelta' && e.p.jugador) {
       sonido.evento('vuelta');
       const txt = e.valida ? fmt(e.t) : fmt(e.t) + ' (anulada)';
-      if (e.mejora) mensaje(sesion.modo === 'carrera' ? 'MEJOR VUELTA PERSONAL' : 'NUEVO MEJOR TIEMPO', txt, 2.4);
+      if (e.mejora) { mensaje(sesion.modo === 'carrera' ? 'MEJOR VUELTA PERSONAL' : 'NUEVO MEJOR TIEMPO', txt, 2.4); if (sesion.modo !== 'carrera') radio.decir(`${fmt(e.t)}. ¡Mejor vuelta! Sigue así.`, { clave: 'mejorV', cada: 8 }); }
       else mensaje('VUELTA', txt, 1.8);
       const clave = 'crono:' + circuito.id;
       if (sesion.modo === 'contrarreloj' && !qActual && e.valida && (!records[clave] || e.t < records[clave])) {
@@ -894,6 +902,7 @@ function procesarEventos() {
     }
     else if (e.tipo === 'meta' && e.p.jugador) {
       mensaje('🏁 BANDERA A CUADROS', `Terminas P${e.p.posicion}`, 3);
+      radio.decir(e.p.posicion <= 3 ? `¡Bandera a cuadros! P${e.p.posicion}, ¡al podio! Gran trabajo.` : `Bandera a cuadros. Terminas P${e.p.posicion}. Buen esfuerzo, vuelve a boxes.`, { prioridad: true, clave: 'metaJ', cada: 30 });
       if (enRed) multi.meta();
       else setTimeout(() => { if (jugando && sesion.modo === 'carrera') mostrarResultados(); }, 3500);
     }
@@ -1025,6 +1034,8 @@ function bucle(ahora) {
   // entrada
   entrada.actualizar(dt);
   const evs = entrada.tomarEventos();
+  // en la repetición el teclado y los toques los gestiona su propia interfaz
+  if (repe) { actualizarRepe(dt); return; }
   const j = sesion.jugador.coche;
   if (jugando) {
     for (const e of evs) {
@@ -1037,7 +1048,7 @@ function bucle(ahora) {
       else if (e === 'recolocar' && enRed) mensaje('SIN REINICIOS EN LÍNEA', '', 1);
       else if (e === 'recolocar') {
         if (j.abandono && sesion.modo !== 'carrera') continue;
-        if (j.velocidad < 8 || j.fueraPista) { j.recolocar(); sesion.jugador.valida = false; mensaje('DE VUELTA A LA PISTA', 'Vuelta anulada', 1.2); }
+        if (j.velocidad < 8 || j.fueraPista) { j.recolocar(); sesion.jugador.valida = false; mensaje('DE VUELTA A LA PISTA', 'Vuelta anulada', 1.2); radio.decir('De vuelta en pista. Esa vuelta no cuenta, céntrate.', { clave: 'recol', cada: 20 }); }
       }
       else if (e === 'box') alternarPanelBox();
     }
@@ -1056,7 +1067,6 @@ function bucle(ahora) {
     else if (!sesion._piloto) import('./ai.js').then(({ PilotoIA }) => { if (sesion && !sesion._piloto) { sesion._piloto = new PilotoIA(sesion.jugador.coche, circuito, 0.9, 0.3); sesion.jugador.coche.esIA = true; } });
     if (!enGaraje) sesion._piloto?.conducir(dt, sesion.coches);
   }
-  if (repe) { actualizarRepe(dt); return; }
   if (enRed && jugando && !qRed) actualizarRed(dt);
   if (qRed) actualizarQRed();
   else $('#hQRed').classList.remove('visible');
@@ -1126,7 +1136,7 @@ function bucle(ahora) {
     efectos.actualizar(dt, sesion.coches, camara.cam.position);
     escombros.actualizar(dt);
     for (const e of barreras.actualizar(dt, sesion.participantes)) {
-      if (e.tipo === 'bidon' && jugando) { sonido.evento('golpe', 4); if (e.jugador) { mensaje('¡BIDONES DE AGUA!', '', 1.2); entrada.vibrar(120, 0.8); } }
+      if (e.tipo === 'bidon' && jugando) { sonido.evento('golpe', 4); if (e.jugador) { mensaje('¡BIDONES DE AGUA!', '', 1.2); entrada.vibrar(120, 0.8); radio.decir('¡Te has llevado los bidones! Revisa que el alerón esté bien.', { clave: 'bidon', cada: 30 }); } }
     }
     gestorBoxes.actualizar(dt);
     comisarios.actualizar(dt, sesion);
@@ -1143,20 +1153,23 @@ function bucle(ahora) {
 
   // sonido
   if (jugando && !pausado) {
-    let cerca = null, dmin = Infinity;
+    // los tres rivales más cercanos suenan situados en 3D
+    const rivales = [];
     for (const p of sesion.participantes) {
-      if (p.jugador) continue;
-      const dx = p.coche.x - j.x, dz = p.coche.z - j.z;
-      const d = Math.hypot(dx, dz);
-      if (d < dmin) {
-        dmin = d;
-        // velocidad relativa de acercamiento (Doppler)
-        const vx = Math.cos(p.coche.psi) * p.coche.vx - Math.cos(j.psi) * j.vx, vz = Math.sin(p.coche.psi) * p.coche.vx - Math.sin(j.psi) * j.vx;
-        cerca = { coche: p.coche, dist: d, vRel: -(vx * dx + vz * dz) / Math.max(1, d) };
-      }
+      if (p.jugador || p.retirado) continue;
+      const d = Math.hypot(p.coche.x - j.x, p.coche.z - j.z);
+      if (d < 220) rivales.push({ c: p.coche, d });
     }
-    const sj = j.proj.s;
-    sonido.actualizar(dt, j, dmin < 150 ? cerca : null, camara.cam, { lluvia: sesion.clima.lluvia, agua: sesion.clima.agua, grada: sj < 600 || sj > circuito.largo - 300 ? 1 : 0 });
+    rivales.sort((a, b) => a.d - b.d);
+    const sj = j.proj.s, ij = j.proj.i;
+    // eco: entre muros cercanos (urbano) y, sobre todo, dentro del túnel
+    circuito._tunel ??= circuito._sDeSegmento?.('Túnel') || false;
+    const enTunel = circuito._tunel && sj > circuito._tunel.s0 && sj < circuito._tunel.s1;
+    sonido.actualizar(dt, j, rivales.slice(0, 3).map(r => r.c), camara.cam, {
+      lluvia: sesion.clima.lluvia, agua: sesion.clima.agua, grada: sj < 600 || sj > circuito.largo - 300 ? 1 : 0,
+      reflejo: enTunel ? 1 : Math.max(0, Math.min(0.6, 1 - (circuito.muro[0][ij] + circuito.muro[1][ij]) / 30)),
+      aBordo: ['cabina', 'cara', 'tcam'].includes(camara.modo),
+    });
     // vibración en bordillos
     if (j.enBordillo && j.velocidad > 15 && Math.random() < dt * 12) entrada.vibrar(12, 0.3);
     actualizarHud(dt);
@@ -1186,20 +1199,20 @@ const NOMBRE_RUEDA = ['delantera izquierda', 'delantera derecha', 'trasera izqui
 function avisoDano(e) {
   const [tipo, det] = e.split(':');
   entrada.vibrar(140, 1);
-  if (tipo === 'rueda') { mensaje('¡RUEDA ARRANCADA!', NOMBRE_RUEDA[+det], 3); return; }
-  if (det === 'aleronDel') mensaje('ALERÓN DELANTERO ROTO', 'Entra a boxes a cambiar el morro', 2.5);
-  else if (det === 'aleronDelTocado') mensaje('ALERÓN DELANTERO TOCADO', 'Menos carga delante', 1.8);
-  else if (det === 'aleronTras') mensaje('ALERÓN TRASERO DAÑADO', 'El coche pierde estabilidad', 2.2);
+  if (tipo === 'rueda') { mensaje('¡RUEDA ARRANCADA!', NOMBRE_RUEDA[+det], 3); radio.decir(`¡Hemos perdido la rueda ${NOMBRE_RUEDA[+det]}! Para el coche en un sitio seguro.`, { prioridad: true, clave: 'ruedaA', cada: 10 }); return; }
+  if (det === 'aleronDel') { mensaje('ALERÓN DELANTERO ROTO', 'Entra a boxes a cambiar el morro', 2.5); radio.decir('Alerón delantero roto. Box esta vuelta, tenemos el morro preparado.', { prioridad: true, clave: 'alaD', cada: 30 }); }
+  else if (det === 'aleronDelTocado') { mensaje('ALERÓN DELANTERO TOCADO', 'Menos carga delante', 1.8); radio.decir('Vemos daño en el alerón delantero. Tendrás algo de subviraje.', { clave: 'alaDT', cada: 40 }); }
+  else if (det === 'aleronTras') { mensaje('ALERÓN TRASERO DAÑADO', 'El coche pierde estabilidad', 2.2); radio.decir('Alerón trasero dañado. Cuidado en las frenadas, la trasera estará nerviosa.', { clave: 'alaT', cada: 40 }); }
   else if (det === 'fondo') { mensaje('FONDO DAÑADO', 'Menos carga aerodinámica', 2.2); radio.decir('Has roto el fondo. El coche tiene menos carga, frena antes.', { clave: 'fondo', cada: 60 }); }
   else if (det === 'motor') { mensaje('MOTOR TOCADO', 'Pierdes potencia', 2.2); radio.decir('El golpe ha tocado la caja de cambios y el motor. Perdemos potencia.', { clave: 'motorD', cada: 60 }); }
-  else if (det.startsWith('pinchazo')) mensaje('¡PINCHAZO!', `Rueda ${NOMBRE_RUEDA[+det.slice(8)]} · entra a boxes`, 2.8);
-  else if (det.startsWith('susp')) mensaje('SUSPENSIÓN DAÑADA', `Rueda ${NOMBRE_RUEDA[+det.slice(4)]} · el coche tira hacia un lado`, 2.4);
+  else if (det.startsWith('pinchazo')) { mensaje('¡PINCHAZO!', `Rueda ${NOMBRE_RUEDA[+det.slice(8)]} · entra a boxes`, 2.8); radio.decir(`¡Pinchazo en la ${NOMBRE_RUEDA[+det.slice(8)]}! Box, box. Tráelo despacio.`, { prioridad: true, clave: 'pinch', cada: 15 }); }
+  else if (det.startsWith('susp')) { mensaje('SUSPENSIÓN DAÑADA', `Rueda ${NOMBRE_RUEDA[+det.slice(4)]} · el coche tira hacia un lado`, 2.4); radio.decir('La suspensión está tocada, el coche tirará hacia un lado. Compensa con el volante.', { clave: 'susp', cada: 40 }); }
 }
 
 function alternarPanelBox() {
   const p = sesion.jugador;
   if (p.box) { mensaje('YA ESTÁS EN BOXES', '', 1); return; }
-  if (p.solicitudBox) { sesion.cancelarBox(p); mensaje('BOXES CANCELADO', '', 1); $('#panelBox').classList.remove('visible'); return; }
+  if (p.solicitudBox) { sesion.cancelarBox(p); mensaje('BOXES CANCELADO', '', 1); radio.decir('Entendido, nos quedamos fuera. Cancelamos la parada.', { clave: 'boxNo', cada: 5 }); $('#panelBox').classList.remove('visible'); return; }
   $('#panelBox').classList.toggle('visible');
 }
 document.querySelectorAll('#panelBox [data-box]').forEach(b => b.addEventListener('click', () => {
@@ -1208,6 +1221,7 @@ document.querySelectorAll('#panelBox [data-box]').forEach(b => b.addEventListene
   if (v === 'cancelar') { sesion.cancelarBox(sesion.jugador); return; }
   sesion.pedirBox(sesion.jugador, v);
   mensaje('BOX, BOX', `Entra al final de esta vuelta · neumáticos ${COMPUESTOS[v].nombre.toLowerCase()}`, 2.4);
+  radio.decir(`Recibido. Box esta vuelta, preparamos ${COMPUESTOS[v].nombre.toLowerCase()}s.`, { clave: 'boxSi', cada: 5 });
 }));
 $('#bBox').addEventListener('click', () => entrada.eventos.push('box'));
 $('#bBox').addEventListener('touchstart', (e) => { e.preventDefault(); entrada.eventos.push('box'); }, { passive: false });
@@ -1591,6 +1605,7 @@ multi.on('clasif', async (d) => {
   sesion = new Sesion(circuito, opc);
   arrancarSesion('contrarreloj');
   mensaje('CLASIFICACIÓN', `${Math.round(d.seg / 60)} minutos · marca tu mejor vuelta`, 3);
+  radio.decir(`Clasificación: ${Math.round(d.seg / 60)} minutos. Busca una vuelta limpia.`, { clave: 'qRed', cada: 10 });
   radio.decir(`Clasificación de ${Math.round(d.seg / 60)} minutos. Tu mejor vuelta decide la parrilla de la carrera.`, { prioridad: true });
 });
 multi.on('tablaQ', (t) => { if (qRed) qRed.tabla = t; });
@@ -1683,25 +1698,73 @@ function nivelDetalle() {
 
 // --- Repetición y modo foto ------------------------------------------------------------
 let fotoPendiente = false;
+let camRepe = null, cine = null, grabVideo = null;
+const VELS_REPE = [0.1, 0.25, 0.5, 1, 2, 4];
 function abrirRepe(desde) {
-  if (!grabadora || grabadora.cuantos < 10) { mensaje('SIN REPETICIÓN', 'Aún no hay nada grabado', 1.5); if (desde === 'pausa') return; return; }
+  if (!grabadora || grabadora.cuantos < 10) { mensaje('SIN REPETICIÓN', 'Aún no hay nada grabado', 1.5); return; }
   const yo = sesion.participantes.indexOf(sesion.jugador);
-  repe = { desde, u: Math.max(0, 1 - 40 / grabadora.duracion), play: true, vel: 1, cam: 'tv', coche: yo, proxies: sesion.participantes.map(p => crearProxy(p.coche)), camPrev: camara.modo };
+  capaCamara?.actualizar(0, {});
+  repe = { desde, u: Math.max(0, 1 - 40 / grabadora.duracion), play: true, vel: 1, cam: 'director', coche: yo, proxies: sesion.participantes.map(p => crearProxy(p.coche)), camPrev: camara.modo, tQuieto: 0, sonido: true };
+  instalarControlesRepe();
+  camRepe = new CamaraRepe(circuito, camarasTV, camara);
+  camRepe.poner('director', camara.cam);
   for (const m of modelos) { m.alDesprender = null; m.reponerPiezas?.(); }
   ocultarTodo();
   $('#hud').classList.remove('visible'); $('#tactil').classList.remove('visible');
   $('#repe').classList.add('visible');
+  $('#repe').classList.remove('oculta', 'limpia');
+  document.body.classList.add('en-repe');
   radio.callar();
-  sonido.silenciar(true);
-  pintarRepe();
+  sonido.modoRepe?.(true);
+  pintarPanelCam(); pintarCine(); pintarRepe();
+  $('#repeAyuda').innerHTML = esTactil ? '' : 'Espacio: pausa · ←/→: ±5 s · ,/. : fotograma · C: cámara · V: coche<br>Cámara libre: arrastra para mirar, WASD/QE para moverte (Mayús rápido), rueda para avanzar<br>H: ocultar controles · P: foto · R: grabar vídeo';
+  despertarRepe();
 }
 function pintarRepe() {
+  if (!repe) return;
   $('#repePlay').textContent = repe.play ? '⏸' : '▶';
   $('#repeVel').textContent = repe.vel + '×';
-  $('#repeCam').textContent = NOMBRES_REPE[repe.cam] + ' · ' + sesion.participantes[repe.coche].nombre;
+  const plano = repe.cam === 'director' && camRepe?.planoActual ? ` (${NOMBRES_REPE[camRepe.planoActual] || ''})` : '';
+  $('#repeCam').textContent = NOMBRES_REPE[repe.cam] + plano;
+  $('#repeCoche').textContent = sesion.participantes[repe.coche].nombre.replace('@', '');
+  document.querySelectorAll('#repePanelCam button').forEach(b => b.classList.toggle('on', b.dataset.cam === repe.cam));
+}
+function pintarPanelCam() {
+  const el = $('#repePanelCam');
+  el.innerHTML = CAMARAS_REPE.map(c => `<button class="chip" data-cam="${c}">${NOMBRES_REPE[c]}</button>`).join('');
+  el.querySelectorAll('button').forEach(b => b.onclick = () => ponerCamRepe(b.dataset.cam));
+}
+function pintarCine() {
+  cine ??= new Cine(renderer);
+  const o = cine.opc;
+  $('#cineFiltros').innerHTML = FILTROS.map(f => `<button class="chip ${o.filtro === f ? 'on' : ''}" data-f="${f}">${NOMBRES_FILTRO[f]}</button>`).join('');
+  $('#cineFiltros').querySelectorAll('button').forEach(b => b.onclick = () => { o.filtro = b.dataset.f; pintarCine(); });
+  $('#cineBarras').classList.toggle('on', o.barras);
+  $('#cineSacudida').classList.toggle('on', !!camRepe?.sacudida);
+  $('#cineSonido').classList.toggle('on', !!repe?.sonido);
+  $('#cineApertura').value = o.apertura * 100; $('#cineGrano').value = o.grano * 500; $('#cineVineta').value = o.vineta * 100;
+  $('#cineZoom').value = camRepe?.fovExtra || 0; $('#cineAlabeo').value = Math.round((camRepe?.alabeo || 0) * 180 / Math.PI);
+}
+function ponerCamRepe(c) {
+  repe.cam = c;
+  camRepe.poner(c, camara.cam);
+  pintarRepe();
+}
+// los controles se apagan solos a los 3 s sin tocar nada
+function despertarRepe() {
+  if (!repe) return;
+  repe.tQuieto = 0;
+  $('#repe').classList.remove('oculta');
+}
+function cineActivo() {
+  const o = cine?.opc;
+  return o && (o.apertura > 0 || o.filtro !== 'natural' || o.barras || o.grano > 0 || o.vineta > 0);
 }
 function actualizarRepe(dt) {
   const r = repe, g = grabadora;
+  r.tQuieto += dt;
+  const panelAbierto = document.querySelector('.repe-panel.visible');
+  if (r.tQuieto > 3 && !panelAbierto && !$('#repe').classList.contains('oculta')) $('#repe').classList.add('oculta');
   if (r.play && !fotoPendiente) {
     r.u += dt * r.vel / Math.max(1, g.duracion);
     if (r.u >= 1) { r.u = 1; r.play = false; pintarRepe(); }
@@ -1709,47 +1772,162 @@ function actualizarRepe(dt) {
   g.leer(r.u, r.proxies);
   $('#repeBarra').value = Math.round(r.u * 1000);
   $('#repeT').textContent = fmt(g.tiempoEn(r.u));
+  const dtR = r.play ? dt * r.vel : 0;
   sesion.participantes.forEach((p, k) => {
     const c = r.proxies[k], m = modelos[k];
     if (!m) return;
     m.raiz.position.set(c.x, c.y, c.z);
     m.raiz.rotation.set(0, -c.psi, 0);
-    m.actualizar(c, dt);
+    m.actualizar(c, dtR);
   });
   const c = r.proxies[r.coche], m = modelos[r.coche];
-  if (['persecucion', 'cabina', 'tcam'].includes(r.cam)) { camara.modo = r.cam; camara.actualizar(dt, c, m); }
-  else camarasTV.actualizar(camara.cam, c, r.cam, dt);
+  const planoAntes = camRepe.planoActual;
+  camRepe.actualizar(camara.cam, c, m, r.cam, dt);
+  if (camRepe.planoActual !== planoAntes) pintarRepe();
   for (const f of escenario.actualizables) f(dt);
+  efectos.actualizar(dtR, [], camara.cam.position);
   lluviaFx.actualizar(dt, camara.cam.position, sesion.clima.lluvia, sesion.clima.agua, renderer);
   escenario.luzSol.target.position.set(c.x, c.y, c.z);
   escenario.luzSol.position.copy(escenario.sol).multiplyScalar(250).add(escenario.luzSol.target.position);
   nivelDetalle();
-  if (composer) composer.render(); else renderer.render(scene, camara.cam);
+  if (r.sonido) sonido.actualizarRepe?.(dt, r.proxies, r.coche, camara.cam, r.play ? r.vel : 0, ['cabina', 'cara', 'tcam', 'morro', 'rueda', 'trasera'].includes(camRepe.planoActual));
+  else sonido.actualizarRepe?.(dt, [], 0, camara.cam, 0, false);
+  if (cineActivo()) cine.render(scene, camara.cam, camara.cam.position.distanceTo(m.raiz.position), dt);
+  else if (composer) composer.render(); else renderer.render(scene, camara.cam);
   if (fotoPendiente) guardarFoto();
+  if (grabVideo?.grabando) $('#repeGrab').textContent = '● ' + fmt(grabVideo.segundos).replace(/\.\d+$/, '');
 }
 function cerrarRepe() {
+  if (grabVideo?.grabando) alternarGrabacion();
   const desde = repe.desde;
   camara.modo = repe.camPrev; camara.iniciada = false;
-  repe = null;
+  camara.cam.up.set(0, 1, 0);
+  repe = null; camRepe = null;
   $('#repe').classList.remove('visible');
-  document.body.classList.remove('foto');
+  document.querySelectorAll('.repe-panel').forEach(p => p.classList.remove('visible'));
+  document.body.classList.remove('foto', 'en-repe');
+  sonido.modoRepe?.(false);
   crearModelos();
   if (desde === 'resultados') mostrar('resultados');
   else { mostrar('pausa'); $('#hud').classList.add('visible'); if (esTactil) $('#tactil').classList.add('visible'); }
 }
-$('#repePlay').addEventListener('click', () => { if (repe.u >= 1) repe.u = 0; repe.play = !repe.play; pintarRepe(); });
-$('#repeVel').addEventListener('click', () => { const v = [0.25, 0.5, 1, 2, 4]; repe.vel = v[(v.indexOf(repe.vel) + 1) % v.length]; pintarRepe(); });
-$('#repeCamBt').addEventListener('click', () => { repe.cam = CAMARAS_REPE[(CAMARAS_REPE.indexOf(repe.cam) + 1) % CAMARAS_REPE.length]; camara.iniciada = false; pintarRepe(); });
-$('#repeCoche').addEventListener('click', () => {
-  // siguiente coche por orden de carrera
+function saltarRepe(seg) { repe.u = THREE.MathUtils.clamp(repe.u + seg / Math.max(1, grabadora.duracion), 0, 1); for (const m of modelos) m.reponerPiezas?.(); }
+function alternarPanel(id) {
+  const p = $(id), abrir = !p.classList.contains('visible');
+  document.querySelectorAll('.repe-panel').forEach(x => x.classList.remove('visible'));
+  p.classList.toggle('visible', abrir);
+}
+function cocheRepe(paso) {
   const orden = sesion.orden || sesion.participantes;
   const i = orden.indexOf(sesion.participantes[repe.coche]);
-  repe.coche = sesion.participantes.indexOf(orden[(i + 1) % orden.length]);
-  camara.iniciada = false; pintarRepe();
-});
+  repe.coche = sesion.participantes.indexOf(orden[(i + paso + orden.length) % orden.length]);
+  camRepe.poner(repe.cam === 'libre' ? 'orbita' : repe.cam, camara.cam);
+  if (repe.cam === 'libre') repe.cam = 'orbita';
+  pintarRepe();
+}
+async function alternarGrabacion() {
+  const bt = $('#repeGrabar');
+  if (grabVideo?.grabando) {
+    bt.classList.remove('on'); $('#repeGrab').classList.remove('on');
+    mensajeRepe('Guardando vídeo…');
+    try { const n = await grabVideo.parar(); mensajeRepe('Vídeo guardado: ' + n); }
+    catch (e) { mensajeRepe('No se pudo guardar el vídeo'); console.warn(e); }
+    return;
+  }
+  if (!puedeGrabar(renderer.domElement)) { mensajeRepe('Este dispositivo no permite grabar vídeo'); return; }
+  grabVideo ??= new GrabadorVideo(renderer.domElement, sonido.flujoGrabacion?.());
+  try {
+    grabVideo.empezar(30);
+    bt.classList.add('on'); $('#repeGrab').classList.add('on');
+    if (!repe.play) { repe.play = true; pintarRepe(); }
+    $('#repe').classList.add('oculta');
+  } catch (e) { mensajeRepe('No se pudo empezar a grabar'); console.warn(e); }
+}
+function mensajeRepe(txt) {
+  const el = $('#repeCam'); el.textContent = txt;
+  clearTimeout(mensajeRepe.t); mensajeRepe.t = setTimeout(pintarRepe, 2500);
+}
+$('#repePlay').addEventListener('click', () => { if (repe.u >= 1) repe.u = 0; repe.play = !repe.play; pintarRepe(); });
+$('#repeVel').addEventListener('click', () => { repe.vel = VELS_REPE[(VELS_REPE.indexOf(repe.vel) + 1) % VELS_REPE.length]; pintarRepe(); });
+$('#repeAtras').addEventListener('click', () => saltarRepe(-5));
+$('#repeAdelante').addEventListener('click', () => saltarRepe(5));
+$('#repeCuadro').addEventListener('click', () => { repe.play = false; saltarRepe(1 / 30); pintarRepe(); });
+$('#repeCamBt').addEventListener('click', () => alternarPanel('#repePanelCam'));
+$('#repeCineBt').addEventListener('click', () => { pintarCine(); alternarPanel('#repePanelCine'); });
+$('#repeCoche').addEventListener('click', () => cocheRepe(1));
+$('#repeCocheSig').addEventListener('click', () => cocheRepe(1));
+$('#repeCochePrev').addEventListener('click', () => cocheRepe(-1));
 $('#repeBarra').addEventListener('input', (e) => { repe.u = +e.target.value / 1000; for (const m of modelos) m.reponerPiezas?.(); });
 $('#repeSalir').addEventListener('click', cerrarRepe);
 $('#repeFoto').addEventListener('click', () => { document.body.classList.add('foto'); fotoPendiente = true; });
+$('#repeGrabar').addEventListener('click', alternarGrabacion);
+$('#repeOcultar').addEventListener('click', () => { $('#repe').classList.add('limpia'); document.querySelectorAll('.repe-panel').forEach(p => p.classList.remove('visible')); });
+$('#repe').addEventListener('pointerdown', despertarRepe);
+// ajustes de cine
+$('#cineApertura').addEventListener('input', (e) => { cine.opc.apertura = +e.target.value / 100; });
+$('#cineGrano').addEventListener('input', (e) => { cine.opc.grano = +e.target.value / 500; });
+$('#cineVineta').addEventListener('input', (e) => { cine.opc.vineta = +e.target.value / 100; });
+$('#cineZoom').addEventListener('input', (e) => { camRepe.fovExtra = +e.target.value; });
+$('#cineAlabeo').addEventListener('input', (e) => { camRepe.alabeo = +e.target.value * Math.PI / 180; });
+$('#cineBarras').addEventListener('click', () => { cine.opc.barras = !cine.opc.barras; pintarCine(); });
+$('#cineSacudida').addEventListener('click', () => { camRepe.sacudida = !camRepe.sacudida; pintarCine(); });
+$('#cineSonido').addEventListener('click', () => { repe.sonido = !repe.sonido; pintarCine(); });
+$('#cineReset').addEventListener('click', () => { Object.assign(cine.opc, { apertura: 0, filtro: 'natural', barras: false, grano: 0, vineta: 0 }); camRepe.fovExtra = 0; camRepe.alabeo = 0; camRepe.sacudida = 1; pintarCine(); });
+// arrastrar sobre la imagen: mirar con la cámara libre u orbitar; tocar sin arrastrar enseña/oculta los controles
+// (se instala al abrir la primera repetición, cuando ya existe el renderizador)
+function instalarControlesRepe() {
+  if (instalarControlesRepe.hecho) return;
+  instalarControlesRepe.hecho = true;
+  const lienzo = renderer.domElement, toques = new Map();
+  let movido = 0, distPrev = 0;
+  lienzo.addEventListener('pointerdown', (e) => { if (!repe) return; toques.set(e.pointerId, { x: e.clientX, y: e.clientY }); movido = 0; lienzo.setPointerCapture?.(e.pointerId); });
+  lienzo.addEventListener('pointermove', (e) => {
+    if (!repe || !toques.has(e.pointerId)) return;
+    const t = toques.get(e.pointerId), dx = e.clientX - t.x, dy = e.clientY - t.y;
+    t.x = e.clientX; t.y = e.clientY; movido += Math.abs(dx) + Math.abs(dy);
+    if (toques.size === 2) {
+      const [a, b] = [...toques.values()], dist = Math.hypot(a.x - b.x, a.y - b.y);
+      if (distPrev) camRepe.acercar(repe.cam, (dist - distPrev) * 2);
+      distPrev = dist;
+      return;
+    }
+    let modo = repe.cam;
+    if (!['libre', 'orbita'].includes(modo) && movido > 12) { repe.cam = modo = 'orbita'; camRepe.poner('orbita', camara.cam); pintarRepe(); }
+    camRepe.arrastrar(modo, dx, dy);
+  });
+  const soltar = (e) => {
+    if (!repe || !toques.has(e.pointerId)) return;
+    toques.delete(e.pointerId); distPrev = 0;
+    if (movido < 6 && toques.size === 0) {
+      const el = $('#repe');
+      if (el.classList.contains('limpia')) el.classList.remove('limpia');
+      else if (el.classList.contains('oculta')) despertarRepe();
+      else { el.classList.add('oculta'); document.querySelectorAll('.repe-panel').forEach(p => p.classList.remove('visible')); }
+    }
+  };
+  lienzo.addEventListener('pointerup', soltar); lienzo.addEventListener('pointercancel', soltar);
+  lienzo.addEventListener('wheel', (e) => { if (!repe) return; e.preventDefault(); camRepe.acercar(repe.cam, -e.deltaY); }, { passive: false });
+  addEventListener('keydown', (e) => {
+    if (!repe || e.target.tagName === 'INPUT') return;
+    const k = e.key.toLowerCase();
+    camRepe.teclas.add(k === 'shift' ? 'shift' : k);
+    if (repe.cam === 'libre' && 'wasdqe'.includes(k) || k.startsWith('arrow') && repe.cam === 'libre') return;
+    if (k === ' ') { e.preventDefault(); $('#repePlay').click(); }
+    else if (k === 'arrowleft') saltarRepe(-5);
+    else if (k === 'arrowright') saltarRepe(5);
+    else if (k === '.') { repe.play = false; saltarRepe(1 / 30); pintarRepe(); }
+    else if (k === ',') { repe.play = false; saltarRepe(-1 / 30); pintarRepe(); }
+    else if (k === 'c') ponerCamRepe(CAMARAS_REPE[(CAMARAS_REPE.indexOf(repe.cam) + 1) % CAMARAS_REPE.length]);
+    else if (k === 'v') cocheRepe(1);
+    else if (k === 'h') { const el = $('#repe'); el.classList.toggle('limpia'); }
+    else if (k === 'p') $('#repeFoto').click();
+    else if (k === 'r') alternarGrabacion();
+    else if (k === 'escape') cerrarRepe();
+    if (!['shift'].includes(k)) despertarRepe();
+  });
+  addEventListener('keyup', (e) => { camRepe?.teclas.delete(e.key.toLowerCase()); });
+  addEventListener('blur', () => camRepe?.teclas.clear());
+}
 
 function guardarFoto() {
   fotoPendiente = false;
@@ -1763,11 +1941,7 @@ function guardarFoto() {
     x.font = `900 italic ${h}px system-ui, Arial`; x.textBaseline = 'bottom'; x.textAlign = 'right';
     x.fillStyle = 'rgba(0,0,0,.45)'; x.fillText('APEX GP · UPGAMES', cv.width - h * 0.6 + 2, cv.height - h * 0.5 + 2);
     x.fillStyle = '#fff'; x.fillText('APEX GP · UPGAMES', cv.width - h * 0.6, cv.height - h * 0.5);
-    cv.toBlob(b => {
-      const a = document.createElement('a'); a.href = URL.createObjectURL(b);
-      a.download = `apexgp-${circuito.id}-${Date.now()}.png`; document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    }, 'image/png');
+    cv.toBlob(b => { guardarArchivo(b, `apexgp-${circuito.id}-${Date.now()}.png`).catch(e => console.warn('foto', e)); }, 'image/png');
   } catch (e) { console.warn('foto', e); }
   const f = $('#flash'); f.classList.add('on'); setTimeout(() => f.classList.remove('on'), 60);
   setTimeout(() => document.body.classList.remove('foto'), 400);
@@ -1793,7 +1967,7 @@ async function subirTiempo(f) {
   if (!cuenta.conectado() || !fichaCrono || !f?.puntos?.length) return;
   try {
     const d = await cuenta.enviarTiempo({ ficha: fichaCrono, tiempo: f.tiempo, fantasma: fantasmaAServidor(f) });
-    if (d.mejorado?.semana) mensaje('TIEMPO EN EL RANKING', `P${d.posicionSemana} de la semana · ${fmt(d.tiempo)}`, 2.6);
+    if (d.mejorado?.semana) { mensaje('TIEMPO EN EL RANKING', `P${d.posicionSemana} de la semana · ${fmt(d.tiempo)}`, 2.6); radio.decir(`Tiempo registrado: P${d.posicionSemana} del ranking de la semana.`, { clave: 'rankS', cada: 20 }); }
   } catch (e) { console.warn('ranking', e.message); }
 }
 
@@ -1853,6 +2027,7 @@ function salirAPistaQ() {
   sesion.hora = q.cfg.hora || opcCarrera.hora || 'dia';
   arrancarSesion('contrarreloj');
   mensaje(NOMBRE_Q[q.clasif.tanda], 'Vuelta de salida · 2 vueltas lanzadas', 3);
+  radio.decir(`${NOMBRE_Q[q.clasif.tanda]}. Vuelta de salida y dos vueltas lanzadas. A por ello.`, { clave: 'q' + q.clasif.tanda, cada: 10 });
 }
 function finVueltaClasif(e) {
   const q = qActual;
@@ -2014,7 +2189,7 @@ $('#bRkFantasma').addEventListener('click', async () => {
 });
 
 // acceso para pruebas automáticas desde la consola
-window.apexDebug = { get sesion() { return sesion; }, get camara() { return camara; }, circuito: () => circuito, multi, get modelos() { return modelos; }, cargarCircuito, get qActual() { return qActual; }, get temporada() { return temporada; }, get repe() { return repe; }, terminarTandaQ, radio };
+window.apexDebug = { get sesion() { return sesion; }, get sonido() { return sonido; }, get camara() { return camara; }, circuito: () => circuito, multi, get modelos() { return modelos; }, cargarCircuito, get qActual() { return qActual; }, get temporada() { return temporada; }, get repe() { return repe; }, terminarTandaQ, radio };
 actualizarCuentaMenu();
 refrescarPerfil().then(actualizarCuentaMenu);
 // enlace estable al APK (servido por el servidor de UpGames); dentro de la app no hace falta

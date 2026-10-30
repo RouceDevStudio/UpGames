@@ -360,12 +360,37 @@ body:not(.tactil-on) .radio { bottom: calc(150px + var(--sa-b)); }
 #teleGrafico { width: 100%; height: auto; background: rgba(0,0,0,.35); border-radius: 10px; }
 
 /* Repetición */
-.repe { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: none; flex-direction: column; gap: 6px; padding: 8px calc(14px + var(--sa-r)) calc(10px + var(--sa-b)) calc(14px + var(--sa-l)); background: linear-gradient(0deg, rgba(0,0,0,.75), rgba(0,0,0,0)); }
-.repe.visible { display: flex; }
-.repe-sup { display: flex; gap: 14px; font-size: 13px; font-weight: 700; align-items: center; }
-.repe-rec { color: var(--rojo); letter-spacing: 2px; }
-#repeBarra { width: 100%; accent-color: var(--rojo); }
-.repe-bot { display: flex; gap: 6px; flex-wrap: wrap; }
+.repe { position: fixed; inset: 0; z-index: 30; display: none; pointer-events: none; font-size: 13px; }
+.repe.visible { display: block; }
+.repe > * { pointer-events: auto; transition: opacity .35s ease, transform .35s ease; }
+.repe.oculta > *:not(.repe-sup) { opacity: 0; pointer-events: none; transform: translateY(8px); }
+.repe.oculta .repe-sup { opacity: .35; }
+.repe.limpia > * { opacity: 0 !important; pointer-events: none !important; }
+.repe-sup { position: absolute; top: calc(8px + var(--sa-t, 0px)); left: calc(10px + var(--sa-l)); display: flex; gap: 10px; align-items: center; padding: 4px 10px; border-radius: 99px; background: rgba(0,0,0,.35); backdrop-filter: blur(4px); font-weight: 700; pointer-events: none; }
+.repe-rec { color: var(--rojo); letter-spacing: 2px; font-size: 11px; }
+.repe-grab { color: #fff; background: var(--rojo); border-radius: 99px; padding: 0 8px; display: none; }
+.repe-grab.on { display: inline; animation: latido 1s infinite; }
+@keyframes latido { 50% { opacity: .5; } }
+.repe-abajo { position: absolute; left: 50%; bottom: calc(8px + var(--sa-b)); transform: translateX(-50%); width: min(760px, calc(100% - 20px - var(--sa-l) - var(--sa-r))); padding: 6px 10px 8px; border-radius: 14px; background: rgba(6,8,14,.55); backdrop-filter: blur(6px); }
+.repe.oculta .repe-abajo { transform: translate(-50%, 8px); }
+#repeBarra { width: 100%; height: 14px; accent-color: var(--rojo); margin: 0 0 4px; }
+.repe-bot { display: flex; gap: 2px; align-items: center; justify-content: center; flex-wrap: wrap; }
+.repe-bot .ic { background: none; border: 0; color: #fff; font-size: 18px; min-width: 34px; height: 34px; border-radius: 8px; cursor: pointer; opacity: .85; }
+.repe-bot .ic:hover, .repe-bot .ic.on { background: rgba(255,255,255,.12); opacity: 1; }
+.repe-bot .ic.txt { font-size: 13px; font-weight: 800; padding: 0 6px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.repe-bot .ic.rec.on { color: var(--rojo); animation: latido 1s infinite; }
+.repe-bot .sep { width: 1px; height: 20px; background: rgba(255,255,255,.18); margin: 0 4px; }
+.repe-panel { position: absolute; right: calc(10px + var(--sa-r)); bottom: calc(96px + var(--sa-b)); max-width: min(420px, calc(100% - 20px)); max-height: 60vh; overflow: auto; display: none; padding: 10px; border-radius: 12px; background: rgba(6,8,14,.78); backdrop-filter: blur(6px); }
+.repe-panel.visible { display: block; }
+#repePanelCam.visible { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 4px; }
+#repePanelCam button { font-size: 12px; text-align: left; }
+.repe-panel label { display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 8px; margin: 4px 0; font-size: 12px; }
+.repe-panel input[type=range] { accent-color: var(--rojo); width: 100%; }
+.repe-fila { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.chip { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); color: #fff; border-radius: 99px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+.chip.on { background: var(--rojo); border-color: var(--rojo); }
+.repe-ayuda { position: absolute; top: calc(8px + var(--sa-t, 0px)); right: calc(10px + var(--sa-r)); max-width: 300px; font-size: 11px; line-height: 1.4; opacity: .7; text-align: right; pointer-events: none; }
+@media (max-width: 700px) { .repe-bot .ic { min-width: 30px; height: 30px; font-size: 16px; } .repe-ayuda { display: none; } .repe-panel { bottom: calc(110px + var(--sa-b)); } }
 body.foto .repe { display: none !important; }
 .flash { position: fixed; inset: 0; z-index: 60; background: #fff; opacity: 0; pointer-events: none; transition: opacity .35s; }
 .flash.on { opacity: .85; transition: none; }

@@ -13,7 +13,10 @@ import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.BridgeActivity;
 
 // Pantalla completa inmersiva, pantalla siempre encendida y audio sin esperar un toque.
+// Además, voz nativa para la radio (window.ApexVoz) y guardado de fotos y vídeos (window.ApexArchivo).
 public class MainActivity extends BridgeActivity {
+    private VozNativa voz;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -27,7 +30,16 @@ public class MainActivity extends BridgeActivity {
         ajustes.setMediaPlaybackRequiresUserGesture(false);
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
         web.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        voz = new VozNativa(this, web);
+        web.addJavascriptInterface(voz, "ApexVoz");
+        web.addJavascriptInterface(new ArchivoNativo(this), "ApexArchivo");
         modoInmersivo();
+    }
+
+    @Override
+    public void onDestroy() {
+        if (voz != null) voz.cerrar();
+        super.onDestroy();
     }
 
     @Override

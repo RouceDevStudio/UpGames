@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 
 export const HZ = 15;
-const CAMPOS = 16;
+const CAMPOS = 20;
 const MAX_SEG = 300;
 
 export class Grabadora {
@@ -39,6 +39,8 @@ export class Grabadora {
       d[o + 7] = c.cabeceo || 0; d[o + 8] = c.balanceo || 0; d[o + 9] = c.rpm; d[o + 10] = c.marcha;
       d[o + 11] = c.velocidad; d[o + 12] = c.drsAbierto ? 1 : 0; d[o + 13] = c.danoAleron || 0;
       d[o + 14] = dn.aleronTras || 0; d[o + 15] = bits;
+      // para el sonido de la repetición
+      d[o + 16] = c.mandos?.acelerador || 0; d[o + 17] = c.mandos?.freno || 0; d[o + 18] = c.fondoToca || 0; d[o + 19] = c.impacto || 0;
     }
   }
 
@@ -67,6 +69,7 @@ export class Grabadora {
       const bits = d[oa + 15];
       p.dano.aleronTras = d[oa + 14];
       for (let r = 0; r < 4; r++) { p.dano.pinchazo[r] = !!(bits & (1 << r)); p.dano.suelta[r] = !!(bits & (16 << r)); }
+      p.mandos.acelerador = L(16); p.mandos.freno = L(17); p.fondoToca = d[oa + 18]; p.impacto = Math.max(d[oa + 19], d[ob + 19]);
     }
   }
 
@@ -82,15 +85,13 @@ export function crearProxy(c) {
   return {
     x: c.x, y: c.y, z: c.z, psi: c.psi, anguloVolante: 0, cabeceo: 0, balanceo: 0, rpm: 6000, marcha: 1, velocidad: 0,
     drsAbierto: false, danoAleron: 0, ersPotenciaActual: 0, ayF: 0, axF: 0, vibracion: 0,
-    alturaDel: c.alturaDel ?? 0.032, alturaTras: c.alturaTras ?? 0.075, mandos: { acelerador: 0, ersModo: 1 },
+    alturaDel: c.alturaDel ?? 0.032, alturaTras: c.alturaTras ?? 0.075, mandos: { acelerador: 0, freno: 0, ersModo: 1 }, fondoToca: 0, impacto: 0,
     dano: { pinchazo: [false, false, false, false], suelta: [false, false, false, false], susp: [0, 0, 0, 0], aleronTras: 0 },
     ruedas: c.ruedas.map(w => ({ angulo: 0, giro: 0, izquierda: w.izquierda, neum: w.neum })),
     reglaje: c.reglaje, proj: { i: 0 }, combustible: c.combustible, ers: c.ers, drsPermitido: false, limitador: false, limitadorPit: false,
   };
 }
 
-export const CAMARAS_REPE = ['tv', 'helicoptero', 'persecucion', 'cabina', 'tcam'];
-export const NOMBRES_REPE = { tv: 'Cámaras de TV', helicoptero: 'Helicóptero', persecucion: 'Persecución', cabina: 'Cabina', tcam: 'T-Cam' };
 
 /** Cámaras fijas a pie de pista: la más cercana por delante del coche lo sigue con zoom. */
 export class CamarasTV {
