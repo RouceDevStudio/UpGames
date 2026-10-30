@@ -11,8 +11,9 @@ Juego de carreras de monoplazas en 3D que corre en el navegador (WebGL con Three
 - **Multijugador**: duelos 1 vs 1 o salas abiertas de hasta 22 pilotos (Socket.IO, espacio `/apexgp` del backend). Salida sincronizada con el reloj del servidor, rivales interpolados y resultados validados en el servidor.
 - **Contrarreloj** con fantasma de tu mejor vuelta, delta en vivo y sectores de colores (morado, verde, amarillo).
 - **Práctica libre** para probar el reglaje.
-- **Campeonato**: tres Grandes Premios (Valle Andino, Puerto Real y Autódromo Veloz), cada uno con clasificación Q1-Q2-Q3 y carrera; puntos de pilotos y constructores (25-18-15-12-10-8-6-4-2-1, +1 por vuelta rápida). Con cuenta de UpGames, el podio da **15/10/5 UpCoins no retirables** (campo `monedas`, nunca `saldo`), validados en el servidor con una ficha firmada, duración mínima y máximo 3 premios al día.
-- **Rankings**: contrarreloj global y semanal por circuito con fantasma descargable del récord (premios semanales 15/10/5 UC no retirables al podio) y ELO del multijugador con partida rápida por nivel y región.
+- **Campeonato**: tres Grandes Premios (Valle Andino, Puerto Real y Autódromo Veloz), cada uno con clasificación Q1-Q2-Q3 y carrera; puntos de pilotos y constructores (25-18-15-12-10-8-6-4-2-1, +1 por vuelta rápida). Con cuenta de UpGames, cada carrera suma puntos al **ranking mundial semanal** (validados en el servidor con una ficha firmada, duración mínima y máximo 6 carreras al día).
+- **Rankings**: campeonato mundial (puntos semanales y de siempre), contrarreloj global y semanal por circuito con fantasma descargable del récord, y ELO del multijugador con partida rápida por nivel y región.
+- **UpCoins como premio**: solo para el **top 5 del ranking mundial** de cada semana (campeonato y contrarreloj de cada circuito): 1º 15 UC, 2º 10 UC, 3º a 5º 5 UC. Son UpCoins de juego **no retirables** (campo `monedas`, nunca `saldo`), pagadas una sola vez por semana y puesto.
 
 ## Circuitos, clima y reglas
 

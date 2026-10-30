@@ -56,6 +56,7 @@ export const cuenta = {
   ranking: (circuito, periodo) => api(`/apexgp/contrarreloj/ranking?circuito=${encodeURIComponent(circuito)}&periodo=${periodo}`),
   fantasmaRecord: (circuito, periodo) => api(`/apexgp/contrarreloj/fantasma?circuito=${encodeURIComponent(circuito)}&periodo=${periodo}`),
   rankingElo: () => api('/apexgp/ranking/elo'),
+  rankingMundial: (periodo) => api(`/apexgp/campeonato/ranking?periodo=${periodo}`),
 };
 
 // Fantasma local (20 Hz: x, z, y, rumbo) ⇄ formato del servidor (10 Hz, enteros: dm, dm, rumbo·1000, y·10)

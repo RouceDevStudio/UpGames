@@ -56,6 +56,32 @@ function crearMundo(monedas) {
         },
     };
     mongoose.models.ApexTiempo = Tiempo;
+    // colección genérica en memoria: find/findOne/countDocuments/updateOne/create con $gt y $gte
+    const coleccion = (unicos = []) => {
+        const docs = [];
+        const cumple = (d, f) => Object.entries(f).every(([k, v]) => {
+            if (v && typeof v === 'object' && !(v instanceof Date)) return ('$gt' in v ? d[k] > v.$gt : true) && ('$gte' in v ? d[k] >= v.$gte : true);
+            return d[k] === v;
+        });
+        const cur = arr => { const c = { sort(o) { const [k, dir] = Object.entries(o)[0]; arr.sort((a, b) => (a[k] - b[k]) * dir); return c; }, limit(n) { arr = arr.slice(0, n); return c; }, select() { return c; }, lean: async () => JSON.parse(JSON.stringify(arr)) }; return c; };
+        return {
+            docs,
+            find: f => cur(docs.filter(d => cumple(d, f))),
+            findOne: f => { const c = cur(docs.filter(d => cumple(d, f))); const l = c.lean; c.lean = async () => (await l())[0] || null; return c; },
+            countDocuments: async f => docs.filter(d => cumple(d, f)).length,
+            create: async d => { if (unicos.some(k => docs.some(x => x[k] === d[k]))) { const e = new Error('dup'); e.code = 11000; throw e; } docs.push({ fecha: new Date(), ...d }); return d; },
+            updateOne: async (f, upd, opc = {}) => {
+                let d = docs.find(x => cumple(x, f));
+                if (!d) { if (!opc.upsert) return { matchedCount: 0 }; d = { ...f }; docs.push(d); }
+                for (const [k, v] of Object.entries(upd.$inc || {})) d[k] = (d[k] || 0) + v;
+                Object.assign(d, upd.$set || {});
+                return { matchedCount: 1 };
+            },
+        };
+    };
+    const Mundial = coleccion(), Resultado = coleccion(['ref']);
+    mongoose.models.ApexMundial = Mundial;
+    mongoose.models.ApexResultado = Resultado;
     const Perfil = {
         findOne: f => consulta(perfiles.get(f.usuario) || null),
         updateOne: async (f, upd, opc = {}) => {
@@ -89,7 +115,7 @@ function crearMundo(monedas) {
         const res = { code: 200, status(c) { this.code = c; return this; }, set() { return this; }, json(d) { resolve({ code: this.code, ...d }); } };
         rutas[ruta]({ usuario, body, query }, res);
     });
-    return { usuarios, perfiles, txs, tiempos, llamar, premiarSemana: r.premiarSemana };
+    return { usuarios, perfiles, txs, tiempos, Mundial, Resultado, llamar, premiarSemana: r.premiarSemana };
 }
 
 (async () => {
@@ -245,51 +271,45 @@ function crearMundo(monedas) {
     // ─── Campeonato, contrarreloj y ELO ───────────────────────────────────
     const ahoraReal = Date.now;
     const adelantar = s => { const base = ahoraReal(); Date.now = () => base + s * 1000; };
-    await test('campeonato: P1 da 15 UC no retirables (monedas, nunca saldo) y la ficha no se reusa', async () => {
+    const correr = async (m, pos, { usuario = 'ana', circuito = 'valle', vueltas = 5, dificultad = 'normal', seg = 5 * 70 } = {}) => {
+        Date.now = ahoraReal;
+        const f = await m.llamar('POST /apexgp/campeonato/carrera', { circuito, vueltas, rivales: 11, dificultad }, usuario);
+        adelantar(seg);
+        try { return { f, r: await m.llamar('POST /apexgp/campeonato/resultado', { ficha: f.ficha, pos, tiempo: seg - 2 }, usuario) }; } finally { Date.now = ahoraReal; }
+    };
+    await test('campeonato: una carrera da puntos al ranking mundial, nunca UpCoins, y la ficha no se reusa', async () => {
         const m = crearMundo(0);
-        const f = await m.llamar('POST /apexgp/campeonato/carrera', { circuito: 'valle', vueltas: 5, rivales: 11, dificultad: 'normal' });
-        assert.strictEqual(f.premiable, true);
-        adelantar(5 * 70);
-        try {
-            const r = await m.llamar('POST /apexgp/campeonato/resultado', { ficha: f.ficha, pos: 1, tiempo: 5 * 69 });
-            assert.strictEqual(r.premio, 15, JSON.stringify(r));
-            assert.strictEqual(m.usuarios.ana.monedas, 15);
-            assert.strictEqual(m.usuarios.ana.saldo, 0);
-            const tx = [...m.txs.values()][0];
-            assert.strictEqual(tx.tipo, 'mision'); assert.strictEqual(tx.usd, 0);
-            const r2 = await m.llamar('POST /apexgp/campeonato/resultado', { ficha: f.ficha, pos: 1, tiempo: 5 * 69 });
-            assert.strictEqual(r2.premio, 0);
-            assert.strictEqual(m.usuarios.ana.monedas, 15);
-        } finally { Date.now = ahoraReal; }
+        const { f, r } = await correr(m, 1);
+        assert.strictEqual(f.puntuable, true);
+        assert.strictEqual(r.puntos, 25, JSON.stringify(r));
+        assert.strictEqual(r.posicion, 1);
+        assert.strictEqual(m.usuarios.ana.monedas, 0);
+        assert.strictEqual(m.txs.size, 0);
+        adelantar(400);
+        try { assert.strictEqual((await m.llamar('POST /apexgp/campeonato/resultado', { ficha: f.ficha, pos: 1, tiempo: 348 })).puntos, 0); } finally { Date.now = ahoraReal; }
+        const rk = await m.llamar('GET /apexgp/campeonato/ranking', null, null, {});
+        assert.deepStrictEqual(rk.filas.map(x => [x.usuario, x.puntos]), [['ana', 25]]);
     });
-    await test('campeonato: P2=10, P3=5, P4=0; máximo 3 premios al día', async () => {
+    await test('campeonato: puntos de F1 con extra por dificultad y máximo 6 carreras al día', async () => {
         const m = crearMundo(0);
-        const jugar = async pos => {
-            Date.now = ahoraReal;
-            const f = await m.llamar('POST /apexgp/campeonato/carrera', { circuito: 'veloz', vueltas: 3, rivales: 7, dificultad: 'dificil' });
-            adelantar(3 * 80);
-            try { return await m.llamar('POST /apexgp/campeonato/resultado', { ficha: f.ficha, pos, tiempo: 3 * 79 }); } finally { Date.now = ahoraReal; }
-        };
-        assert.strictEqual((await jugar(2)).premio, 10);
-        assert.strictEqual((await jugar(3)).premio, 5);
-        assert.strictEqual((await jugar(4)).premio, 0);
-        assert.strictEqual((await jugar(1)).premio, 15);
-        const tope = await jugar(1);
-        assert.strictEqual(tope.premio, 0); assert.strictEqual(tope.tope, true);
-        assert.strictEqual(m.usuarios.ana.monedas, 30);
-        assert.ok([...m.txs.values()].every(t => t.monedas % 5 === 0 && t.monedas <= 15));
+        assert.strictEqual((await correr(m, 2, { dificultad: 'extremo' })).r.puntos, 25);    // 18 × 1,4
+        assert.strictEqual((await correr(m, 11)).r.puntos, 0);
+        for (let k = 0; k < 4; k++) await correr(m, 10);
+        const tope = (await correr(m, 1)).r;
+        assert.strictEqual(tope.puntos, 0); assert.strictEqual(tope.tope, true);
+        assert.strictEqual(A.puntosCarrera(3, 'dificil'), 18);
     });
-    await test('campeonato: sin premio si la carrera dura menos de lo posible, es fácil o corta, o la ficha es falsa', async () => {
+    await test('campeonato: no puntúa si dura menos de lo posible, es fácil o corta, o la ficha es falsa', async () => {
         const m = crearMundo(0);
         const f = await m.llamar('POST /apexgp/campeonato/carrera', { circuito: 'valle', vueltas: 5, rivales: 11, dificultad: 'normal' });
         assert.strictEqual((await m.llamar('POST /apexgp/campeonato/resultado', { ficha: f.ficha, pos: 1, tiempo: 5 * 69 })).code, 400);   // nada de tiempo real
-        assert.strictEqual((await m.llamar('POST /apexgp/campeonato/resultado', { ficha: f.ficha, pos: 1, tiempo: 100 })).code, 400);      // tiempo imposible
+        assert.strictEqual((await m.llamar('POST /apexgp/campeonato/resultado', { ficha: f.ficha, pos: 1, tiempo: 100 })).code, 400);
         assert.strictEqual((await m.llamar('POST /apexgp/campeonato/resultado', { ficha: f.ficha + 'x', pos: 1, tiempo: 400 })).code, 400);
-        assert.strictEqual((await m.llamar('POST /apexgp/campeonato/resultado', { ficha: f.ficha, pos: 1, tiempo: 400 }, 'beto')).code, 400); // ficha de otra persona
+        assert.strictEqual((await m.llamar('POST /apexgp/campeonato/resultado', { ficha: f.ficha, pos: 1, tiempo: 400 }, 'beto')).code, 400);
         const facil = await m.llamar('POST /apexgp/campeonato/carrera', { circuito: 'valle', vueltas: 5, rivales: 11, dificultad: 'facil' });
-        assert.strictEqual(facil.premiable, false);
-        assert.strictEqual(A.carreraPremiable({ circuito: 'valle', vueltas: 2, rivales: 11, dificultad: 'normal' }), false);
-        assert.strictEqual(m.usuarios.ana.monedas, 0);
+        assert.strictEqual(facil.puntuable, false);
+        assert.strictEqual(A.carreraPuntuable({ circuito: 'valle', vueltas: 2, rivales: 11, dificultad: 'normal' }), false);
+        assert.strictEqual(m.Mundial.docs.length, 0);
     });
 
     const fantasma = (seg, v = 60) => JSON.stringify(Array.from({ length: Math.round(seg * A.FANTASMA_HZ) }, (_, i) => [Math.round(i * v / A.FANTASMA_HZ * 10), 0, 0, v]));
@@ -322,15 +342,18 @@ function crearMundo(monedas) {
         const s2 = await m.llamar('POST /apexgp/contrarreloj/sesion', { circuito: 'valle' });
         assert.strictEqual((await m.llamar('POST /apexgp/contrarreloj/tiempo', { ficha: s2.ficha, tiempo: 80, fantasma: fantasma(80) })).code, 400);
     });
-    await test('premios semanales: 15/10/5 al podio de cada circuito, una sola vez', async () => {
+    await test('premios semanales: solo el top 5 mundial cobra 15/10/5/5/5 UC no retirables, una sola vez', async () => {
         const m = crearMundo(0);
         const sem = '2026-W40';
-        m.tiempos.push({ usuario: 'beto', circuito: 'valle', semana: sem, tiempo: 80 }, { usuario: 'ana', circuito: 'valle', semana: sem, tiempo: 78 },
-            { usuario: 'caro', circuito: 'valle', semana: sem, tiempo: 81 }, { usuario: 'caro', circuito: 'veloz', semana: sem, tiempo: 70 });
-        assert.strictEqual(await m.premiarSemana(sem), 4);
+        const nombres = ['ana', 'beto', 'caro', 'dani', 'eva', 'fito'];
+        for (const u of nombres) if (!m.usuarios[u]) m.usuarios[u] = { usuario: u, monedas: 0, saldo: 0 };
+        nombres.forEach((u, i) => m.Mundial.docs.push({ usuario: u, semana: sem, puntos: 100 - i * 10 }));
+        m.tiempos.push({ usuario: 'beto', circuito: 'veloz', semana: sem, tiempo: 70 });
+        assert.strictEqual(await m.premiarSemana(sem), 6);
         assert.strictEqual(await m.premiarSemana(sem), 0);
-        assert.deepStrictEqual([m.usuarios.ana.monedas, m.usuarios.beto.monedas, m.usuarios.caro.monedas], [15, 10, 20]);
-        assert.ok([m.usuarios.ana, m.usuarios.beto, m.usuarios.caro].every(u => u.saldo === 0));
+        assert.deepStrictEqual(nombres.map(u => m.usuarios[u].monedas), [15, 25, 5, 5, 5, 0]);
+        assert.ok(nombres.every(u => m.usuarios[u].saldo === 0));
+        assert.ok([...m.txs.values()].every(t => t.tipo === 'mision' && t.usd === 0 && [5, 10, 15].includes(t.monedas)));
     });
     await test('semanaDe: semanas ISO', () => {
         assert.strictEqual(A.semanaDe(new Date('2026-01-01T12:00:00Z')), '2026-W01');

@@ -6,11 +6,15 @@
  *   POST /apexgp/comprar         { id: 'mejora:motor' | 'cosmetico:patron:rayo', clave }
  *   PUT  /apexgp/equipar         { equipado } (solo se guarda lo que el piloto tiene)
  *
- *   Campeonato (premios de 15/10/5 UC NO retirables al podio, máx. 3 al día):
- *   POST /apexgp/campeonato/carrera    { circuito, vueltas, rivales, dificultad } → ficha firmada
- *   POST /apexgp/campeonato/resultado  { ficha, pos, tiempo }
+ *   UpCoins (NO retirables, solo monedas) únicamente para el TOP 5 del ranking mundial
+ *   de cada semana: 1º 15 · 2º 10 · 3º-5º 5. Las carreras sueltas solo dan puntos.
  *
- *   Contrarreloj (ranking global y semanal con fantasma; premios semanales 15/10/5 UC):
+ *   Campeonato mundial (puntos por carrera, máx. 6 carreras al día):
+ *   POST /apexgp/campeonato/carrera    { circuito, vueltas, rivales, dificultad } → ficha firmada
+ *   POST /apexgp/campeonato/resultado  { ficha, pos, tiempo } → puntos y posición mundial
+ *   GET  /apexgp/campeonato/ranking    ?periodo=semana|global
+ *
+ *   Contrarreloj (ranking global y semanal con fantasma; top 5 semanal de cada circuito):
  *   POST /apexgp/contrarreloj/sesion   { circuito } → ficha
  *   POST /apexgp/contrarreloj/tiempo   { ficha, tiempo, fantasma }
  *   GET  /apexgp/contrarreloj/ranking  ?circuito=&periodo=semana|global
@@ -54,6 +58,26 @@ const TiempoSchema = new mongoose.Schema({
 TiempoSchema.index({ usuario: 1, circuito: 1, semana: 1 }, { unique: true });
 TiempoSchema.index({ circuito: 1, semana: 1, tiempo: 1 });
 
+// Puntos del campeonato mundial por piloto y semana ('global' = de siempre)
+const MundialSchema = new mongoose.Schema({
+    usuario:   { type: String, required: true },
+    semana:    { type: String, required: true },
+    puntos:    { type: Number, default: 0 },
+    carreras:  { type: Number, default: 0 },
+    victorias: { type: Number, default: 0 },
+    fecha:     { type: Date, default: Date.now },
+}, { collection: 'apexgp_mundial', timestamps: false });
+MundialSchema.index({ usuario: 1, semana: 1 }, { unique: true });
+MundialSchema.index({ semana: 1, puntos: -1 });
+
+// Cada carrera de campeonato puntúa una sola vez (ficha) y como mucho 6 al día
+const ResultadoSchema = new mongoose.Schema({
+    ref:     { type: String, required: true, unique: true },
+    usuario: { type: String, required: true, index: true },
+    pos:     Number, puntos: Number, circuito: String,
+    fecha:   { type: Date, default: Date.now, index: true },
+}, { collection: 'apexgp_resultados', timestamps: false });
+
 const claveOk = c => /^[A-Za-z0-9_-]{8,64}$/.test(String(c || ''));
 const r2 = n => Math.round(n * 100) / 100;
 const LIVERY_MAX = 50000;      // librea propia compartida en la sala (JPEG en base64)
@@ -62,6 +86,8 @@ function registrar(app, deps) {
     const { verificarToken, Usuario, LiveTx, io, logger, JWT_SECRET, estaSuspendido } = deps;
     const Perfil = mongoose.models.ApexPerfil || mongoose.model('ApexPerfil', PerfilSchema);
     const Tiempo = mongoose.models.ApexTiempo || mongoose.model('ApexTiempo', TiempoSchema);
+    const Mundial = mongoose.models.ApexMundial || mongoose.model('ApexMundial', MundialSchema);
+    const Resultado = mongoose.models.ApexResultado || mongoose.model('ApexResultado', ResultadoSchema);
     const SECRETO = `${JWT_SECRET || 'apexgp-dev'}:apexgp-fichas`;
     const firmar = d => jwt.sign({ ...d, jti: crypto.randomBytes(12).toString('hex') }, SECRETO, { expiresIn: '6h' });
     const leerFicha = (f, u, tipo) => { try { const d = jwt.verify(String(f || ''), SECRETO); return d.u === u && d.tipo === tipo ? d : null; } catch (_) { return null; } };
@@ -137,13 +163,19 @@ function registrar(app, deps) {
         } catch (e) { logger.error(`[apexgp] equipar: ${e.message}`); err(res, 500, 'No se pudo guardar'); }
     });
 
-    // ─── Campeonato: premios al podio ───────────────────────────────────────
+    // ─── Campeonato mundial: puntos por carrera; UpCoins solo al top 5 semanal ──
     const inicioDia = () => { const d = new Date(); d.setUTCHours(0, 0, 0, 0); return d; };
     app.post('/apexgp/campeonato/carrera', verificarToken, (req, res) => {
         const b = req.body || {};
         const c = { circuito: A.circuitoOk(b.circuito), vueltas: Math.max(1, Math.min(70, Math.floor(+b.vueltas) || 0)), rivales: Math.max(0, Math.min(21, Math.floor(+b.rivales) || 0)), dificultad: String(b.dificultad || '') };
-        ok(res, { ficha: firmar({ tipo: 'camp', u: req.usuario, ...c, t0: Date.now() }), premiable: A.carreraPremiable(c), premios: A.PREMIOS, porDia: A.PREMIOS_DIA });
+        ok(res, { ficha: firmar({ tipo: 'camp', u: req.usuario, ...c, t0: Date.now() }), puntuable: A.carreraPuntuable(c), premios: A.PREMIOS, top: A.TOP_PREMIADO, porDia: A.CARRERAS_DIA });
     });
+
+    const posicionMundial = async (u, semana) => {
+        const yo = await Mundial.findOne({ usuario: u, semana }).select('puntos').lean();
+        if (!yo) return null;
+        return 1 + await Mundial.countDocuments({ semana, puntos: { $gt: yo.puntos } });
+    };
 
     app.post('/apexgp/campeonato/resultado', verificarToken, async (req, res) => {
         const u = req.usuario;
@@ -152,15 +184,27 @@ function registrar(app, deps) {
             if (!f) return err(res, 400, 'La ficha de la carrera no es válida');
             const v = A.validarResultado(f, req.body, Date.now());
             if (!v.ok) return err(res, 400, v.error);
-            const ref = `apexgp:premio:${f.jti}`;
-            if (!v.premio) return ok(res, { premio: 0, upcoins: await totalUC(u) });
-            if (await LiveTx.exists({ ref })) return ok(res, { premio: 0, repetido: true, upcoins: await totalUC(u) });
-            const hoy = await LiveTx.countDocuments({ usuario: u, planId: 'apexgp:premio', fecha: { $gte: inicioDia() } });
-            if (hoy >= A.PREMIOS_DIA) return ok(res, { premio: 0, tope: true, mensaje: `Ya ganaste los ${A.PREMIOS_DIA} premios de hoy`, upcoins: await totalUC(u) });
-            const dado = await premiar(u, v.premio, ref, 'apexgp:premio');
-            if (dado) logger.info(`[apexgp] @${u} P${v.pos} en campeonato: +${v.premio} UC`);
-            ok(res, { premio: dado ? v.premio : 0, repetido: !dado, upcoins: await totalUC(u) });
-        } catch (e) { logger.error(`[apexgp] premio: ${e.message}`); err(res, 500, 'No se pudo registrar el resultado'); }
+            const semana = A.semanaDe();
+            const hoy = await Resultado.countDocuments({ usuario: u, fecha: { $gte: inicioDia() } });
+            if (hoy >= A.CARRERAS_DIA) return ok(res, { puntos: 0, tope: true, mensaje: `Hoy ya puntuaron tus ${A.CARRERAS_DIA} carreras`, posicion: await posicionMundial(u, semana) });
+            try { await Resultado.create({ ref: `apexgp:camp:${f.jti}`, usuario: u, pos: v.pos, puntos: v.puntos, circuito: f.circuito }); }
+            catch (e) { if (e.code === 11000) return ok(res, { puntos: 0, repetido: true, posicion: await posicionMundial(u, semana) }); throw e; }
+            if (v.puntos > 0) {
+                const inc = { $inc: { puntos: v.puntos, carreras: 1, victorias: v.pos === 1 ? 1 : 0 }, $set: { fecha: new Date() } };
+                await Mundial.updateOne({ usuario: u, semana }, inc, { upsert: true });
+                await Mundial.updateOne({ usuario: u, semana: 'global' }, inc, { upsert: true });
+            }
+            ok(res, { puntos: v.puntos, posicion: await posicionMundial(u, semana), semana, premios: A.PREMIOS, top: A.TOP_PREMIADO });
+        } catch (e) { logger.error(`[apexgp] resultado: ${e.message}`); err(res, 500, 'No se pudo registrar el resultado'); }
+    });
+
+    app.get('/apexgp/campeonato/ranking', async (req, res) => {
+        try {
+            const semana = req.query.periodo === 'global' ? 'global' : A.semanaDe();
+            const filas = await Mundial.find({ semana, puntos: { $gt: 0 } }).sort({ puntos: -1 }).limit(20).select('usuario puntos carreras victorias').lean();
+            res.set('Cache-Control', 'public, max-age=30');
+            ok(res, { semana, premios: A.PREMIOS, top: A.TOP_PREMIADO, filas: filas.map((r, i) => ({ pos: i + 1, usuario: r.usuario, puntos: r.puntos, carreras: r.carreras, victorias: r.victorias })) });
+        } catch (e) { logger.error(`[apexgp] ranking mundial: ${e.message}`); err(res, 500, 'No se pudo cargar el ranking'); }
     });
 
     // ─── Contrarreloj: ranking con fantasma y premios semanales ─────────────
@@ -209,16 +253,20 @@ function registrar(app, deps) {
         } catch (e) { logger.error(`[apexgp] fantasma: ${e.message}`); err(res, 500, 'No se pudo cargar el fantasma'); }
     });
 
-    /** Premia al podio de cada circuito de una semana ya cerrada (idempotente por referencia). */
+    /** Premia al top 5 de una semana ya cerrada: campeonato mundial y contrarreloj de cada circuito (idempotente). */
     async function premiarSemana(semana) {
         let n = 0;
+        const top = await Mundial.find({ semana, puntos: { $gt: 0 } }).sort({ puntos: -1 }).limit(A.TOP_PREMIADO).select('usuario').lean();
+        for (let i = 0; i < top.length; i++) {
+            if (await premiar(top[i].usuario, A.premioPosicion(i + 1), `apexgp:mundial:${semana}:${i + 1}`, 'apexgp:mundial')) n++;
+        }
         for (const circuito of Object.keys(A.CIRCUITOS)) {
-            const top = await Tiempo.find({ circuito, semana }).sort({ tiempo: 1 }).limit(3).select('usuario').lean();
-            for (let i = 0; i < top.length; i++) {
-                if (await premiar(top[i].usuario, A.premioPosicion(i + 1), `apexgp:semana:${semana}:${circuito}:${i + 1}`, 'apexgp:semanal')) n++;
+            const tt = await Tiempo.find({ circuito, semana }).sort({ tiempo: 1 }).limit(A.TOP_PREMIADO).select('usuario').lean();
+            for (let i = 0; i < tt.length; i++) {
+                if (await premiar(tt[i].usuario, A.premioPosicion(i + 1), `apexgp:semana:${semana}:${circuito}:${i + 1}`, 'apexgp:semanal')) n++;
             }
         }
-        if (n) logger.info(`[apexgp] premios de contrarreloj de ${semana}: ${n}`);
+        if (n) logger.info(`[apexgp] premios del ranking mundial de ${semana}: ${n}`);
         return n;
     }
     if (io) {
@@ -236,7 +284,7 @@ function registrar(app, deps) {
     });
 
     // ─── Multijugador ───────────────────────────────────────────────────────
-    if (!io) return { Perfil, Tiempo, premiarSemana };
+    if (!io) return { Perfil, Tiempo, Mundial, premiarSemana };
     const salas = new A.Salas();
     const ns = io.of('/apexgp');
     const lim = L.limitador(40, 25);          // estados: ~15/s por coche con margen
@@ -403,7 +451,7 @@ function registrar(app, deps) {
     }, 1000).unref();
     function enviarLibreasA(sk, s) { for (const j of s.jugadores.values()) if (j.id !== sk.id && j.livery) sk.emit('livery', { id: j.id, livery: j.livery }); }
 
-    return { Perfil, Tiempo, salas, premiarSemana, emparejador };
+    return { Perfil, Tiempo, Mundial, salas, premiarSemana, emparejador };
 }
 
-module.exports = { registrar, PerfilSchema, TiempoSchema };
+module.exports = { registrar, PerfilSchema, TiempoSchema, MundialSchema };

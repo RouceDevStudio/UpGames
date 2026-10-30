@@ -342,20 +342,30 @@ const CIRCUITOS = {
 const CLIMAS = ['seco', 'lluvia', 'variable'];
 const circuitoOk = c => Object.prototype.hasOwnProperty.call(CIRCUITOS, c) ? c : 'valle';
 
-// Premios del campeonato y de la contrarreloj semanal: UpCoins NO retirables
-// (van al campo de monedas, como las compradas), de 5 en 5.
-const PREMIOS = { 1: 15, 2: 10, 3: 5 };
-const PREMIOS_DIA = 3;                 // carreras premiadas por día y piloto
+// UpCoins NO retirables (van al campo de monedas, como las compradas), de 5 en 5,
+// y SOLO para los 5 primeros del ranking mundial de cada semana (campeonato y
+// contrarreloj de cada circuito). Las carreras sueltas no dan UpCoins: dan puntos.
+const PREMIOS = { 1: 15, 2: 10, 3: 5, 4: 5, 5: 5 };
+const TOP_PREMIADO = 5;
 const premioPosicion = pos => PREMIOS[pos] || 0;
+// Puntos del ranking mundial por carrera de campeonato (como en la F1)
+const PUNTOS_CARRERA = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
+const CARRERAS_DIA = 6;                // carreras que puntúan por día y piloto
+const DIFICULTAD_EXTRA = { normal: 1, dificil: 1.2, extremo: 1.4 };
 
-/** ¿Una carrera de campeonato puede dar premio? (mínimos contra el abuso) */
-function carreraPremiable(c) {
-    return !!c && CIRCUITOS[c.circuito] && c.vueltas >= 3 && c.rivales >= 7 && ['normal', 'dificil', 'extremo'].includes(c.dificultad);
+/** ¿Una carrera de campeonato puntúa en el ranking mundial? (mínimos contra el abuso) */
+function carreraPuntuable(c) {
+    return !!c && !!CIRCUITOS[c.circuito] && c.vueltas >= 3 && c.rivales >= 7 && Object.prototype.hasOwnProperty.call(DIFICULTAD_EXTRA, c.dificultad);
+}
+
+/** Puntos mundiales de una posición: los de la F1 con un extra por dificultad (enteros). */
+function puntosCarrera(pos, dificultad) {
+    return Math.round((PUNTOS_CARRERA[pos - 1] || 0) * (DIFICULTAD_EXTRA[dificultad] || 1));
 }
 
 /** Valida el resultado de una carrera de campeonato contra su ficha (emitida por el servidor). */
 function validarResultado(ficha, res, ahoraMs) {
-    if (!carreraPremiable(ficha)) return { ok: false, error: 'Esta carrera no da premio (mínimo 3 vueltas, 7 rivales y dificultad normal)' };
+    if (!carreraPuntuable(ficha)) return { ok: false, error: 'Esta carrera no puntúa (mínimo 3 vueltas, 7 rivales y dificultad normal)' };
     const pos = Math.floor(+res?.pos), tiempo = +res?.tiempo;
     if (!(pos >= 1 && pos <= ficha.rivales + 1)) return { ok: false, error: 'Posición no válida' };
     const minimo = ficha.vueltas * CIRCUITOS[ficha.circuito].minVuelta;
@@ -364,7 +374,7 @@ function validarResultado(ficha, res, ahoraMs) {
     const real = (ahoraMs - ficha.t0) / 1000;
     if (real + 20 < tiempo || real < minimo) return { ok: false, error: 'La carrera terminó demasiado pronto' };
     if (real > 6 * 3600) return { ok: false, error: 'La ficha de la carrera caducó' };
-    return { ok: true, pos, tiempo, premio: premioPosicion(pos) };
+    return { ok: true, pos, tiempo, puntos: puntosCarrera(pos, ficha.dificultad) };
 }
 
 /** Semana ISO 'AAAA-Www' (lunes 00:00 UTC) de una fecha. */
@@ -460,7 +470,7 @@ class Emparejador {
 }
 
 module.exports = {
-    CIRCUITOS, CLIMAS, circuitoOk, PREMIOS, PREMIOS_DIA, premioPosicion, carreraPremiable, validarResultado,
+    CIRCUITOS, CLIMAS, circuitoOk, PREMIOS, TOP_PREMIADO, premioPosicion, PUNTOS_CARRERA, CARRERAS_DIA, carreraPuntuable, puntosCarrera, validarResultado,
     semanaDe, semanaAnterior, FANTASMA_HZ, FANTASMA_MAX, validarVuelta, ELO_INICIAL, eloTras, nivelElo, REGIONES, regionOk, Emparejador,
     NIVELES, PRECIO_NIVEL, MEJORAS, COSMETICOS, EQUIPADO_DEF, MAX_JUGADORES, ESTADO_LARGO,
     catalogo, precioCompra, tieneCosmetico, validarEquipado, nivelesMejoras, limpiarNombre, Salas,

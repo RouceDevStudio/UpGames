@@ -1711,7 +1711,7 @@ function empezarCarreraTrasQ() {
   if (cfg.campeonato && cuenta.conectado()) {
     const cc = carreraCamp;
     cuenta.fichaCarrera({ circuito: circuito.id, vueltas: sesion.vueltasTotales, rivales: sesion.participantes.length - 1, dificultad: temporada.opc.dificultad })
-      .then(d => { if (cc) { cc.ficha = d.ficha; cc.premiable = d.premiable; } }).catch(() => {});
+      .then(d => { if (cc) { cc.ficha = d.ficha; cc.puntuable = d.puntuable; } }).catch(() => {});
   }
 }
 
@@ -1732,7 +1732,7 @@ function pintarCampeonato() {
   if (activa) {
     const id = t.rondas[t.ronda], cl = CAMP.climaRonda(t);
     $('#campTitulo').textContent = `Campeonato · GP ${t.ronda + 1} de ${t.rondas.length}`;
-    $('#campInfo').innerHTML = `Próximo: <b>${CIRCUITOS[id].nombre}</b> · ${t.opc.vueltas} vueltas · ${CLIMAS[cl]}${cl === 'variable' ? ' (puede llover)' : ''} · ${t.pilotos.length} pilotos.${t.premios ? ` UpCoins ganadas esta temporada: <b style="color:#ffd23f">${t.premios}</b>` : ''}`;
+    $('#campInfo').innerHTML = `Próximo: <b>${CIRCUITOS[id].nombre}</b> · ${t.opc.vueltas} vueltas · ${CLIMAS[cl]}${cl === 'variable' ? ' (puede llover)' : ''} · ${t.pilotos.length} pilotos.`;
     $('#bCampSeguir').textContent = 'Ir a la clasificación';
     $('#bCampAbandonar').classList.remove('oculto');
   } else if (t?.terminada) {
@@ -1776,22 +1776,25 @@ function cerrarCarreraCampeonato(orden) {
   let txt = `+${pts} puntos en el campeonato`;
   $('#resPremio').textContent = txt;
   guardar();
-  // premio en UpCoins (no retirables) validado por el servidor
-  if (cc.ficha && yo.terminado && !yo.abandono && yo.posicion <= 3) {
-    $('#resPremio').textContent = txt + ' · reclamando premio…';
+  // puntos al ranking mundial (validados por el servidor); las UpCoins solo llegan al top 5 semanal
+  if (cc.ficha && yo.terminado && !yo.abandono) {
+    $('#resPremio').textContent = txt + ' · enviando al ranking mundial…';
     cuenta.resultadoCarrera({ ficha: cc.ficha, pos: yo.posicion, tiempo: yo.tTotal })
       .then(d => {
-        if (d.premio > 0) { temporada.premios = (temporada.premios || 0) + d.premio; perfilApex.upcoins = d.upcoins; guardar(); actualizarCuentaMenu(); txt += ` · 🪙 +${d.premio} UpCoins`; }
-        else if (d.tope) txt += ' · ya ganaste los 3 premios de hoy';
+        if (d.puntos > 0) txt += ` · 🌍 +${d.puntos} pts mundiales`;
+        else if (d.tope) txt += ' · hoy ya puntuaron tus 6 carreras';
+        if (d.posicion) txt += ` · vas P${d.posicion} del mundo esta semana${d.posicion <= 5 ? ' (zona de UpCoins 🪙)' : ' (el top 5 gana UpCoins)'}`;
         $('#resPremio').textContent = txt;
       })
-      .catch(e => { $('#resPremio').textContent = txt + ` · sin premio: ${e.message}`; });
-  } else if (!cuenta.conectado() && yo.posicion <= 3) $('#resPremio').textContent = txt + ' · inicia sesión para ganar UpCoins con el podio';
-  else if (cc.premiable === false && yo.posicion <= 3) $('#resPremio').textContent = txt + ' · sin premio (mínimo 7 rivales, 3 vueltas y dificultad normal)';
+      .catch(e => { $('#resPremio').textContent = txt + ` · no puntuó en el ranking: ${e.message}`; });
+  } else if (!cuenta.conectado()) $('#resPremio').textContent = txt + ' · inicia sesión para sumar puntos al ranking mundial (el top 5 semanal gana UpCoins)';
+  else if (cc.puntuable === false) $('#resPremio').textContent = txt + ' · no puntúa en el ranking mundial (mínimo 7 rivales, 3 vueltas y dificultad normal)';
 }
 
 // --- Rankings en línea ------------------------------------------------------------------------
-const rk = { tab: 'crono', circuito: 'valle', periodo: 'semana' };
+const rk = { tab: 'mundial', circuito: 'valle', periodo: 'semana' };
+const MEDALLA = (pos, semana) => (semana && pos <= 5 ? ['🥇', '🥈', '🥉', '🏅', '🏅'][pos - 1] : '');
+const TXT_PREMIOS = 'Solo el <b style="color:#ffd23f">top 5 mundial</b> de cada semana gana UpCoins (no retirables): <b style="color:#ffd23f">1º 15 · 2º 10 · 3º-5º 5 UC</b>.';
 function abrirRankings() { rk.circuito = circuito.id; mostrar('rankings'); pintarRankings(); }
 async function pintarRankings() {
   document.querySelectorAll('#rankings .pestanas b').forEach(b => { b.classList.toggle('sel', b.dataset.rk === rk.tab); b.onclick = () => { rk.tab = b.dataset.rk; pintarRankings(); }; });
@@ -1799,15 +1802,21 @@ async function pintarRankings() {
   cs.innerHTML = Object.values(CIRCUITOS).map(d => `<b data-v="${d.id}" class="${d.id === rk.circuito ? 'sel' : ''}">${d.corto}</b>`).join('');
   cs.querySelectorAll('b').forEach(b => b.onclick = () => { rk.circuito = b.dataset.v; pintarRankings(); });
   $('#rkPeriodo').querySelectorAll('b').forEach(b => { b.classList.toggle('sel', b.dataset.v === rk.periodo); b.onclick = () => { rk.periodo = b.dataset.v; pintarRankings(); }; });
-  $('#rkFiltros').classList.toggle('oculto', rk.tab !== 'crono');
+  $('#rkFiltros').classList.toggle('oculto', rk.tab === 'elo');
+  $('#rkCircuito').classList.toggle('oculto', rk.tab !== 'crono');
   $('#bRkFantasma').classList.toggle('oculto', rk.tab !== 'crono');
   $('#rkLista').innerHTML = '<p class="nota">Cargando…</p>';
   try {
-    if (rk.tab === 'crono') {
-      $('#rkInfo').innerHTML = `Mejores vueltas en <b>${CIRCUITOS[rk.circuito].nombre}</b>. Premios cada semana al podio de cada circuito: <b style="color:#ffd23f">1º 15 UC · 2º 10 UC · 3º 5 UC</b> (UpCoins de juego, no retirables). Inicia sesión y corre en Contrarreloj para entrar.${records['crono:' + rk.circuito] ? ` Tu récord local: <b>${fmt(records['crono:' + rk.circuito])}</b>.` : ''}`;
+    if (rk.tab === 'mundial') {
+      $('#rkInfo').innerHTML = `Puntos del Campeonato de APEX GP en todo el mundo: cada carrera de campeonato suma (25-18-15-12-10-8-6-4-2-1, más en difícil y extremo). ${TXT_PREMIOS}`;
+      const d = await cuenta.rankingMundial(rk.periodo);
+      const yo = cuenta.usuario();
+      $('#rkLista').innerHTML = d.filas.length ? d.filas.map(f => `${f.pos === 6 && rk.periodo === 'semana' ? '<div class="corte">FIN DE LOS PREMIOS</div>' : ''}<div class="fila-q ${f.usuario === yo ? 'yo' : ''}"><b>${f.pos}</b><span>@${String(f.usuario).replace(/</g, '')} <small style="color:var(--tenue)">${f.carreras} carr.${f.victorias ? ` · 🏆${f.victorias}` : ''}</small></span><span>${f.puntos} pts</span><span>${MEDALLA(f.pos, rk.periodo === 'semana')}</span></div>`).join('') : '<p class="nota">Nadie ha puntuado esta semana. ¡Corre el campeonato y ponte primero!</p>';
+    } else if (rk.tab === 'crono') {
+      $('#rkInfo').innerHTML = `Mejores vueltas en <b>${CIRCUITOS[rk.circuito].nombre}</b>. ${TXT_PREMIOS} Inicia sesión y corre en Contrarreloj para entrar.${records['crono:' + rk.circuito] ? ` Tu récord local: <b>${fmt(records['crono:' + rk.circuito])}</b>.` : ''}`;
       const d = await cuenta.ranking(rk.circuito, rk.periodo);
       const yo = cuenta.usuario();
-      $('#rkLista').innerHTML = d.filas.length ? d.filas.map(f => `<div class="fila-q ${f.usuario === yo ? 'yo' : ''}"><b>${f.pos}</b><span>@${String(f.usuario).replace(/</g, '')}</span><span>${fmt(f.tiempo)}</span><span>${f.pos <= 3 && rk.periodo === 'semana' ? ['🥇', '🥈', '🥉'][f.pos - 1] : ''}</span></div>`).join('') : '<p class="nota">Nadie ha marcado tiempo todavía. ¡Sé el primero!</p>';
+      $('#rkLista').innerHTML = d.filas.length ? d.filas.map(f => `<div class="fila-q ${f.usuario === yo ? 'yo' : ''}"><b>${f.pos}</b><span>@${String(f.usuario).replace(/</g, '')}</span><span>${fmt(f.tiempo)}</span><span>${MEDALLA(f.pos, rk.periodo === 'semana')}</span></div>`).join('') : '<p class="nota">Nadie ha marcado tiempo todavía. ¡Sé el primero!</p>';
     } else {
       $('#rkInfo').innerHTML = `Puntuación ELO de las carreras en línea entre pilotos con cuenta. La partida rápida te empareja con rivales de tu nivel y tu región.${perfilApex.elo ? ` Tu ELO: <b>${perfilApex.elo}</b> (${perfilApex.nivel}).` : ''}`;
       const d = await cuenta.rankingElo();
