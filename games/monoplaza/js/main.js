@@ -37,6 +37,7 @@ import * as ESC from './escuela.js';
 import * as ESTR from './estrategia.js';
 import * as PROG from './progresion.js';
 import * as ED from './editorCircuito.js';
+import { iniciarIdioma } from './idioma.js';
 
 const $ = (s) => document.querySelector(s);
 const esTactil = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -148,6 +149,7 @@ let jugando = false, pausado = false, modoActual = 'practica';
 let pantallaPrevia = 'menu';
 
 async function iniciar() {
+  ajustes.idioma = await iniciarIdioma(ajustes.idioma);
   crearRenderer();
   await cargarImagenLibrea();
   await cargarCircuito(circuitoId);
@@ -668,7 +670,12 @@ function pintarAjustes() {
     if (el.classList.contains('segm')) {
       el.querySelectorAll('b').forEach(b => {
         b.classList.toggle('sel', String(ajustes[k]) === b.dataset.v);
-        b.onclick = () => { ajustes[k] = isNaN(+b.dataset.v) ? b.dataset.v : +b.dataset.v; guardar(); pintarAjustes(); };
+        b.onclick = () => {
+          const antes = ajustes[k];
+          ajustes[k] = isNaN(+b.dataset.v) ? b.dataset.v : +b.dataset.v; guardar(); pintarAjustes();
+          // el idioma se aplica al recargar (así se traduce todo desde el principio)
+          if (k === 'idioma' && antes !== ajustes[k]) setTimeout(() => location.reload(), 150);
+        };
       });
     } else if (el.type === 'checkbox') {
       el.checked = !!ajustes[k];

@@ -3,7 +3,9 @@
 // la tiene, usa el motor de voz nativo a través del puente `ApexVoz`. Cada mensaje sale
 // también como subtítulo, así que nunca se pierde aunque no haya voz.
 
-const voces = () => (window.speechSynthesis?.getVoices?.() || []).filter(v => /^es/i.test(v.lang));
+import { tr, idiomaActual, lenguaVoz } from './idioma.js';
+
+const voces = () => (window.speechSynthesis?.getVoices?.() || []).filter(v => v.lang?.toLowerCase().startsWith(idiomaActual()));
 const MAX_COLA = 6;
 
 export class Radio {
@@ -27,13 +29,20 @@ export class Radio {
     window.__vozFin = (id) => { if (this._idActual === id) this._fin?.(); };
   }
 
-  get nativa() { try { return !!window.ApexVoz?.disponible?.(); } catch { return false; } }
+  get nativa() {
+    try {
+      const si = !!window.ApexVoz?.disponible?.();
+      if (si && !this._lenguaNativa) { this._lenguaNativa = true; window.ApexVoz.idioma?.(idiomaActual()); }
+      return si;
+    } catch { return false; }
+  }
   get disponible() { return this.nativa || !!window.speechSynthesis; }
 
   _vozDe(tipo) {
     const vs = voces();
     if (!vs.length) return null;
     // el ingeniero con una voz y el locutor con otra si hay más de una
+    if (idiomaActual() !== 'es') return vs.find(v => v.lang === lenguaVoz()) || vs[0];
     const pref = tipo === 'megafonia' ? vs.find(v => /es-(ES|MX|US)/i.test(v.lang) && !/female|mujer|helena|laura|paulina|monica/i.test(v.name)) : vs.find(v => /es-(MX|US|CO|419)/i.test(v.lang));
     return pref || vs[tipo === 'megafonia' ? vs.length - 1 : 0];
   }
@@ -45,7 +54,7 @@ export class Radio {
       if (ahora - (this.ultimo.get(clave) ?? -1e9) < cada) return false;
       this.ultimo.set(clave, ahora);
     }
-    const m = { texto, tipo, t: ahora, prioridad };
+    const m = { texto: tr(texto), tipo, t: ahora, prioridad };
     if (prioridad) this.cola.unshift(m); else this.cola.push(m);
     // si se acumulan, se descartan los mensajes normales más viejos (nunca los prioritarios)
     while (this.cola.length > MAX_COLA) {
@@ -90,7 +99,7 @@ export class Radio {
     if (!synth) { setTimeout(fin, 1200 + m.texto.length * 55); return; }
     try {
       const u = new SpeechSynthesisUtterance(m.texto);
-      u.lang = 'es-ES';
+      u.lang = lenguaVoz();
       const v = this._vozDe(m.tipo); if (v) { u.voice = v; u.lang = v.lang; }
       if (mega) { u.rate = 1.0; u.pitch = 0.85; u.volume = 0.8; }
       else { u.rate = 1.12; u.pitch = 1.0; u.volume = 1; }

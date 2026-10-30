@@ -55,5 +55,13 @@ public class VozNativa implements TextToSpeech.OnInitListener {
     @JavascriptInterface
     public void callar() { if (listo) tts.stop(); }
 
+    // idioma del juego: "es", "en" o "pt" (si el teléfono no tiene esa voz, se queda la del sistema)
+    @JavascriptInterface
+    public void idioma(String codigo) {
+        if (!listo || codigo == null) return;
+        Locale l = codigo.startsWith("en") ? new Locale("en", "US") : codigo.startsWith("pt") ? new Locale("pt", "BR") : new Locale("es", "ES");
+        if (tts.setLanguage(l) < 0) tts.setLanguage(Locale.getDefault());
+    }
+
     void cerrar() { tts.shutdown(); }
 }
