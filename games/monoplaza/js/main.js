@@ -18,7 +18,8 @@ import { GrabadorVideo, puedeGrabar, guardarArchivo } from './grabarVideo.js';
 import { Telemetria } from './telemetria.js';
 import { Lluvia } from './render/lluvia.js';
 import { Barreras } from './render/barreras.js';
-import { Comisarios, CapaCamara, CocheSeguridad } from './render/vida.js';
+import { Comisarios, CapaCamara, CocheSeguridad, Fuegos } from './render/vida.js';
+import { Persona } from './render/personas.js';
 import { construirEscenario, ponerHora, ponerAgua } from './render/escenario.js';
 import { crearModelo, dibujarPlantilla } from './render/cocheModelo.js';
 import { GestorBoxes, Escombros } from './render/equipo.js';
@@ -171,6 +172,7 @@ async function cargarCircuito(id) {
   barreras = new Barreras(scene, circuito, { escombros, efectos, calidad });
   comisarios = new Comisarios(scene, circuito, calidad);
   cocheSeg = new CocheSeguridad(scene);
+  fuegos = new Fuegos(scene, calidad);
   camarasTV = new CamarasTV(circuito);
   camara.tv = camarasTV;
   modelos = []; modeloFantasma = null;
@@ -420,6 +422,7 @@ function arrancarSesion(modo) {
   barreras?.reponer();
   // repetición, telemetría, radio y estado de la carrera
   grabadora = new Grabadora(sesion.participantes.length);
+  posPrev = new Map();
   telemetria = new Telemetria(circuito.largo);
   if (sesion.estado === 'formacion') { mensaje('VUELTA DE FORMACIÓN', 'Sigue al de delante y vuelve a tu casilla', 3); radio.decir('Vuelta de formación. Calienta neumáticos y frenos, y vuelve a tu casilla.', { clave: 'form', cada: 5 }); }
   estadoRadio = { clima: sesion.clima.agua > 0.13 ? 'mojado' : 'seco', lluvia: sesion.clima.lluvia > 0.05, lider: null, avisoDesg: false, vsc: false, ultimaPos: null };
@@ -829,8 +832,40 @@ function telemetriaPausa() {
 }
 
 // --- Eventos de la sesión -------------------------------------------------------
+// Momentos para el resumen de la repetición
+function marcarMomento(e) {
+  if (!grabadora || sesion.modo !== 'carrera') return;
+  const t = sesion.tiempo, k = (p) => sesion.participantes.indexOf(p), nom = (p) => p.nombre.replace('@', '');
+  if (e === 'salida') grabadora.marcar(t, 'salida', k(sesion.participantes.find(p => p.posicion === 1) || sesion.jugador), '¡Luces fuera!');
+  else if (e.tipo === 'abandono') grabadora.marcar(t - 2, 'abandono', k(e.p), `Abandono de ${nom(e.p)}`);
+  else if (e.tipo === 'vueltaRapida') grabadora.marcar(t - 3, 'vuelta', k(e.p), `Vuelta rápida de ${nom(e.p)}`);
+  else if (e.tipo === 'meta' && e.p.posicion <= 3) grabadora.marcar(t, 'meta', k(e.p), `${nom(e.p)} termina P${e.p.posicion}`);
+  else if (e.tipo === 'sc' && e.activo) grabadora.marcar(t, 'sc', k(sesion.orden?.[0] || sesion.jugador), 'Safety Car');
+  else if (e.tipo === 'roja') grabadora.marcar(t - 3, 'roja', k(sesion.jugador), 'Bandera roja');
+  else if (e.tipo === 'averia') grabadora.marcar(t, 'averia', k(e.p), `Avería de ${nom(e.p)}`);
+}
+// adelantamientos y golpes fuertes (se revisan dos veces por segundo)
+let tMomentos = 0, posPrev = new Map();
+function vigilarMomentos(dt) {
+  if (!grabadora || sesion.modo !== 'carrera' || sesion.estado !== 'carrera') return;
+  tMomentos += dt;
+  if (tMomentos < 0.5) return;
+  tMomentos = 0;
+  sesion.participantes.forEach((p, k) => {
+    if (p.coche.impacto > 10) grabadora.marcar(sesion.tiempo - 1.5, 'choque', k, `Golpe de ${p.nombre.replace('@', '')}`);
+    const antes = posPrev.get(p);
+    // gana una posición en pista (no por boxes ni abandonos) entre los diez primeros
+    if (antes && p.posicion < antes && p.posicion <= 10 && !p.box && !p.coche.limitadorPit) {
+      const pasado = sesion.participantes.find(o => o.posicion === p.posicion + 1);
+      if (pasado && !pasado.box && !pasado.abandono && !pasado.coche.limitadorPit) grabadora.marcar(sesion.tiempo - 2.5, 'adelanta', k, `${p.nombre.replace('@', '')} adelanta a ${pasado.nombre.replace('@', '')}`);
+    }
+    posPrev.set(p, p.posicion);
+  });
+}
+
 function procesarEventos() {
   for (const e of sesion.eventos) {
+    marcarMomento(e);
     if (e === 'luz') { sonido.evento('luz'); }
     else if (e === 'salida') { sonido.evento('salida'); sonido.ovacion(1.6); mensaje('¡LUCES FUERA!', '', 1.2); entrada.vibrar(80); }
     else if (e.tipo === 'averia') {
@@ -901,14 +936,15 @@ function procesarEventos() {
     else if (e.tipo === 'meta' && e.p.posicion === 1 && !estadoRadio.ganador) {
       estadoRadio.ganador = true; sonido.ovacion(2.5);
       radio.decir(`¡${e.p.nombre.replace('@', '')} gana en el ${circuito.def.corto}!`, { tipo: 'megafonia' });
-      if (e.p.jugador) { mensaje('🏆 ¡VICTORIA!', '', 3); radio.decir('¡¡Ganamos!! ¡Increíble carrera, campeón!', { prioridad: true }); entrada.vibrar(300); if (enRed) multi.meta(); }
-      if (!enRed && e.p.jugador) setTimeout(() => { if (jugando && sesion.modo === 'carrera' && sesion.jugador.terminado) mostrarResultados(); }, 4500);
+      if (e.p.jugador) { mensaje('🏆 ¡VICTORIA!', '', 3); radio.decir('¡¡Ganamos!! ¡Increíble carrera, campeón!', { prioridad: true }); entrada.vibrar(300); if (enRed) multi.meta(); celebrar(e.p); }
+      if (!enRed && e.p.jugador) setTimeout(() => { if (jugando && sesion.modo === 'carrera' && sesion.jugador.terminado) mostrarResultados(); }, 12000);
     }
     else if (e.tipo === 'meta' && e.p.jugador) {
       mensaje('🏁 BANDERA A CUADROS', `Terminas P${e.p.posicion}`, 3);
       radio.decir(e.p.posicion <= 3 ? `¡Bandera a cuadros! P${e.p.posicion}, ¡al podio! Gran trabajo.` : `Bandera a cuadros. Terminas P${e.p.posicion}. Buen esfuerzo, vuelve a boxes.`, { prioridad: true, clave: 'metaJ', cada: 30 });
       if (enRed) multi.meta();
-      else setTimeout(() => { if (jugando && sesion.modo === 'carrera') mostrarResultados(); }, 3500);
+      else setTimeout(() => { if (jugando && sesion.modo === 'carrera') mostrarResultados(); }, e.p.posicion <= 3 ? 10000 : 3500);
+      if (e.p.posicion <= 3) celebrar(e.p);
     }
     else if (e.tipo === 'vuelta' && e.p.jugador && enRed && e.valida) multi.vuelta(e.t);
     else if (e.tipo === 'entraBoxes') prepararEquipo(e.p);
@@ -954,6 +990,42 @@ function procesarEventos() {
 
 // Radio del ingeniero: clima, neumáticos, daños y posiciones (se revisa una vez por segundo)
 let tRadioRev = 0;
+// El ingeniero analiza a los rivales: ritmo, diferencias, paradas, estrategia y lluvia
+function radioRivales(p, pr) {
+  const orden = sesion.orden, i = orden.indexOf(p), del = orden[i - 1], tras = orden[i + 1];
+  const nom = (q) => q.nombre.replace('@', '');
+  const ult = (q) => (q?.ultimaVuelta && q.ultimaVuelta.valida !== false ? q.ultimaVuelta.t : null);
+  const g = sesion.diferencias(p) || {};
+  const mia = ult(p);
+  if (del && !del.box && g.del != null && ult(del) && mia) {
+    const dif = ult(del) - mia;
+    if (dif > 0.25 && g.del < 6) { const n = Math.max(1, Math.ceil(g.del / dif)); radio.decir(`${nom(del)} rueda ${dif.toFixed(1)} más lento. Lo alcanzas en ${n} vuelta${n > 1 ? 's' : ''}.`, { clave: 'alcanza', cada: 55 }); }
+    else if (dif < -0.4 && g.del < 3) radio.decir(`${nom(del)} va más rápido ahora. Cuida los neumáticos y espera su error.`, { clave: 'masRapido', cada: 75 });
+  }
+  if (tras && !tras.box && g.tras != null && ult(tras) && mia) {
+    const dif = mia - ult(tras);
+    if (dif > 0.25 && g.tras < 3) radio.decir(`${nom(tras)} viene ${dif.toFixed(1)} por vuelta más rápido, a ${g.tras.toFixed(1)}. Defiende las frenadas.`, { clave: 'defiende', cada: 55 });
+  }
+  // paradas de los rivales que van justo delante o detrás
+  estadoRadio.paradas ??= new Map();
+  for (const q of [del, tras]) {
+    if (!q) continue;
+    const antes = estadoRadio.paradas.get(q) ?? q.paradas;
+    if (q.paradas > antes) radio.decir(q === del ? `${nom(q)} ha parado. Aprieta ahora: si hacemos buenas vueltas saldremos por delante.` : `${nom(q)} ha entrado a boxes. Intentará el undercut: cuidado con su vuelta de salida.`, { clave: 'paradaRival', cada: 40 });
+    estadoRadio.paradas.set(q, q.paradas);
+  }
+  // gestión: atacar o cuidar
+  const desg = Math.max(...p.coche.ruedas.map(w => w.neum.desgaste)), faltan = sesion.vueltasTotales - p.vuelta;
+  if (desg < 0.25 && g.del != null && g.del < 1.0 && !del?.box) radio.decir('Estás a menos de un segundo. Neumáticos frescos: ¡ataca!', { clave: 'ataca', cada: 70 });
+  else if (desg > 0.4 && faltan > 5 && !p.paradas) radio.decir('Gestiona los neumáticos: suave en la salida de las curvas lentas.', { clave: 'gestiona', cada: 95 });
+  if (faltan === 2 && g.del != null && g.del < 2.5) radio.decir(`Quedan dos vueltas y tienes a ${nom(del)} a ${g.del.toFixed(1)}. Todo o nada.`, { clave: 'final', cada: 200 });
+  // lluvia en vueltas, no en segundos
+  if (pr && pr.lluvia > 0 && pr.en > 0) {
+    const n = Math.max(1, Math.round(pr.en / (isFinite(p.mejor) ? p.mejor : 90)));
+    if (n <= 4) radio.decir(`Lluvia prevista en unas ${n} vuelta${n > 1 ? 's' : ''}. Tenemos los intermedios listos.`, { clave: 'lluviaVueltas', cada: 150 });
+  }
+}
+
 function radioPeriodica(dt) {
   tRadioRev += dt;
   if (tRadioRev < 1) return;
@@ -995,6 +1067,7 @@ function radioPeriodica(dt) {
   }
   if (c.drsPermitido && !c.drsAbierto && sesion.modo === 'carrera') radio.decir('DRS disponible. ¡Ábrelo!', { clave: 'drs', cada: 45 });
   if (sesion.modo === 'carrera' && sesion.vueltasTotales >= 8 && p.vuelta === Math.round(sesion.vueltasTotales * 0.4) && !p.paradas) radio.decir('La ventana de paradas está abierta. Avísanos cuando quieras entrar.', { clave: 'ventana', cada: 999 });
+  if (sesion.modo === 'carrera' && sesion.orden && p.vuelta >= 2) radioRivales(p, pr);
   if (sesion.modo === 'carrera' && sesion.estado === 'carrera' && sesion.orden) {
     const g = sesion.diferencias(p);
     if (g.del != null && g.del < 1 && g.del > 0.2) radio.decir(`Estás a ${g.del.toFixed(1)} del de delante. ¡Ataca!`, { clave: 'ataca', cada: 40 });
@@ -1041,7 +1114,7 @@ function bucle(ahora) {
   entrada.actualizar(dt);
   const evs = entrada.tomarEventos();
   // en la repetición el teclado y los toques los gestiona su propia interfaz
-  if (repe) { actualizarRepe(dt); return; }
+  if (repe) { if (!repe.exportando) actualizarRepe(dt); return; }
   const j = sesion.jugador.coche;
   if (jugando && espectando) { /* sin mandos: lo maneja su propia barra */ }
   else if (jugando) {
@@ -1066,6 +1139,8 @@ function bucle(ahora) {
       j.mandos.acelerador = entrada.acelerador;
       j.mandos.freno = entrada.freno;
     }
+    // donuts de celebración: gas a fondo, volante girado (antes de la física)
+    if (celebracion?.donuts > 0) { j.mandos.acelerador = 1; j.mandos.freno = 0; j.mandos.direccion = 1; if (j.marcha > 2) j.marcha = 2; }
     j.mandos.drs = entrada.drs || (j.drsPermitido && esTactil && ajustes.cambioAuto && !entrada.usandoMando);
     camara.mirarAtras = entrada.mirarAtras;
   } else {
@@ -1082,6 +1157,7 @@ function bucle(ahora) {
     if (jugando) procesarEventos(); else { sesion.eventos.length = 0; for (const p of sesion.participantes) p.coche.eventos.length = 0; }
     if (jugando) {
       grabadora?.grabar(dt, sesion.coches, sesion.tiempo);
+      vigilarMomentos(dt);
       const pj = sesion.jugador;
       if (pj.vuelta > 0) telemetria?.registrar(pj.coche.proj.s, pj.coche, pj.tVuelta);
       if (!espectando) radioPeriodica(dt);
@@ -1160,6 +1236,8 @@ function bucle(ahora) {
     actualizarMarcadorParada();
     comisarios.actualizar(dt, sesion);
     cocheSeg.actualizar(dt, sesion.sc);
+    fuegos?.actualizar(dt);
+    actualizarCelebracion(dt);
   }
   actualizarCapaCamara(dt, j);
   escenario.camPos = camara.cam.position;
@@ -1213,6 +1291,58 @@ function bucle(ahora) {
     fpsAcum = 0; fpsN = 0;
   }
 }
+
+// --- Celebraciones: fuegos, el equipo saltando en el muro y donuts --------------------
+function celebrar(p) {
+  if (celebracion) return;
+  const c = circuito, m = c.muestra(0);
+  // fuegos sobre la recta de meta
+  fuegos?.lanzar(new THREE.Vector3(m.x, m.y + 30, m.z), p.posicion === 1 ? 12 : 7, (pos) => {
+    const d = camara.cam.position.distanceTo(pos), vol = Math.min(1, 60 / Math.max(20, d));
+    setTimeout(() => sonido.boxes?.('gato', vol * 1.4), d / 343 * 1000);    // el estampido llega con retraso
+  });
+  // su equipo, saltando en el muro de boxes frente a su garaje
+  const gente = [];
+  if (calidad >= 1) {
+    const sg = sesion._garajeDe(p), mg = c.muestra(sg), i = mg.i, d = c.semiAncho[i] + c.pit.muroA + 0.7;
+    for (let k = 0; k < (calidad >= 2 ? 8 : 5); k++) {
+      const per = new Persona({ color: p.equipo.base, texto: p.equipo.corto === 'UPG' ? 'UPGAMES' : p.equipo.nombre.split(' ')[0].toUpperCase(), numero: 70 + k, rol: k % 3 === 2 ? 'ingeniero' : 'mecanico', calidad });
+      const s = sg - 6 + k * 1.6, mk = c.muestra(s);
+      per.raiz.position.set(mk.x - mk.tz * d, mk.y, mk.z + mk.tx * d);
+      per.raiz.rotation.y = -Math.atan2(mk.tz, mk.tx) + Math.PI / 2;          // de cara a la pista
+      per.poner('celebra', 0.3); per.salto = 0.6 + Math.random() * 0.4; per.t = Math.random() * 3;
+      scene.add(per.raiz); gente.push(per);
+    }
+  }
+  celebracion = { t: 0, gente, donuts: 0 };
+  if (p.jugador && !enRed) $('#bDonuts').classList.add('visible');
+}
+function actualizarCelebracion(dt) {
+  if (!celebracion) return;
+  const ce = celebracion;
+  ce.t += dt;
+  for (const g of ce.gente) g.actualizar(dt);
+  // donuts automáticos: gas a fondo, volante girado y sin control de tracción
+  const j = sesion.jugador.coche;
+  if (ce.donuts > 0) {
+    ce.donuts -= dt;
+    if (ce.donuts <= 0) { j.ayudas = ce.ayudas || j.ayudas; $('#bDonuts').classList.remove('activo'); }
+  }
+  if (ce.t > 16 || !jugando) {
+    for (const g of ce.gente) scene.remove(g.raiz);
+    $('#bDonuts').classList.remove('visible');
+    celebracion = null;
+  }
+}
+$('#bDonuts').addEventListener('click', () => {
+  if (!celebracion || celebracion.donuts > 0) return;
+  const j = sesion.jugador.coche;
+  celebracion.ayudas = j.ayudas;
+  j.ayudas = { ...j.ayudas, tc: 0, estabilidad: false };
+  celebracion.donuts = 5;
+  $('#bDonuts').classList.add('activo');
+  sonido.ovacion(1.5);
+});
 
 // --- Espectador / juez -------------------------------------------------------------
 const CAMS_ESPECT = ['tv', 'persecucion', 'cercana', 'helicoptero', 'dron', 'lateral', 'suelo', 'cabina', 'tcam', 'morro', 'orbita'];
@@ -1847,6 +1977,7 @@ function nivelDetalle() {
 let fotoPendiente = false;
 let camRepe = null, cine = null, grabVideo = null;
 let espectando = false, camEsp = null;
+let fuegos = null, celebracion = null;
 const esp = { cam: 'tv', auto: true, tCambio: 0, tTorre: 0 };
 const VELS_REPE = [0.1, 0.25, 0.5, 1, 2, 4];
 function abrirRepe(desde) {
@@ -1865,7 +1996,8 @@ function abrirRepe(desde) {
   document.body.classList.add('en-repe');
   radio.callar();
   sonido.modoRepe?.(true);
-  pintarPanelCam(); pintarCine(); pintarRepe();
+  repe.claves = repe.claves || []; repe.resumen = null; repe.ruta = false;
+  pintarPanelCam(); pintarCine(); pintarRepe(); pintarMarcas();
   $('#repeAyuda').innerHTML = esTactil ? '' : 'Espacio: pausa · ←/→: ±5 s · ,/. : fotograma · C: cámara · V: coche<br>Cámara libre: arrastra para mirar, WASD/QE para moverte (Mayús rápido), rueda para avanzar<br>H: ocultar controles · P: foto · R: grabar vídeo';
   despertarRepe();
 }
@@ -1907,7 +2039,7 @@ function despertarRepe() {
 }
 function cineActivo() {
   const o = cine?.opc;
-  return o && (o.apertura > 0 || o.filtro !== 'natural' || o.barras || o.grano > 0 || o.vineta > 0);
+  return o && (o.apertura > 0 || o.filtro !== 'natural' || o.barras || o.grano > 0 || o.vineta > 0 || o.movimiento > 0);
 }
 function actualizarRepe(dt) {
   const r = repe, g = grabadora;
@@ -1918,6 +2050,8 @@ function actualizarRepe(dt) {
     r.u += dt * r.vel / Math.max(1, g.duracion);
     if (r.u >= 1) { r.u = 1; r.play = false; pintarRepe(); }
   }
+  if (r.resumen && r.u >= r.resumen.fin) siguienteMomento();
+  if (r.ruta && r.u >= r.claves[r.claves.length - 1].u) finRuta();
   g.leer(r.u, r.proxies);
   $('#repeBarra').value = Math.round(r.u * 1000);
   $('#repeT').textContent = fmt(g.tiempoEn(r.u));
@@ -1932,6 +2066,7 @@ function actualizarRepe(dt) {
   const c = r.proxies[r.coche], m = modelos[r.coche];
   const planoAntes = camRepe.planoActual;
   camRepe.actualizar(camara.cam, c, m, r.cam, dt);
+  if (r.ruta) camaraRuta(r.u);
   if (camRepe.planoActual !== planoAntes) pintarRepe();
   for (const f of escenario.actualizables) f(dt);
   efectos.actualizar(dtR, [], camara.cam.position);
@@ -1960,6 +2095,134 @@ function cerrarRepe() {
   if (desde === 'resultados') mostrar('resultados');
   else { mostrar('pausa'); $('#hud').classList.add('visible'); if (esTactil) $('#tactil').classList.add('visible'); }
 }
+// ─── Resumen automático: los momentos apuntados durante la carrera ───
+function pintarMarcas() {
+  const g = grabadora, el = $('#repeMarcas');
+  const ms = g.marcas.map(m => ({ ...m, u: g.uDeTiempo(m.t) })).filter(m => m.u > 0.001 && m.u < 0.999);
+  el.innerHTML = ms.map((m, i) => `<i class="${m.tipo}" style="left:${(m.u * 100).toFixed(2)}%" data-i="${i}" title="${m.texto.replace(/"/g, '')}"></i>`).join('')
+    + (repe.claves || []).map(k => `<i class="clave" style="left:${(k.u * 100).toFixed(2)}%"></i>`).join('');
+  el.querySelectorAll('i[data-i]').forEach(x => x.onclick = (e) => {
+    e.stopPropagation();
+    const m = ms[+x.dataset.i];
+    repe.u = Math.max(0, g.uDeTiempo(m.t - 2)); repe.coche = m.coche; repe.play = true;
+    camRepe.poner(repe.cam, camara.cam); for (const md of modelos) md.reponerPiezas?.();
+    rotulo(m.texto); pintarRepe();
+  });
+}
+function rotulo(texto) {
+  const el = $('#repeRotulo'); el.textContent = texto; el.classList.add('visible');
+  clearTimeout(rotulo.t); rotulo.t = setTimeout(() => el.classList.remove('visible'), 4000);
+}
+function iniciarResumen() {
+  const g = grabadora;
+  const lista = g.marcas.filter(m => g.uDeTiempo(m.t) > 0.001).sort((a, b) => a.t - b.t);
+  if (!lista.length) { mensajeRepe('Aún no hay momentos destacados'); return; }
+  repe.resumen = { lista, i: -1, fin: 0 }; repe.vel = 1; repe.play = true; repe.ruta = false;
+  siguienteMomento();
+}
+function siguienteMomento() {
+  const R = repe.resumen; R.i++;
+  if (R.i >= R.lista.length) { repe.resumen = null; repe.play = false; $('#repeRotulo').classList.remove('visible'); mensajeRepe('Fin del resumen'); pintarRepe(); return; }
+  const m = R.lista[R.i], g = grabadora;
+  repe.u = Math.max(0, g.uDeTiempo(m.t - 2.5)); R.fin = g.uDeTiempo(m.t + 4.5);
+  repe.coche = m.coche;
+  const cams = ['tv', 'lateral', 'persecucion', 'helicoptero', 'suelo', 'dron', 'tv', 'cercana'];
+  ponerCamRepe(m.tipo === 'salida' ? 'helicoptero' : m.tipo === 'choque' ? 'tv' : cams[R.i % cams.length]);
+  for (const md of modelos) md.reponerPiezas?.();
+  rotulo(`${R.i + 1}/${R.lista.length} · ${m.texto}`);
+}
+
+// ─── Editor de tráiler: puntos de cámara y recorrido suave entre ellos ───
+function pintarClaves() {
+  $('#claveLista').innerHTML = repe.claves.map((k, i) => `<span data-i="${i}" title="Ir a este punto (doble toque: borrar)">📍 ${i + 1} · ${fmt(grabadora.tiempoEn(k.u))}</span>`).join('') || '<span style="opacity:.6">Sin puntos todavía</span>';
+  $('#claveLista').querySelectorAll('[data-i]').forEach(x => {
+    x.onclick = () => { const k = repe.claves[+x.dataset.i]; repe.u = k.u; repe.play = false; repe.ruta = false; ponerCamRepe('libre'); camRepe.libre.pos.copy(k.pos); camara.cam.quaternion.copy(k.q); const d = new THREE.Vector3(0, 0, -1).applyQuaternion(k.q); camRepe.libre.yaw = Math.atan2(d.z, d.x); camRepe.libre.pitch = Math.asin(d.y); pintarRepe(); };
+    x.ondblclick = () => { repe.claves.splice(+x.dataset.i, 1); pintarClaves(); pintarMarcas(); };
+  });
+}
+function anadirClave() {
+  const c = camara.cam;
+  repe.claves = repe.claves.filter(k => Math.abs(k.u - repe.u) > 1e-4);
+  repe.claves.push({ u: repe.u, pos: c.position.clone(), q: c.quaternion.clone(), fov: c.fov });
+  repe.claves.sort((a, b) => a.u - b.u);
+  pintarClaves(); pintarMarcas();
+  mensajeRepe(`Punto ${repe.claves.length} añadido`);
+}
+const _cr = (p0, p1, p2, p3, t) => { const t2 = t * t, t3 = t2 * t; return 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3); };
+function camaraRuta(u) {
+  const K = repe.claves;
+  if (K.length < 2) return;
+  let i = 0; while (i < K.length - 2 && u >= K[i + 1].u) i++;
+  const a = K[i], b = K[i + 1], p0 = K[i - 1] || a, p3 = K[i + 2] || b;
+  let t = THREE.MathUtils.clamp((u - a.u) / Math.max(1e-6, b.u - a.u), 0, 1);
+  const cam = camara.cam;
+  cam.position.set(_cr(p0.pos.x, a.pos.x, b.pos.x, p3.pos.x, t), _cr(p0.pos.y, a.pos.y, b.pos.y, p3.pos.y, t), _cr(p0.pos.z, a.pos.z, b.pos.z, p3.pos.z, t));
+  const ts = t * t * (3 - 2 * t);
+  cam.quaternion.slerpQuaternions(a.q, b.q, ts);
+  cam.fov = a.fov + (b.fov - a.fov) * ts; cam.updateProjectionMatrix();
+}
+function verRuta(grabar = false) {
+  if (repe.claves.length < 2) { mensajeRepe('Añade al menos 2 puntos de cámara'); return; }
+  repe.u = repe.claves[0].u; repe.play = true; repe.vel = repe.vel > 1 ? 1 : repe.vel; repe.ruta = true; repe.resumen = null;
+  repe.grabarRuta = grabar;
+  for (const md of modelos) md.reponerPiezas?.();
+  document.querySelectorAll('.repe-panel').forEach(p => p.classList.remove('visible'));
+  if (grabar && !grabVideo?.grabando) alternarGrabacion();
+}
+function finRuta() {
+  repe.ruta = false; repe.play = false;
+  if (repe.grabarRuta && grabVideo?.grabando) alternarGrabacion();
+  repe.grabarRuta = false; pintarRepe();
+}
+
+// ─── Exportar a 1080p y 60 fps fotograma a fotograma (no depende de los FPS del móvil) ───
+async function exportarVideo() {
+  if (!window.VideoEncoder || !window.VideoFrame) { mensajeRepe('Este navegador no permite exportar: usa ⏺ Grabar'); return; }
+  const K = repe.claves, g = grabadora;
+  const conRuta = K.length >= 2;
+  const u0 = conRuta ? K[0].u : repe.u, u1 = conRuta ? K[K.length - 1].u : Math.min(1, repe.u + 15 / Math.max(1, g.duracion));
+  const W = 1920, H = 1080, FPS = 60;
+  let codec = null;
+  for (const c of ['avc1.640028', 'avc1.4d0028', 'avc1.42e028', 'vp09.00.40.08']) {
+    try { if ((await VideoEncoder.isConfigSupported({ codec: c, width: W, height: H, bitrate: 14e6, framerate: FPS })).supported) { codec = c; break; } } catch { /* sigue */ }
+  }
+  if (!codec) { mensajeRepe('Sin códec de vídeo disponible: usa ⏺ Grabar'); return; }
+  const { Muxer, ArrayBufferTarget } = await import('../lib/mp4-muxer/mp4-muxer.mjs');
+  const muxer = new Muxer({ target: new ArrayBufferTarget(), video: { codec: codec.startsWith('avc') ? 'avc' : 'vp9', width: W, height: H, frameRate: FPS }, fastStart: 'in-memory' });
+  let fallo = null;
+  const enc = new VideoEncoder({ output: (ch, meta) => muxer.addVideoChunk(ch, meta), error: (e) => { fallo = e; } });
+  enc.configure({ codec, width: W, height: H, bitrate: 14e6, framerate: FPS });
+  // render a 1080p sin tocar el tamaño que se ve en pantalla
+  const prevPR = renderer.getPixelRatio(), prevTam = renderer.getSize(new THREE.Vector2());
+  renderer.setPixelRatio(1); renderer.setSize(W, H, false); composer?.setSize(W, H);
+  camara.cam.aspect = W / H; camara.cam.updateProjectionMatrix();
+  const N = Math.max(1, Math.ceil((u1 - u0) * g.duracion * FPS));
+  Object.assign(repe, { exportando: true, u: u0, play: true, vel: 1, ruta: conRuta, resumen: null });
+  $('#repe').classList.add('limpia');
+  try {
+    for (let i = 0; i < N && !fallo; i++) {
+      actualizarRepe(1 / FPS);
+      const f = new VideoFrame(renderer.domElement, { timestamp: Math.round(i * 1e6 / FPS), duration: Math.round(1e6 / FPS) });
+      enc.encode(f, { keyFrame: i % 120 === 0 }); f.close();
+      if (i % 6 === 0 || enc.encodeQueueSize > 6) { $('#repeGrab').textContent = `⬇ ${Math.round(i / N * 100)}%`; $('#repeGrab').classList.add('on'); await new Promise(r => setTimeout(r, 0)); }
+    }
+    await enc.flush();
+    if (fallo) throw fallo;
+    muxer.finalize();
+    const nombre = `APEX-GP-1080p60-${Date.now()}.mp4`;
+    await guardarArchivo(new Blob([muxer.target.buffer], { type: 'video/mp4' }), nombre);
+    mensajeRepe('Vídeo exportado: ' + nombre);
+  } catch (e) { console.warn('exportar', e); mensajeRepe('No se pudo exportar el vídeo'); }
+  finally {
+    try { enc.close(); } catch { /* ya cerrado */ }
+    renderer.setPixelRatio(prevPR); renderer.setSize(prevTam.x, prevTam.y); composer?.setSize(prevTam.x, prevTam.y);
+    camara.cam.aspect = prevTam.x / prevTam.y; camara.cam.updateProjectionMatrix();
+    repe.exportando = false; repe.play = false; repe.ruta = false;
+    $('#repeGrab').classList.remove('on'); $('#repe').classList.remove('limpia');
+    pintarRepe();
+  }
+}
+
 function saltarRepe(seg) { repe.u = THREE.MathUtils.clamp(repe.u + seg / Math.max(1, grabadora.duracion), 0, 1); for (const m of modelos) m.reponerPiezas?.(); }
 function alternarPanel(id) {
   const p = $(id), abrir = !p.classList.contains('visible');
@@ -2010,6 +2273,14 @@ $('#repeBarra').addEventListener('input', (e) => { repe.u = +e.target.value / 10
 $('#repeSalir').addEventListener('click', cerrarRepe);
 $('#repeFoto').addEventListener('click', () => { document.body.classList.add('foto'); fotoPendiente = true; });
 $('#repeGrabar').addEventListener('click', alternarGrabacion);
+$('#repeResumen').addEventListener('click', iniciarResumen);
+$('#repeClaveBt').addEventListener('click', () => { pintarClaves(); alternarPanel('#repePanelClaves'); });
+$('#claveAnadir').addEventListener('click', anadirClave);
+$('#claveVer').addEventListener('click', () => verRuta(false));
+$('#claveGrabar').addEventListener('click', () => verRuta(true));
+$('#claveExportar').addEventListener('click', exportarVideo);
+$('#claveBorrar').addEventListener('click', () => { repe.claves = []; repe.ruta = false; pintarClaves(); pintarMarcas(); });
+$('#cineMovimiento').addEventListener('input', (e) => { cine.opc.movimiento = +e.target.value / 100; });
 $('#repeOcultar').addEventListener('click', () => { $('#repe').classList.add('limpia'); document.querySelectorAll('.repe-panel').forEach(p => p.classList.remove('visible')); });
 $('#repe').addEventListener('pointerdown', despertarRepe);
 // ajustes de cine
@@ -2021,7 +2292,7 @@ $('#cineAlabeo').addEventListener('input', (e) => { camRepe.alabeo = +e.target.v
 $('#cineBarras').addEventListener('click', () => { cine.opc.barras = !cine.opc.barras; pintarCine(); });
 $('#cineSacudida').addEventListener('click', () => { camRepe.sacudida = !camRepe.sacudida; pintarCine(); });
 $('#cineSonido').addEventListener('click', () => { repe.sonido = !repe.sonido; pintarCine(); });
-$('#cineReset').addEventListener('click', () => { Object.assign(cine.opc, { apertura: 0, filtro: 'natural', barras: false, grano: 0, vineta: 0 }); camRepe.fovExtra = 0; camRepe.alabeo = 0; camRepe.sacudida = 1; pintarCine(); });
+$('#cineReset').addEventListener('click', () => { Object.assign(cine.opc, { apertura: 0, filtro: 'natural', barras: false, grano: 0, vineta: 0, movimiento: 0 }); $('#cineMovimiento').value = 0; camRepe.fovExtra = 0; camRepe.alabeo = 0; camRepe.sacudida = 1; pintarCine(); });
 // arrastrar sobre la imagen: mirar con la cámara libre u orbitar; tocar sin arrastrar enseña/oculta los controles
 // (se instala al abrir la primera repetición, cuando ya existe el renderizador)
 function instalarControlesRepe() {
@@ -2338,7 +2609,7 @@ $('#bRkFantasma').addEventListener('click', async () => {
 });
 
 // acceso para pruebas automáticas desde la consola
-window.apexDebug = { get sesion() { return sesion; }, get sonido() { return sonido; }, get renderer() { return renderer; }, get escenario() { return escenario; }, get camara() { return camara; }, circuito: () => circuito, multi, get modelos() { return modelos; }, cargarCircuito, get qActual() { return qActual; }, get temporada() { return temporada; }, get repe() { return repe; }, terminarTandaQ, radio };
+window.apexDebug = { celebrar: (p) => celebrar(p || sesion.jugador), get grabadora() { return grabadora; }, get sesion() { return sesion; }, get sonido() { return sonido; }, get renderer() { return renderer; }, get escenario() { return escenario; }, get camara() { return camara; }, circuito: () => circuito, multi, get modelos() { return modelos; }, cargarCircuito, get qActual() { return qActual; }, get temporada() { return temporada; }, get repe() { return repe; }, terminarTandaQ, radio };
 actualizarCuentaMenu();
 refrescarPerfil().then(actualizarCuentaMenu);
 // enlace estable al APK (servido por el servidor de UpGames); dentro de la app no hace falta

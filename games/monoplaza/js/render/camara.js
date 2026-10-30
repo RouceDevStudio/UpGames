@@ -31,7 +31,14 @@ export class Camara {
     // vibración por bordillos, hierba y velocidad
     const vib = car.vibracion * 0.02 + Math.min(1, v / 90) * 0.0025;
     const t = this.tiempo;
-    const sx = (Math.sin(t * 61) + Math.sin(t * 97)) * vib, sy = (Math.sin(t * 73) + Math.sin(t * 41)) * vib;
+    // trauma: los golpes sacuden la cámara y se calma poco a poco (sacudida ∝ trauma²)
+    this.trauma = Math.max((this.trauma || 0) * Math.exp(-dt * 2.5), Math.min(1, (car.impacto || 0) / 18));
+    const tr = this.trauma * this.trauma * (this.sacudida === false ? 0 : 1);
+    const sx = (Math.sin(t * 61) + Math.sin(t * 97)) * vib + Math.sin(t * 43 + 1) * tr * 0.25, sy = (Math.sin(t * 73) + Math.sin(t * 41)) * vib + Math.sin(t * 37) * tr * 0.2;
+    // la cabeza del piloto se mueve con las fuerzas G (suavizado: el cuello amortigua)
+    const kG = 1 - Math.exp(-dt * 6);
+    this.gLong = (this.gLong || 0) + (((car.axF || 0) / 9.81) - (this.gLong || 0)) * kG;
+    this.gLat = (this.gLat || 0) + (((car.ayF || 0) / 9.81) - (this.gLat || 0)) * kG;
 
     if (this.modo === 'orbita') {
       // garaje: vuelta lenta alrededor del coche parado
@@ -95,6 +102,12 @@ export class Camara {
       // en la cabina la vista acompaña el giro de la cabeza del piloto hacia la curva
       if (this.modo === 'cabina' && modelo.mirada) mirar.applyAxisAngle(new THREE.Vector3(0, 1, 0), modelo.mirada * 0.85);
       if (this.mirarAtras) { mirar.x = -30; local.x = this.modo === 'tcam' ? -0.6 : -0.1; local.y += 0.1; }
+      // al frenar la cabeza va hacia delante y abajo; al acelerar, atrás; en curva, hacia fuera
+      if (!cara) {
+        local.x -= THREE.MathUtils.clamp(this.gLong, -6, 4) * 0.012;   // axF > 0 acelerando
+        local.y -= Math.max(0, -this.gLong) * 0.004;
+        local.z -= THREE.MathUtils.clamp(this.gLat, -6, 6) * (this.modo === 'cabina' ? 0.008 : 0.003);  // ayF hacia el interior
+      }
       modelo.raiz.updateMatrixWorld(true);
       const m = modelo.carroceria.matrixWorld;
       cam.position.copy(local.applyMatrix4(m));
@@ -102,6 +115,7 @@ export class Camara {
       const up = new THREE.Vector3(0, 1, 0).transformDirection(m);
       cam.up.copy(up);
       cam.lookAt(mirar.applyMatrix4(m));
+      if (tr > 0.001) { cam.rotateZ(Math.sin(t * 29) * tr * 0.08); cam.rotateX(Math.sin(t * 23 + 2) * tr * 0.05); }
       cam.near = 0.05;
       this.iniciada = false;
     }

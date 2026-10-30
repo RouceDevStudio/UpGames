@@ -431,3 +431,18 @@ body.espectando #tactil, body.espectando #hudIzq, body.espectando #volanteHud, b
 .esp-vivo { color: var(--rojo); font-weight: 900; letter-spacing: 1px; font-size: 12px; margin-right: 6px; animation: latido 1.2s infinite; }
 #espInfo { font-size: 12px; opacity: .8; margin-right: 6px; }
 @media (max-width: 700px) { .esp-torre { width: 170px; font-size: 11px; max-height: 45vh; } }
+
+.repe-linea { position: relative; }
+.repe-marcas { position: absolute; left: 0; right: 0; top: -6px; height: 8px; pointer-events: none; }
+.repe-marcas i { position: absolute; top: 0; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: #ffd23f; pointer-events: auto; cursor: pointer; box-shadow: 0 0 0 1px rgba(0,0,0,.5); }
+.repe-marcas i.choque, .repe-marcas i.abandono, .repe-marcas i.roja { background: var(--rojo); }
+.repe-marcas i.adelanta { background: #18c45a; }
+.repe-marcas i.clave { background: #00e5ff; border-radius: 1px; height: 8px; width: 3px; margin-left: -1px; }
+.repe-rotulo { position: absolute; left: calc(14px + var(--sa-l)); bottom: calc(110px + var(--sa-b)); padding: 8px 16px 8px 12px; border-left: 4px solid var(--rojo); background: linear-gradient(90deg, rgba(6,8,14,.85), rgba(6,8,14,0)); font-weight: 900; font-size: 18px; letter-spacing: .5px; opacity: 0; transform: translateX(-20px); transition: opacity .4s, transform .4s; pointer-events: none !important; }
+.repe-rotulo.visible { opacity: 1; transform: none; }
+.clave-lista { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; font-size: 12px; }
+.clave-lista span { background: rgba(0,229,255,.15); border: 1px solid rgba(0,229,255,.4); border-radius: 6px; padding: 2px 6px; cursor: pointer; }
+
+.bdonuts { position: absolute; right: calc(16px + var(--sa-r)); top: 42%; display: none; pointer-events: auto; padding: 12px 18px; border-radius: 14px; border: 2px solid #ffd23f; background: rgba(6,8,14,.75); color: #ffd23f; font-weight: 900; font-size: 18px; cursor: pointer; }
+.bdonuts.visible { display: block; animation: latido 1.2s infinite; }
+.bdonuts.activo { background: #ffd23f; color: #111; }

@@ -302,6 +302,7 @@
     <i data-d="aleronDel">ALERÓN DEL.</i><i data-d="aleronTras">ALERÓN TRAS.</i><i data-d="susp">SUSPENSIÓN</i><i data-d="pinchazo">PINCHAZO</i><i data-d="motor">LIMITADOR PIT</i><i data-d="fondo">FONDO</i><i data-d="motorD">MOTOR</i>
   </div>
   <div id="hMensaje" class="mensaje"></div>
+  <button id="bDonuts" class="bdonuts">🍩 DONUTS</button>
   <div id="hParada" class="hparada"><b>PARADA</b><span id="hParadaT">0.0 s</span><div class="rps"><i class="rp"></i><i class="rp"></i><i class="rp"></i><i class="rp"></i></div></div>
   <div id="hBandera" class="bandera"></div>
   <div id="hRadio" class="radio"></div>
@@ -384,6 +385,7 @@
     <label>Inclinación <input type="range" id="cineAlabeo" min="-30" max="30" value="0"></label>
     <label>Grano <input type="range" id="cineGrano" min="0" max="100" value="0"></label>
     <label>Viñeta <input type="range" id="cineVineta" min="0" max="100" value="0"></label>
+    <label>Movimiento <input type="range" id="cineMovimiento" min="0" max="100" value="0"></label>
     <div class="repe-fila" id="cineFiltros"></div>
     <div class="repe-fila">
       <button class="chip" id="cineBarras">▭ Panorámico 2.39</button>
@@ -393,7 +395,7 @@
     </div>
   </div>
   <div class="repe-abajo">
-    <input type="range" id="repeBarra" min="0" max="1000" value="0">
+    <div class="repe-linea"><input type="range" id="repeBarra" min="0" max="1000" value="0"><div id="repeMarcas" class="repe-marcas"></div></div>
     <div class="repe-bot">
       <button class="ic" id="repeAtras" title="−5 s (←)">⏪</button>
       <button class="ic" id="repePlay" title="Reproducir/pausa (espacio)">⏸</button>
@@ -406,6 +408,8 @@
       <button class="ic txt" id="repeCoche" title="Siguiente coche (V)">🏎️</button>
       <button class="ic" id="repeCocheSig" title="Coche siguiente">▶</button>
       <button class="ic" id="repeCineBt" title="Ajustes de cine">🎬</button>
+      <button class="ic" id="repeResumen" title="Resumen: los mejores momentos de la carrera">⭐</button>
+      <button class="ic" id="repeClaveBt" title="Editor de tráiler: puntos de cámara y exportar">📍</button>
       <span class="sep"></span>
       <button class="ic" id="repeFoto" title="Foto (P)">📷</button>
       <button class="ic rec" id="repeGrabar" title="Grabar vídeo (R)">⏺</button>
@@ -414,6 +418,18 @@
     </div>
   </div>
   <div class="repe-ayuda" id="repeAyuda"></div>
+  <div class="repe-rotulo" id="repeRotulo"></div>
+  <div class="repe-panel" id="repePanelClaves">
+    <p class="nota" style="margin:0 0 6px">Coloca la cámara (libre, órbita o cualquier plano), busca el momento y añade puntos: el recorrido pasa suavemente por todos.</p>
+    <div class="repe-fila">
+      <button class="chip" id="claveAnadir">＋ Punto aquí</button>
+      <button class="chip" id="claveVer">▶ Ver recorrido</button>
+      <button class="chip" id="claveGrabar">⏺ Grabar recorrido</button>
+      <button class="chip" id="claveExportar">⬇ Exportar 1080p60</button>
+      <button class="chip" id="claveBorrar">🗑 Borrar</button>
+    </div>
+    <div id="claveLista" class="clave-lista"></div>
+  </div>
 </div>
 <div id="espect" class="espect">
   <div class="esp-torre" id="espTorre"></div>

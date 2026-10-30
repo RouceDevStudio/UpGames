@@ -1,21 +1,50 @@
-// Repetición: graba el estado visual de todos los coches a 15 Hz (los últimos
-// 5 minutos) y lo reproduce con cámaras de TV, helicóptero o a bordo.
+// Repetición: graba el estado visual de todos los coches a 15 Hz durante toda la carrera
+// (hasta ~40 MB: una hora con pocos coches, ~25 min con 22) en bloques de un minuto que se
+// reservan según hacen falta, y apunta los momentos clave (salida, adelantamientos,
+// choques, abandonos, vuelta rápida, meta) para el resumen automático.
 
 import * as THREE from 'three';
 
 export const HZ = 15;
 const CAMPOS = 20;
-const MAX_SEG = 300;
+const MAX_SEG = 3600;
+const BLOQUE = HZ * 60;                    // fotogramas por bloque de memoria
+const MEMORIA = 40e6;                      // bytes como mucho para la repetición
 
 export class Grabadora {
   constructor(n) {
     this.n = n;
-    this.max = HZ * MAX_SEG;
-    this.datos = new Float32Array(this.max * n * CAMPOS);
+    const porFoto = n * CAMPOS * 4;
+    this.max = Math.max(BLOQUE, Math.min(HZ * MAX_SEG, Math.floor(MEMORIA / porFoto / BLOQUE) * BLOQUE));
+    this.bloques = [];                     // Float32Array de BLOQUE fotogramas cada uno
     this.cuantos = 0;      // fotogramas guardados
     this.inicio = 0;       // índice circular del primero
     this.t = 0;
     this.tiempos = new Float32Array(this.max);
+    this.marcas = [];      // { t, tipo, coche, texto }
+  }
+
+  // bloque y desplazamiento de un fotograma (índice circular)
+  _foto(idx) {
+    const b = Math.floor(idx / BLOQUE);
+    if (!this.bloques[b]) this.bloques[b] = new Float32Array(BLOQUE * this.n * CAMPOS);
+    return [this.bloques[b], (idx - b * BLOQUE) * this.n * CAMPOS];
+  }
+
+  /** Apunta un momento para el resumen (t: tiempo de sesión). */
+  marcar(t, tipo, coche, texto) {
+    const ult = this.marcas[this.marcas.length - 1];
+    if (ult && ult.tipo === tipo && ult.coche === coche && t - ult.t < 4) return;   // sin repetir
+    this.marcas.push({ t, tipo, coche, texto });
+    if (this.marcas.length > 300) this.marcas.shift();
+  }
+
+  /** Posición (0..1) de la repetición para un tiempo de sesión. */
+  uDeTiempo(t) {
+    if (this.cuantos < 2) return 0;
+    let lo = 0, hi = this.cuantos - 1;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (this.tiempos[(this.inicio + m) % this.max] < t) lo = m + 1; else hi = m; }
+    return lo / (this.cuantos - 1);
   }
 
   // estado de cada coche → 16 números
@@ -26,8 +55,7 @@ export class Grabadora {
     const idx = (this.inicio + this.cuantos) % this.max;
     if (this.cuantos < this.max) this.cuantos++; else this.inicio = (this.inicio + 1) % this.max;
     this.tiempos[idx] = tiempo;
-    let o = idx * this.n * CAMPOS;
-    const d = this.datos;
+    let [d, o] = this._foto(idx);
     for (let k = 0; k < this.n; k++, o += CAMPOS) {
       const c = coches[k];
       if (!c) continue;
@@ -52,24 +80,24 @@ export class Grabadora {
     const f = Math.max(0, Math.min(this.cuantos - 1.001, u * (this.cuantos - 1)));
     const a = Math.floor(f), t = f - a;
     const ia = (this.inicio + a) % this.max, ib = (this.inicio + a + 1) % this.max;
-    const d = this.datos;
+    const [da, ba] = this._foto(ia), [db, bb] = this._foto(ib);
     for (let k = 0; k < this.n; k++) {
       const p = proxies[k]; if (!p) continue;
-      const oa = (ia * this.n + k) * CAMPOS, ob = (ib * this.n + k) * CAMPOS;
-      const L = (j) => d[oa + j] + (d[ob + j] - d[oa + j]) * t;
+      const oa = ba + k * CAMPOS, ob = bb + k * CAMPOS;
+      const L = (j) => da[oa + j] + (db[ob + j] - da[oa + j]) * t;
       p.x = L(0); p.y = L(1); p.z = L(2);
-      let dpsi = d[ob + 3] - d[oa + 3]; dpsi = Math.atan2(Math.sin(dpsi), Math.cos(dpsi));
-      p.psi = d[oa + 3] + dpsi * t;
+      let dpsi = db[ob + 3] - da[oa + 3]; dpsi = Math.atan2(Math.sin(dpsi), Math.cos(dpsi));
+      p.psi = da[oa + 3] + dpsi * t;
       p.anguloVolante = L(4);
       const ang = L(5);
-      let giro = d[ob + 6] - d[oa + 6]; if (Math.abs(giro) > 3) giro = 0;
-      p.ruedas.forEach((w, r) => { w.angulo = r < 2 ? ang : 0; w.giro = d[oa + 6] + giro * t; });
-      p.cabeceo = L(7); p.balanceo = L(8); p.rpm = L(9); p.marcha = d[oa + 10]; p.velocidad = L(11);
-      p.drsAbierto = d[oa + 12] > 0.5; p.danoAleron = d[oa + 13];
-      const bits = d[oa + 15];
-      p.dano.aleronTras = d[oa + 14];
+      let giro = db[ob + 6] - da[oa + 6]; if (Math.abs(giro) > 3) giro = 0;
+      p.ruedas.forEach((w, r) => { w.angulo = r < 2 ? ang : 0; w.giro = da[oa + 6] + giro * t; });
+      p.cabeceo = L(7); p.balanceo = L(8); p.rpm = L(9); p.marcha = da[oa + 10]; p.velocidad = L(11);
+      p.drsAbierto = da[oa + 12] > 0.5; p.danoAleron = da[oa + 13];
+      const bits = da[oa + 15];
+      p.dano.aleronTras = da[oa + 14];
       for (let r = 0; r < 4; r++) { p.dano.pinchazo[r] = !!(bits & (1 << r)); p.dano.suelta[r] = !!(bits & (16 << r)); }
-      p.mandos.acelerador = L(16); p.mandos.freno = L(17); p.fondoToca = d[oa + 18]; p.impacto = Math.max(d[oa + 19], d[ob + 19]);
+      p.mandos.acelerador = L(16); p.mandos.freno = L(17); p.fondoToca = da[oa + 18]; p.impacto = Math.max(da[oa + 19], db[ob + 19]);
     }
   }
 

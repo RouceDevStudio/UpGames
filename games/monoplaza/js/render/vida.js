@@ -180,3 +180,72 @@ export class CocheSeguridad {
     this.luces.forEach((m, k) => { m.emissive.setHex(col); m.emissiveIntensity = Math.sin(this.t * 12 + k * Math.PI) > 0 ? 4 : 0.2; });
   }
 }
+
+// Fuegos artificiales para celebrar una victoria o un podio: cohetes que suben y estallan
+// en esferas de chispas de colores que caen apagándose.
+export class Fuegos {
+  constructor(scene, calidad = 2) {
+    this.scene = scene;
+    this.max = calidad >= 2 ? 2400 : 1000;
+    const g = new THREE.BufferGeometry();
+    this.pos = new Float32Array(this.max * 3); this.col = new Float32Array(this.max * 3);
+    this.vel = new Float32Array(this.max * 3); this.vida = new Float32Array(this.max);
+    for (let i = 0; i < this.max; i++) this.pos[i * 3 + 1] = -9999;
+    g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(this.col, 3));
+    this.puntos = new THREE.Points(g, new THREE.PointsMaterial({ size: 1.6, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true }));
+    this.puntos.frustumCulled = false;
+    scene.add(this.puntos);
+    this.libre = 0; this.t = 0; this.activo = 0; this.cohetes = [];
+  }
+
+  /** Lanza fuegos durante `seg` segundos alrededor de `centro` (Vector3). */
+  lanzar(centro, seg = 10, alEstallar = null) { this.centro = centro.clone(); this.activo = seg; this.alEstallar = alEstallar; }
+
+  _estallar(x, y, z) {
+    const cols = [[1, 0.25, 0.2], [1, 0.85, 0.3], [0.3, 0.8, 1], [0.4, 1, 0.5], [1, 0.4, 1], [1, 1, 1]];
+    const c = cols[Math.floor(Math.random() * cols.length)], n = 160 + Math.floor(Math.random() * 120), fuerza = 14 + Math.random() * 10;
+    for (let k = 0; k < n; k++) {
+      const i = this.libre; this.libre = (this.libre + 1) % this.max;
+      const th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1), v = fuerza * (0.85 + Math.random() * 0.3);
+      this.pos.set([x, y, z], i * 3);
+      this.vel.set([Math.sin(ph) * Math.cos(th) * v, Math.cos(ph) * v, Math.sin(ph) * Math.sin(th) * v], i * 3);
+      this.col.set(c, i * 3); this.vida[i] = 1.6 + Math.random() * 0.8;
+    }
+    this.alEstallar?.(new THREE.Vector3(x, y, z));
+  }
+
+  actualizar(dt) {
+    this.t += dt;
+    if (this.activo > 0) {
+      this.activo -= dt;
+      if (Math.random() < dt * 2.2) {
+        const c = this.centro;
+        this.cohetes.push({ x: c.x + (Math.random() - 0.5) * 120, y: c.y + 5, z: c.z + (Math.random() - 0.5) * 120, vy: 38 + Math.random() * 12, t: 1.1 + Math.random() * 0.5 });
+      }
+    }
+    // cohetes subiendo (dejan una estela) y estallido al final
+    this.cohetes = this.cohetes.filter(r => {
+      r.y += r.vy * dt; r.vy -= 9.8 * dt; r.t -= dt;
+      const i = this.libre; this.libre = (this.libre + 1) % this.max;
+      this.pos.set([r.x, r.y, r.z], i * 3); this.vel.set([0, -2, 0], i * 3); this.col.set([1, 0.7, 0.4], i * 3); this.vida[i] = 0.4;
+      if (r.t <= 0) { this._estallar(r.x, r.y, r.z); return false; }
+      return true;
+    });
+    let vivas = 0;
+    for (let i = 0; i < this.max; i++) {
+      if (this.vida[i] <= 0) continue;
+      vivas++;
+      this.vida[i] -= dt;
+      const o = i * 3;
+      this.vel[o + 1] -= 6 * dt; this.vel[o] *= 1 - dt * 1.2; this.vel[o + 1] *= 1 - dt * 1.2; this.vel[o + 2] *= 1 - dt * 1.2;
+      this.pos[o] += this.vel[o] * dt; this.pos[o + 1] += this.vel[o + 1] * dt; this.pos[o + 2] += this.vel[o + 2] * dt;
+      const f = Math.max(0, Math.min(1, this.vida[i]));
+      this.col[o] *= 0.985 + f * 0.015; this.col[o + 1] *= 0.98 + f * 0.02; this.col[o + 2] *= 0.98 + f * 0.02;
+      if (this.vida[i] <= 0) { this.pos[o + 1] = -9999; }
+    }
+    this.puntos.visible = vivas > 0 || this.cohetes.length > 0;
+    this.puntos.geometry.attributes.position.needsUpdate = true;
+    this.puntos.geometry.attributes.color.needsUpdate = true;
+  }
+}

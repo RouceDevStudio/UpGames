@@ -12,7 +12,8 @@ const FRAG = /* glsl */`
 uniform sampler2D tColor;
 uniform sampler2D tDepth;
 uniform vec2 resolucion;
-uniform float cerca, lejos, foco, apertura, tiempo, barras, grano, vineta, aberracion;
+uniform float cerca, lejos, foco, apertura, tiempo, barras, grano, vineta, aberracion, movimiento;
+uniform mat4 vpAnterior, vpInversa;
 uniform int filtro;
 varying vec2 vUv;
 
@@ -43,6 +44,20 @@ void main() {
     }
     col = suma / max(peso, 0.001);
   } else col = texture2D(tColor, uv).rgb;
+  // desenfoque de movimiento de cámara: dónde estaba este punto en el fotograma anterior
+  if (movimiento > 0.0) {
+    vec4 ndc = vec4(uv * 2.0 - 1.0, texture2D(tDepth, uv).x * 2.0 - 1.0, 1.0);
+    vec4 mundo = vpInversa * ndc; mundo /= mundo.w;
+    vec4 antes = vpAnterior * mundo; vec2 uvAntes = antes.xy / antes.w * 0.5 + 0.5;
+    vec2 vel = (uv - uvAntes) * movimiento;
+    float l = length(vel);
+    if (l > 0.0015) {
+      vel *= min(1.0, 0.06 / l);
+      vec3 suma = col; float n = 1.0;
+      for (int k = 1; k < 10; k++) { float f = float(k) / 9.0 - 0.5; suma += texture2D(tColor, uv + vel * f).rgb; n += 1.0; }
+      col = suma / n;
+    }
+  }
   if (aberracion > 0.0) {
     vec2 dc = (uv - 0.5) * aberracion / resolucion * 6.0;
     col.r = mix(col.r, texture2D(tColor, uv + dc).r, 0.8);
@@ -82,6 +97,7 @@ export class Cine {
         tColor: { value: this.rt.texture }, tDepth: { value: this.rt.depthTexture }, resolucion: { value: tam.clone() },
         cerca: { value: 0.1 }, lejos: { value: 9000 }, foco: { value: 10 }, apertura: { value: 0 }, tiempo: { value: 0 },
         barras: { value: 0 }, grano: { value: 0 }, vineta: { value: 0 }, aberracion: { value: 0 }, filtro: { value: 0 },
+        movimiento: { value: 0 }, vpAnterior: { value: new THREE.Matrix4() }, vpInversa: { value: new THREE.Matrix4() },
       },
       vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
       fragmentShader: FRAG, depthTest: false, depthWrite: false,
@@ -90,7 +106,8 @@ export class Cine {
     this.escena.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.mat));
     this.camOrto = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
     // ajustes del usuario
-    this.opc = { apertura: 0, filtro: 'natural', barras: false, grano: 0, vineta: 0 };
+    this.opc = { apertura: 0, filtro: 'natural', barras: false, grano: 0, vineta: 0, movimiento: 0 };
+    this._vp = new THREE.Matrix4(); this._posAnt = new THREE.Vector3(); this._hayAnt = false;
   }
 
   ajustarTam() {
@@ -115,6 +132,15 @@ export class Cine {
     u.grano.value = o.grano + (o.filtro === 'vintage' ? 0.05 : 0);
     u.vineta.value = o.vineta;
     u.aberracion.value = o.filtro === 'vintage' ? 0.5 : o.filtro === 'cine' ? 0.2 : 0;
+    // matrices para el desenfoque de movimiento (en un corte de cámara no hay estela)
+    cam.updateMatrixWorld();
+    const vp = new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    const corte = !this._hayAnt || this._posAnt.distanceTo(cam.position) > 25;
+    u.vpAnterior.value.copy(corte ? vp : this._vp);
+    u.vpInversa.value.copy(vp).invert();
+    // la intensidad equivale a la apertura del obturador: 1 = 180° a 30 fps
+    u.movimiento.value = (o.movimiento || 0) * Math.min(2, (1 / 30) / Math.max(dt, 1 / 240));
+    this._vp.copy(vp); this._posAnt.copy(cam.position); this._hayAnt = true;
     this.r.setRenderTarget(this.rt);
     this.r.render(scene, cam);
     this.r.setRenderTarget(null);
