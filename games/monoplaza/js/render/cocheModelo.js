@@ -713,6 +713,7 @@ export function crearModelo(opc) {
         m.giro.rotation.x = sd * 0.16 * (w.izquierda ? -1 : 1);
         m.giro.position.y = m.base.y - (pin ? m.radio * 0.1 : 0) - sd * 0.04 + this.elevar;
         if (d?.suelta[k] && !m.suelta) { m.suelta = true; this.alDesprender?.('rueda', m.giro, k); }
+        else if (!d?.suelta[k] && m.suelta) m.suelta = false;      // coche reparado (o la repetición vuelve atrás)
         m.giro.visible = !m.suelta && !this.ruedaOculta[k];
       }
       carroceria.rotation.z = -car.cabeceo;

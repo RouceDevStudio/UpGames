@@ -16,8 +16,9 @@ function texturaBidon() {
 }
 
 export class Barreras {
-  constructor(scene, c, { escombros, efectos, calidad = 1 }) {
+  constructor(scene, c, { escombros, efectos, calidad = 1, deformar = null, reparar = null }) {
     this.scene = scene; this.c = c; this.escombros = escombros; this.efectos = efectos;
+    this.deformar = deformar; this.reparar = reparar;
     // bidones de agua
     const geo = new THREE.CylinderGeometry(0.42, 0.42, 0.95, 16); geo.translate(0, 0.475, 0);
     this.matBidon = new THREE.MeshStandardMaterial({ map: texturaBidon(), roughness: 0.5 });
@@ -85,6 +86,7 @@ export class Barreras {
       if (car.golpesMuro?.length) {
         for (const g of car.golpesMuro) {
           this._marca(g, car, p.equipo?.base);
+          this.deformar?.(g);
           if (g.tipo === 1 && g.bruto > 5) {
             // la barrera de neumáticos suelta algunos
             const n = Math.min(5, Math.floor(g.bruto / 4));
@@ -140,5 +142,5 @@ export class Barreras {
     return ev;
   }
 
-  reponer() { for (const b of this.bidones) b.vivo = true; this._colocarBidones(); for (const m of this.marcas) this.scene.remove(m); this.marcas = []; }
+  reponer() { this.reparar?.(); this.escombros.vaciar(); this.restos = []; for (const b of this.bidones) b.vivo = true; this._colocarBidones(); for (const m of this.marcas) this.scene.remove(m); this.marcas = []; }
 }

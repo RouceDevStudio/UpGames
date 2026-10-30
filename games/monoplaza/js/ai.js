@@ -6,7 +6,7 @@ import { COCHE, factorAgua } from './config.js';
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 
 export class PilotoIA {
-  constructor(coche, circuito, habilidad = 0.97, agresividad = 0.5) {
+  constructor(coche, circuito, habilidad = 0.97, agresividad = 0.5, { humano = true } = {}) {
     this.coche = coche;
     this.c = circuito;
     this.habilidad = habilidad;
@@ -21,6 +21,40 @@ export class PilotoIA {
     this.error = null;        // { hasta, extra } curva en la que se pasará de frenada
     this.curvaRevisada = -1;
     this.tiempo = 0;
+    // conducción humana: la línea varía, cada frenada es distinta, el ritmo sube y baja,
+    // hay errores (pasarse, abrirse, trompos) y los agresivos cierran la puerta
+    this.humano = humano;
+    const torpeza = clamp((1.02 - habilidad) * 18, 0.15, 1.2) * (1.5 - this.constancia);
+    this.ampLinea = humano ? clamp(0.25 + torpeza * 0.6, 0.25, 1.1) : 0;   // m de error de línea
+    this.ruido = 0; this.ruidoObj = 0; this.tRuido = 0;
+    this.forma = 1; this.formaObj = 1; this.tForma = 0;                    // concentración / ritmo
+    this.margenCurva = 1;                                                   // frenada de esta curva
+    this.duro = humano && agresividad > 0.6 && Math.random() < agresividad - 0.35;  // no deja hueco
+  }
+
+  // ruido lento (paseo aleatorio suavizado) para línea y ritmo
+  _humano(dt, kc) {
+    if (!this.humano) return;
+    this.tRuido -= dt; this.tForma -= dt;
+    if (this.tRuido <= 0) { this.ruidoObj = (Math.random() * 2 - 1) * this.ampLinea; this.tRuido = 1.5 + Math.random() * 3; }
+    this.ruido += (this.ruidoObj - this.ruido) * Math.min(1, dt * 0.8);
+    if (this.tForma <= 0) {
+      // rachas de concentración: unas vueltas va algo más rápido y otras pierde unas décimas
+      const amp = 0.004 + 0.008 * (1.4 - this.constancia);
+      this.formaObj = 1 - Math.random() * amp * 1.6 + amp * 0.3; this.tForma = 15 + Math.random() * 40;
+    }
+    this.forma += (this.formaObj - this.forma) * Math.min(1, dt * 0.2);
+    void kc;
+  }
+
+  /** Error aleatorio en la próxima curva: el tipo depende del piloto, la pista y la lluvia. */
+  _elegirError(v, agua) {
+    const r = Math.random();
+    const pTrompo = 0.06 + agua * 0.4 + (this.agresividad > 0.7 ? 0.03 : 0);
+    if (r < pTrompo) return { tipo: 'trompo', hasta: this.tiempo + 3.2, extra: 1.0 + Math.random() * 0.03, tAcel: 0 };
+    if (r < pTrompo + 0.27) return { tipo: 'ancho', hasta: this.tiempo + 3.5, extra: 1.01 + Math.random() * 0.025, lado: 0, fuera: Math.random() < 0.35 };
+    // pasarse de frenada (a veces bloqueando ruedas)
+    return { tipo: 'frenada', hasta: this.tiempo + 3, extra: 1.02 + Math.random() * Math.random() * 0.07, bloqueo: Math.random() < 0.35 };
   }
 
   _puntoTrazada(s, desvio, out) {
@@ -102,8 +136,16 @@ export class PilotoIA {
       const dd = o.proj.d - p.d;
       if (ds > 0 && ds < 150) {
         if (!delante || ds < delante.ds) delante = { o, ds, dd };
-        // distancia de frenada hasta un coche más lento en nuestro carril
-        if (Math.abs(dd) < 2.3) {
+        // distancia de frenada hasta un coche más lento en nuestro carril (un coche que hace un
+        // trompo o va cruzado ocupa mucho más: se le da más margen, como haría un piloto)
+        const cruzado = o.velocidad > 3 && Math.abs(Math.atan2(o.vy, Math.max(0.1, Math.abs(o.vx)))) > 0.22;
+        // dónde estará lateralmente cuando lleguemos (si se mueve hacia nuestra línea, cuenta ya)
+        const io = o.proj.i, cs = Math.cos(o.psi), sn = Math.sin(o.psi);
+        const vd = (o.vx * cs - o.vy * sn) * -c.tz[io] + (o.vx * sn + o.vy * cs) * c.tx[io];
+        const tLlega = Math.min(2.5, ds / Math.max(1, v - o.vx));
+        const ddFut = o.proj.d + vd * tLlega - p.d;
+        const ancho = (cruzado ? 4.5 : 2.3) + Math.min(1.5, Math.max(0, v - o.vx) * 0.05);
+        if (Math.abs(dd) < ancho || Math.abs(ddFut) < ancho || (dd * ddFut < 0)) {
           const agarre = this.agarreMojado ?? 1;      // en mojado se frena menos y se deja más hueco
           const hueco = (5 + v * 0.13) / Math.sqrt(agarre);
           // frenada prudente hasta el coche lento y, ya cerca, seguirlo a su ritmo
@@ -132,7 +174,7 @@ export class PilotoIA {
       const o = delante.o;
       const cierre = car.vx - o.vx;
       const rebufo = delante.ds < 30;
-      const lento = o.vx < v * 0.6 || o.abandono;       // coche dañado o parado: esquivarlo ya
+      const lento = o.vx < v * 0.6 || o.abandono || Math.abs(Math.atan2(o.vy, Math.max(0.1, Math.abs(o.vx)))) > 0.3;   // dañado, parado o trompeando: esquivarlo ya
       if (lento || (recta && (cierre > 0.4 || rebufo) && Math.random() < dt * (1 + this.agresividad * 2))) {
         // por el interior de la siguiente curva, salvo que esté tapado
         let lado = this._interior(p.s);
@@ -142,8 +184,14 @@ export class PilotoIA {
       }
     }
     // ── Defensa: cubrir el interior antes de la frenada, una sola vez ─────
-    if (detras && !salida && !this.ataque && detras.ds > -14 && (detras.o.vx - car.vx) > 0.5 && recta && Math.random() < dt * this.agresividad) this.defensa = this._interior(p.s);
-    if (!detras || detras.ds < -30 || curvaCerca) this.defensa = 0;
+    // cubrirse: en recta (y los duros, también a la entrada de la frenada); con rebufo pegado se cubre más
+    const pegado = detras && detras.ds > -14 && ((detras.o.vx - car.vx) > 0.3 || detras.ds > -8);
+    if (pegado && !salida && !this.ataque && !this.defensa && (recta || (this.duro && !curvaCerca)) && Math.random() < dt * (0.4 + this.agresividad * 1.6)) {
+      this.defensa = this._interior(p.s);
+      // los duros cubren justo hacia donde va el que ataca
+      if (this.duro && Math.abs(detras.dd) > 1.5) this.defensa = Math.sign(detras.dd);
+    }
+    if (!detras || detras.ds < -30 || (curvaCerca && !this.duro)) this.defensa = 0;
 
     // ── Desplazamiento lateral objetivo ────────────────────────────────────
     const hw = c.semiAncho[p.i];
@@ -151,16 +199,24 @@ export class PilotoIA {
     let dObj = offTraz;                                     // en coordenada d de la pista
     if (this.ataque) dObj = this.ataque.rival.proj.d + this.ataque.lado * 3.4;
     else if (this.defensa) dObj = this.defensa * (hw - 2.2);
-    // lado a lado en curva: cada uno conserva su línea (nada de cerrar la puerta)
-    if (curvaCerca && apar.some(a => Math.abs(a.dd) < 4)) dObj = p.d;
-    // lado a lado: mantener al menos 3,2 m entre centros
+    // línea humana: nunca exactamente la misma (se nota más fuera del tráfico)
+    if (!this.ataque && !this.defensa && !apar.length) dObj += this.ruido;
+    // error «ancho»: se abre hacia el exterior a la salida (bordillo, hierba, límites)
+    if (this.error?.tipo === 'ancho') {
+      if (!this.error.lado && Math.abs(c.trazada.curv[p.i]) > 1 / 250) this.error.lado = -Math.sign(c.trazada.curv[p.i]);
+      if (this.error.lado) dObj = this.error.lado * (c.def.urbano ? hw - 0.8 : this.error.fuera ? hw + 0.6 : hw - 0.3);   // en un urbano, al muro no
+    }
+    // lado a lado en curva: cada uno conserva su línea; los duros cierran la puerta igualmente
+    if (curvaCerca && !this.duro && apar.some(a => Math.abs(a.dd) < 4)) dObj = p.d;
+    // lado a lado: hueco entre centros (los duros aprietan y a veces se tocan)
+    const hueco = this.duro ? 2.6 : 3.2;
     for (const a of apar) {
-      if (Math.abs(a.dd) < 3.2) {
-        const lejos = a.dd > 0 ? a.o.proj.d - 3.3 : a.o.proj.d + 3.3;
+      if (Math.abs(a.dd) < hueco) {
+        const lejos = a.dd > 0 ? a.o.proj.d - (hueco + 0.1) : a.o.proj.d + (hueco + 0.1);
         dObj = a.dd > 0 ? Math.min(dObj, lejos) : Math.max(dObj, lejos);
       }
     }
-    dObj = clamp(dObj, -hw + 1.2, hw - 1.2);
+    dObj = this.error?.tipo === 'ancho' ? clamp(dObj, -hw - 1, hw + 1) : clamp(dObj, -hw + 1.2, hw - 1.2);
     this.desvioObj = dObj - offTraz;
     const kDes = this.ataque || apar.length ? 1.6 : curvaCerca ? 1.3 : 1.0;
     this.desvio += (this.desvioObj - this.desvio) * Math.min(1, dt * kDes);
@@ -182,14 +238,19 @@ export class PilotoIA {
     const iFren = Math.floor(c.envolver(p.s + 120) / c.paso) % c.n;
     if (c.perfil[iFren] < v * 0.75 && iFren !== this.curvaRevisada && !this.error) {
       this.curvaRevisada = iFren;
-      // errores pequeños (pasarse de frenada, abrirse en la salida); los graves son raros
-      const prob = (1.02 - this.habilidad) * 0.5 * (1.4 - this.constancia);
-      if (Math.random() < prob) this.error = { hasta: this.tiempo + 3, extra: 1.02 + Math.random() * Math.random() * 0.05 };
+      // cada frenada es distinta: unas veces llega algo corto y otras apura de más
+      this.margenCurva = this.humano ? clamp(1 + (Math.random() + Math.random() - 1) * 0.018 * (1.5 - this.constancia), 0.975, 1.012) : 1;
+      // errores: pasarse de frenada, abrirse a la salida y algún trompo (más con lluvia, en tráfico y presionado)
+      const agua = Math.min(1, (c.agua || 0) * 3);
+      const presion = (this.enTrafico ? 1.4 : 1) * (this.defensa || this.ataque ? 1.3 : 1);
+      const prob = this.humano ? (1.03 - this.habilidad) * 0.3 * (1.45 - this.constancia) * presion * (1 + agua * 1.5) : 0;
+      if (Math.random() < prob) this.error = this._elegirError(v, agua);
     }
-    if (this.error && this.tiempo > this.error.hasta) this.error = null;
+    if (this.error && this.tiempo > this.error.hasta) { if (this.error.tc != null) car.ayudas.tc = this.error.tc; if (this.error.abs != null) car.ayudas.abs = this.error.abs; this.error = null; }
+    this._humano(dt);
 
     // ── Velocidad ──────────────────────────────────────────────────────────
-    let vObj = this.velocidadObjetivo(p.s + v * 0.12);
+    let vObj = this.velocidadObjetivo(p.s + v * 0.12) * this.forma * this.margenCurva;
     if (this.error) vObj *= this.error.extra;
     if (this.ataque && recta) vObj *= 1.01;               // en el ataque se apura algo más la frenada
     // fuera de la trazada la curva es más cerrada: hay que ir más despacio
@@ -206,6 +267,16 @@ export class PilotoIA {
     else if (err > -1.2) ac = clamp(0.35 + err * 0.3, 0, 1);
     else fr = clamp(-err * 0.16, 0, 1);
     if (Math.abs(beta) > 0.12) ac *= 0.5;
+    // trompo: en el vértice pisa a fondo demasiado pronto, sin control de tracción
+    const er = this.error;
+    if (er?.tipo === 'trompo' && Math.abs(kc) > 1 / 120 && v > 12 && v < 45 && fr === 0 && er.tAcel < 0.7) {
+      if (er.tc == null) { er.tc = car.ayudas.tc; car.ayudas.tc = 0; }
+      er.tAcel += dt; ac = 1;
+      car.mandos.direccion = clamp(car.mandos.direccion * 1.25, -1, 1);
+    }
+    // bloqueo de ruedas: frena de más con el ABS apagado un instante (humo y plano)
+    if (er?.tipo === 'frenada' && er.bloqueo && fr > 0.6) { if (er.abs == null) { er.abs = car.ayudas.abs; car.ayudas.abs = false; } fr = 1; }
+    else if (er?.abs != null && fr < 0.3) { car.ayudas.abs = er.abs; er.abs = null; }
     this.dbg = { vObj, beta, w: car.aireSucio, d: p.d, desvio: this.desvio, dObj };
     car.mandos.acelerador = ac;
     car.mandos.freno = fr;

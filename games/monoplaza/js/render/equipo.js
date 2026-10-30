@@ -310,6 +310,9 @@ export class Escombros {
     if (this.lista.length > 30) { const v = this.lista.shift(); this.scene.remove(v.obj); }
   }
 
+  /** Quita todos los restos (al reiniciar o al recibir un coche nuevo). */
+  vaciar() { for (const p of this.lista) this.scene.remove(p.obj); this.lista.length = 0; }
+
   // trozos de fibra de carbono
   esquirlas(pos, vel, n = 8) {
     const geo = new THREE.BoxGeometry(0.25, 0.02, 0.15);

@@ -2,6 +2,9 @@
 // boxes, pórtico de salida con semáforo, carteles de frenada y vegetación.
 
 import * as THREE from 'three';
+import { crearHelicoptero } from './helicoptero.js';
+import { Publico } from './publico.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Sky } from 'three/addons/objects/Sky.js';
 import * as TX from './texturas.js';
 import { crearGaraje, crearPuestoMuro } from './garaje.js';
@@ -9,7 +12,9 @@ import { crearGaraje, crearPuestoMuro } from './garaje.js';
 const SOL_ELEVACION = 34, SOL_AZIMUT = 215;
 
 // Cinta indexada a lo largo de la pista. `perfil(i)` devuelve K pares [d, dy].
-function cinta(c, perfil, { filtro = null, uDe = null, escalaV = 10, yBase = 0 } = {}) {
+// `largo` (±1): la textura corre a lo largo de la pista (u) en ese sentido y en vertical (v) por
+// el perfil; así los rótulos de los muros se leen bien desde la pista a ambos lados
+function cinta(c, perfil, { filtro = null, uDe = null, escalaV = 10, yBase = 0, largo = 0 } = {}) {
   const n = c.n;
   const K = perfil(0).length;
   const filas = n + 1;
@@ -24,8 +29,9 @@ function cinta(c, perfil, { filtro = null, uDe = null, escalaV = 10, yBase = 0 }
       pos[k * 3] = c.x[i] + nx * d;
       pos[k * 3 + 1] = c.y[i] + dy + yBase;
       pos[k * 3 + 2] = c.z[i] + nz * d;
-      uv[k * 2] = uDe ? uDe(j, d, i) : j / (K - 1);
-      uv[k * 2 + 1] = r * c.paso / escalaV;
+      const u = uDe ? uDe(j, d, i) : j / (K - 1), v = r * c.paso / escalaV;
+      if (largo) { uv[k * 2] = largo * v; uv[k * 2 + 1] = u; }
+      else { uv[k * 2] = u; uv[k * 2 + 1] = v; }
     }
   }
   const idx = [];
@@ -133,7 +139,9 @@ class Terreno {
 }
 
 export function construirEscenario(scene, renderer, c, calidad) {
-  const res = { luces: [], actualizables: [] };
+  const res = { luces: [], actualizables: [], deformables: [] };
+  res.deformarMuro = (g) => deformarMuro(res, c, g);
+  res.repararMuros = () => repararMuros(res);
   const anis = renderer.capabilities.getMaxAnisotropy();
 
   // --- Cielo y entorno ---------------------------------------------------
@@ -321,11 +329,12 @@ export function construirEscenario(scene, renderer, c, calidad) {
         const w = c.muro[lado][i];
         const y0 = c.caida(i, sg * w);
         return [[sg * w, y0 - 0.1], [sg * w, y0 + alto]];
-      }, { filtro, escalaV: mat === matMuro ? 16 : mat === matTecpro ? 4.8 : 2.4, uDe: (j) => 1 - j });
+      }, mat === matMuro ? { filtro, escalaV: 16, uDe: (j) => j, largo: -sg } : { filtro, escalaV: mat === matTecpro ? 4.8 : 2.4, uDe: (j) => 1 - j });
       const m = new THREE.Mesh(g, mat);
       mat.side = THREE.DoubleSide;
       m.castShadow = calidad >= 2; m.receiveShadow = true;
       scene.add(m);
+      registrarDeformable(res, g, lado, mat === matMuro ? 0.55 : 1.0);
     };
     const bar = (i) => c.barrera?.[lado]?.[i] ?? (c.grava[lado][i] ? 1 : 0);
     muro((i) => bar(i) === 0 && noPit(i), matMuro, 1.05);
@@ -347,6 +356,7 @@ export function construirEscenario(scene, renderer, c, calidad) {
         return [[sg * w, y0], [sg * (w + 0.4), y0 + 3.2]];
       }, { filtro: noPit, escalaV: 1.6, uDe: (j) => j * 2 });
       scene.add(new THREE.Mesh(g, matV));
+      registrarDeformable(res, g, lado, 1.3);
     }
   }
 
@@ -374,14 +384,18 @@ export function construirEscenario(scene, renderer, c, calidad) {
   const texPublico = TX.texturaPublico();
   const matGrada = new THREE.MeshStandardMaterial({ map: texPublico, roughness: 0.9 });
   const matTecho = new THREE.MeshStandardMaterial({ color: 0xeef2f6, roughness: 0.5, metalness: 0.3 });
+  // con calidad media o alta el público es 3D (asientos de colores); en baja, la textura de siempre
+  const publico = calidad >= 1 ? new Publico(calidad) : null;
+  const matAsientos = new THREE.MeshStandardMaterial({ color: 0x1f4fd6, roughness: 0.6 });
+  const gradaOpc = { publico, matAsientos };
   const matEdif = new THREE.MeshStandardMaterial({ map: TX.texturaEdificio(), roughness: 0.6 });
-  for (const [s0, largo] of [[-260, 150], [-90, 160], [120, 170], [330, 140]]) grada(scene, c, s0, largo, -1, matGrada, matTecho, matHormigon);
+  for (const [s0, largo] of [[-260, 150], [-90, 160], [120, 170], [330, 140]]) grada(scene, c, s0, largo, -1, matGrada, matTecho, matHormigon, gradaOpc);
   res.garajes = calleBoxes(scene, c, { matAsfalto: matEscape, matLinea, matMuro, matTecho, matHormigon, calidad }, res);
   // tribuna en la horquilla y en la Parabólica
   for (const cv of c.curvas) {
     if (/Horquilla|Remanso|Parab/.test(cv.nombre)) {
       const lado = cv.nombre.includes('Parab') ? -1 : -1;
-      grada(scene, c, cv.s - 60, 110, lado, matGrada, matTecho, matHormigon);
+      grada(scene, c, cv.s - 60, 110, lado, matGrada, matTecho, matHormigon, gradaOpc);
     }
   }
   // puente publicitario sobre una recta larga de cada circuito
@@ -399,12 +413,67 @@ export function construirEscenario(scene, renderer, c, calidad) {
   let tPub = 0;
   res.actualizables.push((dt) => { tPub += dt; texPublico.offset.x = (Math.floor(tPub * 5) % 2) * 0.0035; texPublico.offset.y = (Math.floor(tPub * 3) % 2) * 0.004; });
 
+  if (publico) {
+    publico.construir(scene);
+    res.publico = publico;
+    res.actualizables.push((dt) => publico.actualizar(dt, tv.foco));
+  }
+
   // --- Vegetación o ciudad ---------------------------------------------------
   if (urbano) ciudad(scene, c, terreno, calidad, matHormigon);
   arboles(scene, c, terreno, calidad, urbano ? 140 : 48);
   montanas(scene, terreno);
 
   return res;
+}
+
+// ─── Muros, barreras y vallas que se abollan con los golpes ─────────────────────
+// Cada cinta guarda sus vértices originales; un golpe empuja hacia fuera las filas
+// cercanas (más arriba que abajo) y al reiniciar todo vuelve a su sitio.
+function registrarDeformable(res, geo, lado, blandura) {
+  const pos = geo.attributes.position;
+  res.deformables.push({ geo, lado, blandura, orig: Float32Array.from(pos.array), tocada: false });
+}
+
+function deformarMuro(res, c, g) {
+  if (!g || g.lado == null || g.i == null) return;
+  const fuerza = Math.min(1, Math.max(0, (g.bruto - 3) / 22));      // 3 m/s apenas marca, 25 m/s abolla a fondo
+  if (fuerza <= 0) return;
+  const sg = g.lado ? 1 : -1, R = 4;                               // ±4 filas (≈ ±8 m)
+  for (const d of res.deformables) {
+    if (d.lado !== g.lado) continue;
+    const pos = d.geo.attributes.position, arr = pos.array;
+    const filas = c.n + 1, K = pos.count / filas;
+    for (let dr = -R; dr <= R; dr++) {
+      const i = (g.i + dr + c.n) % c.n;
+      const caida = Math.exp(-(dr * dr) / 5);
+      const nx = -c.tz[i] * sg, nz = c.tx[i] * sg;
+      for (const row of (i === 0 ? [0, c.n] : [i])) {
+        for (let j = 0; j < K; j++) {
+          const alto = K > 1 ? j / (K - 1) : 1;
+          const empuje = fuerza * caida * d.blandura * (0.35 + 0.65 * alto) * 0.6;
+          const k = (row * K + j) * 3;
+          // tope: nada se mueve más de ~0,9 m de su sitio
+          const ox = arr[k] - d.orig[k], oz = arr[k + 2] - d.orig[k + 2];
+          if (ox * ox + oz * oz > 0.8) continue;
+          arr[k] += nx * empuje; arr[k + 2] += nz * empuje;
+          arr[k + 1] -= empuje * alto * 0.25;                       // la parte alta se dobla y cae un poco
+        }
+      }
+    }
+    pos.needsUpdate = true; d.tocada = true;
+    d.geo.computeVertexNormals();
+  }
+}
+
+function repararMuros(res) {
+  for (const d of res.deformables) {
+    if (!d.tocada) continue;
+    d.geo.attributes.position.array.set(d.orig);
+    d.geo.attributes.position.needsUpdate = true;
+    d.geo.computeVertexNormals();
+    d.tocada = false;
+  }
 }
 
 // Los charcos aparecen poco a poco cuando el agua en pista supera ~0.35
@@ -543,7 +612,7 @@ function colocarEnPista(c, obj, s, d, rotExtra = 0) {
   obj.rotation.y = -Math.atan2(m.tz, m.tx) + rotExtra;
 }
 
-function grada(scene, c, s0, largo, lado, matGrada, matTecho, matBase) {
+function grada(scene, c, s0, largo, lado, matGrada, matTecho, matBase, { publico = null, matAsientos = null } = {}) {
   const tramos = Math.max(1, Math.round(largo / 30));
   for (let k = 0; k < tramos; k++) {
     const s = s0 + (k + 0.5) * largo / tramos;
@@ -553,7 +622,7 @@ function grada(scene, c, s0, largo, lado, matGrada, matTecho, matBase) {
     const L = largo / tramos - 1;
     const filas = 8;
     for (let f = 0; f < filas; f++) {
-      const esc = new THREE.Mesh(new THREE.BoxGeometry(L, 0.9 + f * 0.9, 1.6), f % 2 ? matBase : matGrada);
+      const esc = new THREE.Mesh(new THREE.BoxGeometry(L, 0.9 + f * 0.9, 1.6), f % 2 ? matBase : publico ? matAsientos : matGrada);
       esc.position.set(0, (0.9 + f * 0.9) / 2, -lado * (-f * 1.6));
       g.add(esc);
     }
@@ -562,7 +631,7 @@ function grada(scene, c, s0, largo, lado, matGrada, matTecho, matBase) {
     frente.position.set(0, filas * 0.45 + 0.5, lado * filas * 0.8 - lado * 0.8);
     frente.rotation.x = lado > 0 ? Math.atan2(0.9, 1.6) - Math.PI / 2 : -(Math.atan2(0.9, 1.6) - Math.PI / 2);
     frente.rotation.y = lado > 0 ? Math.PI : 0;
-    g.add(frente);
+    if (!publico) g.add(frente);
     const techo = new THREE.Mesh(new THREE.BoxGeometry(L, 0.25, filas * 1.6 + 3), matTecho);
     techo.position.set(0, filas * 0.9 + 4, lado * filas * 0.8);
     techo.rotation.x = lado * 0.08;
@@ -575,6 +644,7 @@ function grada(scene, c, s0, largo, lado, matGrada, matTecho, matBase) {
     g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     colocarEnPista(c, g, s, d);
     scene.add(g);
+    publico?.agregarGrada(g, L, filas, lado);
   }
 }
 
@@ -644,7 +714,18 @@ function arboles(scene, c, terreno, calidad, distMin = 48) {
   const it = new THREE.InstancedMesh(tronco, matTronco, n);
   const ip = new THREE.InstancedMesh(copaPino, matPino, n);
   const ifr = new THREE.InstancedMesh(copaFrondosa, matFrond, n);
-  let np = 0, nf = 0, nt = 0;
+  // los árboles cercanos a la pista (los que se ven de cerca) con más detalle: pinos de
+  // varios pisos y frondosos de copa irregular con ramas; los lejanos siguen igual de simples
+  const cerca = calidad >= 1 ? 150 : 0, nCerca = calidad >= 2 ? 320 : 160;
+  const pinoDet = mergeGeometries([0, 1, 2, 3].map(k => { const g = new THREE.ConeGeometry(2.6 - k * 0.55, 3.4 - k * 0.3, 10, 1); g.translate(0, 3.6 + k * 1.55, 0); return g; }));
+  const lobulos = [[0, 5.2, 0, 2.3], [1.4, 4.6, 0.6, 1.7], [-1.2, 4.8, -0.8, 1.8], [0.3, 6.4, -0.5, 1.6], [-0.6, 4.3, 1.3, 1.5]];
+  const frondDet = mergeGeometries(lobulos.map(([x, y, z, rr]) => { const g = new THREE.IcosahedronGeometry(rr, 1); g.translate(x, y, z); return g; }));
+  const ramas = mergeGeometries([[0.9, 0.5], [-0.8, -0.6], [0.2, 1.1]].map(([a, b]) => { const g = new THREE.CylinderGeometry(0.06, 0.11, 2.2, 5); g.translate(0, 1.1, 0); g.rotateZ(a * 0.7); g.rotateX(b * 0.5); g.translate(0, 3, 0); return g; }));
+  const troncoDet = mergeGeometries([new THREE.CylinderGeometry(0.2, 0.34, 3.4, 9).translate(0, 1.7, 0), ramas]);
+  const matPinoDet = new THREE.MeshStandardMaterial({ color: 0x2c4a2a, roughness: 0.9, flatShading: true });
+  const matFrondDet = new THREE.MeshStandardMaterial({ color: 0x3f6331, roughness: 0.85, flatShading: true });
+  const itd = new THREE.InstancedMesh(troncoDet, matTronco, nCerca), ipd = new THREE.InstancedMesh(pinoDet, matPinoDet, nCerca), ifd = new THREE.InstancedMesh(frondDet, matFrondDet, nCerca);
+  let np = 0, nf = 0, nt = 0, ntd = 0, npd = 0, nfd = 0;
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sc = new THREE.Vector3(), p = new THREE.Vector3();
   const col = new THREE.Color();
   let intentos = 0;
@@ -659,13 +740,19 @@ function arboles(scene, c, terreno, calidad, distMin = 48) {
     const s = 0.7 + rnd() * 0.8;
     e.set(0, rnd() * Math.PI * 2, 0); q.setFromEuler(e); sc.set(s, s * (0.85 + rnd() * 0.4), s); p.set(x, y - 0.2, z);
     m.compose(p, q, sc);
-    it.setMatrixAt(nt++, m);
-    col.setHSL(0.27 + rnd() * 0.06, 0.35 + rnd() * 0.2, 0.75 + rnd() * 0.3);
+    col.setHSL(0.24 + rnd() * 0.1, 0.3 + rnd() * 0.25, 0.68 + rnd() * 0.4);
+    if (dist < cerca && ntd < nCerca) {
+      itd.setMatrixAt(ntd++, m); nt++;
+      if (rnd() < 0.45) { ipd.setMatrixAt(npd, m); ipd.setColorAt(npd++, col); }
+      else { ifd.setMatrixAt(nfd, m); ifd.setColorAt(nfd++, col); }
+      continue;
+    }
+    it.setMatrixAt(nt - ntd, m); nt++;
     if (rnd() < 0.5) { ip.setMatrixAt(np, m); ip.setColorAt(np++, col); }
     else { ifr.setMatrixAt(nf, m); ifr.setColorAt(nf++, col); }
   }
-  it.count = nt; ip.count = np; ifr.count = nf;
-  for (const im of [it, ip, ifr]) { im.castShadow = calidad >= 2; im.receiveShadow = false; im.frustumCulled = false; scene.add(im); }
+  it.count = nt - ntd; ip.count = np; ifr.count = nf; itd.count = ntd; ipd.count = npd; ifd.count = nfd;
+  for (const im of [it, ip, ifr, itd, ipd, ifd]) { im.castShadow = calidad >= 2; im.receiveShadow = false; im.frustumCulled = false; scene.add(im); }
 }
 
 // Circuito urbano: manzanas de edificios tras los guardarraíles, túnel y mar
@@ -765,9 +852,9 @@ function calleBoxes(scene, c, m, res) {
   }
   // muro de boxes (hormigón con publicidad)
   const muro = new THREE.Mesh(cinta(c, (i) => [[c.semiAncho[i] + p.muroDe, 1.0], [c.semiAncho[i] + (p.muroDe + p.muroA) / 2, 1.15], [c.semiAncho[i] + p.muroA, 1.0]],
-    { filtro: (i) => c.hayMuroPit(i), escalaV: 16, uDe: (j) => j / 2 }), m.matMuro);
-  const lados = new THREE.Mesh(cinta(c, (i) => [[c.semiAncho[i] + p.muroDe, -0.05], [c.semiAncho[i] + p.muroDe, 1.0]], { filtro: (i) => c.hayMuroPit(i), escalaV: 16, uDe: (j) => 1 - j }), m.matMuro);
-  const lados2 = new THREE.Mesh(cinta(c, (i) => [[c.semiAncho[i] + p.muroA, -0.05], [c.semiAncho[i] + p.muroA, 1.0]], { filtro: (i) => c.hayMuroPit(i), escalaV: 16, uDe: (j) => j }), m.matMuro);
+    { filtro: (i) => c.hayMuroPit(i), escalaV: 16, uDe: (j) => j / 2, largo: 1 }), m.matMuro);
+  const lados = new THREE.Mesh(cinta(c, (i) => [[c.semiAncho[i] + p.muroDe, -0.05], [c.semiAncho[i] + p.muroDe, 1.0]], { filtro: (i) => c.hayMuroPit(i), escalaV: 16, uDe: (j) => j, largo: -1 }), m.matMuro);
+  const lados2 = new THREE.Mesh(cinta(c, (i) => [[c.semiAncho[i] + p.muroA, -0.05], [c.semiAncho[i] + p.muroA, 1.0]], { filtro: (i) => c.hayMuroPit(i), escalaV: 16, uDe: (j) => j, largo: 1 }), m.matMuro);
   for (const x of [muro, lados, lados2]) { x.castShadow = true; x.receiveShadow = true; scene.add(x); }
   // líneas del limitador con el rótulo PIT
   const texPit = TX.texturaCartel('PIT 80', '#ffffff', '#111111');
@@ -831,6 +918,9 @@ function calleBoxes(scene, c, m, res) {
   return garajes;
 }
 
+// coche que sigue el helicóptero de la tele (lo actualiza el bucle del juego)
+export const tv = { foco: null };
+
 // ─── Publicidad de UpGames por todo el circuito ───────────────────────────────
 const LEMAS = [
   ['UPGAMES', 'La primera plataforma de su especie', '#0d47ff', '#ffffff'],
@@ -839,6 +929,10 @@ const LEMAS = [
   ['NEXUS IA', 'El cerebro de UpGames', '#0b0b14', '#00e5ff'],
   ['upgames.games', 'Juegos, mods y apps', '#ffffff', '#0d47ff'],
   ['APEX GP', 'Corre contra 21 pilotos en línea', '#ff7a00', '#111111'],
+  ['UPGAMES STORE', 'Mods, apps y juegos para tu móvil', '#0b0b14', '#ffd23f'],
+  ['UPGAMES TV', 'Las carreras en directo', '#f2f4f8', '#e8202a'],
+  ['JUEGA EN UPGAMES', 'Gratis · sin descargas · upgames.games', '#16a34a', '#ffffff'],
+  ['NEXUS IA', 'Tu asistente dentro de UpGames', '#3b0aa8', '#ffffff'],
 ];
 
 function texturaValla(lema) {
@@ -868,10 +962,12 @@ function texturaLogoSuelo(texto, color) {
 
 function publicidad(scene, c, terreno, calidad) {
   const actualizables = [];
-  const mats = LEMAS.map(l => new THREE.MeshStandardMaterial({ map: texturaValla(l), roughness: 0.55, side: THREE.DoubleSide }));
+  const mats = LEMAS.map(l => new THREE.MeshStandardMaterial({ map: texturaValla(l), roughness: 0.55 }));
+  const matDorso = new THREE.MeshStandardMaterial({ color: 0x2a2d33, roughness: 0.8, metalness: 0.3 });
+  const geoCaja = new THREE.BoxGeometry(16.4, 5.4, 0.3);
   const matPoste = new THREE.MeshStandardMaterial({ color: 0x3a3d44, metalness: 0.7, roughness: 0.4 });
   // vallas gigantes junto a la pista
-  const paso = calidad >= 2 ? 230 : 330;
+  const paso = calidad >= 2 ? 160 : calidad >= 1 ? 220 : 300;
   let k = 0;
   for (let s = 60; s < c.largo - 60; s += paso) {
     const i = Math.floor(s / c.paso) % c.n;
@@ -880,15 +976,18 @@ function publicidad(scene, c, terreno, calidad) {
     if (lado > 0 && c.enZonaPit[i]) continue;
     const d = lado * (c.muro[lado > 0 ? 1 : 0][i] + 7);
     const g = new THREE.Group();
+    // panel con estructura (no una lámina): la cara impresa mira a los coches que llegan
     const panel = new THREE.Mesh(new THREE.PlaneGeometry(16, 5), mats[k++ % mats.length]);
-    panel.position.y = 6.5; g.add(panel);
+    panel.position.set(0, 6.5, 0.16); g.add(panel);
+    const caja = new THREE.Mesh(geoCaja, matDorso); caja.position.y = 6.5; g.add(caja);
     for (const x of [-6, 6]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.35, 6.5, 0.35), matPoste); p.position.set(x, 3.25, 0); g.add(p); }
     g.traverse(o => { if (o.isMesh) o.castShadow = calidad >= 2; });
     const m = c.muestra(s);
     const px = m.x - m.tz * d, pz = m.z + m.tx * d;
     g.position.set(px, Math.min(m.y, terreno.altura(px, pz) + 0.3), pz);
     // de cara a los coches que llegan
-    g.rotation.y = -Math.atan2(m.tz, m.tx) + Math.PI / 2 + lado * 0.35;
+    // (la cara +z del grupo apunta contra el sentido de la marcha, girada un poco hacia la pista)
+    g.rotation.y = -Math.atan2(m.tz, m.tx) - Math.PI / 2 - lado * 0.35;
     scene.add(g);
   }
   // logotipos pintados en la hierba de las escapatorias y en la recta
@@ -931,6 +1030,11 @@ function publicidad(scene, c, terreno, calidad) {
     }
     zep.traverse(o => { if (o.isMesh) o.castShadow = true; });
     scene.add(zep);
+    // helicóptero de la tele siguiendo al líder (res.foco lo pone el bucle del juego)
+    const heli = crearHelicoptero(calidad);
+    scene.add(heli.grupo);
+    const centro = { x: cx, z: cz }, radio = Math.max(terreno.ancho, terreno.alto) * 0.25;
+    actualizables.push((dt) => heli.actualizar(dt, tv.foco, centro, radio));
     let a = 0;
     actualizables.push((dt) => {
       a += dt * 0.012;

@@ -332,6 +332,10 @@ export class Persona {
     this.andar = 0;          // velocidad al andar (m/s), 0 = quieto
     this.salto = 0;
     this.extra = {};          // giros añadidos por hueso (p. ej. el retroceso de la pistola)
+    // muelles por hueso: el cuerpo tiene inercia (arranca, se pasa un poco y se asienta)
+    this.muelles = Object.fromEntries(HUESOS.map(h => [h, { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, ok: false }]));
+    this.semilla = Math.random() * 100;
+    this._dt = 0;
     this.aplicar();
   }
 
@@ -351,7 +355,26 @@ export class Persona {
   actualizar(dt) {
     this.t += dt;
     if (this.mezcla < 1) this.mezcla = Math.min(1, this.mezcla + dt * this.velMezcla);
+    this._dt = Math.min(dt, 1 / 20);
     this.aplicar();
+  }
+
+  // muelle algo subamortiguado hacia la pose objetivo (los brazos más sueltos que el tronco)
+  _muelles() {
+    const dt = this._dt;
+    for (const h of HUESOS) {
+      const m = this.muelles[h], r = this[h].rotation;
+      if (!m.ok || dt <= 0) { m.x = r.x; m.y = r.y; m.z = r.z; m.vx = m.vy = m.vz = 0; m.ok = true; continue; }
+      const k = h[0] === 'h' || h[0] === 'c' || h[0] === 'm' ? 260 : 420, amort = 2 * Math.sqrt(k) * 0.72;
+      // integración semi-implícita en pasos pequeños (estable con FPS bajos)
+      const n = Math.ceil(dt / 0.012), d = dt / n;
+      for (let q = 0; q < n; q++) {
+        m.vx += ((r.x - m.x) * k - m.vx * amort) * d; m.x += m.vx * d;
+        m.vy += ((r.y - m.y) * k - m.vy * amort) * d; m.y += m.vy * d;
+        m.vz += ((r.z - m.z) * k - m.vz * amort) * d; m.z += m.vz * d;
+      }
+      r.set(m.x, m.y, m.z);
+    }
   }
 
   aplicar() {
@@ -366,6 +389,16 @@ export class Persona {
     // respiración (el pecho sube y baja) y pequeño balanceo del peso
     const t = this.t;
     this.tronco.rotation.z += Math.sin(t * 1.6) * 0.015;
+    // en espera nadie está quieto del todo: pasa el peso de una pierna a otra y mueve las manos
+    if ((this.pose === 'de_pie' || this.pose === 'espera') && this.andar <= 0.05) {
+      const ws = Math.sin(t * 0.42 + this.semilla), mano = Math.sin(t * 0.9 + this.semilla * 2);
+      this.tronco.rotation.x += ws * 0.035; this.cadera.rotation.x = ws * 0.03;
+      this.kI.rotation.z -= Math.max(0, ws) * 0.12; this.rI.rotation.z += Math.max(0, ws) * 0.2;
+      this.kD.rotation.z -= Math.max(0, -ws) * 0.12; this.rD.rotation.z += Math.max(0, -ws) * 0.2;
+      this.cI.rotation.z += mano * 0.08; this.cD.rotation.z -= mano * 0.06;
+      // de vez en cuando mira a otro lado
+      this.cabeza.rotation.y += Math.max(0, Math.sin(t * 0.21 + this.semilla) - 0.7) * 1.4 * Math.sign(Math.sin(this.semilla * 7) || 1);
+    } else this.cadera.rotation.x = 0;
     this.cabeza.rotation.y += Math.sin(t * 0.37) * 0.12 * (this.pose === 'de_pie' || this.pose === 'espera' ? 1 : 0.2);
     // ciclo de andar o correr
     if (this.andar > 0.05) {
@@ -375,8 +408,10 @@ export class Persona {
       this.rI.rotation.z += -Math.max(0, -c) * amp * 1.4; this.rD.rotation.z += -Math.max(0, c) * amp * 1.4;
       if (this.pose === 'de_pie') { this.hI.rotation.z -= s * amp * 0.8; this.hD.rotation.z += s * amp * 0.8; this.cI.rotation.z += 0.3; this.cD.rotation.z += 0.3; }
       this.tronco.rotation.z -= this.andar * 0.04;
+      this.tronco.rotation.y += s * amp * 0.12;              // los hombros contrarrotan con la zancada
       y += Math.abs(Math.sin(fase)) * 0.035 - 0.02;
     }
+    this._muelles();
     // la cadera baja lo justo para que la pierna más baja (pie o rodilla apoyada) toque el suelo
     const bajo = (k, r) => {
       const a1 = k.rotation.z, a2 = a1 + r.rotation.z;

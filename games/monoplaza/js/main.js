@@ -5,6 +5,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { Circuito, CIRCUITOS } from './track.js';
 import { Sesion } from './race.js';
 import { REGLAJE_DEF, COMPUESTOS, COCHE, EQUIPOS, MEJORAS_INFO, compuestoParaAgua } from './config.js';
@@ -22,7 +23,7 @@ import { Lluvia } from './render/lluvia.js';
 import { Barreras } from './render/barreras.js';
 import { Comisarios, CapaCamara, CocheSeguridad, Fuegos } from './render/vida.js';
 import { Persona } from './render/personas.js';
-import { construirEscenario, ponerHora, ponerAgua } from './render/escenario.js';
+import { construirEscenario, ponerHora, ponerAgua, tv } from './render/escenario.js';
 import { crearModelo, dibujarPlantilla } from './render/cocheModelo.js';
 import { GestorBoxes, Escombros } from './render/equipo.js';
 import { NOMBRES_PATRON, NOMBRES_CASCO } from './render/librea.js';
@@ -185,7 +186,7 @@ async function cargarCircuito(id, forzar = false) {
   });
   escombros = new Escombros(scene, (x, z) => { const p = circuito.proyectar(x, z, -1, {}); return p.y + circuito.caida(p.i, p.d); });
   lluviaFx = new Lluvia(scene, escenario, calidad);
-  barreras = new Barreras(scene, circuito, { escombros, efectos, calidad });
+  barreras = new Barreras(scene, circuito, { escombros, efectos, calidad, deformar: (g) => escenario.deformarMuro(g), reparar: () => escenario.repararMuros() });
   comisarios = new Comisarios(scene, circuito, calidad);
   cocheSeg = new CocheSeguridad(scene);
   fuegos = new Fuegos(scene, calidad);
@@ -269,7 +270,33 @@ function configurarPost() {
   composer.setPixelRatio(pixelRatio());
   composer.addPass(new RenderPass(scene, camara.cam));
   composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.22, 0.45, 0.93));
+  composer.addPass(pasoVelocidad = new ShaderPass(DESENFOQUE_VELOCIDAD));
   composer.addPass(new OutputPass());
+}
+
+// Desenfoque por velocidad: zoom radial suave hacia los bordes (el centro queda nítido)
+let pasoVelocidad = null;
+const DESENFOQUE_VELOCIDAD = {
+  uniforms: { tDiffuse: { value: null }, fuerza: { value: 0 }, centro: { value: new THREE.Vector2(0.5, 0.55) } },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float fuerza; uniform vec2 centro; varying vec2 vUv;
+    void main() {
+      vec4 base = texture2D(tDiffuse, vUv);
+      if (fuerza < 0.001) { gl_FragColor = base; return; }
+      vec2 dir = vUv - centro;
+      float borde = smoothstep(0.12, 0.62, length(dir * vec2(1.6, 1.0)));
+      vec3 suma = base.rgb;
+      for (int k = 1; k < 8; k++) suma += texture2D(tDiffuse, vUv - dir * fuerza * borde * float(k) / 7.0).rgb;
+      gl_FragColor = vec4(suma / 8.0, base.a);
+    }`,
+};
+/** Fuerza del desenfoque según la velocidad del coche (desde ~180 km/h) y la cámara. */
+function actualizarDesenfoque(v, dt) {
+  if (!pasoVelocidad) return;
+  const activo = ajustes.desenfoque !== false && ['cabina', 'tcam', 'persecucion', 'cercana'].includes(camara.modo);
+  const obj = activo ? Math.max(0, Math.min(1, (v * 3.6 - 180) / 150)) * 0.035 : 0;
+  const u = pasoVelocidad.uniforms.fuerza;
+  u.value += (obj - u.value) * Math.min(1, dt * 4);
 }
 
 function redimensionar() {
@@ -1022,7 +1049,7 @@ function procesarEventos() {
         radio.decir('Se acabó, lo siento. Deja el coche en un lugar seguro.', { prioridad: true });
         if (enRed) { multi.abandono(informeIncidentes()); setTimeout(() => { if (jugando && enRed) mostrarFueraRed(e.motivo); }, 3500); }
         else if (sesion.modo === 'carrera') setTimeout(() => { if (jugando) mostrarResultados(); }, 4500);
-        else setTimeout(() => { if (jugando && sesion.jugador.coche.abandono) { const c = sesion.jugador.coche; c.repararTodo(); c.repararEnBoxes(); c.recolocar(); sesion.jugador.abandono = false; sesion.jugador.valida = false; crearModelos(); mensaje('COCHE NUEVO', 'Vuelta anulada', 2); } }, 3500);
+        else setTimeout(() => { if (jugando && sesion.jugador.coche.abandono) { const c = sesion.jugador.coche; c.repararTodo(); c.repararEnBoxes(); c.recolocar(); sesion.jugador.abandono = false; sesion.jugador.valida = false; barreras?.reponer(); crearModelos(); mensaje('COCHE NUEVO', 'Vuelta anulada', 2); } }, 3500);
       }
     }
     else if (e.tipo === 'finCarrera' && !enRed) { if (jugando && !$('#resultados').classList.contains('visible')) setTimeout(() => { if (jugando) mostrarResultados(); }, 1500); }
@@ -1200,7 +1227,7 @@ function bucle(ahora) {
   } else {
     // menú: el coche del jugador da vueltas solo como fondo (en el garaje se queda quieto)
     if (enGaraje) { /* parado frente a su garaje */ }
-    else if (!sesion._piloto) import('./ai.js').then(({ PilotoIA }) => { if (sesion && !sesion._piloto) { sesion._piloto = new PilotoIA(sesion.jugador.coche, circuito, 0.9, 0.3); sesion.jugador.coche.esIA = true; } });
+    else if (!sesion._piloto) import('./ai.js').then(({ PilotoIA }) => { if (sesion && !sesion._piloto) { sesion._piloto = new PilotoIA(sesion.jugador.coche, circuito, 0.9, 0.3, { humano: false }); sesion.jugador.coche.esIA = true; } });
     if (!enGaraje) sesion._piloto?.conducir(dt, sesion.coches);
   }
   if (enRed && jugando && !qRed) actualizarRed(dt);
@@ -1297,6 +1324,9 @@ function bucle(ahora) {
   }
   actualizarCapaCamara(dt, j);
   escenario.camPos = camara.cam.position;
+  // el helicóptero de la tele sigue al líder (o al coche del jugador en práctica)
+  { const q = sesion.orden?.[0] || sesion.jugador, k = sesion.participantes.indexOf(q), mm = modelos[k];
+    tv.foco = mm ? { x: mm.raiz.position.x, y: mm.raiz.position.y, z: mm.raiz.position.z, psi: q.coche.psi } : null; }
   for (const f of escenario.actualizables) f(dt);
   // lluvia, spray y asfalto mojado
   efectos.agua = sesion.clima.agua;
@@ -1331,6 +1361,7 @@ function bucle(ahora) {
   if (tMensaje > 0) { tMensaje -= dt; if (tMensaje <= 0) $('#hMensaje').classList.remove('visible'); }
 
   // render
+  actualizarDesenfoque(sesion.jugador?.coche?.velocidad || 0, dt);
   if (composer) composer.render(); else renderer.render(scene, camara.cam);
   if (fotoPendiente) guardarFoto();
 
@@ -2168,6 +2199,7 @@ function actualizarRepe(dt) {
   const c = r.proxies[r.coche], m = modelos[r.coche];
   const planoAntes = camRepe.planoActual;
   camRepe.actualizar(camara.cam, c, m, r.cam, dt);
+  tv.foco = c ? { x: c.x, y: c.y, z: c.z, psi: c.psi } : null;
   if (r.ruta) camaraRuta(r.u);
   if (camRepe.planoActual !== planoAntes) pintarRepe();
   for (const f of escenario.actualizables) f(dt);
@@ -2176,10 +2208,10 @@ function actualizarRepe(dt) {
   escenario.luzSol.target.position.set(c.x, c.y, c.z);
   escenario.luzSol.position.copy(escenario.sol).multiplyScalar(250).add(escenario.luzSol.target.position);
   nivelDetalle();
-  if (r.sonido) sonido.actualizarRepe?.(dt, r.proxies, r.coche, camara.cam, r.play ? r.vel : 0, ['cabina', 'cara', 'tcam', 'morro', 'rueda', 'trasera'].includes(camRepe.planoActual));
+  if (r.sonido) sonido.actualizarRepe?.(dt, r.proxies, r.coche, camara.cam, r.play ? r.vel : 0, ['cabina', 'cara', 'tcam', 'morro', 'rueda', 'ruedaTras', 'trasera'].includes(camRepe.planoActual));
   else sonido.actualizarRepe?.(dt, [], 0, camara.cam, 0, false);
   if (cineActivo()) cine.render(scene, camara.cam, camara.cam.position.distanceTo(m.raiz.position), dt);
-  else if (composer) composer.render(); else renderer.render(scene, camara.cam);
+  else if (composer) { if (pasoVelocidad) pasoVelocidad.uniforms.fuerza.value = 0; composer.render(); } else renderer.render(scene, camara.cam);
   if (fotoPendiente) guardarFoto();
   if (grabVideo?.grabando) $('#repeGrab').textContent = '● ' + fmt(grabVideo.segundos).replace(/\.\d+$/, '');
 }
