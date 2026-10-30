@@ -488,12 +488,16 @@ export class Sesion {
     const lon = (T.x - D.x) * cd + (T.z - D.z) * sd;
     if (lon > -2.2 || lon < -6.5) return;                        // tiene que estar justo detrás
     const al = Math.abs(lat);
-    if (al < 0.5 || al > 1.9) return;                            // morro contra la caja de cambios o solo un roce lateral
+    // las ruedas solo se montan si de verdad se solapan (centros separados ~1,6 m de lado);
+    // fuera de esa franja es morro contra caja de cambios o un roce lateral
+    if (al < 1.15 || al > 1.95) return;
+    // y no siempre: muchas veces la rueda solo roza y rebota
+    if (Math.random() > 0.65) return;
     if (this.tiempo - (T._tRueda ?? -9) < 1) return;
     T._tRueda = this.tiempo;
     const lado = Math.sign(lat);
     // cuanto más solapan las ruedas y más rápido van, más alto sale
-    const solape = 1 - Math.abs(al - 1.25) / 0.75;
+    const solape = 1 - Math.abs(al - 1.55) / 0.4;
     const vh = Math.min(7, 2.4 + v * 0.04 + vRel * 0.3) * (0.75 + 0.3 * solape);
     if (!atras.remoto) {
       T.despegar(vh, 1.2 + Math.random() * 2.2 + vRel * 0.1, lado * (1.0 + Math.random() * 2.4), lado * (Math.random() * 0.8));

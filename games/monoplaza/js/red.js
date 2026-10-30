@@ -100,6 +100,7 @@ export function empaquetar(car, p) {
   d.suelta.forEach((x, k) => { if (x) bits |= 1 << (k + 4); });
   bits |= Math.round(Math.min(1, car.danoAleron) * 3) << 8;
   bits |= Math.round(Math.min(1, d.aleronTras) * 3) << 10;
+  if (d.desintegrado) bits |= 1 << 12;                 // coche partido (solo queda la célula)
   const flags = (car.drsAbierto ? 1 : 0) | (car.mandos.freno > 0.1 ? 2 : 0) | (p.box ? 4 : 0) | (car.retenido ? 8 : 0) | (car.abandono ? 16 : 0) | (car.limitadorPit ? 32 : 0);
   return [car.x, car.z, car.y, car.psi, car.vx, car.vy, car.r, car.anguloVolante || 0, car.rpm, car.marcha,
     car.proj.s, p.distancia, p.vuelta, flags, car.cabeceo, car.balanceo, bits, car.mandos.acelerador, car.giroCab || 0, car.giroBal || 0];
@@ -115,6 +116,7 @@ export function aplicarEstado(car, e, circuito) {
   car.mandos.freno = f & 2 ? 1 : 0; car.mandos.acelerador = e[17] || 0;
   for (let k = 0; k < 4; k++) { car.dano.pinchazo[k] = !!(bits & (1 << k)); car.dano.suelta[k] = !!(bits & (1 << (k + 4))); }
   car.danoAleron = ((bits >> 8) & 3) / 3; car.dano.aleronTras = ((bits >> 10) & 3) / 3;
+  car.dano.desintegrado = !!(bits & (1 << 12));
   car.proj = circuito.proyectar(car.x, car.z, car.proj?.i ?? -1, car.proj?.i >= 0 ? car.proj : {});
   // giro de las ruedas y dirección para el modelo
   const delta = car.anguloVolante;

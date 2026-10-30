@@ -538,3 +538,7 @@ body.cine-salida::before, body.cine-salida::after { content: ''; position: fixed
 body.cine-salida::before { top: 0; } body.cine-salida::after { bottom: 0; }
 #cineEtiqueta { position: fixed; top: calc(9vh + 10px); left: 50%; transform: translateX(-50%); z-index: 31; font: 800 13px/1 system-ui, sans-serif; letter-spacing: .12em; color: #fff; background: rgba(0,0,0,.55); padding: 7px 12px; border-radius: 6px; opacity: 0; transition: opacity .3s; pointer-events: none; }
 #cineEtiqueta.visible { opacity: 1; }
+/* práctica: tras destrozar el coche, tú decides cuándo pedir otro */
+#bCocheNuevo { position: fixed; right: 16px; top: 50%; transform: translateY(-50%); z-index: 32; display: none; }
+#bCocheNuevo.visible { display: block; }
+body.en-repe #bCocheNuevo { display: none; }

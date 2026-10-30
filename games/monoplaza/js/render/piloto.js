@@ -5,6 +5,7 @@
 // cabeza se encoge contra el HANS. Pasado el golpe vuelve a coger el volante.
 
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { texturaCasco } from './librea.js';
 
 const BRAZO = 0.27, ANTEBRAZO = 0.25;          // m
@@ -13,7 +14,7 @@ const _x = new THREE.Vector3(1, 0, 0), _z = new THREE.Vector3(0, 0, 1);
 export function casco(matCasco, matNegro, calidad) {
   const g = new THREE.Group();
   // carcasa: esfera alargada y aplanada por los lados, con la mentonera prolongada
-  const gC = new THREE.SphereGeometry(0.135, calidad >= 2 ? 36 : 22, calidad >= 2 ? 24 : 14);
+  const gC = new THREE.SphereGeometry(0.135, calidad >= 2 ? 48 : 30, calidad >= 2 ? 32 : 20);
   const p = gC.attributes.position;
   for (let i = 0; i < p.count; i++) {
     let x = p.getX(i), y = p.getY(i), z = p.getZ(i);
@@ -45,7 +46,11 @@ export function casco(matCasco, matNegro, calidad) {
 // guante: palma, dedos juntos y pulgar (apunta a +x local; se orienta con el antebrazo)
 function guanteGeo() {
   const palma = new THREE.BoxGeometry(0.075, 0.03, 0.07); palma.translate(0.035, 0, 0);
-  const dedos = new THREE.CapsuleGeometry(0.017, 0.045, 3, 8); dedos.rotateZ(Math.PI / 2); dedos.scale(1, 1, 2.1); dedos.translate(0.09, -0.004, 0);
+  // cuatro dedos separados (como en el modelo de referencia), algo curvados hacia la palma
+  const dedos = mergeGeometries([-0.026, -0.009, 0.009, 0.026].map((z, k) => {
+    const d = new THREE.CapsuleGeometry(0.0085, 0.04 + (k === 1 || k === 2 ? 0.008 : 0), 3, 8);
+    d.rotateZ(Math.PI / 2 - 0.35); d.translate(0.095, -0.012, z); return d;
+  }));
   const pulgar = new THREE.CapsuleGeometry(0.012, 0.03, 3, 6); pulgar.rotateZ(Math.PI / 2.6); pulgar.translate(0.045, 0.012, 0.04);
   const pulgar2 = pulgar.clone(); pulgar2.translate(0, 0, -0.08);
   return [palma, dedos, pulgar, pulgar2];
@@ -97,7 +102,16 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
   cinta(new THREE.Vector3(0.105, 0.612, 0), new THREE.Vector3(0.16, 0.585, 0), 0.04);                     // entrepierna
   // hombros redondeados (de ellos cuelgan los brazos)
   const geoHombro = new THREE.SphereGeometry(0.048, hi ? 18 : 12, hi ? 14 : 10);
-  const hombros = [-1, 1].map(l => { const m = new THREE.Mesh(geoHombro, traje); m.position.set(0.05, 0.665, l * 0.165); grupo.add(m); return m; });
+  const hombros = [-1, 1].map(l => {
+    const m = new THREE.Mesh(geoHombro, traje); m.position.set(0.05, 0.665, l * 0.165); m.scale.setScalar(1.15); grupo.add(m);
+    // hombrera del mono (la tira para sacar al piloto)
+    const hb = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.012, 0.045), traje); hb.position.set(0, 0.043, 0); m.add(hb);
+    return m;
+  });
+  // cuello del mono asomando bajo el HANS
+  const matCuelloMono = traje.clone(); matCuelloMono.side = THREE.DoubleSide;
+  const cuelloMono = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.068, 0.045, hi ? 20 : 12, 1, true), matCuelloMono);
+  cuelloMono.position.set(0.035, 0.705, 0); grupo.add(cuelloMono);
   const hans = new THREE.Mesh(new THREE.TorusGeometry(0.095, 0.03, 8, 20, Math.PI * 1.3), matNegro);
   hans.rotation.set(Math.PI / 2, 0, Math.PI * 0.85); hans.position.set(0.02, 0.70, 0);
   grupo.add(hans);
@@ -113,8 +127,9 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
   grupo.add(cuello);
   // brazos: brazo, codo y antebrazo; manos con guante
   const seg = hi ? 16 : 10;
-  const geoBrazo = new THREE.CylinderGeometry(0.034, 0.03, 1, seg, 3), geoAnte = new THREE.CylinderGeometry(0.03, 0.024, 1, seg, 3);
-  const geoCodo = new THREE.SphereGeometry(0.031, seg, 10);
+  // mangas holgadas del mono ignífugo (más gruesas, como en la referencia)
+  const geoBrazo = new THREE.CylinderGeometry(0.042, 0.037, 1, seg, 4), geoAnte = new THREE.CylinderGeometry(0.037, 0.03, 1, seg, 4);
+  const geoCodo = new THREE.SphereGeometry(0.039, seg, 10);
   // puño del guante (manguito) donde termina el antebrazo
   const geoPuno = new THREE.CylinderGeometry(0.032, 0.034, 0.05, seg);
   const gg = guanteGeo();

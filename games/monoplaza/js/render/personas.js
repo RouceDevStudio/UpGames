@@ -44,7 +44,7 @@ function normalTela() {
 
 // Pliegues del mono de piloto (como el modelo esculpido de referencia): arrugas grandes y
 // alargadas que siguen las extremidades, más las costuras acolchadas. Mapa de normales.
-function normalPliegues() {
+export function normalPliegues() {
   if (cacheTex.has('pliegues')) return cacheTex.get('pliegues');
   const n = 256, cv = lienzo(n, n), x = cv.getContext('2d'), img = x.createImageData(n, n);
   const H = new Float32Array(n * n);
@@ -177,6 +177,7 @@ function texturaPiel(tono) {
 // ─── Geometrías compartidas ──────────────────────────────────────────────────
 let G = null;
 function torno(perfil, seg = 14) {
+  seg = Math.round(seg * 1.5);              // más lados: cuerpos redondos, no facetados
   const g = new THREE.LatheGeometry(perfil.map(([r, y]) => new THREE.Vector2(r, y)), seg);
   g.computeVertexNormals();
   return g;
@@ -207,9 +208,9 @@ function geometrias() {
     nariz: new THREE.ConeGeometry(0.017, 0.034, 8),
     oreja: new THREE.SphereGeometry(0.026, 8, 6),
     pelo: new THREE.SphereGeometry(0.104, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55),
-    hombro: new THREE.SphereGeometry(0.057, 12, 10),
-    codo: new THREE.SphereGeometry(0.041, 10, 8),
-    rodilla: new THREE.SphereGeometry(0.064, 10, 8),
+    hombro: new THREE.SphereGeometry(0.057, 18, 14),
+    codo: new THREE.SphereGeometry(0.041, 16, 12),
+    rodilla: new THREE.SphereGeometry(0.064, 16, 12),
   };
   // piezas del piloto (guantes, botas, arnés)
   G.puno = new THREE.CylinderGeometry(0.045, 0.04, 0.07, 12);

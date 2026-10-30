@@ -6,6 +6,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { COCHE, COMPUESTOS } from '../config.js';
 import { texturaCarbono } from './texturas.js';
 import { proyectarUV, dibujarLibrea, materialLibrea } from './librea.js';
+import { normalPliegues } from './personas.js';
 import { crearPiloto } from './piloto.js';
 
 const A = COCHE.wheelbase * (1 - COCHE.repartoDel); // eje delantero
@@ -143,6 +144,37 @@ function loftS(secciones, segs = 24) {
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setIndex(idx);
   return orientarFuera(g);
+}
+
+// Tubo de sección ovalada a lo largo de una curva; radios(t) → [ancho (horizontal), alto]
+function barridoOval(curva, segs, radial, radios) {
+  const pos = [], idx = [];
+  const T = new THREE.Vector3(), lado = new THREE.Vector3(), arriba = new THREE.Vector3(), P = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i <= segs; i++) {
+    const t = i / segs;
+    curva.getPointAt(t, P); curva.getTangentAt(t, T);
+    lado.crossVectors(T, Y); if (lado.lengthSq() < 1e-6) lado.set(0, 0, 1); lado.normalize();
+    arriba.crossVectors(lado, T).normalize();
+    const [a, b] = radios(t);
+    for (let j = 0; j < radial; j++) {
+      const ang = j / radial * Math.PI * 2;
+      pos.push(P.x + lado.x * Math.cos(ang) * a + arriba.x * Math.sin(ang) * b, P.y + lado.y * Math.cos(ang) * a + arriba.y * Math.sin(ang) * b, P.z + lado.z * Math.cos(ang) * a + arriba.z * Math.sin(ang) * b);
+    }
+  }
+  for (let i = 0; i < segs; i++) for (let j = 0; j < radial; j++) {
+    const a = i * radial + j, b = i * radial + (j + 1) % radial, c = (i + 1) * radial + j, d = (i + 1) * radial + (j + 1) % radial;
+    idx.push(a, c, b, b, c, d);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  // las caras hacia fuera (mismo criterio que el resto de piezas)
+  const p = g.attributes.position, n = g.attributes.normal, ii = g.index.array;
+  let fuera = 0;
+  for (let k = 0; k < p.count; k += 7) { curva.getPointAt(Math.min(1, Math.floor(k / radial) / segs), P); fuera += (p.getX(k) - P.x) * n.getX(k) + (p.getY(k) - P.y) * n.getY(k) + (p.getZ(k) - P.z) * n.getZ(k); }
+  if (fuera < 0) { for (let k = 0; k < ii.length; k += 3) { const tt = ii[k + 1]; ii[k + 1] = ii[k + 2]; ii[k + 2] = tt; } g.computeVertexNormals(); }
+  return g;
 }
 
 // Perfil alar con muchos cortes a lo largo de la envergadura para poder curvarlo
@@ -520,10 +552,23 @@ export function crearModelo(opc) {
       [-0.20, 0.72, -0.30], [-0.10, 0.865, -0.33], [0.10, 0.955, -0.30], [0.36, 0.995, -0.20], [0.52, 1.0, -0.06],
       [0.52, 1.0, 0.06], [0.36, 0.995, 0.20], [0.10, 0.955, 0.30], [-0.10, 0.865, 0.33], [-0.20, 0.72, 0.30],
     ].map(p => new THREE.Vector3(...p)));
-    const tubo = new THREE.TubeGeometry(curva, 48, 0.026, 10, false);
-    geo.librea.push(tubo);
-    const pilar = new THREE.CatmullRomCurve3([[0.82, 0.645, 0], [0.72, 0.79, 0], [0.60, 0.97, 0], [0.53, 0.995, 0]].map(p => new THREE.Vector3(...p)));
-    geo.librea.push(new THREE.TubeGeometry(pilar, 16, 0.021, 8, false));
+    // como el modelo de referencia: aro de sección ovalada (más ancho que alto), patas traseras
+    // que se ensanchan al unirse a la carrocería, pilar delantero en forma de pala con su base
+    // atornillada sobre el morro
+    geo.librea.push(barridoOval(curva, fisico ? 72 : 40, fisico ? 16 : 10, (t) => {
+      const pie = Math.max(0, 1 - Math.min(t, 1 - t) / 0.12);          // ensanche en las patas
+      return [0.030 + pie * 0.035, 0.021 + pie * 0.022];
+    }));
+    const pilar = new THREE.CatmullRomCurve3([[0.84, 0.64, 0], [0.74, 0.78, 0], [0.62, 0.95, 0], [0.53, 0.995, 0]].map(p => new THREE.Vector3(...p)));
+    geo.librea.push(barridoOval(pilar, fisico ? 24 : 14, fisico ? 14 : 8, (t) => {
+      const base = Math.max(0, 1 - t / 0.25);
+      return [0.016 + base * 0.02, 0.03 + base * 0.035];               // pala: estrecha de lado, larga de frente
+    }));
+    // placa de anclaje del pilar sobre el morro (con sus tornillos)
+    geo.negro.push(caja(0.12, 0.012, 0.075, 0.86, 0.637, 0, 0, 0, -0.32));
+    for (const [dx, dz] of [[-0.035, -0.025], [-0.035, 0.025], [0.035, -0.025], [0.035, 0.025]]) {
+      const t = new THREE.CylinderGeometry(0.006, 0.006, 0.008, 8); t.translate(0.86 + dx, 0.646 - dx * 0.33, dz); geo.metal.push(t);
+    }
   }
   // suspensión: triángulos y bieletas con perfil aerodinámico
   const xr = -B;
@@ -644,7 +689,7 @@ export function crearModelo(opc) {
   carroceria.add(columna);
 
   // Piloto: modelo aparte (render/piloto.js), sentado en la carrocería
-  const piloto = crearPiloto({ traje: new THREE.MeshStandardMaterial({ map: texturaMono(colores), roughness: 0.78 }), guante: new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.8 }),
+  const piloto = crearPiloto({ traje: new THREE.MeshStandardMaterial({ map: texturaMono(colores), roughness: 0.78, normalMap: calidad >= 1 ? normalPliegues() : null, normalScale: new THREE.Vector2(0.6, 0.6) }), guante: new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.8 }),
     matNegro: matComun('negro'), equipado: eq, colores, columna, calidad });
   carroceria.add(piloto.grupo);
   const casco = piloto.casco, cuello = piloto.cuello;

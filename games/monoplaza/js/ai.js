@@ -145,13 +145,18 @@ export class PilotoIA {
         const tLlega = Math.min(2.5, ds / Math.max(1, v - o.vx));
         const ddFut = o.proj.d + vd * tLlega - p.d;
         const ancho = (cruzado ? 4.5 : 2.3) + Math.min(1.5, Math.max(0, v - o.vx) * 0.05);
-        if (Math.abs(dd) < ancho || Math.abs(ddFut) < ancho || (dd * ddFut < 0)) {
+        // si ya lo estamos esquivando (va lento o parado), no frenar en seco detrás de él: seguir
+        // rodando despacio mientras nos apartamos (antes se quedaban clavados y hacían cola)
+        const esquivando = this.ataque?.rival === o && this.ataque.lento;
+        if (esquivando && Math.abs(dd) > 1.9) { /* ya hay hueco lateral: se pasa */ }
+        else if (Math.abs(dd) < ancho || Math.abs(ddFut) < ancho || (dd * ddFut < 0)) {
           const agarre = this.agarreMojado ?? 1;      // en mojado se frena menos y se deja más hueco
           const hueco = (5 + v * 0.13) / Math.sqrt(agarre);
           // frenada prudente hasta el coche lento y, ya cerca, seguirlo a su ritmo
           const vo = Math.max(0, o.vx);
           let vt = Math.sqrt(vo * vo + 2 * 8 * agarre * Math.max(0, ds - hueco));
           if (ds < hueco + 30) vt = Math.min(vt, vo + (ds - hueco) * 0.7);
+          if (esquivando && ds > 3.2) vt = Math.max(vt, 3);
           vTrafico = Math.min(vTrafico, vt);
         }
       } else if (ds <= 0 && ds > -40) {
@@ -166,7 +171,7 @@ export class PilotoIA {
       const a = this.ataque;
       let ds = a.rival.proj.s - p.s; if (ds < -L / 2) ds += L; else if (ds > L / 2) ds -= L;
       // la maniobra se abandona si llega la curva y aún no vamos emparejados
-      if (ds < -7 || this.tiempo > a.hasta || ds > 60 || (curvaCerca && ds > 3 && !a.lento)) this.ataque = null;
+      if (ds < -7 || (this.tiempo > a.hasta && !(a.lento && ds < 25)) || ds > 60 || (curvaCerca && ds > 3 && !a.lento)) this.ataque = null;
     }
     // en los primeros segundos de carrera cada uno mantiene su carril (salida limpia)
     const salida = this.tiempo < 9;
@@ -174,7 +179,9 @@ export class PilotoIA {
       const o = delante.o;
       const cierre = car.vx - o.vx;
       const rebufo = delante.ds < 30;
-      const lento = o.vx < v * 0.6 || o.abandono || Math.abs(Math.atan2(o.vy, Math.max(0.1, Math.abs(o.vx)))) > 0.3;   // dañado, parado o trompeando: esquivarlo ya
+      // dañado, parado o trompeando: esquivarlo ya (un coche casi parado siempre cuenta como lento,
+      // aunque nosotros también estemos parados detrás: si no, se formaba una cola eterna)
+      const lento = o.vx < Math.max(v * 0.6, 4) || o.abandono || Math.abs(Math.atan2(o.vy, Math.max(0.1, Math.abs(o.vx)))) > 0.3;
       if (lento || (recta && (cierre > 0.4 || rebufo) && Math.random() < dt * (1 + this.agresividad * 2))) {
         // por el interior de la siguiente curva, salvo que esté tapado
         let lado = this._interior(p.s);

@@ -513,7 +513,7 @@ function arrancarSesion(modo) {
   iniciarEstrategia();
   progCarrera = { parrilla: sesion.jugador?.posicion || 1, sanciones: 0, vr: false, pole: vengoDeQ && sesion.jugador?.posicion === 1, km: 0, cerrada: false };
   vengoDeQ = false;
-  pilotosFuera?.limpiar(); salidasPendientes = []; tAturdido = 0; cineSalida = null; finPendiente = null; document.body.classList.remove('cine-salida'); document.body.classList.remove('aturdido');
+  pilotosFuera?.limpiar(); salidasPendientes = []; tAturdido = 0; cineSalida = null; finPendiente = null; document.body.classList.remove('cine-salida'); $('#bCocheNuevo').classList.remove('visible'); document.body.classList.remove('aturdido');
   // repetición, telemetría, radio y estado de la carrera
   grabadora = new Grabadora(sesion.participantes.length);
   posPrev = new Map();
@@ -557,6 +557,7 @@ function pausar(si) {
     mostrar('pausa');
     $('#bPausaReglaje').style.display = modoActual === 'carrera' || enRed ? 'none' : '';
     $('#bReiniciar').style.display = enRed ? 'none' : '';
+    $('#bPausaCoche').style.display = !enRed && sesion?.modo !== 'carrera' && sesion?.jugador.coche.abandono ? '' : 'none';
     $('#bCalibrar').style.display = ajustes.control === 'inclinacion' && esTactil ? '' : 'none';
     telemetriaPausa();
     sonido.silenciar(true);
@@ -567,6 +568,7 @@ function pausar(si) {
 }
 
 function salirAlMenu() {
+  $('#bCocheNuevo').classList.remove('visible');
   terminarLeccion();
   salirDeTray();
   if (enRed) { multi.salir(); enRed = false; }
@@ -771,6 +773,21 @@ function aplicarAjustesEnVivo() {
 }
 
 $('#bContinuar').addEventListener('click', () => pausar(false));
+// coche nuevo en práctica/contrarreloj tras destrozar el anterior
+function cocheNuevo() {
+  if (!sesion || sesion.modo === 'carrera' || enRed || !sesion.jugador.coche.abandono) return;
+  const c = sesion.jugador.coche;
+  c.repararTodo(); c.repararEnBoxes(); c.recolocar();
+  sesion.jugador.abandono = false; sesion.jugador.valida = false;
+  barreras?.reponer(); pilotosFuera?.limpiar(); salidasPendientes = [];
+  if (cineSalida) { cineSalida = null; document.body.classList.remove('cine-salida'); camara.iniciada = false; }
+  crearModelos();
+  $('#bCocheNuevo').classList.remove('visible');
+  if (pausado) pausar(false);
+  mensaje('COCHE NUEVO', 'Vuelta anulada', 2);
+}
+$('#bCocheNuevo').addEventListener('click', (e) => { e.stopPropagation(); cocheNuevo(); });
+$('#bPausaCoche').addEventListener('click', () => cocheNuevo());
 $('#bReiniciar').addEventListener('click', () => { if (qActual) salirAPistaQ(); else empezar(modoActual, carreraCamp ? { pilotos: sesion.participantes.map(p => ({ id: p.idPiloto, nombre: p.nombre, ie: p.indiceEquipo, ip: p.numeroPiloto, hab: p.ia?.habilidad ?? 1, jugador: p.jugador })), vueltas: sesion.vueltasTotales, clima: sesion.clima.modo, campeonato: carreraCamp } : {}); });
 $('#bSalir').addEventListener('click', salirAlMenu);
 $('#bProbarVoz').addEventListener('click', () => {
@@ -1178,7 +1195,7 @@ function procesarEventos() {
     }
     else if (e.tipo === 'abandono') {
       // el piloto se baja cuando el coche se detiene (en carrera; en práctica te dan otro coche)
-      if (sesion.modo === 'carrera' && !e.p.remoto) salidasPendientes.push({ p: e.p, t: 0, herido: (e.p.coche.picoGolpe || 0) > 24 });
+      if ((sesion.modo === 'carrera' || e.p.jugador) && !e.p.remoto) salidasPendientes.push({ p: e.p, t: 0, herido: (e.p.coche.picoGolpe || 0) > 24 });
       if (!e.p.jugador && sesion.modo === 'carrera') radio.decir(`Abandono de ${e.p.nombre.replace('@', '')}.`, { tipo: 'megafonia', clave: 'ab:' + e.p.nombre, cada: 999 });
       if (e.p.jugador) {
         mensaje('ABANDONO', e.motivo || 'Coche demasiado dañado', 3.5);
@@ -1186,7 +1203,9 @@ function procesarEventos() {
         // la pantalla final espera a que termine la salida del piloto (con sus cámaras)
         if (enRed) { multi.abandono(informeIncidentes()); trasSalida(() => { if (jugando && enRed) mostrarFueraRed(e.motivo); }, 3500); }
         else if (sesion.modo === 'carrera') trasSalida(() => { if (jugando) mostrarResultados(); }, 4500);
-        else setTimeout(() => { if (jugando && sesion.jugador.coche.abandono) { const c = sesion.jugador.coche; c.repararTodo(); c.repararEnBoxes(); c.recolocar(); sesion.jugador.abandono = false; sesion.jugador.valida = false; barreras?.reponer(); pilotosFuera?.limpiar(); crearModelos(); mensaje('COCHE NUEVO', 'Vuelta anulada', 2); } }, 3500);
+        // práctica y contrarreloj: no se reinicia solo; se puede ver el choque y la salida del
+        // piloto y, cuando quieras, pedir otro coche (botón, menú de pausa o tecla R)
+        else { $('#bCocheNuevo').classList.add('visible'); radio.decir('Tranquilo. Cuando quieras te preparamos otro coche.', { clave: 'cocheNuevo', cada: 30 }); }
       }
     }
     else if (e.tipo === 'finCarrera' && !enRed) { if (jugando && !$('#resultados').classList.contains('visible')) setTimeout(() => { if (jugando) mostrarResultados(); }, 1500); }
@@ -1374,7 +1393,7 @@ function bucle(ahora) {
       else if (e === 'mezcla') { j.mandos.mezcla = ((j.mandos.mezcla ?? 1) + 1) % 3; mensaje('MEZCLA ' + MEZCLA_NOMBRES[j.mandos.mezcla], ['Menos potencia, gasta menos', 'Equilibrada', 'Más potencia, gasta más y castiga el motor'][j.mandos.mezcla], 1.2); }
       else if (e === 'recolocar' && enRed) mensaje('SIN REINICIOS EN LÍNEA', '', 1);
       else if (e === 'recolocar') {
-        if (j.abandono && sesion.modo !== 'carrera') continue;
+        if (j.abandono && sesion.modo !== 'carrera') { cocheNuevo(); continue; }
         if (j.velocidad < 8 || j.fueraPista) { j.recolocar(); sesion.jugador.valida = false; mensaje('DE VUELTA A LA PISTA', 'Vuelta anulada', 1.2); radio.decir('De vuelta en pista. Esa vuelta no cuenta, céntrate.', { clave: 'recol', cada: 20 }); }
       }
       else if (e === 'box') alternarPanelBox();
