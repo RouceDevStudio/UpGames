@@ -34,7 +34,7 @@ export class Lluvia {
 
   forzar() { this.intensidad = -1; }
 
-  actualizar(dt, camPos, lluvia, agua, renderer) {
+  actualizar(dt, camPos, lluvia, agua, renderer, sombraNubes = 0) {
     this.t += dt;
     const on = lluvia > 0.02;
     this.lineas.visible = on;
@@ -52,7 +52,7 @@ export class Lluvia {
       this.mat.opacity = 0.18 + lluvia * 0.35;
     }
     // ambiente: solo se recalcula cuando cambia algo
-    const clave = Math.round(lluvia * 50) + Math.round(agua * 50) * 100;
+    const clave = Math.round(lluvia * 50) + Math.round(agua * 50) * 100 + Math.round(sombraNubes * 40) * 10000;
     if (clave === this.intensidad) return;
     this.intensidad = clave;
     const nube = Math.min(1, lluvia * 1.4 + agua * 0.3);
@@ -60,8 +60,10 @@ export class Lluvia {
     const noche = this.esc.hora === 'noche';
     this.scene.fog.color.copy(b.fogColor).lerp(new THREE.Color(noche ? 0x0c1220 : 0x6f7a86), nube);
     this.scene.fog.far = b.fogFar * (1 - 0.55 * lluvia);
-    this.esc.luzSol.intensity = b.sol * (1 - (noche ? 0.25 : 0.7) * nube);
-    if (this.esc.hemi) this.esc.hemi.intensity = b.hemi + (noche ? 0 : 0.35) * nube;
+    // una nube tapando el sol: la luz directa baja y el cielo rellena un poco
+    const sn = noche ? 0 : sombraNubes * (1 - nube);
+    this.esc.luzSol.intensity = b.sol * (1 - (noche ? 0.25 : 0.7) * nube) * (1 - 0.6 * sn);
+    if (this.esc.hemi) this.esc.hemi.intensity = b.hemi + (noche ? 0 : 0.35) * nube + 0.12 * sn;
     if (renderer) renderer.toneMappingExposure = b.exp - 0.12 * nube;
     if (this.asf) {
       // asfalto mojado: más oscuro y con reflejos

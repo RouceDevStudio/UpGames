@@ -81,7 +81,9 @@ const opcCamp = { vueltas: 5, rivales: 11, dificultad: 'normal', clima: 'auto', 
 const CALENDARIOS = {
   clasico: ['valle', 'puerto', 'veloz'],
   europa: ['levante', 'principado', 'alpino', 'aerodromo', 'danubio', 'ardenas', 'parque_real'],
-  mundial: ['desierto', 'valle', 'levante', 'principado', 'isla', 'alpino', 'aerodromo', 'danubio', 'ardenas', 'dunas', 'parque_real', 'puerto', 'veloz'],
+  mundial: ['desierto', 'valle', 'levante', 'principado', 'isla', 'alpino', 'aerodromo', 'danubio', 'ardenas', 'dunas', 'parque_real', 'bahia', 'puerto', 'veloz', 'bulevar'],
+  // carreras de noche bajo los focos
+  noche: ['desierto', 'bahia', 'bulevar', 'puerto'],
 };
 let temporada = (() => { try { return JSON.parse(localStorage.getItem('apexgp.campeonato')) || null; } catch { return null; } })();
 // modo carrera: su temporada va aparte; mientras se corre un GP de la carrera, `temporada` apunta a ella
@@ -1211,7 +1213,15 @@ function radioPeriodica(dt) {
   const pr = clima.pronostico();
   if (pr && pr.lluvia > 0 && pr.en < 70 && pr.en > 0) radio.decir(`El radar marca lluvia en un minuto más o menos.`, { clave: 'radarLluvia', cada: 999 });
   if (pr && pr.lluvia === 0 && pr.en < 60 && pr.en > 0 && clima.lluvia > 0.2) radio.decir('Va a parar de llover pronto. La pista se secará poco a poco.', { clave: 'radarSeco', cada: 999 });
-  if (clima.lluvia > 0.1 && !estadoRadio.lluvia) { estadoRadio.lluvia = true; radio.decir('Empieza a llover. Cuidado en las frenadas.', { clave: 'llueve', cada: 60 }); }
+  if (clima.lluvia > 0.1 && !estadoRadio.lluvia) {
+    estadoRadio.lluvia = true;
+    // el frente entra por una zona: se dice en qué sector llueve
+    if (clima.cobertura < 0.6) {
+      const sec = Math.min(3, Math.floor(clima.centro * 3) + 1);
+      radio.decir(`Está lloviendo en el sector ${sec}; el resto del circuito todavía está seco. Cuidado al llegar ahí.`, { clave: 'llueve', cada: 60 });
+    } else radio.decir('Empieza a llover. Cuidado en las frenadas.', { clave: 'llueve', cada: 60 });
+  }
+  if (clima.lluvia > 0.1 && clima.cobertura >= 1 && !estadoRadio.lluviaTodo && estadoRadio.lluvia) { estadoRadio.lluviaTodo = true; radio.decir('Ya llueve en todo el circuito.', { clave: 'llueveTodo', cada: 120 }); }
   if (clima.lluvia < 0.02 && estadoRadio.lluvia) { estadoRadio.lluvia = false; radio.decir('Ha parado de llover.', { clave: 'parado', cada: 60 }); }
   if (sesion.modo === 'carrera' && !p.solicitudBox && !p.box) {
     const ideal = compuestoParaAgua(clima.agua);
@@ -1431,7 +1441,10 @@ function bucle(ahora) {
   efectos.agua = sesion.clima.agua;
   ponerAgua(escenario, sesion.clima.agua);
   mojarCoches(sesion.clima.agua, sesion.clima.lluvia);
-  lluviaFx.actualizar(dt, camara.cam.position, sesion.clima.lluvia, sesion.clima.agua, renderer);
+  { // lluvia y agua del lugar donde está la cámara (el frente puede cubrir solo una parte)
+    const fc = sesion.clima.factor ? sesion.clima.factor((sesion.jugador?.coche.proj.s || 0) / circuito.largo) : 1;
+    lluviaFx.actualizar(dt, camara.cam.position, sesion.clima.lluvia * fc, sesion.clima.agua * fc, renderer, sesion.clima.sombraNubes?.() || 0);
+  }
   nivelDetalle();
   if (efectos._escala !== camara.cam.fov) { efectos.ajustarEscala(innerHeight * renderer.getPixelRatio(), camara.cam.fov); efectos._escala = camara.cam.fov; }
 
@@ -2328,7 +2341,10 @@ function actualizarRepe(dt) {
   if (camRepe.planoActual !== planoAntes) pintarRepe();
   for (const f of escenario.actualizables) f(dt);
   efectos.actualizar(dtR, [], camara.cam.position);
-  lluviaFx.actualizar(dt, camara.cam.position, sesion.clima.lluvia, sesion.clima.agua, renderer);
+  { // lluvia y agua del lugar donde está la cámara (el frente puede cubrir solo una parte)
+    const fc = sesion.clima.factor ? sesion.clima.factor((sesion.jugador?.coche.proj.s || 0) / circuito.largo) : 1;
+    lluviaFx.actualizar(dt, camara.cam.position, sesion.clima.lluvia * fc, sesion.clima.agua * fc, renderer, sesion.clima.sombraNubes?.() || 0);
+  }
   escenario.luzSol.target.position.set(c.x, c.y, c.z);
   escenario.luzSol.position.copy(escenario.sol).multiplyScalar(250).add(escenario.luzSol.target.position);
   nivelDetalle();

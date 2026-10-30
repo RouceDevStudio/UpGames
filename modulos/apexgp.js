@@ -541,6 +541,8 @@ const CIRCUITOS = {
     dunas:       { nombre: 'Circuito de las Dunas',          minVuelta: 70, largo: 4266 },
     desierto:    { nombre: 'Circuito del Desierto',          minVuelta: 85, largo: 5418 },
     isla:        { nombre: 'Circuito de la Isla',            minVuelta: 66, largo: 4365 },
+    bahia:       { nombre: 'Circuito Urbano de la Bahía',    minVuelta: 85, largo: 4935 },
+    bulevar:     { nombre: 'Gran Bulevar Nocturno',          minVuelta: 82, largo: 6209 },
 };
 const CLIMAS = ['seco', 'lluvia', 'variable'];
 const circuitoOk = c => Object.prototype.hasOwnProperty.call(CIRCUITOS, c) ? c : 'valle';

@@ -472,6 +472,9 @@ export class Monoplaza {
     const parDif = clamp(dOmega * 350, -capacidad, capacidad);
     let maxKappaTras = 0;
     const nx = -p.tz, nz = p.tx;
+    // agua donde está el coche (la lluvia puede caer solo en una parte del circuito)
+    const aguaAqui = (c.agua || 0) * (c.factorAgua ? c.factorAgua(p.s / c.largo) : 1);
+    this.aguaAqui = aguaAqui;
     for (let k = 0; k < 4; k++) {
       const w = this.ruedas[k];
       w.fz = Math.max(0, fz[k]);
@@ -515,7 +518,7 @@ export class Monoplaza {
       const nm = w.neum;
       let mu = muCarga(nm.c.mu, w.fz) * nm.factorAgarre() * sp.mu;
       // agua en la pista (fuera del asfalto, la hierba mojada es una pista de hielo)
-      const agua = c.agua || 0;
+      const agua = aguaAqui;
       if (agua > 0) mu *= factorAgua(nm.c, agua) * (w.sup > SUP_ESCAPE ? 1 - 0.35 * agua : 1);
       // neumáticos sucios tras pisar hierba o grava: se limpian rodando unos cientos de metros
       if (w.sup > SUP_ESCAPE && Math.abs(vl) > 2) w.suciedad = Math.min(1, (w.suciedad || 0) + dt * 1.2);

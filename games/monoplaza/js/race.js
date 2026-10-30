@@ -311,6 +311,7 @@ export class Sesion {
     const coches = this._coches;
     this.clima.actualizar(dt);
     this.c.agua = this.clima.agua;
+    this.c.factorAgua ??= (u) => this.clima.factor(u);
     this._banderas(dt);
     this._moverSc(dt);
     this._neutralizar(dt);
