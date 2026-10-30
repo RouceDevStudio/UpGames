@@ -510,6 +510,22 @@ function crearMundo(monedas) {
         assert.strictEqual(sala.jugadores.get('b2').abandono, true);
         assert.strictEqual(S.reanudar('b3', sala.codigo, 'beto').ok, false);
     });
+    await test('GP oficial: cada 2 h en punto, igual para todos y sale con un solo piloto', () => {
+        const t = Date.UTC(2026, 9, 30, 13, 47);
+        const o = A.oficialDe(t);
+        assert.strictEqual(new Date(o.inicio).toISOString().slice(11, 16), '14:00');
+        assert.strictEqual(o.inicio - o.abre, 10 * 60 * 1000);
+        assert.ok(A.CIRCUITOS[o.circuito]);
+        assert.deepStrictEqual(A.oficialDe(t + 60000), o);                  // misma carrera un minuto después
+        assert.notStrictEqual(A.oficialDe(t + 2 * 3600e3).slot, o.slot);    // la siguiente es otra
+        let ahora = 1e6;
+        const S = new A.Salas({ ahora: () => ahora, azar: () => 0.5 });
+        const { sala } = S.crear('u1', { nombre: 'Ana' }, { tipo: 'abierta', rapida: true, circuito: o.circuito, vueltas: 12, clasifSeg: 0 });
+        assert.strictEqual(S.iniciar('u1').ok, false);                      // sala normal: hace falta otro
+        sala.oficial = o;
+        assert.strictEqual(S.iniciar('u1').ok, true);                       // oficial: sale con la IA
+        assert.ok(sala.bots.length > 0);
+    });
     await test('limpiarNombre: sin HTML ni nombres larguísimos', () => {
         assert.strictEqual(A.limpiarNombre('<b>Ana</b>'), 'bAnab');
         assert.strictEqual(A.limpiarNombre('x'.repeat(60)).length, 18);

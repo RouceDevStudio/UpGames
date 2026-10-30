@@ -510,9 +510,36 @@ function registrar(app, deps) {
             cb?.({ ok: true, elo, nivel: A.nivelElo(elo), sr, enCola: n });
         });
         socket.on('cancelarBusqueda', () => emparejador.salir(id));
+        // GP Oficial: información de la próxima y apuntarse (abre 10 minutos antes)
+        socket.on('oficial', (cb) => {
+            if (typeof cb !== 'function') return;
+            const o = A.oficialDe(), sala = oficiales.get(o.slot);
+            cb({ ok: true, ...o, ahora: Date.now(), inscritos: sala ? sala.jugadores.size : 0, nombreCircuito: A.CIRCUITOS[o.circuito]?.nombre });
+        });
+        socket.on('oficialUnirse', async (d, cb) => {
+            if (!acc()) return cb?.({ ok: false, error: 'Vas muy rápido' });
+            const o = A.oficialDe(), ahora = Date.now();
+            if (ahora < o.abre) return cb?.({ ok: false, error: 'Las inscripciones abren 10 minutos antes de la salida' });
+            dejar();
+            const jugador = await jugadorDe(socket, d);
+            let sala = oficiales.get(o.slot), r;
+            if (sala && salas.salas.get(sala.codigo) === sala && sala.estado === 'espera') r = salas.unirse(id, sala.codigo, jugador);
+            else {
+                const hora = new Date(o.inicio).toISOString().slice(11, 16);
+                r = salas.crear(id, jugador, { tipo: 'abierta', max: A.MAX_JUGADORES, vueltas: o.vueltas, publica: true, rapida: true, nombre: `GP Oficial ${hora} UTC`, circuito: o.circuito, clima: o.clima, clasifSeg: 0 });
+                if (r.sala) { r.sala.oficial = o; oficiales.set(o.slot, r.sala); }
+            }
+            if (!r.ok && !r.sala) return cb?.(r);
+            salas.listo(id, true);
+            socket.join(rid(r.sala.codigo)); socket.leave('apex:lobby');
+            cb?.({ ok: true, sala: salas.publico(r.sala), yo: id, inicio: o.inicio, ahora });
+            emitirSala(r.sala); enviarLibreas(socket, r.sala); emitirLista();
+        });
         socket.on('listo', v => { if (!acc()) return; const s = salas.listo(id, v); if (s) emitirSala(s); });
         socket.on('iniciar', cb => {
             if (!acc()) return;
+            const so = salas.salaDe(id);
+            if (so?.oficial) { const e = { ok: false, error: 'El GP Oficial sale solo a la hora en punto' }; return typeof cb === 'function' ? cb(e) : socket.emit('error_sala', e.error); }
             const r = salas.iniciar(id);
             if (!r.ok) return typeof cb === 'function' ? cb(r) : socket.emit('error_sala', r.error);
             if (r.clasif) ns.to(rid(r.sala.codigo)).emit('clasif', { tFin: r.sala.tFinQ, ahora: Date.now(), seg: r.sala.clasifSeg });
@@ -556,6 +583,23 @@ function registrar(app, deps) {
             emitirSala(s);
         }
     }, 66).unref();
+
+    // GP Oficial: a la hora en punto sale sola la sala de esa hora (si hay alguien apuntado)
+    const oficiales = new Map();
+    setInterval(() => {
+        const ahora = Date.now();
+        for (const [slot, sala] of oficiales) {
+            const o = sala.oficial;
+            if (salas.salas.get(sala.codigo) !== sala || ahora > o.inicio + 3600e3) { oficiales.delete(slot); continue; }
+            if (sala.estado !== 'espera' || ahora < o.inicio || !sala.jugadores.size) continue;
+            for (const j of sala.jugadores.keys()) salas.listo(j, true);
+            const r = salas.iniciar(sala.host);
+            if (!r.ok) { logger.warn(`[apexgp] GP oficial ${sala.codigo}: ${r.error}`); continue; }
+            if (r.clasif) ns.to(rid(sala.codigo)).emit('clasif', { tFin: sala.tFinQ, ahora: Date.now(), seg: sala.clasifSeg });
+            else ns.to(rid(sala.codigo)).emit('salida', { tSalida: sala.tSalida, ahora: Date.now(), parrilla: sala.parrilla });
+            emitirSala(sala);
+        }
+    }, 1000).unref();
 
     // partida rápida: cada segundo se forman grupos por ELO y región y salen solos
     const CIRC = Object.keys(A.CIRCUITOS);

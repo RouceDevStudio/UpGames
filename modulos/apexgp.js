@@ -264,7 +264,7 @@ class Salas {
         if (sala.host !== id) return { ok: false, error: 'Solo quien creó la sala puede empezar' };
         if (sala.estado !== 'espera') return { ok: false, error: 'La carrera ya empezó' };
         const n = sala.jugadores.size;
-        if (n < 2) return { ok: false, error: 'Hace falta al menos otro piloto' };
+        if (n < 2 && !sala.oficial) return { ok: false, error: 'Hace falta al menos otro piloto' };   // el GP oficial sale aunque solo haya uno (con la IA)
         if (sala.tipo === '1v1' && n !== 2) return { ok: false, error: 'El duelo es de 2 pilotos' };
         const noListos = [...sala.jugadores.values()].filter(j => j.id !== id && !j.listo).length;
         if (noListos) return { ok: false, error: `Faltan ${noListos} piloto(s) por marcar "Listo"` };
@@ -702,7 +702,20 @@ class Emparejador {
     }
 }
 
+// ─── GP Oficial: carrera en línea a hora fija, cada 2 horas en punto (UTC) ───
+// Todos los que se apunten corren en la misma sala; la IA completa la parrilla. El circuito
+// rota y de vez en cuando hay clima variable; las inscripciones abren 10 minutos antes.
+const OFICIAL_CADA = 2 * 3600 * 1000, OFICIAL_ABRE = 10 * 60 * 1000;
+const OFICIAL_ROTA = ['valle', 'principado', 'levante', 'bahia', 'veloz', 'ardenas', 'alpino', 'aerodromo', 'puerto', 'danubio', 'parque_real', 'bulevar', 'isla', 'dunas', 'desierto'].filter(c => CIRCUITOS[c]);
+function oficialDe(ahora = Date.now()) {
+    const slot = Math.floor(ahora / OFICIAL_CADA) + 1;           // la próxima hora en punto
+    const inicio = slot * OFICIAL_CADA;
+    const h = (slot * 2654435761) >>> 0;
+    return { slot, inicio, abre: inicio - OFICIAL_ABRE, circuito: OFICIAL_ROTA[slot % OFICIAL_ROTA.length], clima: h % 5 === 0 ? 'variable' : 'seco', vueltas: 12 };
+}
+
 module.exports = {
+    oficialDe, OFICIAL_CADA, OFICIAL_ABRE,
     CIRCUITOS, CLIMAS, circuitoOk, PREMIOS, TOP_PREMIADO, premioPosicion, PUNTOS_CARRERA, CARRERAS_DIA, carreraPuntuable, puntosCarrera, validarResultado,
     semanaDe, semanaAnterior, FANTASMA_HZ, FANTASMA_MAX, validarVuelta, ELO_INICIAL, eloTras, nivelElo, SR_INICIAL, LICENCIAS, licenciaDe, nivelLicencia, limpiarIncidentes, srTras, REGIONES, regionOk, Emparejador,
     NIVELES, PRECIO_NIVEL, MEJORAS, COSMETICOS, EQUIPADO_DEF, MAX_JUGADORES, ESTADO_LARGO,

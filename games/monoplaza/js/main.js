@@ -608,6 +608,7 @@ document.addEventListener('click', (e) => {
   sonido.iniciar();
   const destino = b.dataset.ir;
   if (destino === 'volver') { aplicarAjustesEnVivo(); mostrar(jugando ? 'pausa' : pantallaPrevia || 'menu'); return; }
+  if (destino === 'desafio') { empezarDesafio(); return; }
   if (destino === 'contrarreloj' || destino === 'practica') { if (destino === 'contrarreloj') fantasmaRival = null; empezar(destino); return; }
   if (destino === 'garaje') { abrirGaraje(); return; }
   if (destino === 'trayectoria') { abrirTrayectoria(); return; }
@@ -621,6 +622,30 @@ document.addEventListener('click', (e) => {
   mostrar(destino);
   if (destino === 'carrera') pintarSegmentos('#carrera', opcCarrera);
 });
+
+// ─── Desafío semanal: la misma vuelta para todos (circuito de la semana, seco y de día) ───
+// Cuenta en el ranking semanal de contrarreloj de ese circuito (los 5 mejores ganan UpCoins).
+const ROTA_DESAFIO = ['principado', 'ardenas', 'bahia', 'levante', 'alpino', 'aerodromo', 'danubio', 'parque_real', 'bulevar', 'isla', 'dunas', 'desierto', 'valle', 'puerto', 'veloz'];
+function desafioSemana() {
+  const lunes0 = Date.UTC(2024, 0, 1);                 // fue lunes
+  const semana = Math.floor((Date.now() - lunes0) / (7 * 864e5));
+  const lista = ROTA_DESAFIO.filter(c => CIRCUITOS[c]);
+  const fin = lunes0 + (semana + 1) * 7 * 864e5;
+  return { id: lista[semana % lista.length], dias: Math.max(1, Math.ceil((fin - Date.now()) / 864e5)) };
+}
+function pintarDesafio() {
+  const d = desafioSemana(), b = $('#bDesafio');
+  if (b) b.innerHTML = `🗓️ Desafío semanal<small style="display:block;font-size:11px;opacity:.75">${CIRCUITOS[d.id]?.corto} · quedan ${d.dias} día(s)</small>`;
+}
+async function empezarDesafio() {
+  const d = desafioSemana();
+  if (circuitoId !== d.id) await cargarCircuito(d.id);
+  fantasmaRival = null;
+  empezar('contrarreloj', { clima: 'seco', hora: 'dia' });
+  mensaje('DESAFÍO SEMANAL', `${circuito.nombre} · los 5 mejores de la semana ganan UpCoins`, 3.5);
+  progresar?.('desafio');
+}
+pintarDesafio();
 
 function pintarSegmentos(raiz, obj) {
   document.querySelectorAll(`${raiz} .segm[data-campo]`).forEach(sg => {
@@ -1930,8 +1955,38 @@ async function abrirMulti() {
     await multi.conectar();
     $('#mEstado').innerHTML = `Conectado${cuenta.conectado() ? ` como <b>@${cuenta.usuario()}</b>` : ' como invitado (inicia sesión para usar tu nombre y tus mejoras)'} · ping ${Math.round(multi.latencia || 0)} ms`;
     multi.pedirLista();
+    pintarOficial();
   } catch (e) { $('#mEstado').textContent = e.message + '. Revisa tu conexión.'; }
 }
+
+// ─── GP Oficial: todos los que se apuntan corren juntos a la hora en punto ───
+let oficial = null, tOficial = null;
+async function pintarOficial() {
+  clearInterval(tOficial);
+  try { oficial = await multi.oficial(); } catch { oficial = null; }
+  if (!oficial?.ok) { $('#oficialInfo').textContent = 'No se pudo consultar el GP Oficial.'; return; }
+  oficial.desfase = oficial.ahora - Date.now();
+  const hora = new Date(oficial.inicio).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const pinta = () => {
+    if (!$('#multi').classList.contains('visible')) { clearInterval(tOficial); return; }
+    const ahora = Date.now() + oficial.desfase, falta = oficial.inicio - ahora, abre = oficial.abre - ahora;
+    if (falta <= 0) { pintarOficial(); return; }
+    const mmss = (ms) => `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}`;
+    const cuando = falta > 3600e3 ? `a las ${hora}` : `en ${mmss(falta)}`;
+    $('#oficialInfo').innerHTML = `Próxima: <b>${CIRCUITOS[oficial.circuito]?.nombre || oficial.nombreCircuito}</b> · ${oficial.vueltas} vueltas · ${CLIMAS[oficial.clima] || 'Seco'} · sale ${cuando}`
+      + (abre > 0 ? `<br>Las inscripciones abren en ${mmss(abre)}.` : `<br><b style="color:#7dff9a">Inscripciones abiertas</b> · ${oficial.inscritos} piloto(s) apuntados · la IA completa la parrilla.`);
+    $('#bOficial').disabled = abre > 0;
+  };
+  pinta(); tOficial = setInterval(pinta, 1000);
+}
+$('#bOficial').addEventListener('click', async () => {
+  espectando = false;
+  const r = await multi.oficialUnirse(datosJugador());
+  if (!r.ok) { $('#mEstado').textContent = r.error; return; }
+  clearInterval(tOficial);
+  entrarSala(r.sala);
+  mensaje('GP OFICIAL', 'Sale solo a la hora en punto: prepara el reglaje mientras tanto', 3);
+});
 function pintarOpcMulti() {
   const mc = $('#mpCircuitos');
   if (mc && !mc.children.length) mc.innerHTML = Object.values(CIRCUITOS).filter(d => !d.comunidad).map(d => `<b data-v="${d.id}">${d.corto}</b>`).join('');

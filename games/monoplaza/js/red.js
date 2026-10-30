@@ -192,6 +192,9 @@ export class Multijugador {
   botAbandono(id) { this.socket?.emit('botAbandono', id); }
   buscar(datos) { return new Promise(r => this.socket.emit('buscar', datos, r)); }
   cancelarBusqueda() { this.socket?.emit('cancelarBusqueda'); }
+  // GP Oficial: carrera en línea a hora fija (cada 2 h en punto, UTC)
+  oficial() { return new Promise(r => this.socket.emit('oficial', (x) => r(x || { ok: false }))); }
+  oficialUnirse(datos) { return new Promise(r => this.socket.emit('oficialUnirse', datos, (x) => { if (x?.ok) { this.sala = x.sala; this.yo = x.yo; } r(x || { ok: false }); })); }
   salir() { this.socket?.emit('salir'); this.sala = null; this.buffers.clear(); }
   desconectar() { this.salir(); this.socket?.disconnect(); this.socket = null; }
   enviarEstado(arr) { this.socket?.volatile.emit('estado', arr.map(v => Math.round(v * 1000) / 1000)); }

@@ -47,6 +47,7 @@
       </div>
       <div class="fila">
         <button class="btn grande" data-ir="contrarreloj">⏱️ Contrarreloj</button>
+        <button class="btn grande" data-ir="desafio" id="bDesafio">🗓️ Desafío semanal</button>
         <button class="btn grande" data-ir="practica">🛞 Práctica</button>
       </div>
       <div class="fila">
@@ -307,6 +308,9 @@
   <div class="panel ancho">
     <h2>Multijugador</h2>
     <div id="mEstado" class="nota" style="text-align:left"></div>
+    <h3>🏁 GP Oficial · cada 2 horas en punto</h3>
+    <p class="nota" style="text-align:left" id="oficialInfo">Consultando la próxima carrera…</p>
+    <div class="acciones"><button class="btn primario" id="bOficial" disabled>Inscribirme</button></div>
     <h3>Partida rápida · 22 coches · 20 vueltas</h3>
     <p class="nota" style="text-align:left">6 minutos de clasificación deciden la parrilla. Sin ayudas a la conducción ni reinicios: si destrozas el coche, quedas fuera. Los huecos los completan pilotos de la IA.</p>
     <div class="opcion"><label>Rivales de tu nivel (ELO) y de tu región<span class="desc" id="mElo"></span></label><div class="segm" data-mp="region"><b data-v="america">América</b><b data-v="europa">Europa</b><b data-v="asia">Asia</b></div></div>
