@@ -34,6 +34,7 @@ import { Sonido } from './audio.js';
 import { Entrada } from './input.js';
 import { PilotosFuera } from './render/pilotoFuera.js';
 import * as ESC from './escuela.js';
+import * as ESTR from './estrategia.js';
 import * as ED from './editorCircuito.js';
 
 const $ = (s) => document.querySelector(s);
@@ -474,6 +475,7 @@ function arrancarSesion(modo) {
   if (ajustes.control === 'inclinacion' && esTactil) entrada.activarInclinacion().then(() => setTimeout(() => entrada.calibrar(), 400));
   pedirWakeLock();
   barreras?.reponer();
+  iniciarEstrategia();
   pilotosFuera?.limpiar(); salidasPendientes = []; tAturdido = 0; document.body.classList.remove('aturdido');
   // repetición, telemetría, radio y estado de la carrera
   grabadora = new Grabadora(sesion.participantes.length);
@@ -999,6 +1001,7 @@ function procesarEventos() {
     }
     else if (e.tipo === 'vuelta' && e.p.jugador) {
       if (leccion) leccionVuelta = { t: e.t, valida: e.valida };
+      estrategiaVuelta(e.p);
       sonido.evento('vuelta');
       const txt = e.valida ? fmt(e.t) : fmt(e.t) + ' (anulada)';
       if (e.mejora) { mensaje(sesion.modo === 'carrera' ? 'MEJOR VUELTA PERSONAL' : 'NUEVO MEJOR TIEMPO', txt, 2.4); if (sesion.modo !== 'carrera') radio.decir(`${fmt(e.t)}. ¡Mejor vuelta! Sigue así.`, { clave: 'mejorV', cada: 8 }); }
@@ -1047,6 +1050,7 @@ function procesarEventos() {
       if (e.p.jugador) { mensaje('PARADA EN BOXES', e.morro ? 'Neumáticos y morro nuevo' : 'Cambio de neumáticos', 2); estadoRadio.avisoDesg = false; }
     }
     else if (e.tipo === 'paradaFin') {
+      if (e.p.jugador) estr.paradas++;
       const k = sesion.participantes.indexOf(e.p);
       modelos[k].cambiarCompuesto(e.p.coche.reglaje.compuesto);
       if (e.p.jugador) radio.decir(e.duracion < 3 ? `¡Parada de ${e.duracion.toFixed(1)} segundos! Vamos, vamos, vamos.` : `Parada de ${e.duracion.toFixed(1)} segundos. Sal con cuidado, neumáticos fríos.`, { prioridad: true });
@@ -1327,6 +1331,7 @@ function bucle(ahora) {
     escombros.actualizar(dt);
     actualizarPilotosFuera(dt);
     actualizarLeccion(dt);
+    actualizarEstrategia(dt);
     avisosConduccion();
     for (const e of barreras.actualizar(dt, sesion.participantes)) {
       if (e.tipo === 'bidon' && jugando) { sonido.evento('golpe', 4); if (e.jugador) { mensaje('¡BIDONES DE AGUA!', '', 1.2); entrada.vibrar(120, 0.8); radio.decir('¡Te has llevado los bidones! Revisa que el alerón esté bien.', { clave: 'bidon', cada: 30 }); } }
@@ -1600,6 +1605,11 @@ function alternarPanelBox() {
   if (p.box) { mensaje('YA ESTÁS EN BOXES', '', 1); return; }
   if (p.solicitudBox) { sesion.cancelarBox(p); mensaje('BOXES CANCELADO', '', 1); radio.decir('Entendido, nos quedamos fuera. Cancelamos la parada.', { clave: 'boxNo', cada: 5 }); $('#panelBox').classList.remove('visible'); return; }
   $('#panelBox').classList.toggle('visible');
+  // desgaste actual, vueltas que aguantan y lo que dice el plan
+  { const car = sesion.jugador.coche, d = Math.max(...car.ruedas.map(w => w.neum.desgaste)), comp = car.reglaje.compuesto;
+    const quedan = COMPUESTOS[comp].lluvia ? '' : ` · aguantan ~${Math.max(0, Math.floor((0.45 - d) * 100 / ESTR.desgastePorVuelta(comp, circuito.largo)))} vueltas más`;
+    const sig = ESTR.siguienteParada(estr.plan, sesion.jugador.vuelta, estr.paradas);
+    $('#boxInfo').textContent = `Desgaste ${Math.round(d * 100)} %${quedan}${sig ? ` · plan: parar en la vuelta ${sig.vuelta} (${COMPUESTOS[sig.compuesto].nombre})` : ''}`; }
 }
 document.querySelectorAll('#panelBox [data-box]').forEach(b => b.addEventListener('click', () => {
   const v = b.dataset.box;
@@ -3064,3 +3074,88 @@ if (!Object.keys(progresoEsc).length) document.querySelector('[data-ir="escuela"
 $('#escRepetir').addEventListener('click', () => empezarLeccion(leccionK));
 $('#escSig').addEventListener('click', () => empezarLeccion(leccionK + 1));
 $('#escMenu').addEventListener('click', () => { salirAlMenu(); abrirEscuela(); });
+
+// ─── Estrategia de carrera ───────────────────────────────────────────────────────────
+// Planes de paradas calculados con el ritmo y el desgaste de cada compuesto; en carrera el
+// ingeniero propone parar en la vuelta del plan (o antes si las ruedas se acaban o llueve).
+let planElegido = null;
+const estr = { plan: null, paradas: 0, tDec: 0, accion: null, avisado: new Set() };
+
+function pintarEstrategia() {
+  const v = +opcCarrera.vueltas || 5;
+  const lluvia = opcCarrera.clima === 'lluvia';
+  const ps = ESTR.planes({ vueltas: v, circuito, lluvia });
+  const pb = ESTR.perdidaBoxes(circuito);
+  $('#estrInfo').innerHTML = `${circuito.def.corto} · ${v} vueltas · parar cuesta ~${pb.toFixed(0)} s · los neumáticos aguantan unas ${ESTR.vida('blando', circuito.largo)} (blando), ${ESTR.vida('medio', circuito.largo)} (medio) y ${ESTR.vida('duro', circuito.largo)} vueltas (duro).${v > 8 ? ' En seco hay que usar dos compuestos distintos.' : ''}`;
+  $('#estrLista').innerHTML = ps.map((p, k) => `<div class="esc-fila"><span class="esc-ico">${['🥇', '🥈', '🥉', '4️⃣'][k]}</span><div><b>${p.paradas === 0 ? 'Sin paradas' : p.paradas === 1 ? '1 parada' : '2 paradas'}</b><small>${p.texto}${p.paradasEn?.length ? ` · paradas en la vuelta ${p.paradasEn.join(' y ')}` : ''}</small></div><span class="esc-med">${k ? '+' + p.delta.toFixed(1) + ' s' : 'el más rápido'}</span><button class="btn mini primario" data-plan="${k}">Elegir</button></div>`).join('');
+  document.querySelectorAll('[data-plan]').forEach(b => b.onclick = () => {
+    planElegido = ps[+b.dataset.plan];
+    opcCarrera.compuesto = planElegido.relevos[0].c; guardar();
+    $('#estrResumen').textContent = 'Plan: ' + planElegido.texto;
+    $('#estrategia').classList.remove('visible');
+    pintarSegmentos('#carrera', opcCarrera);
+  });
+}
+$('#bEstrategia').addEventListener('click', () => { pintarEstrategia(); $('#estrategia').classList.add('visible'); });
+$('#estrCerrar').addEventListener('click', () => $('#estrategia').classList.remove('visible'));
+
+function iniciarEstrategia() {
+  Object.assign(estr, { plan: null, paradas: 0, tDec: 0, accion: null, avisado: new Set() });
+  $('#decision').classList.remove('visible');
+  if (!sesion || sesion.modo !== 'carrera' || enRed && espectando) return;
+  const v = sesion.vueltasTotales;
+  if (v < 3) return;
+  // el plan elegido (si es de este circuito y estas vueltas) o el más rápido del equipo
+  const comp = sesion.jugador.coche.reglaje.compuesto;
+  const ps = ESTR.planes({ vueltas: v, circuito, lluvia: !!COMPUESTOS[comp]?.lluvia });
+  estr.plan = planElegido && planElegido.relevos.reduce((a, x) => a + x.vueltas, 0) === v ? planElegido : (ps.find(p => p.relevos[0].c === comp) || ps[0]);
+  if (estr.plan?.paradas) setTimeout(() => { if (jugando && sesion?.modo === 'carrera') radio.decir(`Plan de carrera: ${estr.plan.texto.replace(/\(/g, '').replace(/\)/g, ' vueltas')}. Te aviso cuando toque parar.`, { clave: 'plan', cada: 600 }); }, 9000);
+}
+
+/** Tarjeta de decisión con dos botones (se cierra sola). */
+function decidir(texto, siFn, seg = 14) {
+  $('#decTxt').textContent = texto;
+  estr.accion = siFn; estr.tDec = seg;
+  $('#decision').classList.add('visible');
+}
+$('#decSi').addEventListener('click', () => { estr.accion?.(); estr.accion = null; $('#decision').classList.remove('visible'); });
+$('#decNo').addEventListener('click', () => { estr.accion = null; $('#decision').classList.remove('visible'); radio.decir('Recibido, seguimos fuera.', { clave: 'decNo', cada: 5 }); });
+
+function pararAhora(comp) {
+  if (!sesion || sesion.jugador.coche.abandono) return;
+  sesion.pedirBox(sesion.jugador, comp);
+  $('#bBox').classList.add('activo');
+  radio.decir(`Box, box. Ponemos ${COMPUESTOS[comp].nombre.toLowerCase()}s.`, { prioridad: true, clave: 'boxPlan', cada: 5 });
+}
+
+// al cruzar la meta: ¿toca parar según el plan, se acaban las ruedas o ha cambiado el tiempo?
+function estrategiaVuelta(p) {
+  if (!estr.plan && sesion?.modo !== 'carrera') return;
+  if (sesion.modo !== 'carrera' || p.terminado || p.solicitudBox || p.box) return;
+  const car = p.coche, hechas = p.vuelta, quedan = sesion.vueltasTotales - hechas;
+  const comp = car.reglaje.compuesto;
+  const agua = sesion.clima.agua;
+  // lluvia: cambio de neumáticos antes que nada
+  if (!COMPUESTOS[comp].lluvia && agua > 0.18 && quedan >= 1) { decidir(`Está lloviendo (${Math.round(agua * 100)} % de agua). ¿Paramos a poner ${agua > 0.55 ? 'de lluvia' : 'intermedios'}?`, () => pararAhora(agua > 0.55 ? 'lluvia' : 'inter')); radio.decir('Empieza a llover fuerte. ¿Entramos a por neumáticos de agua?', { prioridad: true, clave: 'decLluvia', cada: 60 }); return; }
+  if (COMPUESTOS[comp].lluvia && agua < 0.08 && quedan >= 2) { decidir('La pista se ha secado. ¿Paramos a poner lisos?', () => pararAhora(quedan > 12 ? 'medio' : 'blando')); radio.decir('La pista ya está seca. Es momento de poner lisos.', { prioridad: true, clave: 'decSeco', cada: 60 }); return; }
+  // plan de paradas: se para en la vuelta siguiente al cruzar (la entrada está antes de la meta)
+  const sig = ESTR.siguienteParada(estr.plan, hechas, estr.paradas);
+  if (sig && hechas + 1 === sig.vuelta && !estr.avisado.has(sig.vuelta)) {
+    estr.avisado.add(sig.vuelta);
+    decidir(`Plan: box esta vuelta para poner ${COMPUESTOS[sig.compuesto].nombre.toLowerCase()}s. ¿Paramos?`, () => pararAhora(sig.compuesto), 25);
+    radio.decir(`Box esta vuelta, según el plan. Ponemos ${COMPUESTOS[sig.compuesto].nombre.toLowerCase()}s. ¿Confirmas?`, { prioridad: true, clave: 'decPlan' + sig.vuelta, cada: 5 });
+    return;
+  }
+  // neumáticos acabados sin parada prevista
+  const desg = Math.max(...car.ruedas.map(w => w.neum.desgaste));
+  if (desg > 0.55 && quedan >= 3 && !estr.avisado.has('desg' + estr.paradas)) {
+    estr.avisado.add('desg' + estr.paradas);
+    const nuevo = quedan > ESTR.vida('medio', circuito.largo) ? 'duro' : quedan > ESTR.vida('blando', circuito.largo) ? 'medio' : 'blando';
+    decidir(`Las ruedas están al ${Math.round(desg * 100)} %. ¿Paramos a por ${COMPUESTOS[nuevo].nombre.toLowerCase()}s?`, () => pararAhora(nuevo), 20);
+  }
+}
+
+// la tarjeta de decisión se cierra sola; el panel de boxes muestra el desgaste y lo que aguantan
+function actualizarEstrategia(dt) {
+  if (estr.tDec > 0) { estr.tDec -= dt; if (estr.tDec <= 0) { estr.accion = null; $('#decision').classList.remove('visible'); } }
+}

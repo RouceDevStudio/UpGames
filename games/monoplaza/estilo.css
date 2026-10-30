@@ -512,3 +512,8 @@ body #lienzo { transition: filter 1.5s; }
 @media (max-width: 640px) { .esc-fila { grid-template-columns: 30px 1fr; } .esc-med, .esc-fila .btn { grid-column: 2; justify-self: start; } }
 .btn.nuevo { position: relative; }
 .btn.nuevo::after { content: 'NUEVO'; position: absolute; top: -7px; right: -6px; background: #e8202a; color: #fff; font: 800 9px/1 system-ui, sans-serif; padding: 3px 5px; border-radius: 6px; }
+/* tarjeta de decisión del ingeniero */
+.decision { position: fixed; right: 12px; top: 40%; display: none; flex-direction: column; gap: 8px; max-width: min(320px, 70vw); background: rgba(10,12,18,.86); border: 1px solid #ffd23f; border-radius: 12px; padding: 10px 12px; z-index: 40; font-size: 13px; color: #fff; }
+.decision.visible { display: flex; }
+.decision div { display: flex; gap: 8px; }
+#estrategia .panel { max-height: 90vh; overflow: auto; }

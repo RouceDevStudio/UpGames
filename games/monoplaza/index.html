@@ -78,10 +78,19 @@
     <div class="opcion"><label>Duración<span class="desc">Por tiempo = resistencia: repostaje en boxes, relevos con tu compañero y, en 24 h, ciclo día-noche completo</span></label><div class="segm" data-campo="duracion"><b data-v="0">Vueltas</b><b data-v="15">15 min</b><b data-v="30">30 min</b><b data-v="60">1 h</b><b data-v="24">24 h ⚡</b></div></div>
     <div class="opcion"><label>Vuelta de formación<span class="desc">Una vuelta lenta en fila antes de la salida</span></label><div class="segm" data-campo="formacion"><b data-v="0">No</b><b data-v="1">Sí</b></div></div>
     <div class="opcion"><label>Clima</label><div class="segm" data-campo="clima"><b data-v="seco">☀️ Seco</b><b data-v="variable">🌦️ Variable</b><b data-v="lluvia">🌧️ Lluvia</b></div></div>
+    <div class="opcion"><label>Estrategia<span class="desc" id="estrResumen">El equipo propone un plan de paradas</span></label><button class="btn mini" id="bEstrategia">📋 Ver planes</button></div>
     <div class="opcion"><label>Neumático</label><div class="segm compuestos" data-campo="compuesto"><b data-v="blando">Blando</b><b data-v="medio">Medio</b><b data-v="duro">Duro</b><b data-v="inter">Inter</b><b data-v="lluvia">Lluvia</b></div></div>
     <div class="acciones"><button class="btn" data-ir="menu">Atrás</button><button class="btn primario" id="empezarCarrera">A la parrilla</button></div>
   </div>
 </div>
+
+<!-- Planes de estrategia -->
+<div id="estrategia" class="esc-res"><div class="panel ancho">
+  <h2>📋 Estrategia de carrera</h2>
+  <p class="nota" id="estrInfo" style="text-align:left"></p>
+  <div id="estrLista" class="esc-lista"></div>
+  <div class="acciones"><button class="btn" id="estrCerrar">Cerrar</button></div>
+</div></div>
 
 <!-- Escuela de pilotaje -->
 <div id="escuela" class="pantalla">
@@ -366,11 +375,13 @@
   <div id="hQRed" class="qred"></div>
   <div id="panelBox" class="panel-box">
     <div class="mini">ENTRAR A BOXES · NEUMÁTICOS</div>
+    <div class="mini" id="boxInfo" style="color:#ffd23f"></div>
     <div class="fila-box"><button class="btn" data-box="blando">Blando</button><button class="btn" data-box="medio">Medio</button><button class="btn" data-box="duro">Duro</button></div>
     <div class="fila-box"><button class="btn" data-box="inter">Inter</button><button class="btn" data-box="lluvia">Lluvia</button></div>
     <label class="relevo-op" id="opRelevo"><input type="checkbox" id="chkRelevo"> 🔄 Cambio de piloto en esta parada</label>
     <button class="btn" data-box="cancelar">Cancelar</button>
   </div>
+  <div id="decision" class="decision"><span id="decTxt"></span><div><button class="btn mini primario" id="decSi">Sí</button><button class="btn mini" id="decNo">No</button></div></div>
   <div id="hEscuela" class="h-escuela"><b id="hEscTit"></b><span id="hEscTxt"></span><i id="hEscT">0.0</i></div>
 <div id="escRes" class="esc-res"><div class="panel"><h2 id="escResTit"></h2><p id="escResTxt"></p><div class="acciones"><button class="btn" id="escMenu">Lecciones</button><button class="btn" id="escRepetir">Repetir</button><button class="btn primario" id="escSig">Siguiente</button></div></div></div>
 <div id="hRelevo" class="hrelevo"><span>🔄 Conduce tu compañero</span><button class="btn mini" id="bRelevoRapido">⏩ ×3</button><button class="btn mini primario" id="bRelevoVolver">Volver al volante</button></div>
