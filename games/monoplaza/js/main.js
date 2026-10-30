@@ -16,6 +16,8 @@ import { CamaraRepe, CAMARAS_REPE, NOMBRES_REPE } from './render/camaraRepe.js';
 import { Cine, FILTROS, NOMBRES_FILTRO } from './render/cine.js';
 import { GrabadorVideo, puedeGrabar, guardarArchivo } from './grabarVideo.js';
 import { Telemetria } from './telemetria.js';
+import { SINTOMAS, proponer, frase } from './ingeniero.js';
+import * as TRAY from './trayectoria.js';
 import { Lluvia } from './render/lluvia.js';
 import { Barreras } from './render/barreras.js';
 import { Comisarios, CapaCamara, CocheSeguridad, Fuegos } from './render/vida.js';
@@ -29,6 +31,7 @@ import { Efectos } from './render/efectos.js';
 import { Camara, NOMBRES_CAMARA } from './render/camara.js';
 import { Sonido } from './audio.js';
 import { Entrada } from './input.js';
+import * as ED from './editorCircuito.js';
 
 const $ = (s) => document.querySelector(s);
 const esTactil = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -41,12 +44,15 @@ const AJ_DEF = {
   tc: 2, abs: true, cambioAuto: true, direccion: true, estabilidad: false, trazada: true,
   calidad: 'auto', fps: false, volumen: 0.8, unidades: 'kmh', camara: 'persecucion', radio: true, ambiente: true, averias: true,
 };
-const OPC_CARRERA_DEF = { vueltas: 5, rivales: 7, dificultad: 'normal', posSalida: 0, compuesto: 'medio', clima: 'seco', hora: 'dia', formacion: 0 };
+const OPC_CARRERA_DEF = { vueltas: 5, rivales: 7, dificultad: 'normal', posSalida: 0, compuesto: 'medio', clima: 'seco', hora: 'dia', formacion: 0, duracion: 0 };
 function cargar() {
   try { return JSON.parse(localStorage.getItem(CLAVE)) || {}; } catch { return {}; }
 }
 const datos = cargar();
 const ajustes = { ...AJ_DEF, ...(datos.ajustes || {}) };
+// circuitos creados con el editor (se corren sin conexión)
+let circuitosCom = ED.cargarGuardados();
+for (const d of circuitosCom) { try { ED.registrar(CIRCUITOS, d); } catch { /* dañado */ } }
 // circuito elegido; el reglaje, los récords y el fantasma se guardan por circuito
 let circuitoId = CIRCUITOS[datos.circuito] ? datos.circuito : 'valle';
 const reglajes = datos.reglajes || { valle: datos.reglaje || {} };
@@ -62,15 +68,25 @@ const EQUIPADO_DEF = { patron: 'flecha', acabado: 'brillo', casco: 'clasico', pr
 const equipado = { ...EQUIPADO_DEF, ...(datos.equipado || {}), colores: { ...EQUIPADO_DEF.colores, ...(datos.equipado?.colores || {}) }, cascoColores: { ...EQUIPADO_DEF.cascoColores, ...(datos.equipado?.cascoColores || {}) } };
 let perfilApex = datos.perfil || { mejoras: {}, cosmeticos: [], upcoins: null };
 const regionDef = (() => { const z = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; return /^Europe|^Africa/.test(z) ? 'europa' : /^Asia|^Australia|^Pacific/.test(z) ? 'asia' : 'america'; })();
-const opcMulti = { tipo: '1v1', max: 22, vueltas: 3, circuito: 'valle', clima: 'seco', region: regionDef, ...(datos.multi || {}) };
-const opcCamp = { vueltas: 5, rivales: 11, dificultad: 'normal', clima: 'auto', ...(datos.opcCamp || {}) };
+const opcMulti = { tipo: '1v1', max: 22, vueltas: 3, circuito: 'valle', clima: 'seco', licMin: 'D', region: regionDef, ...(datos.multi || {}) };
+const opcCamp = { vueltas: 5, rivales: 11, dificultad: 'normal', clima: 'auto', calendario: 'clasico', ...(datos.opcCamp || {}) };
+// calendarios del campeonato (los reales en el orden de la temporada)
+const CALENDARIOS = {
+  clasico: ['valle', 'puerto', 'veloz'],
+  europa: ['levante', 'principado', 'alpino', 'aerodromo', 'danubio', 'ardenas', 'parque_real'],
+  mundial: ['desierto', 'valle', 'levante', 'principado', 'isla', 'alpino', 'aerodromo', 'danubio', 'ardenas', 'dunas', 'parque_real', 'puerto', 'veloz'],
+};
 let temporada = (() => { try { return JSON.parse(localStorage.getItem('apexgp.campeonato')) || null; } catch { return null; } })();
+// modo carrera: su temporada va aparte; mientras se corre un GP de la carrera, `temporada` apunta a ella
+let tray = (() => { try { return JSON.parse(localStorage.getItem('apexgp.trayectoria')) || null; } catch { return null; } })();
+let enTray = false, temporadaNormal = null;
 function guardar() {
   reglajes[circuitoId] = { ...reglaje };
   if (fantasmaGuardado) fantasmas[circuitoId] = fantasmaGuardado;
   try {
     localStorage.setItem(CLAVE, JSON.stringify({ ajustes, reglajes, circuito: circuitoId, carrera: opcCarrera, records, fantasmas, equipado, perfil: perfilApex, multi: opcMulti, opcCamp }));
-    localStorage.setItem('apexgp.campeonato', JSON.stringify(temporada));
+    localStorage.setItem('apexgp.campeonato', JSON.stringify(enTray ? temporadaNormal : temporada));
+    if (tray) localStorage.setItem('apexgp.trayectoria', JSON.stringify(tray));
   } catch { /* sin almacenamiento */ }
 }
 // librea propia: imagen guardada aparte (puede pesar varios cientos de KB)
@@ -135,9 +151,9 @@ async function iniciar() {
 
 // Construye (o reconstruye) el circuito y todo su escenario
 let cargando = null;
-async function cargarCircuito(id) {
+async function cargarCircuito(id, forzar = false) {
   if (cargando) await cargando;
-  if (circuito && circuito.id === id) return;
+  if (!forzar && circuito && circuito.id === id) return;
   let fin;
   cargando = new Promise(r => { fin = r; });
   const visible = document.querySelector('.pantalla.visible')?.id;
@@ -222,12 +238,12 @@ function liberarEscena() {
 
 function pintarCircuitos() {
   const el = $('#selCircuito');
-  el.innerHTML = Object.values(CIRCUITOS).map(d => `<b data-v="${d.id}" class="${d.id === circuitoId ? 'sel' : ''}">${d.corto}<small>${d.tipo === 'urbano' ? 'urbano' : d.tipo === 'parque' ? 'rápido' : 'técnico'}</small></b>`).join('');
+  el.innerHTML = Object.values(CIRCUITOS).map(d => `<b data-v="${d.id}" class="${d.id === circuitoId ? 'sel' : ''}">${d.corto}<small>${d.comunidad ? '✏️ tuyo' : d.tipo === 'urbano' ? 'urbano' : d.tipo === 'parque' ? 'rápido' : 'técnico'}</small></b>`).join('');
   el.querySelectorAll('b').forEach(b => b.onclick = () => { if (b.dataset.v !== circuitoId) cargarCircuito(b.dataset.v); });
 }
 
 function crearRenderer() {
-  renderer = new THREE.WebGLRenderer({ canvas: $('#lienzo'), antialias: calidad === 1, powerPreference: 'high-performance', stencil: false });
+  renderer = new THREE.WebGLRenderer({ canvas: $('#lienzo'), antialias: calidad <= 1, powerPreference: 'high-performance', stencil: false });
   renderer.setPixelRatio(pixelRatio());
   renderer.setSize(innerWidth, innerHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -242,7 +258,7 @@ function crearRenderer() {
 
 function pixelRatio() {
   const dpr = devicePixelRatio || 1;
-  return [0.75, Math.min(dpr, 1.25), Math.min(dpr, 1.6), Math.min(dpr, 2)][calidad];
+  return [Math.min(dpr, 1), Math.min(dpr, 1.3), Math.min(dpr, 1.6), Math.min(dpr, 2)][calidad];
 }
 
 function configurarPost() {
@@ -366,6 +382,7 @@ function ayudasDe(red = enRed) {
 // --- Sesiones -----------------------------------------------------------------
 const nombreJugador = () => cuenta.usuario() ? '@' + cuenta.usuario() : 'Tú';
 function opcBase(modo) {
+  if (enTray && tray?.equipo != null) return { modo, reglaje: { ...reglaje }, ayudas: ayudasDe(), mejoras: tray.desarrollo, equipado: { equipo: tray.equipo, patron: EQUIPOS[tray.equipo].patron, numero: equipado.numero, casco: equipado.casco }, equipoJugador: tray.equipo, nombre: nombreJugador() };
   return { modo, reglaje: { ...reglaje }, ayudas: ayudasDe(), mejoras: perfilApex.mejoras, equipado: { ...equipado }, equipoJugador: equipado.equipo || 0, nombre: nombreJugador() };
 }
 
@@ -374,6 +391,8 @@ function empezar(modo, extra = {}) {
   sonido.iniciar();
   sonido.ponerVolumen(ajustes.volumen);
   const opc = { ...opcBase(modo), ...extra, averias: ajustes.averias ? 1 : 0, formacion: opcCarrera.formacion === 1 };
+  // resistencia: la duración (min) manda sobre las vueltas; '24' son 24 h de reloj en 60 min reales
+  if (modo === 'carrera' && !extra.campeonato && +opcCarrera.duracion > 0) opc.tiempoLimite = (+opcCarrera.duracion === 24 ? 60 : +opcCarrera.duracion) * 60;
   carreraCamp = extra.campeonato || null;
   if (modo === 'carrera' && !extra.pilotos) {
     // carrera rápida: con clasificación la parrilla la decide Q1-Q2-Q3
@@ -390,7 +409,7 @@ function empezar(modo, extra = {}) {
     const f = fantasmaRival || fantasmaGuardado;
     if (f?.puntos?.length) opc.fantasma = f;
     fichaCrono = null;
-    if (cuenta.conectado()) cuenta.fichaCrono(circuito.id).then(d => { fichaCrono = d.ficha; }).catch(() => {});
+    if (cuenta.conectado() && !circuito.def.comunidad) cuenta.fichaCrono(circuito.id).then(d => { fichaCrono = d.ficha; }).catch(() => {});
   }
   if (modo === 'practica') opc.clima = extra.clima || opcCarrera.clima;
   sesion = new Sesion(circuito, opc);
@@ -400,6 +419,8 @@ function empezar(modo, extra = {}) {
 
 // Parte común de empezar una sesión local o en línea
 function arrancarSesion(modo) {
+  document.body.classList.toggle('resistencia', !!sesion.tiempoLimite);
+  Object.assign(relevo, { pendiente: false, activo: false, rapido: false }); $('#hRelevo').classList.remove('visible');
   enGaraje = false;
   aplicarHora(sesion.hora || 'dia');
   crearModelos();
@@ -473,6 +494,7 @@ function pausar(si) {
 }
 
 function salirAlMenu() {
+  salirDeTray();
   if (enRed) { multi.salir(); enRed = false; }
   aplicarHora('dia');
   qRed = null;
@@ -515,6 +537,8 @@ document.addEventListener('click', (e) => {
   if (destino === 'volver') { aplicarAjustesEnVivo(); mostrar(jugando ? 'pausa' : pantallaPrevia || 'menu'); return; }
   if (destino === 'contrarreloj' || destino === 'practica') { if (destino === 'contrarreloj') fantasmaRival = null; empezar(destino); return; }
   if (destino === 'garaje') { abrirGaraje(); return; }
+  if (destino === 'trayectoria') { abrirTrayectoria(); return; }
+  if (destino === 'editor') { abrirEditor(); return; }
   if (destino === 'multi') { abrirMulti(); return; }
   if (destino === 'campeonato') { abrirCampeonato(); return; }
   if (destino === 'rankings') { abrirRankings(); return; }
@@ -550,7 +574,30 @@ const REGLAJE_UI = [
   ['alturaTras', 'Altura trasera', 1, 10, 'Controla el rake (inclinación) y el balance aerodinámico.'],
   ['presion', 'Presión de neumáticos', 1, 10, 'Más baja: más agarre y temperatura; más desgaste del flanco.'],
 ];
+// Reglaje guiado: síntoma → propuesta del ingeniero → aplicar o deshacer
+let deshacerReglaje = null;
+function pintarIngeniero() {
+  const el = $('#ingSintomas');
+  el.innerHTML = SINTOMAS.map(x => `<button class="chip" data-s="${x.id}">${x.icono} ${x.texto}</button>`).join('');
+  el.querySelectorAll('[data-s]').forEach(b => b.onclick = () => {
+    const p = proponer(reglaje, b.dataset.s);
+    const nom = (c) => (REGLAJE_UI.find(r => r[0] === c) || [c, c])[1];
+    $('#ingPropuesta').innerHTML = `<p>🎧 ${frase(p)}</p>` + p.cambios.map(c => `<div class="cambio"><span>${nom(c.campo)}</span><b>${c.antes} → ${c.despues}</b><small>${c.porque}</small></div>`).join('')
+      + (p.cambios.length ? '<div class="acciones"><button class="btn primario" id="ingAplicar">Aplicar cambios</button></div>' : '');
+    radio.decir(frase(p), { prioridad: true });
+    $('#ingAplicar')?.addEventListener('click', () => {
+      deshacerReglaje = { ...reglaje };
+      for (const c of p.cambios) reglaje[c.campo] = c.despues;
+      guardar(); pintarReglaje();
+      $('#ingPropuesta').innerHTML = `<p>✅ Cambios aplicados. Sal a pista y dime cómo va. <button class="btn mini" id="ingDeshacer">Deshacer</button></p>`;
+      $('#ingDeshacer').onclick = () => { if (deshacerReglaje) Object.assign(reglaje, deshacerReglaje); deshacerReglaje = null; guardar(); pintarReglaje(); $('#ingPropuesta').innerHTML = '<p>↩️ Reglaje anterior recuperado.</p>'; };
+      radio.decir('Hecho. Los mecánicos ya han cambiado el reglaje.', { prioridad: true });
+    });
+  });
+}
+
 function pintarReglaje() {
+  if (!$('#ingSintomas').children.length) pintarIngeniero();
   const lista = $('#listaReglaje');
   lista.innerHTML = '';
   const fila = document.createElement('div'); fila.className = 'opcion';
@@ -627,7 +674,7 @@ $('#bProbarVoz').addEventListener('click', () => {
 });
 $('#bCalibrar').addEventListener('click', () => { entrada.calibrar(); mensaje('CENTRADO', '', 1); });
 $('#bResMenu').addEventListener('click', salirAlMenu);
-$('#bResOtra').addEventListener('click', () => { if (carreraCamp) { carreraCamp = null; volverMenuSinSesion(); abrirCampeonato(); } else empezar(modoActual === 'red' ? 'carrera' : modoActual); });
+$('#bResOtra').addEventListener('click', () => { if (carreraCamp && enTray) { carreraCamp = null; volverMenuSinSesion(); salirDeTray(); abrirTrayectoria(); } else if (carreraCamp) { carreraCamp = null; volverMenuSinSesion(); abrirCampeonato(); } else empezar(modoActual === 'red' ? 'carrera' : modoActual); });
 $('#bPausaRepe').addEventListener('click', () => abrirRepe('pausa'));
 $('#bResRepe').addEventListener('click', () => abrirRepe('resultados'));
 $('#bPausaTele').addEventListener('click', () => abrirTelemetria());
@@ -798,7 +845,7 @@ function actualizarHud(dt) {
   const total = sesion.participantes.length;
   $('#hPos').parentElement.style.display = sesion.modo === 'carrera' ? '' : 'none';
   $('#hPos').textContent = 'P' + p.posicion; $('#hPosTot').textContent = '/' + total;
-  $('#hVuelta').textContent = sesion.modo === 'carrera' ? `${Math.max(1, Math.min(p.vuelta, sesion.vueltasTotales))}/${sesion.vueltasTotales}` : String(Math.max(0, p.vuelta));
+  $('#hVuelta').textContent = sesion.tiempoLimite ? `⏱ ${fmt(Math.max(0, sesion.tiempoLimite - sesion.tiempo)).replace(/\.\d+$/, '')} · V${Math.max(1, p.vuelta)}` : sesion.modo === 'carrera' ? `${Math.max(1, Math.min(p.vuelta, sesion.vueltasTotales))}/${sesion.vueltasTotales}` : String(Math.max(0, p.vuelta));
   if (sesion.modo === 'carrera' && sesion.orden) {
     const lider = sesion.orden[0];
     // en el móvil solo líder, el de delante, tú y el de detrás (el resto tapa los pedales)
@@ -892,6 +939,7 @@ function procesarEventos() {
       if (ds < 700) radio.decir('Bandera amarilla más adelante, cuidado.', { clave: 'amarilla', cada: 15 });
     }
     else if (e.tipo === 'sancion') {
+      if (e.p.jugador) incRed.sanciones++;
       if (e.p.jugador) { mensaje(`+${e.seg} s DE SANCIÓN`, e.motivo, 2.6); radio.decir(`Nos han puesto cinco segundos de sanción por ${e.motivo.toLowerCase()}. Llevamos ${e.total} en total.`, { prioridad: true }); }
     }
     else if (e.tipo === 'avisoLimites' && e.p.jugador) {
@@ -902,8 +950,12 @@ function procesarEventos() {
       radio.decir(`Vuelta rápida para ${e.p.nombre.replace('@', '')}: ${fmt(e.p.mejor)}.`, { tipo: 'megafonia', clave: 'vr', cada: 40 });
       if (e.p.jugador) radio.decir('¡Vuelta rápida! Muy bien.', { clave: 'vrJ', cada: 30 });
     }
-    else if (e.tipo === 'contacto' && e.jugador) { sonido.evento('contacto', e.fuerza); entrada.vibrar(60, 0.8); }
-    else if (e.tipo === 'limites' && e.jugador) { mensaje('LÍMITES DE PISTA', 'Vuelta anulada', 1.8); radio.decir(['Te has pasado de los límites, vuelta anulada.', 'Cuatro ruedas fuera. Esa vuelta no cuenta.', 'Ojo con los límites de pista.'][Math.floor(Math.random() * 3)], { clave: 'limites', cada: 12 }); }
+    else if (e.tipo === 'contacto' && e.jugador) {
+      sonido.evento('contacto', e.fuerza); entrada.vibrar(60, 0.8);
+      // para el safety rating: un contacto fuerte cuenta una vez (no cada paso de física que dure)
+      if (e.fuerza > 2.5 && sesion.tiempo - incRed.tUlt > 2) { incRed.contactos++; incRed.tUlt = sesion.tiempo; }
+    }
+    else if (e.tipo === 'limites' && e.jugador) { incRed.limites++; mensaje('LÍMITES DE PISTA', 'Vuelta anulada', 1.8); radio.decir(['Te has pasado de los límites, vuelta anulada.', 'Cuatro ruedas fuera. Esa vuelta no cuenta.', 'Ojo con los límites de pista.'][Math.floor(Math.random() * 3)], { clave: 'limites', cada: 12 }); }
     else if (e.tipo === 'sector') {
       const el = $('#hS' + (e.k + 1)); el.className = e.color;
       if (e.color === 'morado') radio.decir(`Sector ${e.k + 1} morado. ¡Vas volando!`, { clave: 'morado', cada: 40 });
@@ -936,13 +988,13 @@ function procesarEventos() {
     else if (e.tipo === 'meta' && e.p.posicion === 1 && !estadoRadio.ganador) {
       estadoRadio.ganador = true; sonido.ovacion(2.5);
       radio.decir(`¡${e.p.nombre.replace('@', '')} gana en el ${circuito.def.corto}!`, { tipo: 'megafonia' });
-      if (e.p.jugador) { mensaje('🏆 ¡VICTORIA!', '', 3); radio.decir('¡¡Ganamos!! ¡Increíble carrera, campeón!', { prioridad: true }); entrada.vibrar(300); if (enRed) multi.meta(); celebrar(e.p); }
+      if (e.p.jugador) { mensaje('🏆 ¡VICTORIA!', '', 3); radio.decir('¡¡Ganamos!! ¡Increíble carrera, campeón!', { prioridad: true }); entrada.vibrar(300); if (enRed) multi.meta(informeIncidentes()); celebrar(e.p); }
       if (!enRed && e.p.jugador) setTimeout(() => { if (jugando && sesion.modo === 'carrera' && sesion.jugador.terminado) mostrarResultados(); }, 12000);
     }
     else if (e.tipo === 'meta' && e.p.jugador) {
       mensaje('🏁 BANDERA A CUADROS', `Terminas P${e.p.posicion}`, 3);
       radio.decir(e.p.posicion <= 3 ? `¡Bandera a cuadros! P${e.p.posicion}, ¡al podio! Gran trabajo.` : `Bandera a cuadros. Terminas P${e.p.posicion}. Buen esfuerzo, vuelve a boxes.`, { prioridad: true, clave: 'metaJ', cada: 30 });
-      if (enRed) multi.meta();
+      if (enRed) multi.meta(informeIncidentes());
       else setTimeout(() => { if (jugando && sesion.modo === 'carrera') mostrarResultados(); }, e.p.posicion <= 3 ? 10000 : 3500);
       if (e.p.posicion <= 3) celebrar(e.p);
     }
@@ -960,6 +1012,7 @@ function procesarEventos() {
       const k = sesion.participantes.indexOf(e.p);
       modelos[k].cambiarCompuesto(e.p.coche.reglaje.compuesto);
       if (e.p.jugador) radio.decir(e.duracion < 3 ? `¡Parada de ${e.duracion.toFixed(1)} segundos! Vamos, vamos, vamos.` : `Parada de ${e.duracion.toFixed(1)} segundos. Sal con cuidado, neumáticos fríos.`, { prioridad: true });
+      if (e.p.jugador && relevo.pendiente) ponerRelevo(!relevo.activo);
       if (e.p.jugador) { mensaje(`PARADA: ${e.duracion.toFixed(1)} s`, `Neumáticos ${COMPUESTOS[e.p.coche.reglaje.compuesto].nombre.toLowerCase()}`, 2.4); $('#bBox').classList.remove('activo'); }
     }
     else if (e.tipo === 'abandono') {
@@ -967,7 +1020,7 @@ function procesarEventos() {
       if (e.p.jugador) {
         mensaje('ABANDONO', e.motivo || 'Coche demasiado dañado', 3.5);
         radio.decir('Se acabó, lo siento. Deja el coche en un lugar seguro.', { prioridad: true });
-        if (enRed) { multi.abandono(); setTimeout(() => { if (jugando && enRed) mostrarFueraRed(e.motivo); }, 3500); }
+        if (enRed) { multi.abandono(informeIncidentes()); setTimeout(() => { if (jugando && enRed) mostrarFueraRed(e.motivo); }, 3500); }
         else if (sesion.modo === 'carrera') setTimeout(() => { if (jugando) mostrarResultados(); }, 4500);
         else setTimeout(() => { if (jugando && sesion.jugador.coche.abandono) { const c = sesion.jugador.coche; c.repararTodo(); c.repararEnBoxes(); c.recolocar(); sesion.jugador.abandono = false; sesion.jugador.valida = false; crearModelos(); mensaje('COCHE NUEVO', 'Vuelta anulada', 2); } }, 3500);
       }
@@ -1062,7 +1115,8 @@ function radioPeriodica(dt) {
     else if (bat > 0.95 && (c.mandos.ersModo ?? 1) !== 2) radio.decir('Batería llena. Usa el modo ataque en la recta.', { clave: 'batLlena', cada: 90 });
     if (sesion.modo === 'carrera') {
       const faltan = sesion.vueltasTotales - p.vuelta + 1, necesita = faltan * 1.45;
-      if (c.combustible < necesita * 0.97) radio.decir('Vamos justos de combustible. Levanta y deja correr antes de frenar.', { clave: 'gasolina', cada: 90 });
+      if (sesion.tiempoLimite) { if (c.combustible < 3 * 1.45 && !p.solicitudBox) radio.decir('Quedan tres vueltas de gasolina. Box para repostar.', { clave: 'repostar', cada: 60, prioridad: true }); }
+      else if (c.combustible < necesita * 0.97) radio.decir('Vamos justos de combustible. Levanta y deja correr antes de frenar.', { clave: 'gasolina', cada: 90 });
     }
   }
   if (c.drsPermitido && !c.drsAbierto && sesion.modo === 'carrera') radio.decir('DRS disponible. ¡Ábrelo!', { clave: 'drs', cada: 45 });
@@ -1154,6 +1208,8 @@ function bucle(ahora) {
   else $('#hQRed').classList.remove('visible');
   if (!pausado && !enGaraje) {
     sesion.actualizar(dt);
+    if (relevo.activo && relevo.rapido && jugando) { sesion.actualizar(dt); sesion.actualizar(dt); }
+    if (sesion.tiempoLimite && jugando) cicloDiaNoche();
     if (jugando) procesarEventos(); else { sesion.eventos.length = 0; for (const p of sesion.participantes) p.coche.eventos.length = 0; }
     if (jugando) {
       grabadora?.grabar(dt, sesion.coches, sesion.tiempo);
@@ -1344,6 +1400,37 @@ $('#bDonuts').addEventListener('click', () => {
   sonido.ovacion(1.5);
 });
 
+// --- Resistencia: relevos de piloto y ciclo día-noche --------------------------------
+const relevo = { pendiente: false, activo: false, rapido: false };
+function ponerRelevo(activo) {
+  const p = sesion.jugador, c = p.coche;
+  relevo.activo = activo; relevo.pendiente = false; relevo.rapido = false;
+  if (activo) {
+    import('./ai.js').then(({ PilotoIA }) => { p.ia = new PilotoIA(c, circuito, 0.95, 0.35); c.esIA = true; });
+    mensaje('RELEVO', 'Tu compañero se pone al volante', 2.5);
+    radio.decir('Cambio de piloto hecho. Descansa, tu compañero lleva el coche. Avísanos cuando quieras volver.', { prioridad: true });
+  } else {
+    p.ia = null; c.esIA = false;
+    mensaje('DE VUELTA AL VOLANTE', 'Te toca conducir', 2.5);
+    radio.decir('Vuelves al coche. Neumáticos y gasolina a tope. ¡Vamos!', { prioridad: true });
+  }
+  $('#hRelevo').classList.toggle('visible', activo);
+  $('#bRelevoRapido').classList.remove('on');
+}
+$('#bRelevoRapido').addEventListener('click', () => { relevo.rapido = !relevo.rapido; $('#bRelevoRapido').classList.toggle('on', relevo.rapido); });
+$('#bRelevoVolver').addEventListener('click', () => {
+  sesion.pedirBox(sesion.jugador, sesion.jugador.coche.reglaje.compuesto); relevo.pendiente = true;
+  mensaje('BOX ESTA VUELTA', 'Cambio de piloto: vuelves al coche', 2);
+  radio.decir('Recibido, entra en esta vuelta y te devolvemos el coche.', { clave: 'relevoVuelta', cada: 5 });
+});
+// 24 h: el reloj del circuito recorre un día entero (salida a las 15:00); en las demás, de tarde a noche
+function cicloDiaNoche() {
+  const f = Math.min(1, sesion.tiempo / sesion.tiempoLimite);
+  const h = +opcCarrera.duracion === 24 ? (15 + 24 * f) % 24 : 16 + 5 * f;
+  const hora = h >= 7 && h < 17.5 ? 'dia' : (h >= 17.5 && h < 19.5) || (h >= 5.5 && h < 7) ? 'atardecer' : 'noche';
+  if (escenario.hora !== hora) { aplicarHora(hora); if (hora === 'noche') radio.decir('Cae la noche. Ojo con los coches lentos, se ven menos.', { clave: 'noche', cada: 600 }); }
+}
+
 // --- Espectador / juez -------------------------------------------------------------
 const CAMS_ESPECT = ['tv', 'persecucion', 'cercana', 'helicoptero', 'dron', 'lateral', 'suelo', 'cabina', 'tcam', 'morro', 'orbita'];
 function iniciarEspectador() {
@@ -1471,6 +1558,7 @@ document.querySelectorAll('#panelBox [data-box]').forEach(b => b.addEventListene
   $('#panelBox').classList.remove('visible');
   if (v === 'cancelar') { sesion.cancelarBox(sesion.jugador); return; }
   sesion.pedirBox(sesion.jugador, v);
+  if ($('#chkRelevo').checked) { relevo.pendiente = true; $('#chkRelevo').checked = false; }
   mensaje('BOX, BOX', `Entra al final de esta vuelta · neumáticos ${COMPUESTOS[v].nombre.toLowerCase()}`, 2.4);
   radio.decir(`Recibido. Box esta vuelta, preparamos ${COMPUESTOS[v].nombre.toLowerCase()}s.`, { clave: 'boxSi', cada: 5 });
 }));
@@ -1509,7 +1597,7 @@ async function refrescarPerfil() {
   if (!cuenta.conectado()) return;
   try {
     const d = await cuenta.perfil();
-    perfilApex = { mejoras: d.mejoras || {}, cosmeticos: d.cosmeticos || [], upcoins: d.upcoins, elo: d.elo, nivel: d.nivel };
+    perfilApex = { mejoras: d.mejoras || {}, cosmeticos: d.cosmeticos || [], upcoins: d.upcoins, elo: d.elo, nivel: d.nivel, sr: d.sr, licencia: d.licencia };
     if (d.equipado) Object.assign(equipado, d.equipado, { propia: equipado.propia && d.equipado.propia });
     guardar();
   } catch (e) { if (e.status === 401) perfilApex.upcoins = null; }
@@ -1696,6 +1784,8 @@ async function abrirMulti() {
   } catch (e) { $('#mEstado').textContent = e.message + '. Revisa tu conexión.'; }
 }
 function pintarOpcMulti() {
+  const mc = $('#mpCircuitos');
+  if (mc && !mc.children.length) mc.innerHTML = Object.values(CIRCUITOS).filter(d => !d.comunidad).map(d => `<b data-v="${d.id}">${d.corto}</b>`).join('');
   document.querySelectorAll('#multi [data-mp]').forEach(sg => {
     const k = sg.dataset.mp;
     sg.querySelectorAll('b').forEach(b => {
@@ -1704,7 +1794,7 @@ function pintarOpcMulti() {
     });
   });
   $('#filaMax').classList.toggle('oculto', opcMulti.tipo === '1v1');
-  $('#mElo').textContent = perfilApex.elo ? `Tu ELO: ${perfilApex.elo} (${perfilApex.nivel})` : cuenta.conectado() ? '' : 'Inicia sesión para tener ELO y ranking';
+  $('#mElo').innerHTML = perfilApex.elo ? `Tu ELO: ${perfilApex.elo} (${perfilApex.nivel}) · ${chipLic(perfilApex.licencia || 'D')} SR ${(perfilApex.sr ?? 2.5).toFixed(2)}` : cuenta.conectado() ? '' : 'Inicia sesión para tener ELO, licencia y ranking';
 }
 let buscando = false;
 $('#bBuscar').addEventListener('click', async () => {
@@ -1722,17 +1812,28 @@ multi.on('emparejado', (d) => {
   mostrar('sala'); pintarSala();
   $('#salaInfo').innerHTML = `¡Rivales encontrados! ${d.sala.jugadores.length} pilotos · ${CIRCUITOS[d.sala.circuito]?.corto || ''} · la salida es en unos segundos…`;
 });
-let ultimoElo = null;
+let ultimoElo = null, ultimaLic = null;
+// incidentes del jugador en la carrera en línea (safety rating de la licencia)
+let incRed = { contactos: 0, sanciones: 0, limites: 0, tUlt: -99 };
+const informeIncidentes = () => ({ vueltas: Math.max(0, (sesion?.jugador?.vuelta || 1) - 1), contactos: incRed.contactos, sanciones: incRed.sanciones, limites: incRed.limites });
+const textoLic = (d) => `Licencia ${d.licencia} · SR ${d.antes.toFixed(2)} → ${d.despues.toFixed(2)} (${d.despues >= d.antes ? '+' : ''}${(d.despues - d.antes).toFixed(2)})`;
+const chipLic = (l) => l ? `<span class="lic lic-${String(l).toLowerCase()}">${l}</span>` : '';
+multi.on('licencia', (d) => {
+  perfilApex.sr = d.despues; perfilApex.licencia = d.licencia; guardar();
+  ultimaLic = d;
+  if (d.anterior && d.anterior !== d.licencia) setTimeout(() => mensaje(`LICENCIA ${d.licencia}`, '¡Nueva licencia!', 3), 500);
+  if ($('#resultados').classList.contains('visible')) $('#resPremio').textContent = [ultimoElo && textoElo(ultimoElo), textoLic(d)].filter(Boolean).join(' · ');
+});
 const textoElo = (d) => { const dif = d.despues - d.antes; return `ELO ${d.antes} → ${d.despues} (${dif >= 0 ? '+' : ''}${dif}) · ${d.nivel}`; };
 multi.on('elo', (d) => {
   perfilApex.elo = d.despues; perfilApex.nivel = d.nivel; guardar();
   ultimoElo = d;
-  if ($('#resultados').classList.contains('visible')) $('#resPremio').textContent = textoElo(d);
+  if ($('#resultados').classList.contains('visible')) $('#resPremio').textContent = [textoElo(d), ultimaLic && textoLic(ultimaLic)].filter(Boolean).join(' · ');
 });
 multi.on('lista', (l) => {
   $('#listaSalas').innerHTML = l.length ? '<h3>Salas abiertas y carreras en directo</h3>' + l.map(x => {
     const enVivo = x.estado && x.estado !== 'espera';
-    return `<div class="sala-pub" data-codigo="${x.codigo}" data-vivo="${enVivo ? 1 : ''}"><span>${enVivo ? '<b style="color:var(--rojo)">● EN DIRECTO</b> · ' : ''}<b>${x.nombre.replace(/</g, '')}</b>${x.juez ? ' · 🏆 torneo con juez' : ''} · ${x.tipo === '1v1' ? 'Duelo' : 'Abierta'} · ${CIRCUITOS[x.circuito]?.corto || 'Valle Andino'} · ${x.vueltas} vueltas${x.clima && x.clima !== 'seco' ? ' · ' + CLIMAS[x.clima] : ''}${x.mejoras ? ' · con mejoras' : ''}${x.espectadores ? ` · 👁 ${x.espectadores}` : ''}</span><span>${x.jugadores}/${x.max} <button class="btn mini ver" data-ver="${x.codigo}">👁 Ver</button></span></div>`;
+    return `<div class="sala-pub" data-codigo="${x.codigo}" data-vivo="${enVivo ? 1 : ''}"><span>${enVivo ? '<b style="color:var(--rojo)">● EN DIRECTO</b> · ' : ''}<b>${x.nombre.replace(/</g, '')}</b>${x.juez ? ' · 🏆 torneo con juez' : ''} · ${x.tipo === '1v1' ? 'Duelo' : 'Abierta'} · ${CIRCUITOS[x.circuito]?.corto || 'Valle Andino'} · ${x.vueltas} vueltas${x.clima && x.clima !== 'seco' ? ' · ' + CLIMAS[x.clima] : ''}${x.mejoras ? ' · con mejoras' : ''}${x.licMin && x.licMin !== 'D' ? ` · licencia ${x.licMin}+` : ''}${x.espectadores ? ` · 👁 ${x.espectadores}` : ''}</span><span>${x.jugadores}/${x.max} <button class="btn mini ver" data-ver="${x.codigo}">👁 Ver</button></span></div>`;
   }).join('') : '<p class="nota">No hay salas abiertas ahora mismo. ¡Crea una y comparte el código!</p>';
   document.querySelectorAll('.sala-pub').forEach(el => el.onclick = (e) => {
     if (e.target.closest('[data-ver]') || el.dataset.vivo) espectarSala(el.dataset.codigo); else unirse(el.dataset.codigo);
@@ -1742,7 +1843,7 @@ multi.on('aviso', (t) => { if ($('#sala').classList.contains('visible')) $('#sal
 const datosJugador = () => ({ nombre: cuenta.usuario() || 'Invitado', equipado: { ...equipado }, livery: libreaParaRed() });
 $('#bCrearSala').addEventListener('click', async () => {
   const juez = $('#mpJuez').checked;
-  const r = await multi.crear({ ...datosJugador(), opciones: { tipo: opcMulti.tipo, max: opcMulti.max, vueltas: opcMulti.vueltas, publica: $('#mpPublica').checked, mejoras: $('#mpMejoras').checked, circuito: opcMulti.circuito, clima: opcMulti.clima, juez } });
+  const r = await multi.crear({ ...datosJugador(), opciones: { tipo: opcMulti.tipo, max: opcMulti.max, vueltas: opcMulti.vueltas, publica: $('#mpPublica').checked, mejoras: $('#mpMejoras').checked, circuito: opcMulti.circuito, clima: opcMulti.clima, juez, licMin: opcMulti.licMin || 'D' } });
   if (!r.ok) { $('#mEstado').textContent = r.error; return; }
   espectando = juez;
   entrarSala(r.sala);
@@ -1773,10 +1874,10 @@ function pintarSala() {
   const s = salaActual; if (!s) return;
   const yo = multi.yo, soyHost = s.host === yo;
   $('#salaTitulo').textContent = `${s.nombre} · ${s.codigo}`;
-  $('#salaInfo').innerHTML = `${s.rapida ? 'Partida rápida' : s.tipo === '1v1' ? 'Duelo 1 vs 1' : `Sala abierta · hasta ${s.max} pilotos`} · <b>${CIRCUITOS[s.circuito]?.nombre || ''}</b> · ${CLIMAS[s.clima] || 'Seco'} · ${s.vueltas} vueltas · ${s.mejoras ? 'con mejoras de UpCoins' : 'coches iguales'}${s.publica ? ' · pública' : ' · privada'}<br>Comparte el código <b style="color:#ffd23f;font-size:16px">${s.codigo}</b> para que se unan.`;
+  $('#salaInfo').innerHTML = `${s.rapida ? 'Partida rápida' : s.tipo === '1v1' ? 'Duelo 1 vs 1' : `Sala abierta · hasta ${s.max} pilotos`} · <b>${CIRCUITOS[s.circuito]?.nombre || ''}</b> · ${CLIMAS[s.clima] || 'Seco'} · ${s.vueltas} vueltas · ${s.mejoras ? 'con mejoras de UpCoins' : 'coches iguales'}${s.publica ? ' · pública' : ' · privada'}${s.licMin && s.licMin !== 'D' ? ` · exige licencia ${s.licMin}` : ''}<br>Comparte el código <b style="color:#ffd23f;font-size:16px">${s.codigo}</b> para que se unan.`;
   // el circuito de la sala se prepara mientras se espera
   if (s.circuito && s.circuito !== circuito.id && !cargando && s.estado === 'espera') cargarCircuito(s.circuito);
-  $('#salaPilotos').innerHTML = s.jugadores.map((j, k) => `<div class="sala-fila"><b>${k + 1}</b><span><i class="eq" style="display:inline-block;width:4px;height:16px;border-radius:2px;margin-right:8px;vertical-align:middle;background:${j.equipado?.colores?.base || '#888'}"></i>${j.nombre.replace(/</g, '')}${j.id === yo ? ' (tú)' : ''}</span><span class="host">${j.id === s.host ? 'ANFITRIÓN' : ''}</span><span class="listo">${j.listo || j.id === s.host ? 'LISTO' : ''}</span></div>`).join('');
+  $('#salaPilotos').innerHTML = s.jugadores.map((j, k) => `<div class="sala-fila"><b>${k + 1}</b><span><i class="eq" style="display:inline-block;width:4px;height:16px;border-radius:2px;margin-right:8px;vertical-align:middle;background:${j.equipado?.colores?.base || '#888'}"></i>${j.nombre.replace(/</g, '')} ${chipLic(j.licencia)}${j.id === yo ? ' (tú)' : ''}</span><span class="host">${j.id === s.host ? 'ANFITRIÓN' : ''}</span><span class="listo">${j.listo || j.id === s.host ? 'LISTO' : ''}</span></div>`).join('');
   $('#bSalaEmpezar').classList.toggle('oculto', !soyHost);
   $('#bSalaListo').classList.toggle('oculto', soyHost || espectando);
   if (espectando) $('#salaInfo').innerHTML += `<br>👁 <b>${s.juez === yo ? 'Eres el juez: das la salida y lo ves todo en directo' : 'Modo espectador'}</b> · ${s.espectadores || 1} mirando${s.estado === 'clasif' ? ' · <b>clasificación en curso</b>' : ''}`;
@@ -1796,7 +1897,8 @@ multi.on('salida', async (d) => {
   const s = salaActual;
   if (s.circuito && s.circuito !== circuito?.id) await cargarCircuito(s.circuito);
   modoActual = 'red'; enRed = true;
-  carreraCamp = null; qActual = null; ultimoElo = null;
+  carreraCamp = null; qActual = null; ultimoElo = null; ultimaLic = null;
+  incRed = { contactos: 0, sanciones: 0, limites: 0, tUlt: -99 };
   sonido.iniciar(); sonido.ponerVolumen(ajustes.volumen);
   const rc = { ...reglaje };
   if (s.clima === 'lluvia' && !COMPUESTOS[rc.compuesto]?.lluvia) rc.compuesto = 'lluvia';
@@ -1932,7 +2034,7 @@ function mostrarResultadosRed(r) {
   $('#resTitulo').textContent = espectando ? '🏁 Resultados de la carrera' : yo?.pos === 1 && !yo.abandono ? '🏆 ¡Victoria en línea!' : `Resultado: P${yo?.pos ?? '-'}`;
   document.body.classList.remove('espectando');
   const ganador = r[0];
-  $('#resPremio').textContent = ultimoElo ? textoElo(ultimoElo) : cuenta.conectado() ? 'Calculando ELO…' : '';
+  $('#resPremio').textContent = ultimoElo || ultimaLic ? [ultimoElo && textoElo(ultimoElo), ultimaLic && textoLic(ultimaLic)].filter(Boolean).join(' · ') : cuenta.conectado() ? 'Calculando ELO y licencia…' : '';
   $('#resLista').innerHTML = r.map(x => `<div class="fila-res ${x.id === multi.yo ? 'yo' : ''}"><b>${x.pos}</b><span>${nombreQ(x)}${x.bot != null ? ' <small style="color:var(--tenue)">IA</small>' : ''}</span><span>${x.abandono ? 'Abandono' : x === ganador ? fmt(x.tiempo) : '+' + (x.tiempo - ganador.tiempo).toFixed(3)}</span><span>${fmt(x.mejor)}</span></div>`).join('');
   mostrar('resultados');
   $('#bResOtra').textContent = 'Volver a la sala';
@@ -2488,6 +2590,54 @@ function empezarCarreraTrasQ() {
   }
 }
 
+// --- Modo carrera profesional ---------------------------------------------------------------
+function entrarATray() { if (!enTray) { temporadaNormal = temporada; temporada = tray.temp; enTray = true; } }
+function salirDeTray() { if (enTray) { if (tray) tray.temp = temporada?.terminada ? null : temporada; temporada = temporadaNormal; enTray = false; guardar(); } }
+function abrirTrayectoria() {
+  if (!tray) tray = TRAY.nueva(nombreJugador());
+  mostrar('trayectoria'); pintarTrayectoria();
+}
+function pintarTrayectoria() {
+  const t = tray, eq = t.equipo != null ? EQUIPOS[t.equipo] : null;
+  $('#trTitulo').textContent = `Modo carrera · Temporada ${t.temporadaNum}`;
+  const pil = t.temp ? CAMP.tablaPilotos(t.temp) : null;
+  const posYo = pil ? pil.findIndex(p => p.jugador) + 1 : null, yoP = pil?.find(p => p.jugador), rivP = pil?.find(p => p.id === t.rival?.id);
+  $('#trCabecera').innerHTML = `<div>Piloto<b>${t.nombre.replace(/</g, '')}</b></div>
+    <div>Equipo<b style="color:${eq?.base || '#fff'}">${eq ? eq.nombre : 'Sin equipo'}</b></div>
+    <div>Reputación<b>${t.reputacion}/100</b><div class="tr-barra"><i style="width:${t.reputacion}%"></i></div></div>
+    <div>Créditos<b>${t.creditos.toLocaleString('es')} ¢</b></div>
+    ${t.contrato ? `<div>Contrato<b>${t.contrato.anios} temp. · objetivo P${t.contrato.objetivo}</b></div>` : ''}
+    ${pil ? `<div>Mundial<b>P${posYo} · ${yoP?.puntos || 0} pts</b></div>` : ''}
+    ${t.rival && pil ? `<div>Rival: ${t.rival.nombre}<b>${yoP?.puntos || 0} – ${rivP?.puntos || 0}</b></div>` : ''}`;
+  let h = '';
+  if (t.pregunta) h += `<div class="tr-sec tr-prensa"><h3>🎤 Rueda de prensa</h3><p>${t.pregunta.q}</p>${t.pregunta.r.map((r, k) => `<button class="btn mini" data-resp="${k}">${r[0]}</button>`).join('')}</div>`;
+  if (t.ofertas.length && (!t.temp)) h += `<div class="tr-sec"><h3>📄 Ofertas de contrato</h3>${t.ofertas.map((o, k) => `<div class="tr-oferta"><span><b style="color:${EQUIPOS[o.equipo].base}">●</b> ${EQUIPOS[o.equipo].nombre}${o.renovar ? ' (renovación)' : ''} · ${o.anios} temp. · ${o.sueldo} ¢/temp. · objetivo P${o.objetivo}</span><button class="btn mini primario" data-firma="${k}">Firmar</button></div>`).join('')}</div>`;
+  if (eq) h += `<div class="tr-sec"><h3>🔧 Desarrollo del coche <small class="nota">${t.puntosDes} puntos disponibles</small></h3>${Object.entries(TRAY.AREAS).map(([k, n]) => { const lv = t.desarrollo[k] || 0, c = TRAY.costeMejora(lv); return `<div class="tr-area"><span>${n}<span class="tr-niveles">${[0, 1, 2, 3, 4].map(i => `<i class="${i < lv ? 'on' : ''}"></i>`).join('')}</span></span><button class="btn mini" data-inv="${k}" ${lv >= 5 || t.puntosDes < c ? 'disabled' : ''}>${lv >= 5 ? 'Máximo' : `Mejorar (${c})`}</button></div>`; }).join('')}</div>`;
+  h += `<div class="tr-sec tr-noticias"><h3>📰 Noticias</h3>${t.noticias.slice(0, 8).map(n => `<div>${n.t.replace(/</g, '')}</div>`).join('')}</div>`;
+  $('#trCuerpo').innerHTML = h;
+  $('#trCuerpo').querySelectorAll('[data-firma]').forEach(b => b.onclick = () => { TRAY.firmar(tray, tray.ofertas[+b.dataset.firma]); guardar(); pintarTrayectoria(); });
+  $('#trCuerpo').querySelectorAll('[data-inv]').forEach(b => b.onclick = () => { if (TRAY.invertir(tray, b.dataset.inv)) { guardar(); pintarTrayectoria(); } });
+  $('#trCuerpo').querySelectorAll('[data-resp]').forEach(b => b.onclick = () => { const r = TRAY.responder(tray, +b.dataset.resp); guardar(); pintarTrayectoria(); if (r) mensaje('PRENSA', r, 2); });
+  const sinEquipo = t.equipo == null || (!t.temp && t.ofertas.length && !(t.contrato?.anios > 0));
+  $('#trSeguir').textContent = sinEquipo ? 'Elige una oferta' : t.temp ? `GP ${t.temp.ronda + 1}/${t.temp.rondas.length}: ${CIRCUITOS[t.temp.rondas[t.temp.ronda]].corto}` : 'Empezar temporada';
+  $('#trSeguir').disabled = !!sinEquipo || !!t.pregunta;
+}
+$('#trReiniciar').addEventListener('click', () => { if (!confirm('¿Empezar tu carrera desde cero?')) return; tray = TRAY.nueva(nombreJugador()); guardar(); pintarTrayectoria(); });
+$('#trSeguir').addEventListener('click', async () => {
+  const t = tray;
+  if (!t.temp) {
+    t.temp = CAMP.crearTemporada({ ...opcCamp, rondas: CALENDARIOS.europa, equipoJugador: t.equipo, nombre: nombreJugador() });
+    TRAY.ajustarParrilla(t.temp, t);
+    t.ofertas = [];
+    guardar();
+  }
+  entrarATray();
+  const tp = temporada;
+  await cargarCircuito(tp.rondas[tp.ronda]);
+  empezarClasificacion({ pilotos: tp.pilotos.map(p => ({ id: p.id, nombre: p.nombre, ie: p.ie, ip: p.ip, hab: p.hab, jugador: p.jugador })), clima: CAMP.climaRonda(tp), vueltas: tp.opc.vueltas, semilla: tp.semilla + tp.ronda, campeonato: true,
+    hora: CIRCUITOS[tp.rondas[tp.ronda]]?.hora || 'dia' });
+});
+
 // --- Campeonato -------------------------------------------------------------------------------
 function pintarCampeonato() {
   const t = temporada;
@@ -2521,17 +2671,17 @@ function pintarCampeonato() {
     $('#bCampAbandonar').classList.add('oculto');
   }
 }
-function abrirCampeonato() { mostrar('campeonato'); pintarCampeonato(); }
+function abrirCampeonato() { salirDeTray(); mostrar('campeonato'); pintarCampeonato(); }
 $('#bCampSeguir').addEventListener('click', async () => {
   if (!temporada || temporada.terminada) {
-    temporada = CAMP.crearTemporada({ ...opcCamp, equipoJugador: equipado.equipo || 0, nombre: nombreJugador() });
+    temporada = CAMP.crearTemporada({ ...opcCamp, rondas: CALENDARIOS[opcCamp.calendario] || CALENDARIOS.clasico, equipoJugador: equipado.equipo || 0, nombre: nombreJugador() });
     guardar();
   }
   const t = temporada;
   await cargarCircuito(t.rondas[t.ronda]);
   const cl = CAMP.climaRonda(t);
   empezarClasificacion({ pilotos: t.pilotos.map(p => ({ id: p.id, nombre: p.nombre, ie: p.ie, ip: p.ip, hab: p.hab, jugador: p.jugador })), clima: cl, vueltas: t.opc.vueltas, semilla: t.semilla + t.ronda, campeonato: true,
-    hora: t.rondas[t.ronda] === 'puerto' ? 'noche' : t.rondas[t.ronda] === 'veloz' ? 'atardecer' : 'dia' });
+    hora: CIRCUITOS[t.rondas[t.ronda]]?.hora || (t.rondas[t.ronda] === 'puerto' ? 'noche' : t.rondas[t.ronda] === 'veloz' ? 'atardecer' : 'dia') });
 });
 $('#bCampAbandonar').addEventListener('click', () => {
   if (!confirm('¿Empezar una temporada nueva? Se pierde la clasificación actual.')) return;
@@ -2548,6 +2698,12 @@ function cerrarCarreraCampeonato(orden) {
   const yo = sesion.jugador;
   const pts = ganados.jugador || 0;
   let txt = `+${pts} puntos en el campeonato`;
+  if (enTray && tray) {
+    const riv = orden.find(p => p.idPiloto === tray.rival?.id);
+    const r = TRAY.trasCarrera(tray, { pos: yo.posicion, abandono: yo.abandono || !yo.terminado, rivalPos: riv?.posicion, puntos: pts, gp: circuito.def.corto, nPilotos: orden.length });
+    txt += ` · reputación ${r.reputacion >= 0 ? '+' : ''}${r.reputacion} · ${r.titulares[0]}`;
+    if (temporada.terminada) TRAY.finTemporada(tray, CAMP.tablaPilotos(temporada).findIndex(p => p.jugador) + 1);
+  }
   $('#resPremio').textContent = txt;
   guardar();
   // puntos al ranking mundial (validados por el servidor); las UpCoins solo llegan al top 5 semanal
@@ -2573,7 +2729,7 @@ function abrirRankings() { rk.circuito = circuito.id; mostrar('rankings'); pinta
 async function pintarRankings() {
   document.querySelectorAll('#rankings .pestanas b').forEach(b => { b.classList.toggle('sel', b.dataset.rk === rk.tab); b.onclick = () => { rk.tab = b.dataset.rk; pintarRankings(); }; });
   const cs = $('#rkCircuito');
-  cs.innerHTML = Object.values(CIRCUITOS).map(d => `<b data-v="${d.id}" class="${d.id === rk.circuito ? 'sel' : ''}">${d.corto}</b>`).join('');
+  cs.innerHTML = Object.values(CIRCUITOS).filter(d => !d.comunidad).map(d => `<b data-v="${d.id}" class="${d.id === rk.circuito ? 'sel' : ''}">${d.corto}</b>`).join('');
   cs.querySelectorAll('b').forEach(b => b.onclick = () => { rk.circuito = b.dataset.v; pintarRankings(); });
   $('#rkPeriodo').querySelectorAll('b').forEach(b => { b.classList.toggle('sel', b.dataset.v === rk.periodo); b.onclick = () => { rk.periodo = b.dataset.v; pintarRankings(); }; });
   $('#rkFiltros').classList.toggle('oculto', rk.tab === 'elo');
@@ -2623,3 +2779,103 @@ iniciar().catch((err) => {
   console.error(err);
   $('#cargaTexto').textContent = 'No se pudo iniciar el juego: ' + (err?.message || err) + '. Tu navegador necesita WebGL.';
 });
+
+// ─── Editor de circuitos de la comunidad ─────────────────────────────────────
+let editor = null, edActual = null;
+function abrirEditor() {
+  mostrar('editor');
+  if (!editor) {
+    editor = new ED.EditorPlano($('#edPlano'), pintarEstadoEditor);
+    addEventListener('resize', () => { if ($('#editor').classList.contains('visible')) editor.pintar(); });
+    $('#edNombre').addEventListener('input', () => { if (edActual) edActual.nombre = ED.limpiarNombre($('#edNombre').value); });
+    document.querySelectorAll('#editor [data-ed]').forEach(sg => sg.addEventListener('click', (e) => {
+      const b = e.target.closest('b'); if (!b || !edActual) return;
+      edActual[sg.dataset.ed] = sg.dataset.ed === 'ancho' ? +b.dataset.v : b.dataset.v;
+      pintarOpcEditor(); editor.cambio();
+    }));
+    $('#edUrbano').addEventListener('change', (e) => { if (edActual) edActual.urbano = e.target.checked; });
+    $('#edNoche').addEventListener('change', (e) => { if (edActual) edActual.noche = e.target.checked; });
+    $('#edBorrarPunto').onclick = () => editor.borrarSel();
+    $('#edMeta').onclick = () => editor.metaAqui();
+    $('#edInvertir').onclick = () => editor.invertir();
+    $('#edLimpiar').onclick = () => { if (edActual && confirm('¿Borrar todos los puntos?')) { edActual.p = []; editor.cargar(edActual); } };
+    $('#edNuevo').onclick = () => editarCircuito(null);
+    $('#edGuardar').onclick = () => guardarCircuitoEd() && pintarListaEditor();
+    $('#edProbar').onclick = probarCircuitoEd;
+    $('#edCompartir').onclick = compartirCircuitoEd;
+    $('#edImportar').onclick = importarCircuitoEd;
+    $('#edEliminar').onclick = eliminarCircuitoEd;
+  }
+  pintarListaEditor();
+  editarCircuito(circuitosCom.find(d => d.id === edActual?.id) || circuitosCom[0] || null);
+}
+function editarCircuito(d) {
+  edActual = d ? structuredClone(d) : { id: ED.nuevoId(), nombre: `Circuito ${circuitosCom.length + 1}`, ancho: 13, relieve: 'ondulado', urbano: false, noche: false, p: ED.PLANTILLA.slice() };
+  $('#edNombre').value = edActual.nombre;
+  $('#edUrbano').checked = !!edActual.urbano; $('#edNoche').checked = !!edActual.noche;
+  pintarOpcEditor(); pintarListaEditor();
+  requestAnimationFrame(() => editor.cargar(edActual));
+}
+function pintarOpcEditor() {
+  document.querySelectorAll('#editor [data-ed]').forEach(sg => sg.querySelectorAll('b').forEach(b => b.classList.toggle('sel', String(edActual?.[sg.dataset.ed]) === b.dataset.v)));
+}
+function pintarListaEditor() {
+  $('#edLista').innerHTML = circuitosCom.map(d => `<b data-id="${d.id}" class="${d.id === edActual?.id ? 'sel' : ''}">${d.nombre.replace(/</g, '')}</b>`).join('') || '<span class="nota">Aún no has guardado circuitos</span>';
+  $('#edLista').classList.toggle('segm', circuitosCom.length > 0);
+  $('#edLista').querySelectorAll('b').forEach(b => b.onclick = () => editarCircuito(circuitosCom.find(d => d.id === b.dataset.id)));
+}
+function pintarEstadoEditor(rev) {
+  const n = (edActual?.p.length || 0) / 2;
+  if (!rev) { $('#edEstado').innerHTML = `${n} puntos · toca el plano para añadir puntos (mínimo 5). El punto verde es la meta.`; return; }
+  $('#edEstado').innerHTML = `<b>${(rev.largo / 1000).toFixed(2)} km</b> · ${n} puntos · curva más cerrada: ${Number.isFinite(rev.rMin) ? rev.rMin.toFixed(0) + ' m' : '—'}`
+    + (rev.ok ? ' · <b style="color:#22c55e">✓ listo para correr</b>' : '') + rev.errores.map(e => `<br><b style="color:#ff6b6b">✕ ${e}</b>`).join('') + (rev.avisos || []).map(a => `<br><span style="color:#ffd23f">${a}</span>`).join('');
+}
+function guardarCircuitoEd() {
+  if (!edActual) return false;
+  edActual.nombre = ED.limpiarNombre($('#edNombre').value);
+  const rev = ED.revisar(edActual);
+  if (!rev.ok) { $('#edEstado').innerHTML += '<br><b style="color:#ff6b6b">Corrige los errores antes de guardar</b>'; return false; }
+  try { ED.construir(edActual); } catch (e) { $('#edEstado').innerHTML += `<br><b style="color:#ff6b6b">${e.message}</b>`; return false; }
+  const k = circuitosCom.findIndex(d => d.id === edActual.id);
+  const copia = structuredClone(edActual);
+  if (k >= 0) circuitosCom[k] = copia; else circuitosCom.unshift(copia);
+  ED.guardarLista(circuitosCom);
+  ED.registrar(CIRCUITOS, copia);
+  delete reglajes[copia.id];
+  $('#edEstado').innerHTML += '<br><b style="color:#22c55e">Guardado ✓ · ya aparece en el selector de circuitos</b>';
+  return true;
+}
+async function probarCircuitoEd() {
+  if (!guardarCircuitoEd()) return;
+  // si ya estaba cargado, se reconstruye con el trazado nuevo
+  delete records[edActual.id]; delete fantasmas[edActual.id];
+  await cargarCircuito(edActual.id, true);
+  empezar('practica');
+}
+async function compartirCircuitoEd() {
+  if (!edActual || !ED.revisar(edActual).ok) { $('#edEstado').innerHTML += '<br><b style="color:#ff6b6b">El circuito tiene errores: corrígelos para compartirlo</b>'; return; }
+  edActual.nombre = ED.limpiarNombre($('#edNombre').value);
+  const codigo = ED.codificar(edActual);
+  const t = `Corre en mi circuito «${edActual.nombre}» en APEX GP. Ábrelo en Crear circuito → Importar código:\n${codigo}`;
+  try {
+    if (navigator.share) await navigator.share({ title: 'Circuito APEX GP', text: t });
+    else { await navigator.clipboard.writeText(codigo); $('#edEstado').innerHTML += '<br>Código copiado al portapapeles'; }
+  } catch { prompt('Copia este código y compártelo:', codigo); }
+}
+function importarCircuitoEd() {
+  const txt = prompt('Pega el código del circuito (empieza por APX1.)');
+  if (!txt) return;
+  try {
+    const d = ED.decodificar(txt);
+    editarCircuito(d);
+    $('#edEstado').innerHTML += '<br>Circuito importado: pulsa Guardar para quedártelo';
+  } catch (e) { alert(e.message); }
+}
+function eliminarCircuitoEd() {
+  if (!edActual || !circuitosCom.some(d => d.id === edActual.id) || !confirm(`¿Eliminar «${edActual.nombre}»?`)) return;
+  if (circuitoId === edActual.id) cargarCircuito('valle').then(() => mostrar('editor'));
+  circuitosCom = circuitosCom.filter(d => d.id !== edActual.id);
+  delete CIRCUITOS[edActual.id];
+  ED.guardarLista(circuitosCom);
+  editarCircuito(circuitosCom[0] || null);
+}

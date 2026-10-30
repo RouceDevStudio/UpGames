@@ -794,10 +794,10 @@ function calleBoxes(scene, c, m, res) {
     const i = Math.floor(c.envolver(sg) / c.paso) % c.n;
     const hw = c.semiAncho[i];
     // garaje abierto con su interior (equipo, pantallas, ruedas, mecánicos)
-    const gar = crearGaraje({ nombre: nombreEquipos[k], color: coloresEquipos[k], calidad: m.calidad, k });
+    const gar = crearGaraje({ nombre: nombreEquipos[k], color: coloresEquipos[k], calidad: m.calidad, k, ancho: p.anchoGaraje || 28 });
     const g = gar.grupo;
     void matFachada;
-    const alero = new THREE.Mesh(new THREE.BoxGeometry(28, 0.3, 4), m.matTecho); alero.position.set(0, 9.2, -9.5); g.add(alero);
+    const alero = new THREE.Mesh(new THREE.BoxGeometry(Math.max(12, p.anchoGaraje || 28), 0.3, 4), m.matTecho); alero.position.set(0, 9.2, -9.5); g.add(alero);
     const cartel = new THREE.Mesh(new THREE.PlaneGeometry(10, 1.6), new THREE.MeshStandardMaterial({ map: TX.texturaCartel(nombreEquipos[k], coloresEquipos[k], k === 8 || k === 9 || k === 2 ? '#111111' : '#ffffff'), roughness: 0.5 }));
     cartel.position.set(0, 7.6, -8.27); cartel.rotation.y = Math.PI; g.add(cartel);
     // plaza de parada pintada en el suelo con el color del equipo

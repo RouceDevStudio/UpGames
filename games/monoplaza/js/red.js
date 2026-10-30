@@ -145,6 +145,7 @@ export class Multijugador {
       s.on('clasif', (d) => this._emitirLocal('clasif', { ...d, tFinLocal: d.tFin - this.offset }));
       s.on('tablaQ', (t) => this._emitirLocal('tablaQ', t));
       s.on('elo', (d) => this._emitirLocal('elo', d));
+      s.on('licencia', (d) => this._emitirLocal('licencia', d));
       s.on('error_sala', (e) => this._emitirLocal('aviso', e));
       s.on('disconnect', () => this._emitirLocal('desconectado'));
     });
@@ -182,8 +183,8 @@ export class Multijugador {
   desconectar() { this.salir(); this.socket?.disconnect(); this.socket = null; }
   enviarEstado(arr) { this.socket?.volatile.emit('estado', arr.map(v => Math.round(v * 1000) / 1000)); }
   vuelta(t) { this.socket?.emit('vuelta', t); }
-  meta() { this.socket?.emit('meta'); }
-  abandono() { this.socket?.emit('abandono'); }
+  meta(inc) { this.socket?.emit('meta', inc); }
+  abandono(inc) { this.socket?.emit('abandono', inc); }
 
   _recibirEstados(p) {
     for (const [id, e] of p.c) {

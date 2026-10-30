@@ -446,3 +446,48 @@ body.espectando #tactil, body.espectando #hudIzq, body.espectando #volanteHud, b
 .bdonuts { position: absolute; right: calc(16px + var(--sa-r)); top: 42%; display: none; pointer-events: auto; padding: 12px 18px; border-radius: 14px; border: 2px solid #ffd23f; background: rgba(6,8,14,.75); color: #ffd23f; font-weight: 900; font-size: 18px; cursor: pointer; }
 .bdonuts.visible { display: block; animation: latido 1.2s infinite; }
 .bdonuts.activo { background: #ffd23f; color: #111; }
+
+/* reglaje guiado */
+.ing-panel { border: 1px solid var(--borde); border-radius: 12px; padding: 10px; margin-bottom: 10px; background: rgba(0,229,255,.04); }
+.ing-panel h3 { margin: 0 0 8px; font-size: 15px; }
+.ing-sintomas { display: flex; flex-wrap: wrap; gap: 6px; }
+.ing-sintomas button { font-size: 12px; }
+.ing-propuesta:empty { display: none; }
+.ing-propuesta { margin-top: 10px; font-size: 13px; }
+.ing-propuesta .cambio { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 6px 0; border-top: 1px solid var(--borde); }
+.ing-propuesta .cambio b { color: #00e5ff; }
+.ing-propuesta .cambio small { grid-column: 1 / -1; color: var(--tenue); }
+
+.relevo-op { display: none; align-items: center; gap: 6px; font-size: 12px; margin: 6px 0; }
+body.resistencia .relevo-op { display: flex; }
+.hrelevo { position: absolute; top: calc(70px + var(--sa-t)); left: 50%; transform: translateX(-50%); display: none; gap: 8px; align-items: center; padding: 6px 12px; border-radius: 10px; background: rgba(6,8,14,.75); pointer-events: auto; font-weight: 800; font-size: 13px; }
+.hrelevo.visible { display: flex; }
+
+/* modo carrera */
+.tr-cab { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.tr-cab div { background: rgba(255,255,255,.05); border: 1px solid var(--borde); border-radius: 10px; padding: 8px; font-size: 12px; }
+.tr-cab b { display: block; font-size: 16px; margin-top: 2px; }
+.tr-barra { height: 6px; border-radius: 3px; background: #2a2d36; margin-top: 4px; overflow: hidden; }
+.tr-barra i { display: block; height: 100%; background: linear-gradient(90deg, #ffd23f, #e8202a); }
+.tr-sec { border: 1px solid var(--borde); border-radius: 12px; padding: 10px; margin: 8px 0; }
+.tr-sec h3 { margin: 0 0 8px; font-size: 14px; }
+.tr-oferta, .tr-area { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px solid var(--borde); font-size: 13px; }
+.tr-oferta:first-of-type, .tr-area:first-of-type { border-top: 0; }
+.tr-niveles { display: inline-flex; gap: 3px; margin-left: 6px; }
+.tr-niveles i { width: 10px; height: 10px; border-radius: 2px; background: #2a2d36; }
+.tr-niveles i.on { background: #00e5ff; }
+.tr-noticias div { font-size: 12px; padding: 4px 0; border-top: 1px solid rgba(255,255,255,.06); }
+.tr-prensa button { margin: 4px 4px 0 0; }
+
+/* licencias en línea */
+.lic { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 4px; font: 700 11px/16px system-ui, sans-serif; text-align: center; color: #fff; vertical-align: middle; background: #6b7280; }
+.lic-c { background: #d97706; } .lic-b { background: #16a34a; } .lic-a { background: #2563eb; } .lic-pro { background: linear-gradient(135deg, #111, #7c3aed); box-shadow: 0 0 0 1px #c4b5fd inset; }
+
+/* editor de circuitos */
+.ed-lista { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+.ed-lista .segm { flex: 1 1 auto; flex-wrap: wrap; }
+.ed-cuerpo { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+#edPlano { width: 100%; aspect-ratio: 1; border-radius: 10px; border: 1px solid var(--borde); touch-action: none; cursor: crosshair; background: #16301e; }
+.ed-input { width: 100%; max-width: 220px; background: rgba(255,255,255,.06); color: inherit; border: 1px solid var(--borde); border-radius: 8px; padding: 6px 8px; font: inherit; }
+.ed-herr { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+@media (max-width: 760px) { .ed-cuerpo { grid-template-columns: 1fr; } #edPlano { max-height: 70vh; } }

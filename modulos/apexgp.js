@@ -143,6 +143,7 @@ class Salas {
         return {
             id, nombre: limpiarNombre(j?.nombre), usuario: j?.usuario || null,
             equipado: j?.equipado || EQUIPADO_DEF, mejoras: j?.mejoras || {}, livery: typeof j?.livery === 'string' ? j.livery : '',
+            licencia: LICENCIAS.includes(j?.licencia) ? j.licencia : 'D', sr: +j?.sr || SR_INICIAL, inc: null,
             listo: false, estado: null, terminado: false, tiempo: null, mejor: null, abandono: false, unido: this.ahora(),
         };
     }
@@ -157,6 +158,7 @@ class Salas {
             vueltas: Math.max(1, Math.min(70, Math.floor(+opc.vueltas) || 3)),
             publica: opc.publica !== false,
             mejoras: !!opc.mejoras,            // ¿cuentan las mejoras compradas?
+            licMin: LICENCIAS.includes(opc.licMin) ? opc.licMin : 'D',   // licencia mínima para entrar
             circuito: circuitoOk(opc.circuito),
             clima: CLIMAS.includes(opc.clima) ? opc.clima : 'seco',
             semilla: Math.floor(this.azar() * 1e9),   // mismo tiempo variable para todos
@@ -181,6 +183,7 @@ class Salas {
         if (sala.jugadores.has(id)) return { ok: true, sala };
         if (sala.estado !== 'espera') return { ok: false, error: 'La carrera ya empezó' };
         if (sala.jugadores.size + sala.bots.length >= sala.max) return { ok: false, error: 'La sala está llena' };
+        if (nivelLicencia(jugador?.licencia) < nivelLicencia(sala.licMin)) return { ok: false, error: `Esta sala exige licencia ${sala.licMin} o superior` };
         if (this.de.has(id)) this.salir(id);
         sala.jugadores.set(id, this._jugador(id, jugador));
         this.de.set(id, sala.codigo);
@@ -188,6 +191,14 @@ class Salas {
     }
 
     salaDe(id) { return this.salas.get(this.de.get(id)); }
+
+    /** Informe de incidentes del piloto (se manda junto a la meta o el abandono). */
+    incidentes(id, d) {
+        const j = this.salaDe(id)?.jugadores.get(id);
+        if (!j || !d || typeof d !== 'object') return false;
+        j.inc = limpiarIncidentes(d);
+        return true;
+    }
 
     /** Mirar una sala sin correr: no ocupa plaza ni casilla. */
     espectar(id, codigo) {
@@ -254,7 +265,7 @@ class Salas {
         if (sala.tipo === '1v1' && n !== 2) return { ok: false, error: 'El duelo es de 2 pilotos' };
         const noListos = [...sala.jugadores.values()].filter(j => j.id !== id && !j.listo).length;
         if (noListos) return { ok: false, error: `Faltan ${noListos} piloto(s) por marcar "Listo"` };
-        for (const j of sala.jugadores.values()) { j.terminado = false; j.tiempo = null; j.abandono = false; j.mejor = null; j.tQ = null; }
+        for (const j of sala.jugadores.values()) { j.terminado = false; j.tiempo = null; j.abandono = false; j.mejor = null; j.tQ = null; j.inc = null; }
         // partida rápida: la IA completa la parrilla hasta el máximo de la sala
         if (sala.rapida) this._crearBots(sala);
         if (sala.clasifSeg > 0) {
@@ -423,17 +434,17 @@ class Salas {
         const js = [...sala.jugadores.values(), ...sala.bots.map(b => ({ ...b, bot: b.k, nombre: null, usuario: null, mejor: null }))];
         const fin = js.filter(j => j.terminado).sort((a, b) => a.tiempo - b.tiempo);
         const resto = js.filter(j => !j.terminado);
-        return [...fin, ...resto].map((j, i) => ({ pos: i + 1, id: j.id, nombre: j.nombre, usuario: j.usuario, bot: j.bot ?? null, tiempo: j.tiempo, mejor: j.mejor, abandono: !j.terminado, desconectado: !!j.desconectado }));
+        return [...fin, ...resto].map((j, i) => ({ pos: i + 1, id: j.id, nombre: j.nombre, usuario: j.usuario, bot: j.bot ?? null, tiempo: j.tiempo, mejor: j.mejor, abandono: !j.terminado, desconectado: !!j.desconectado, inc: j.inc || null, licencia: j.licencia || null }));
     }
 
     publico(sala) {
         return {
             codigo: sala.codigo, tipo: sala.tipo, max: sala.max, vueltas: sala.vueltas, publica: sala.publica, mejoras: sala.mejoras,
-            circuito: sala.circuito, clima: sala.clima, semilla: sala.semilla, rapida: sala.rapida,
+            circuito: sala.circuito, clima: sala.clima, semilla: sala.semilla, rapida: sala.rapida, licMin: sala.licMin,
             clasifSeg: sala.clasifSeg, tFinQ: sala.tFinQ, bots: sala.bots.map(b => ({ id: b.id, k: b.k, hab: b.hab, terminado: b.terminado, abandono: b.abandono })),
             nombre: sala.nombre, host: sala.host, estado: sala.estado, parrilla: sala.parrilla, tSalida: sala.tSalida,
             juez: sala.juez || null, espectadores: this.numEspectadores(sala),
-            jugadores: [...sala.jugadores.values()].map(j => ({ id: j.id, nombre: j.nombre, usuario: j.usuario, equipado: j.equipado,
+            jugadores: [...sala.jugadores.values()].map(j => ({ id: j.id, nombre: j.nombre, usuario: j.usuario, equipado: j.equipado, licencia: j.licencia,
                 mejoras: sala.mejoras ? j.mejoras : {}, listo: j.listo, terminado: j.terminado, abandono: j.abandono })),
         };
     }
@@ -442,7 +453,7 @@ class Salas {
         // abiertas con sitio (para unirse) y en marcha (para verlas como espectador)
         return [...this.salas.values()].filter(s => s.publica && ((s.estado === 'espera' && s.jugadores.size < s.max) || s.estado === 'carrera' || s.estado === 'clasif'))
             .sort((a, b) => (a.estado === 'espera' ? 0 : 1) - (b.estado === 'espera' ? 0 : 1) || b.jugadores.size - a.jugadores.size).slice(0, 30)
-            .map(s => ({ codigo: s.codigo, nombre: s.nombre, tipo: s.tipo, jugadores: s.jugadores.size + s.bots.length, max: s.max, vueltas: s.vueltas, mejoras: s.mejoras, circuito: s.circuito, clima: s.clima,
+            .map(s => ({ codigo: s.codigo, nombre: s.nombre, tipo: s.tipo, jugadores: s.jugadores.size + s.bots.length, max: s.max, vueltas: s.vueltas, mejoras: s.mejoras, circuito: s.circuito, clima: s.clima, licMin: s.licMin,
                 estado: s.estado, espectadores: this.numEspectadores(s), juez: !!s.juez }));
     }
 
@@ -463,6 +474,17 @@ const CIRCUITOS = {
     valle:  { nombre: 'Valle Andino',      minVuelta: 62 },
     puerto: { nombre: 'Puerto Real',       minVuelta: 48 },
     veloz:  { nombre: 'Autódromo Veloz',   minVuelta: 50 },
+    // trazados reales con otros nombres (vuelta mínima ≈ 78 % del ritmo de la IA)
+    principado:  { nombre: 'Circuito Urbano del Principado', minVuelta: 63 },
+    parque_real: { nombre: 'Autódromo del Parque Real',      minVuelta: 72 },
+    ardenas:     { nombre: 'Circuito de las Ardenas',        minVuelta: 96 },
+    aerodromo:   { nombre: 'Circuito del Viejo Aeródromo',   minVuelta: 88 },
+    levante:     { nombre: 'Circuito de Levante',            minVuelta: 71 },
+    alpino:      { nombre: 'Anillo Alpino',                  minVuelta: 62 },
+    danubio:     { nombre: 'Circuito del Danubio',           minVuelta: 75 },
+    dunas:       { nombre: 'Circuito de las Dunas',          minVuelta: 70 },
+    desierto:    { nombre: 'Circuito del Desierto',          minVuelta: 85 },
+    isla:        { nombre: 'Circuito de la Isla',            minVuelta: 66 },
 };
 const CLIMAS = ['seco', 'lluvia', 'variable'];
 const circuitoOk = c => Object.prototype.hasOwnProperty.call(CIRCUITOS, c) ? c : 'valle';
@@ -556,6 +578,32 @@ function eloTras(jugadores) {
     }
     return out;
 }
+// Licencias y safety rating (SR, 0..5): las carreras limpias suben el SR; contactos,
+// sanciones y límites de pista lo bajan. La licencia exige SR, experiencia y nivel.
+const SR_INICIAL = 2.5;
+const LICENCIAS = ['D', 'C', 'B', 'A', 'Pro'];
+function licenciaDe(sr = SR_INICIAL, carreras = 0, elo = ELO_INICIAL) {
+    if (sr >= 4 && carreras >= 30 && elo >= 1550) return 'Pro';
+    if (sr >= 3.5 && carreras >= 15) return 'A';
+    if (sr >= 3 && carreras >= 8) return 'B';
+    if (sr >= 2 && carreras >= 3) return 'C';
+    return 'D';
+}
+const nivelLicencia = l => Math.max(0, LICENCIAS.indexOf(l));
+/** Informe de incidentes que manda el cliente al acabar (acotado: no se fía de números absurdos). */
+function limpiarIncidentes(d) {
+    const n = (v, max) => Math.max(0, Math.min(max, Math.floor(+v) || 0));
+    return { vueltas: n(d?.vueltas, 200), contactos: n(d?.contactos, 99), sanciones: n(d?.sanciones, 99), limites: n(d?.limites, 99) };
+}
+/** SR tras una carrera: +0,05 por vuelta limpia (máx. +0,4), −0,15 por contacto, −0,3 por sanción, −0,05 por límites. */
+function srTras(sr = SR_INICIAL, inc = {}, abandono = false) {
+    const i = limpiarIncidentes(inc);
+    const sucias = i.contactos + i.sanciones + i.limites;
+    const limpias = Math.max(0, i.vueltas - sucias);
+    let d = Math.min(0.4, limpias * 0.05) - i.contactos * 0.15 - i.sanciones * 0.3 - i.limites * 0.05;
+    if (abandono && !i.vueltas) d -= 0.1;             // irse en la primera vuelta también cuenta
+    return Math.round(Math.max(0, Math.min(5, sr + d)) * 100) / 100;
+}
 const nivelElo = e => e >= 1800 ? 'Leyenda' : e >= 1550 ? 'Diamante' : e >= 1400 ? 'Oro' : e >= 1250 ? 'Plata' : 'Bronce';
 const REGIONES = ['america', 'europa', 'asia', 'otra'];
 const regionOk = r => (REGIONES.includes(r) ? r : 'otra');
@@ -569,12 +617,14 @@ class Emparejador {
         this.cola = new Map();   // id → { id, elo, region, t, jugador }
         this.ahora = ahora; this.maximo = maximo; this.espera = espera;
     }
-    entrar(id, jugador, elo, region) { this.cola.set(id, { id, jugador, elo: +elo || ELO_INICIAL, region: regionOk(region), t: this.ahora() }); return this.cola.size; }
+    entrar(id, jugador, elo, region, sr = SR_INICIAL) { this.cola.set(id, { id, jugador, elo: +elo || ELO_INICIAL, region: regionOk(region), sr: +sr || 0, t: this.ahora() }); return this.cola.size; }
     salir(id) { return this.cola.delete(id); }
     _compatibles(a, b, ahora) {
         const espera = Math.min(ahora - a.t, ahora - b.t) / 1000;
         const margen = 150 + 25 * espera;
-        return Math.abs(a.elo - b.elo) <= margen && (a.region === b.region || espera >= 20);
+        // quien conduce sucio (SR < 2) corre con los suyos durante el primer minuto
+        const limpio = (a.sr >= 2) === (b.sr >= 2) || espera >= 60;
+        return Math.abs(a.elo - b.elo) <= margen && (a.region === b.region || espera >= 20) && limpio;
     }
     /** Grupos listos para correr (se sacan de la cola). */
     emparejar() {
@@ -596,7 +646,7 @@ class Emparejador {
 
 module.exports = {
     CIRCUITOS, CLIMAS, circuitoOk, PREMIOS, TOP_PREMIADO, premioPosicion, PUNTOS_CARRERA, CARRERAS_DIA, carreraPuntuable, puntosCarrera, validarResultado,
-    semanaDe, semanaAnterior, FANTASMA_HZ, FANTASMA_MAX, validarVuelta, ELO_INICIAL, eloTras, nivelElo, REGIONES, regionOk, Emparejador,
+    semanaDe, semanaAnterior, FANTASMA_HZ, FANTASMA_MAX, validarVuelta, ELO_INICIAL, eloTras, nivelElo, SR_INICIAL, LICENCIAS, licenciaDe, nivelLicencia, limpiarIncidentes, srTras, REGIONES, regionOk, Emparejador,
     NIVELES, PRECIO_NIVEL, MEJORAS, COSMETICOS, EQUIPADO_DEF, MAX_JUGADORES, ESTADO_LARGO,
     catalogo, precioCompra, tieneCosmetico, validarEquipado, nivelesMejoras, limpiarNombre, Salas,
 };

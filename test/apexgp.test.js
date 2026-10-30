@@ -451,6 +451,31 @@ function crearMundo(monedas) {
         assert.ok(!S.salas.has(sala.codigo));
         assert.ok(!S.espect.has('v2'));
     });
+    await test('licencias y safety rating: carreras limpias suben, sucias bajan, salas con licencia mínima', () => {
+        assert.strictEqual(A.licenciaDe(2.5, 0, 1200), 'D');
+        assert.strictEqual(A.licenciaDe(2.5, 5, 1200), 'C');
+        assert.strictEqual(A.licenciaDe(3.6, 20, 1200), 'A');
+        assert.strictEqual(A.licenciaDe(4.2, 40, 1600), 'Pro');
+        assert.strictEqual(A.licenciaDe(4.2, 40, 1300), 'A');
+        assert.ok(A.srTras(2.5, { vueltas: 10 }) > 2.5);
+        assert.ok(A.srTras(2.5, { vueltas: 10, contactos: 2, sanciones: 1 }) < 2.5);
+        assert.strictEqual(A.srTras(4.99, { vueltas: 50 }), 5);
+        assert.strictEqual(A.srTras(0.1, { vueltas: 1, sanciones: 9 }), 0);
+        assert.deepStrictEqual(A.limpiarIncidentes({ vueltas: 1e9, contactos: -3, limites: 'x' }), { vueltas: 200, contactos: 0, sanciones: 0, limites: 0 });
+        const S = new A.Salas();
+        const { sala } = S.crear('h', { nombre: 'Host', licencia: 'B' }, { licMin: 'B', vueltas: 3 });
+        assert.strictEqual(S.publico(sala).licMin, 'B');
+        assert.ok(!S.unirse('n', sala.codigo, { nombre: 'Novato', licencia: 'D' }).ok);
+        assert.ok(S.unirse('v', sala.codigo, { nombre: 'Veterano', licencia: 'A' }).ok);
+        assert.ok(S.incidentes('v', { vueltas: 3, contactos: 1 }));
+        assert.strictEqual(sala.jugadores.get('v').inc.contactos, 1);
+        // partida rápida: un piloto sucio no se empareja con uno limpio en el primer minuto
+        let t = 0;
+        const E = new A.Emparejador({ ahora: () => t, espera: 1000 });
+        E.entrar('a', {}, 1200, 'europa', 3); E.entrar('b', {}, 1200, 'europa', 1.2);
+        t = 5000; assert.strictEqual(E.emparejar().length, 0);
+        t = 61000; assert.strictEqual(E.emparejar().length, 1);
+    });
     await test('limpiarNombre: sin HTML ni nombres larguísimos', () => {
         assert.strictEqual(A.limpiarNombre('<b>Ana</b>'), 'bAnab');
         assert.strictEqual(A.limpiarNombre('x'.repeat(60)).length, 18);

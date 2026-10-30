@@ -29,7 +29,7 @@ function fusionar(g) {
   }
 }
 
-const ANCHO = 28, FONDO = 16, ALTO = 9, HUECO = 6.2;
+const FONDO = 16, ALTO = 9, HUECO = 6.2;
 
 function lienzo(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 function tex(cv, rep = [1, 1]) { const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(...rep); t.anisotropy = 4; return t; }
@@ -93,7 +93,8 @@ function materiales() {
  * Garaje completo. Devuelve { grupo, actualizar(dt, camPos) }.
  * k: índice de equipo (para variar), calidad 0..3.
  */
-export function crearGaraje({ nombre, color, calidad = 2, k = 0 }) {
+export function crearGaraje({ nombre, color, calidad = 2, k = 0, ancho = 28 }) {
+  const ANCHO = Math.max(12, ancho);     // en rectas cortas (urbano) los garajes son más estrechos
   const M = materiales();
   const g = new THREE.Group();
   const caja = (w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; g.add(m); return m; };
@@ -111,7 +112,7 @@ export function crearGaraje({ nombre, color, calidad = 2, k = 0 }) {
   const fondo = new THREE.Mesh(new THREE.PlaneGeometry(ANCHO - 1, 5.4), new THREE.MeshStandardMaterial({ map: texturaFondo(nombre, color), roughness: 0.6 }));
   fondo.position.set(0, 3.6, FONDO / 2 - 0.2); fondo.rotation.y = Math.PI; g.add(fondo);
   // luces del techo (tiras)
-  for (const x of [-8, 0, 8]) for (const z of [-3, 3]) caja(5, 0.08, 0.35, M.luz, x, ALTO - 0.3, z).castShadow = false;
+  for (const x of [-ANCHO * 0.29, 0, ANCHO * 0.29]) for (const z of [-3, 3]) caja(5, 0.08, 0.35, M.luz, x, ALTO - 0.3, z).castShadow = false;
   if (calidad >= 1) {
     // armarios de herramientas a los lados, en el color del equipo
     for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) {
@@ -122,24 +123,25 @@ export function crearGaraje({ nombre, color, calidad = 2, k = 0 }) {
     // pantallas de telemetría en el fondo
     for (let i = 0; i < 4; i++) {
       const p = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.95), new THREE.MeshStandardMaterial({ map: texturaPantalla(i + k), emissive: 0xffffff, emissiveMap: texturaPantalla(i + k), emissiveIntensity: 0.9 }));
-      p.position.set(-4.5 + i * 3, 2.2, FONDO / 2 - 1.2); p.rotation.y = Math.PI; g.add(p);
-      caja(1.6, 1.05, 0.06, M.negro, -4.5 + i * 3, 2.2, FONDO / 2 - 1.15);
-      caja(0.08, 1.7, 0.08, M.metal, -4.5 + i * 3, 0.85, FONDO / 2 - 1.15);
+      p.position.set((-1.5 + i) * Math.min(3, ANCHO / 5), 2.2, FONDO / 2 - 1.2); p.rotation.y = Math.PI; g.add(p);
+      caja(1.6, 1.05, 0.06, M.negro, (-1.5 + i) * Math.min(3, ANCHO / 5), 2.2, FONDO / 2 - 1.15);
+      caja(0.08, 1.7, 0.08, M.metal, (-1.5 + i) * Math.min(3, ANCHO / 5), 0.85, FONDO / 2 - 1.15);
     }
     // estanterías con ruedas (con mantas del equipo) a la izquierda y derecha del fondo
     const neum = new THREE.CylinderGeometry(0.36, 0.36, 0.34, 18);
     const matManta = new THREE.MeshStandardMaterial({ color, roughness: 0.9 });
-    for (const sx of [-1, 1]) for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) {
+    for (const sx of [-1, 1]) for (let i = 0; i < (ANCHO > 20 ? 4 : 2); i++) for (let j = 0; j < 3; j++) {
       const r = new THREE.Mesh(neum, j === 2 ? M.goma : matManta);
       r.position.set(sx * (ANCHO / 2 - 3.2 - i * 0.85), 0.2 + j * 0.36, FONDO / 2 - 2.6);
       r.castShadow = true; g.add(r);
     }
     // alerón delantero de recambio sobre su caballete
-    caja(1.9, 0.05, 0.5, M.carbono, -9, 1.0, -1.5);
-    caja(0.04, 0.32, 0.5, matEquipo, -9.95, 1.12, -1.5); caja(0.04, 0.32, 0.5, matEquipo, -8.05, 1.12, -1.5);
-    for (const x of [-9.6, -8.4]) caja(0.06, 1.0, 0.06, M.metal, x, 0.5, -1.5);
+    const xa = -Math.min(9, ANCHO / 2 - 2.5);
+    caja(1.9, 0.05, 0.5, M.carbono, xa, 1.0, -1.5);
+    caja(0.04, 0.32, 0.5, matEquipo, xa - 0.95, 1.12, -1.5); caja(0.04, 0.32, 0.5, matEquipo, xa + 0.95, 1.12, -1.5);
+    for (const x of [xa - 0.6, xa + 0.6]) caja(0.06, 1.0, 0.06, M.metal, x, 0.5, -1.5);
     // carro de pistolas neumáticas y mangueras colgando del techo
-    caja(1.2, 0.9, 0.6, M.negro, 9, 0.45, -2);
+    caja(1.2, 0.9, 0.6, M.negro, Math.min(9, ANCHO / 2 - 2), 0.45, -2);
     for (const x of [-3, 3]) {
       const m = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, ALTO - 2.2, 6), M.negro);
       m.position.set(x, (ALTO + 2.2) / 2, -4); g.add(m);
@@ -149,7 +151,7 @@ export function crearGaraje({ nombre, color, calidad = 2, k = 0 }) {
   // mecánicos trabajando (solo con calidad alta)
   const gente = [];
   if (calidad >= 2) {
-    const quien = [['espera', -6, 1.5, -0.6], ['de_pie', 7.5, 2.5, Math.PI], ['preparado', -9, -0.6, Math.PI / 2]];
+    const f = Math.min(1, ANCHO / 28), quien = [['espera', -6 * f, 1.5, -0.6], ['de_pie', 7.5 * f, 2.5, Math.PI], ['preparado', -9 * f, -0.6, Math.PI / 2]];
     quien.forEach(([pose, x, z, ry], i) => {
       const p = new Persona({ color, texto: nombre.split(' ')[0].toUpperCase(), numero: 60 + i, rol: i === 1 ? 'ingeniero' : 'mecanico', calidad });
       p.raiz.position.set(x, 0, z); p.raiz.rotation.y = ry; p.poner(pose, 0.01);

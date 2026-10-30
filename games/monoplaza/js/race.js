@@ -19,6 +19,9 @@ export class Sesion {
     this.c = circuito;
     this.modo = opc.modo;           // 'carrera' | 'contrarreloj' | 'practica'
     this.vueltasTotales = opc.vueltas || 5;
+    // resistencia: carrera por tiempo (s); termina cuando el líder cruza la meta tras agotarse
+    this.tiempoLimite = this.modo === 'carrera' && opc.tiempoLimite ? opc.tiempoLimite : 0;
+    if (this.tiempoLimite) this.vueltasTotales = Math.ceil(this.tiempoLimite / Math.max(40, circuito.def.ritmoIA || 80)) + 2;
     this.tiempo = 0;
     this.acumulado = 0;
     this.estado = this.modo === 'carrera' ? 'parrilla' : 'pista';
@@ -46,7 +49,9 @@ export class Sesion {
     this.abandonosRecientes = [];
     this.formacion = this.modo === 'carrera' && !mp && !!opc.formacion;
     if (this.formacion) this.estado = 'formacion';
-    const combustible = this.modo === 'carrera' ? 12 + this.vueltasTotales * 1.45 : 20;
+    // en resistencia se reposta en cada parada: se sale con el depósito para ~25 vueltas
+    this.depositoMax = this.tiempoLimite ? Math.min(110, 12 + 25 * 1.45) : 0;
+    const combustible = this.tiempoLimite ? this.depositoMax : this.modo === 'carrera' ? 12 + this.vueltasTotales * 1.45 : 20;
     const plantilla = () => ({
       vuelta: 0, tVuelta: 0, tiempos: [], mejor: Infinity, sectores: [null, null, null],
       mejoresSectores: [Infinity, Infinity, Infinity], tSector: 0, sector: 0,
@@ -208,6 +213,7 @@ export class Sesion {
       alParar: () => { p.paradaInfo = { inicio: this.tiempo, duracion, morro, compuesto }; this.eventos.push({ tipo: 'paradaIni', p, duracion, morro }); },
       alTerminar: () => {
         car.repararEnBoxes(compuesto); p.paradas++;
+        if (this.depositoMax) car.combustible = this.depositoMax;      // repostaje (resistencia)
         this.eventos.push({ tipo: 'paradaFin', p, duracion });
         p.paradaInfo = null;
       },
@@ -229,6 +235,8 @@ export class Sesion {
     else if (actual === 'inter' && (agua < 0.1 || agua > 0.62)) ideal = agua < 0.1 ? seco : 'lluvia';
     else if (actual === 'lluvia' && agua < 0.36) ideal = agua < 0.1 ? seco : 'inter';
     if (ideal !== actual && restantes >= 1) { p.solicitudBox = ideal; p.porClima = true; return; }
+    // resistencia: a repostar con margen de dos vueltas
+    if (this.depositoMax && car.combustible < 2.6 * 1.45 && !p.solicitudBox && (!this.tiempoLimite || this.tiempo < this.tiempoLimite - 60)) { this.pedirBox(p, actual); return; }
     // si el tiempo cambió antes de llegar a boxes, se cancela la parada por clima
     if (p.solicitudBox && p.porClima && ideal === actual) { p.solicitudBox = null; p.porClima = false; }
     if (p.solicitudBox) return;
@@ -469,7 +477,8 @@ export class Sesion {
       c.nuevaVuelta();
       if (this.modo === 'carrera') {
         const lider = this.participantes.reduce((a, b) => (a.distancia > b.distancia ? a : b));
-        if (p.vuelta > this.vueltasTotales || (this.banderaFinal && !p.terminado)) {
+        const finTiempo = this.tiempoLimite && this.tiempo >= this.tiempoLimite && p.posicion === 1;
+        if (p.vuelta > this.vueltasTotales || finTiempo || (this.banderaFinal && !p.terminado)) {
           if (!p.terminado) {
             p.terminado = true; p.tTotal = this.tiempo;
             this.banderaFinal = true;

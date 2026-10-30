@@ -522,7 +522,7 @@ export function crearModelo(opc) {
       // placas laterales curvadas
       const sh = new THREE.Shape();
       sh.moveTo(3.02, 0.055); sh.lineTo(2.50, 0.05); sh.quadraticCurveTo(2.40, 0.20, 2.46, 0.34); sh.lineTo(2.62, 0.33); sh.quadraticCurveTo(2.90, 0.18, 3.02, 0.055);
-      const g = new THREE.ExtrudeGeometry(sh, { depth: 0.012, bevelEnabled: false }); g.translate(0, 0, sg * (env / 2) - 0.006);
+      const g = new THREE.ExtrudeGeometry(sh, { depth: 0.02, bevelEnabled: true, bevelSize: 0.003, bevelThickness: 0.003, bevelSegments: 1 }); g.translate(0, 0, sg * (env / 2) - 0.01);
       lib.push(g);
       // soportes del morro
       carb.push(caja(0.28, 0.10, 0.012, 2.92, 0.15, sg * 0.05));
@@ -545,7 +545,7 @@ export function crearModelo(opc) {
     for (const sg of [-1, 1]) {
       const sh = new THREE.Shape();
       sh.moveTo(-1.95, 0.52); sh.quadraticCurveTo(-1.88, 0.80, -1.96, 1.07); sh.lineTo(-2.46, 1.10); sh.quadraticCurveTo(-2.54, 0.80, -2.42, 0.50); sh.closePath();
-      const g = new THREE.ExtrudeGeometry(sh, { depth: 0.016, bevelEnabled: false }); g.translate(0, 0, sg * envT / 2 - 0.008);
+      const g = new THREE.ExtrudeGeometry(sh, { depth: 0.026, bevelEnabled: true, bevelSize: 0.004, bevelThickness: 0.004, bevelSegments: 1 }); g.translate(0, 0, sg * envT / 2 - 0.013);
       lib.push(g);
     }
     // pilón central (cuello de cisne)
@@ -669,7 +669,11 @@ export function crearModelo(opc) {
     const disco = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.48, r * 0.48, 0.035, 24), matF);
     disco.rotation.x = Math.PI / 2; disco.position.z = -sg * (w / 2 - 0.07);
     giro.add(disco);
-    ruedas.push({ giro, rot, neum, tapa, matFreno: matF, base: new THREE.Vector3(x, r, z), radio: r, ancho: w, suelta: false });
+    // a alta velocidad los radios de la llanta se ven como un disco borroso (como en la tele)
+    const borroso = new THREE.Mesh(new THREE.CircleGeometry(r * 0.975, 40), matBorroso(cmp.color));
+    borroso.position.z = sg * (w / 2 + 0.009); if (sg < 0) borroso.rotation.y = Math.PI;
+    giro.add(borroso);
+    ruedas.push({ giro, rot, neum, tapa, borroso, matFreno: matF, base: new THREE.Vector3(x, r, z), radio: r, ancho: w, suelta: false });
   }
 
   // calor del escape: una lámina translúcida que ondula detrás del coche cuando el motor empuja
@@ -679,6 +683,10 @@ export function crearModelo(opc) {
   carroceria.add(calor);
   const raiz = new THREE.Group();
   raiz.add(carroceria); raiz.add(grupo);
+  // sombra de contacto: oscurece el asfalto bajo el coche (sin ella parece que flota)
+  const sombraC = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 5.8), matSombraContacto(calidad));
+  sombraC.rotation.x = -Math.PI / 2; sombraC.position.set(-0.15, 0.015, 0); sombraC.renderOrder = -1;
+  raiz.add(sombraC);
 
   const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3(), eje = new THREE.Vector3();
   let tPantalla = 0;
@@ -698,6 +706,9 @@ export function crearModelo(opc) {
         // pinchazo: neumático aplastado; suspensión doblada: rueda caída y torcida
         const pin = d?.pinchazo[k] && !d.suelta[k];
         m.neum.scale.set(1, pin ? 0.9 : 1, pin ? 1.08 : 1);
+        const om = Math.abs(car.velocidad || 0) / m.radio;
+        m.borroso.material.opacity = Math.min(0.9, Math.max(0, (om - 25) / 50));
+        m.borroso.visible = m.borroso.material.opacity > 0.02 && !m.suelta && !this.ruedaOculta[k];
         const sd = d?.susp[k] || 0;
         m.giro.rotation.x = sd * 0.16 * (w.izquierda ? -1 : 1);
         m.giro.position.y = m.base.y - (pin ? m.radio * 0.1 : 0) - sd * 0.04 + this.elevar;
@@ -789,6 +800,38 @@ export function crearModelo(opc) {
 }
 
 const cacheTex = new Map();
+
+// disco de llanta "en movimiento": anillos concéntricos difuminados con el color del compuesto
+const cacheBorroso = new Map();
+function matBorroso(color) {
+  if (cacheBorroso.has(color)) return cacheBorroso.get(color).clone();
+  const n = 128, cv = document.createElement('canvas'); cv.width = cv.height = n;
+  const x = cv.getContext('2d'), c = n / 2;
+  const g = x.createRadialGradient(c, c, 0, c, c, c);
+  g.addColorStop(0, '#2b2e33'); g.addColorStop(0.16, '#8a9099'); g.addColorStop(0.2, '#30343a');
+  g.addColorStop(0.6, '#3a3e45'); g.addColorStop(0.64, '#22252a'); g.addColorStop(0.9, '#1b1d21');
+  g.addColorStop(0.93, color); g.addColorStop(0.97, color); g.addColorStop(1, '#151515');
+  x.fillStyle = g; x.beginPath(); x.arc(c, c, c, 0, Math.PI * 2); x.fill();
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
+  const m = new THREE.MeshStandardMaterial({ map: t, transparent: true, opacity: 0, roughness: 0.5, metalness: 0.3, depthWrite: false });
+  cacheBorroso.set(color, m);
+  return m.clone();
+}
+
+// sombra de contacto suave (gradiente elíptico) compartida por todos los coches
+let matSombraC = null;
+function matSombraContacto(calidad) {
+  if (matSombraC) return matSombraC;
+  const cv = document.createElement('canvas'); cv.width = 64; cv.height = 128;
+  const x = cv.getContext('2d');
+  x.scale(1, 2);
+  const g = x.createRadialGradient(32, 32, 4, 32, 32, 32);
+  g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.55, 'rgba(0,0,0,0.75)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(cv);
+  matSombraC = new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: calidad >= 1 ? 0.45 : 0.7, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, color: 0x000000 });
+  return matSombraC;
+}
 
 // Plantilla de la librea: el contorno real de cada pieza sobre el atlas, para pintarla en cualquier editor
 export function dibujarPlantilla(tam = 2048) {

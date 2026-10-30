@@ -40,6 +40,10 @@
         <button class="btn grande" data-ir="campeonato">🏆 Campeonato</button>
       </div>
       <div class="fila">
+        <button class="btn grande" data-ir="trayectoria">🧑‍✈️ Modo carrera</button>
+        <button class="btn grande" data-ir="editor">✏️ Crear circuito</button>
+      </div>
+      <div class="fila">
         <button class="btn grande" data-ir="contrarreloj">⏱️ Contrarreloj</button>
         <button class="btn grande" data-ir="practica">🛞 Práctica</button>
       </div>
@@ -70,6 +74,7 @@
     <div class="opcion"><label>Dificultad</label><div class="segm" data-campo="dificultad"><b data-v="facil">Fácil</b><b data-v="normal">Normal</b><b data-v="dificil">Difícil</b><b data-v="extremo">Extremo</b></div></div>
     <div class="opcion"><label>Salida<span class="desc">Con clasificación, Q1-Q2-Q3 deciden la parrilla</span></label><div class="segm" data-campo="posSalida"><b data-v="0">Clasificación</b><b data-v="1">Pole</b><b data-v="6">Media</b><b data-v="22">Última</b></div></div>
     <div class="opcion"><label>Hora</label><div class="segm" data-campo="hora"><b data-v="dia">☀️ Día</b><b data-v="atardecer">🌇 Atardecer</b><b data-v="noche">🌙 Noche</b></div></div>
+    <div class="opcion"><label>Duración<span class="desc">Por tiempo = resistencia: repostaje en boxes, relevos con tu compañero y, en 24 h, ciclo día-noche completo</span></label><div class="segm" data-campo="duracion"><b data-v="0">Vueltas</b><b data-v="15">15 min</b><b data-v="30">30 min</b><b data-v="60">1 h</b><b data-v="24">24 h ⚡</b></div></div>
     <div class="opcion"><label>Vuelta de formación<span class="desc">Una vuelta lenta en fila antes de la salida</span></label><div class="segm" data-campo="formacion"><b data-v="0">No</b><b data-v="1">Sí</b></div></div>
     <div class="opcion"><label>Clima</label><div class="segm" data-campo="clima"><b data-v="seco">☀️ Seco</b><b data-v="variable">🌦️ Variable</b><b data-v="lluvia">🌧️ Lluvia</b></div></div>
     <div class="opcion"><label>Neumático</label><div class="segm compuestos" data-campo="compuesto"><b data-v="blando">Blando</b><b data-v="medio">Medio</b><b data-v="duro">Duro</b><b data-v="inter">Inter</b><b data-v="lluvia">Lluvia</b></div></div>
@@ -77,12 +82,44 @@
   </div>
 </div>
 
+<!-- Editor de circuitos -->
+<div id="editor" class="pantalla">
+  <div class="panel ancho">
+    <h2>✏️ Crear circuito</h2>
+    <div class="ed-lista"><div id="edLista" class="segm"></div><button class="btn mini" id="edNuevo">＋ Nuevo</button><button class="btn mini" id="edImportar">📥 Importar código</button></div>
+    <div class="ed-cuerpo">
+      <canvas id="edPlano"></canvas>
+      <div class="ed-lado">
+        <div class="opcion"><label>Nombre</label><input id="edNombre" maxlength="28" class="ed-input"></div>
+        <div class="opcion"><label>Ancho</label><div class="segm" data-ed="ancho"><b data-v="11">11 m</b><b data-v="13">13 m</b><b data-v="15">15 m</b></div></div>
+        <div class="opcion"><label>Relieve</label><div class="segm" data-ed="relieve"><b data-v="llano">Llano</b><b data-v="ondulado">Ondulado</b><b data-v="montana">Montaña</b></div></div>
+        <div class="opcion"><label>Urbano<span class="desc">Muros pegados a la pista</span></label><input type="checkbox" id="edUrbano"></div>
+        <div class="opcion"><label>Carrera de noche</label><input type="checkbox" id="edNoche"></div>
+        <div class="ed-herr"><button class="btn mini" id="edBorrarPunto">🗑 Borrar punto</button><button class="btn mini" id="edMeta">🏁 Meta aquí</button><button class="btn mini" id="edInvertir">⇄ Sentido</button><button class="btn mini" id="edLimpiar">Vaciar</button></div>
+        <p id="edEstado" class="nota" style="text-align:left"></p>
+        <p class="nota" style="text-align:left">Toca para añadir un punto (cerca de un tramo, se inserta ahí) y arrástralo para moverlo. La pista pasa suave por todos los puntos; el verde es la meta y los boxes se colocan solos en la recta.</p>
+      </div>
+    </div>
+    <div class="acciones"><button class="btn" data-ir="menu">Volver</button><button class="btn" id="edEliminar">Eliminar</button><button class="btn" id="edCompartir">📤 Compartir</button><button class="btn" id="edGuardar">💾 Guardar</button><button class="btn primario" id="edProbar">▶ Probar</button></div>
+  </div>
+</div>
+
 <!-- Campeonato -->
+<div id="trayectoria" class="pantalla">
+  <div class="panel ancho">
+    <h2 id="trTitulo">Modo carrera</h2>
+    <div id="trCabecera" class="tr-cab"></div>
+    <div id="trCuerpo"></div>
+    <div class="acciones"><button class="btn" data-ir="menu">Volver</button><button class="btn" id="trReiniciar">Empezar de cero</button><button class="btn primario" id="trSeguir">Siguiente GP</button></div>
+  </div>
+</div>
+
 <div id="campeonato" class="pantalla">
   <div class="panel ancho">
     <h2 id="campTitulo">Campeonato</h2>
     <div id="campInfo" class="nota" style="text-align:left"></div>
     <div id="campNueva" class="lista">
+      <div class="opcion"><label>Calendario<span class="desc">Clásico: 3 GP · Europa: 7 GP en trazados reales · Mundial: los 13 circuitos</span></label><div class="segm" data-camp="calendario"><b data-v="clasico">Clásico</b><b data-v="europa">Europa</b><b data-v="mundial">Mundial</b></div></div>
       <div class="opcion"><label>Vueltas por carrera</label><div class="segm" data-camp="vueltas"><b data-v="3">3</b><b data-v="5">5</b><b data-v="8">8</b><b data-v="12">12</b></div></div>
       <div class="opcion"><label>Rivales</label><div class="segm" data-camp="rivales"><b data-v="7">7</b><b data-v="11">11</b><b data-v="15">15</b><b data-v="21">21</b></div></div>
       <div class="opcion"><label>Dificultad</label><div class="segm" data-camp="dificultad"><b data-v="facil">Fácil</b><b data-v="normal">Normal</b><b data-v="dificil">Difícil</b><b data-v="extremo">Extremo</b></div></div>
@@ -127,6 +164,11 @@
 <div id="reglaje" class="pantalla">
   <div class="panel ancho">
     <h2>Reglaje del coche <small id="reglajeCircuito" class="nota"></small></h2>
+    <div class="ing-panel">
+      <h3>🎧 Habla con tu ingeniero <small class="nota">¿Qué notas en el coche?</small></h3>
+      <div id="ingSintomas" class="ing-sintomas"></div>
+      <div id="ingPropuesta" class="ing-propuesta"></div>
+    </div>
     <div id="listaReglaje" class="lista"></div>
     <div class="acciones"><button class="btn" id="reglajeDef">Valores de fábrica</button><button class="btn primario" data-ir="volver">Listo</button></div>
   </div>
@@ -231,11 +273,12 @@
     <div class="opcion"><label>Rivales de tu nivel (ELO) y de tu región<span class="desc" id="mElo"></span></label><div class="segm" data-mp="region"><b data-v="america">América</b><b data-v="europa">Europa</b><b data-v="asia">Asia</b></div></div>
     <div class="acciones"><button class="btn primario" id="bBuscar">⚡ Buscar partida</button></div>
     <h3>Crear sala</h3>
-    <div class="opcion"><label>Circuito</label><div class="segm" data-mp="circuito"><b data-v="valle">Valle Andino</b><b data-v="puerto">Puerto Real</b><b data-v="veloz">Veloz</b></div></div>
+    <div class="opcion"><label>Circuito</label><div class="segm" data-mp="circuito" id="mpCircuitos"></div></div>
     <div class="opcion"><label>Clima</label><div class="segm" data-mp="clima"><b data-v="seco">Seco</b><b data-v="variable">Variable</b><b data-v="lluvia">Lluvia</b></div></div>
     <div class="opcion"><label>Tipo</label><div class="segm" data-mp="tipo"><b data-v="1v1">Duelo 1 vs 1</b><b data-v="abierta">Sala abierta (hasta 22)</b></div></div>
     <div class="opcion" id="filaMax"><label>Pilotos máximo</label><div class="segm" data-mp="max"><b data-v="4">4</b><b data-v="8">8</b><b data-v="12">12</b><b data-v="22">22</b></div></div>
     <div class="opcion"><label>Vueltas</label><div class="segm" data-mp="vueltas"><b data-v="2">2</b><b data-v="3">3</b><b data-v="5">5</b><b data-v="10">10</b></div></div>
+    <div class="opcion"><label>Licencia mínima<span class="desc">Solo entran pilotos con esta licencia o superior (el safety rating sube con carreras limpias y baja con contactos y sanciones)</span></label><div class="segm" data-mp="licMin"><b data-v="D">Libre</b><b data-v="C">C</b><b data-v="B">B</b><b data-v="A">A</b><b data-v="Pro">Pro</b></div></div>
     <div class="opcion"><label>Mejoras de UpCoins<span class="desc">Si las desactivas, todos corren con el mismo coche</span></label><input type="checkbox" id="mpMejoras"></div>
     <div class="opcion"><label>Sala pública</label><input type="checkbox" id="mpPublica" checked></div>
     <div class="opcion"><label>Soy el juez (no corro)<span class="desc">Para torneos: diriges la sala, das la salida y lo ves todo en directo</span></label><input type="checkbox" id="mpJuez"></div>
@@ -313,8 +356,10 @@
     <div class="mini">ENTRAR A BOXES · NEUMÁTICOS</div>
     <div class="fila-box"><button class="btn" data-box="blando">Blando</button><button class="btn" data-box="medio">Medio</button><button class="btn" data-box="duro">Duro</button></div>
     <div class="fila-box"><button class="btn" data-box="inter">Inter</button><button class="btn" data-box="lluvia">Lluvia</button></div>
+    <label class="relevo-op" id="opRelevo"><input type="checkbox" id="chkRelevo"> 🔄 Cambio de piloto en esta parada</label>
     <button class="btn" data-box="cancelar">Cancelar</button>
   </div>
+  <div id="hRelevo" class="hrelevo"><span>🔄 Conduce tu compañero</span><button class="btn mini" id="bRelevoRapido">⏩ ×3</button><button class="btn mini primario" id="bRelevoVolver">Volver al volante</button></div>
   <div id="hFps" class="fps"></div>
   <div id="semaforo"><i></i><i></i><i></i><i></i><i></i></div>
 </div>

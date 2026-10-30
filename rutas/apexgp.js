@@ -44,6 +44,7 @@ const PerfilSchema = new mongoose.Schema({
     victorias:  { type: Number, default: 0 },
     elo:        { type: Number, default: A.ELO_INICIAL, index: true },
     online:     { type: Number, default: 0 },          // carreras online puntuadas
+    sr:         { type: Number, default: A.SR_INICIAL },  // safety rating (0..5)
 }, { collection: 'apexgp_perfiles', timestamps: true });
 
 // Mejor vuelta de contrarreloj por piloto, circuito y semana ('global' = de siempre)
@@ -105,7 +106,8 @@ function registrar(app, deps) {
     const totalUC = async u => Math.floor(UC.saldoUC(await Usuario.findOne({ usuario: u }).select('monedas saldo solicitudPagoPendiente').lean() || {}).total);
     const perfilDe = async u => (await Perfil.findOne({ usuario: u }).lean()) || { usuario: u, mejoras: {}, cosmeticos: [], equipado: null };
     const publico = p => ({ mejoras: A.nivelesMejoras(p), cosmeticos: p.cosmeticos || [], equipado: A.validarEquipado(p.equipado || {}, p), carreras: p.carreras || 0, victorias: p.victorias || 0,
-        elo: p.elo || A.ELO_INICIAL, nivel: A.nivelElo(p.elo || A.ELO_INICIAL), online: p.online || 0 });
+        elo: p.elo || A.ELO_INICIAL, nivel: A.nivelElo(p.elo || A.ELO_INICIAL), online: p.online || 0,
+        sr: p.sr ?? A.SR_INICIAL, licencia: A.licenciaDe(p.sr ?? A.SR_INICIAL, p.online || 0, p.elo || A.ELO_INICIAL) });
 
     app.get('/apexgp/catalogo', (req, res) => { res.set('Cache-Control', 'public, max-age=300'); ok(res, A.catalogo()); });
 
@@ -337,10 +339,11 @@ function registrar(app, deps) {
         const base = { nombre: u ? `@${u}` : A.limpiarNombre(d?.nombre) || 'Invitado', usuario: u };
         let livery = '';
         if (typeof d?.livery === 'string' && d.livery.length <= LIVERY_MAX && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(d.livery)) livery = d.livery;
-        if (!u) return { ...base, equipado: A.validarEquipado(d?.equipado, {}), mejoras: {}, livery: '' };
+        if (!u) return { ...base, equipado: A.validarEquipado(d?.equipado, {}), mejoras: {}, livery: '', licencia: 'D', sr: A.SR_INICIAL };
         const p = await perfilDe(u).catch(() => ({}));
         const equipado = A.validarEquipado(d?.equipado || p.equipado, p);
-        return { ...base, equipado, mejoras: A.nivelesMejoras(p), livery: equipado.propia ? livery : '' };
+        const sr = p.sr ?? A.SR_INICIAL;
+        return { ...base, equipado, mejoras: A.nivelesMejoras(p), livery: equipado.propia ? livery : '', sr, licencia: A.licenciaDe(sr, p.online || 0, p.elo || A.ELO_INICIAL) };
     }
 
     async function cerrarCarrera(s) {
@@ -350,6 +353,25 @@ function registrar(app, deps) {
         // estadísticas de los pilotos con cuenta
         for (const r of res) if (r.usuario) Perfil.updateOne({ usuario: r.usuario }, { $inc: { carreras: 1, victorias: r.pos === 1 && !r.abandono ? 1 : 0 } }, { upsert: true }).catch(() => {});
         actualizarElo(s, res).catch(e => logger.error(`[apexgp] elo: ${e.message}`));
+        actualizarSr(res).catch(e => logger.error(`[apexgp] sr: ${e.message}`));
+    }
+
+    // safety rating y licencia de cada piloto con cuenta según su informe de incidentes
+    async function actualizarSr(res) {
+        const vistos = new Set();
+        const conCuenta = res.filter(r => r.usuario && !vistos.has(r.usuario) && vistos.add(r.usuario));
+        if (!conCuenta.length) return;
+        const perfiles = await Perfil.find({ usuario: { $in: conCuenta.map(r => r.usuario) } }).select('usuario sr elo online').lean();
+        const por = Object.fromEntries(perfiles.map(p => [p.usuario, p]));
+        for (const r of conCuenta) {
+            const p = por[r.usuario] || {};
+            const antes = p.sr ?? A.SR_INICIAL;
+            // sin informe (se cerró la app, se desconectó) no se suma nada limpio
+            const despues = A.srTras(antes, r.inc || { vueltas: 0 }, r.abandono);
+            await Perfil.updateOne({ usuario: r.usuario }, { $set: { sr: despues } }, { upsert: true });
+            const licencia = A.licenciaDe(despues, (p.online || 0) + 1, p.elo || A.ELO_INICIAL);
+            ns.sockets.get(r.id)?.emit('licencia', { antes, despues, licencia, anterior: r.licencia || null });
+        }
     }
 
     // ELO entre los pilotos con cuenta (cada usuario cuenta una vez por carrera)
@@ -436,9 +458,10 @@ function registrar(app, deps) {
             if (!acc()) return cb?.({ ok: false, error: 'Vas muy rápido' });
             dejar();
             const u = socket.data.usuario;
-            const elo = u ? ((await Perfil.findOne({ usuario: u }).select('elo').lean().catch(() => null))?.elo || A.ELO_INICIAL) : A.ELO_INICIAL;
-            const n = emparejador.entrar(id, await jugadorDe(socket, d), elo, d?.region);
-            cb?.({ ok: true, elo, nivel: A.nivelElo(elo), enCola: n });
+            const p = u ? await Perfil.findOne({ usuario: u }).select('elo sr').lean().catch(() => null) : null;
+            const elo = p?.elo || A.ELO_INICIAL, sr = p?.sr ?? A.SR_INICIAL;
+            const n = emparejador.entrar(id, await jugadorDe(socket, d), elo, d?.region, sr);
+            cb?.({ ok: true, elo, nivel: A.nivelElo(elo), sr, enCola: n });
         });
         socket.on('cancelarBusqueda', () => emparejador.salir(id));
         socket.on('listo', v => { if (!acc()) return; const s = salas.listo(id, v); if (s) emitirSala(s); });
@@ -463,8 +486,8 @@ function registrar(app, deps) {
             if (s) ns.to(rid(s.codigo)).emit('tablaQ', salas.tablaQ(s));
         });
         socket.on('vuelta', t => { const s = salas.vuelta(id, t); if (s) ns.to(rid(s.codigo)).emit('vuelta', { id, t: +t }); });
-        socket.on('meta', () => { const s = salas.meta(id); if (!s) return; emitirSala(s); if (s.estado === 'fin') cerrarCarrera(s); });
-        socket.on('abandono', () => { const s = salas.abandono(id); if (!s) return; emitirSala(s); if (s.estado === 'fin') cerrarCarrera(s); });
+        socket.on('meta', inc => { salas.incidentes(id, inc); const s = salas.meta(id); if (!s) return; emitirSala(s); if (s.estado === 'fin') cerrarCarrera(s); });
+        socket.on('abandono', inc => { salas.incidentes(id, inc); const s = salas.abandono(id); if (!s) return; emitirSala(s); if (s.estado === 'fin') cerrarCarrera(s); });
         socket.on('evento', d => {
             // contactos entre coches y daños visibles para los demás (pequeños y limitados)
             const s = salas.salaDe(id);
@@ -493,7 +516,7 @@ function registrar(app, deps) {
     setInterval(() => {
         for (const g of emparejador.emparejar()) {
             const vivos = g.filter(x => ns.sockets.get(x.id));
-            if (vivos.length < 2) { for (const x of vivos) emparejador.entrar(x.id, x.jugador, x.elo, x.region); continue; }
+            if (vivos.length < 2) { for (const x of vivos) emparejador.entrar(x.id, x.jugador, x.elo, x.region, x.sr); continue; }
             const [h, ...resto] = vivos;
             // 22 coches (la IA completa la parrilla), 20 vueltas y 6 minutos de clasificación
             const opciones = { tipo: 'abierta', max: A.MAX_JUGADORES, vueltas: 20, publica: false, rapida: true, nombre: 'Partida rápida', clasifSeg: +process.env.APEXGP_CLASIF_SEG || 360,

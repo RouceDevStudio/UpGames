@@ -2,6 +2,7 @@
 // No depende de Three.js para poder probar las físicas en Node.
 
 import { COCHE, G, RHO_AIRE } from './config.js';
+import { REALES } from './circuitosReales.js';
 
 // Trazado tipo "tortuga": rectas (S) y curvas de radio constante (A).
 // Ángulo positivo = curva a la derecha. La línea de meta está en s = 0.
@@ -123,8 +124,37 @@ const TRAZADO_VELOZ = {
   drs: [{ ini: -300, fin: 900, det: -460 }, { recta: 'Recta del Serraglio', ini: 120, fin: -60, det: -260 }],
 };
 
-export const CIRCUITOS = { valle: TRAZADO_VALLE, puerto: TRAZADO_PUERTO, veloz: TRAZADO_VELOZ };
+// los tres originales y los trazados reales (con otros nombres)
+export const CIRCUITOS = { valle: TRAZADO_VALLE, puerto: TRAZADO_PUERTO, veloz: TRAZADO_VELOZ, ...REALES };
+for (const d of Object.values(REALES)) { d.real = true; d.drs ??= 'auto'; }
 export const circuitoDe = id => CIRCUITOS[id] || TRAZADO_VALLE;
+
+// Trazado por puntos (circuitos reales): curva cerrada de Catmull-Rom centrípeta muestreada
+// cada ~1 m, con el rumbo en cada punto
+function polilineaDePuntos(def) {
+  const P = [];
+  for (let i = 0; i < def.puntos.length; i += 2) P.push([def.puntos[i], def.puntos[i + 1]]);
+  const n = P.length, out = [];
+  for (let i = 0; i < n; i++) {
+    const p0 = P[(i - 1 + n) % n], p1 = P[i], p2 = P[(i + 1) % n], p3 = P[(i + 2) % n];
+    const d = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]), m = Math.max(1, Math.ceil(d));
+    // centrípeta: parámetros por raíz de la distancia (sin bucles ni picos)
+    const t0 = 0, t1 = t0 + Math.sqrt(Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) || 1e-3), t2 = t1 + Math.sqrt(d || 1e-3), t3 = t2 + Math.sqrt(Math.hypot(p3[0] - p2[0], p3[1] - p2[1]) || 1e-3);
+    for (let k = 0; k < m; k++) {
+      const t = t1 + (t2 - t1) * k / m;
+      const pt = [0, 1].map(c => {
+        const A1 = (t1 - t) / (t1 - t0) * p0[c] + (t - t0) / (t1 - t0) * p1[c];
+        const A2 = (t2 - t) / (t2 - t1) * p1[c] + (t - t1) / (t2 - t1) * p2[c];
+        const A3 = (t3 - t) / (t3 - t2) * p2[c] + (t - t2) / (t3 - t2) * p3[c];
+        const B1 = (t2 - t) / (t2 - t0) * A1 + (t - t0) / (t2 - t0) * A2;
+        const B2 = (t3 - t) / (t3 - t1) * A2 + (t - t1) / (t3 - t1) * A3;
+        return (t2 - t) / (t2 - t1) * B1 + (t - t1) / (t2 - t1) * B2;
+      });
+      out.push({ x: pt[0], z: pt[1], h: 0 });
+    }
+  }
+  return out;
+}
 
 function construirPolilinea(segs, paso) {
   const pts = [];
@@ -204,10 +234,14 @@ export class Circuito {
     this.id = def.id;
     this.nombre = def.nombre;
     this.paso = 2;
-    const segs = cerrarTrazado(def);
+    let pts, segs = [];
+    if (def.puntos) pts = polilineaDePuntos(def);
+    else {
+      segs = cerrarTrazado(def);
+      pts = construirPolilinea(segs, 1).pts;
+      pts.pop(); // el último coincide con el primero
+    }
     this.segmentos = segs;
-    const { pts } = construirPolilinea(segs, 1);
-    pts.pop(); // el último coincide con el primero
     // remuestreo uniforme cada `paso` metros
     const acum = [0];
     for (let i = 1; i <= pts.length; i++) {
@@ -228,9 +262,11 @@ export class Circuito {
       X[i] = a.x + (b.x - a.x) * t; Z[i] = a.z + (b.z - a.z) * t;
     }
     // suavizado ligero para que la curvatura sea continua (transiciones tipo clotoide)
-    const xs = suavizarCircular(Array.from(X), 4, 3), zs = suavizarCircular(Array.from(Z), 4, 3);
+    const [rS, vS] = def.puntos ? [6, 4] : [4, 3];      // los datos reales traen algo de ruido
+    const xs = suavizarCircular(Array.from(X), rS, vS), zs = suavizarCircular(Array.from(Z), rS, vS);
     this.x = Float64Array.from(xs); this.z = Float64Array.from(zs);
     this._derivadas();
+    if (def.puntos) this._rectasAuto();
     this._relieve();
     this._superficies();
     this.trazada = this._trazadaIdeal();
@@ -240,6 +276,8 @@ export class Circuito {
     // neumáticos fríos o gastados: 15 % menos de agarre (en las curvas rápidas pesa mucho más)
     this.perfilFrio = this._perfilVelocidad(this.trazada, { mu: 1.55 * 0.85 });
     this.perfilFrioSucio = this._perfilVelocidad(this.trazada, { mu: 1.55 * 0.85 * 0.96, clA: 4.6 * 0.74 });
+    // ritmo de la IA (clasificación simulada) en los trazados reales: como en los originales
+    if (!def.ritmoIA) def.ritmoIA = Math.round(this.vueltaTeorica(1) * (def.urbano ? 1.04 : 1.084) * 10) / 10;
     this._indexar();
     // nombres de curvas por posición
     this.curvas = [];
@@ -249,8 +287,9 @@ export class Circuito {
       if (sg.t === 'A' && sg.nombre) this.curvas.push({ s: s + largo / 2, nombre: sg.nombre, r: sg.r });
       s += largo;
     }
+    if (def.puntos) this._curvasAuto();
     this.drs = [];
-    for (const z of def.drs) {
+    for (const z of (def.drs === 'auto' ? this._drsAuto : def.drs)) {
       if (z.recta) {
         const rr = this._sDeSegmento(z.recta);
         if (rr) this.drs.push({ ini: rr.s0 + z.ini, fin: rr.s1 + z.fin, deteccion: this.envolver(rr.s0 + z.det) });
@@ -291,6 +330,46 @@ export class Circuito {
   }
 
   envolver(s) { s %= this.largo; return s < 0 ? s + this.largo : s; }
+
+  // Circuitos por puntos: rectas (radio > 400 m) para la recta ancha de meta y el DRS
+  _rectasAuto() {
+    const n = this.n, k = this.curvSuave, recto = (i) => Math.abs(k[i]) < 0.0025;
+    const tramos = [];
+    let i0 = 0; while (recto(i0) && i0 < n - 1) i0++;            // empezar en una curva
+    for (let j = 0, ini = -1; j <= n; j++) {
+      const i = (i0 + j) % n;
+      if (recto(i) && j < n) { if (ini < 0) ini = i0 + j; }
+      else if (ini >= 0) { tramos.push({ s0: ini * this.paso, s1: (i0 + j) * this.paso }); ini = -1; }
+    }
+    for (const t of tramos) { t.largo = t.s1 - t.s0; t.s0 = this.envolver(t.s0); t.s1 = this.envolver(t.s1); }
+    this.rectas = tramos.sort((a, b) => b.largo - a.largo);
+    // la recta de meta: la que contiene s = 0
+    const meta = tramos.find(t => t.s0 > t.s1 || t.s0 < 1) || { s0: this.largo - 300, s1: 400 };
+    const ra = Math.max(0, (meta.s0 > meta.s1 ? meta.s1 : meta.s1) - 60), rb = Math.max(0, (meta.s0 > meta.s1 ? this.largo - meta.s0 : 0) - 40);
+    this.def.rectaAncha ??= [Math.min(700, ra), Math.min(500, rb)];
+    // DRS en las dos rectas más largas (y siempre en la de meta si es larga)
+    const zonas = this.rectas.filter(t => t.largo > 450).slice(0, 2);
+    this._drsAuto = zonas.map(t => ({ ini: t.s0 + 90, fin: this.envolver(t.s1 - 60), det: t.s0 - 280 }));
+    if (!this._drsAuto.length) this._drsAuto = [{ ini: -200, fin: Math.min(400, ra), det: -350 }];
+    // ritmo de la IA para la clasificación simulada (como en los trazados originales)
+    this._ritmoAuto = true;
+  }
+
+  // Circuitos por puntos: una curva por cada tramo con curvatura notable (T1, T2…)
+  _curvasAuto() {
+    const n = this.n, k = this.curvSuave;
+    this.curvas = [];
+    let dentro = false, ini = 0, num = 0, pico = 0;
+    for (let i = 0; i <= n; i++) {
+      const c = Math.abs(k[i % n]);
+      if (c > 0.006 && !dentro) { dentro = true; ini = i; pico = c; }
+      else if (dentro && c > pico) pico = c;
+      if (dentro && (c < 0.004 || i === n)) {
+        dentro = false;
+        if ((i - ini) * this.paso > 12) this.curvas.push({ s: (ini + i) / 2 * this.paso, nombre: `T${++num}`, r: Math.round(1 / pico) });
+      }
+    }
+  }
 
   _derivadas() {
     const n = this.n, X = this.x, Z = this.z;
@@ -613,11 +692,18 @@ export class Circuito {
 // Calle de boxes paralela a la recta principal, a la derecha (lado del interior del circuito)
 Circuito.prototype._calleBoxes = function () {
   const L = this.largo;
+  // la calle de boxes cabe en la recta de meta: se mide cuánta recta hay antes y después
+  // (el carril va a la derecha: solo estorban las curvas cerradas a la derecha, donde quedaría por dentro)
+  const recta = (dir) => { let m = 0; for (let i = 0; m < 900; m += this.paso, i += dir) { const k = this.curvSuave[(i + this.n * 4) % this.n]; if (k > 0.022 || k < -0.05) break; } return m; };
+  const delante = this.def.real ? recta(1) : 455, detras = this.def.real ? recta(-1) : 175;
+  const salida = Math.max(150, Math.min(430, delante - 25));
+  const entrada = -Math.max(120, Math.min(detras - 25, Math.max(150, 580 - salida)));
   const pit = this.pit = {
-    entrada: this.envolver(-150),     // se abandona la pista
-    limiteIni: this.envolver(-55),    // línea del limitador
-    limiteFin: 330,
-    salida: 430,                      // se vuelve a la pista
+    entrada: this.envolver(entrada),  // se abandona la pista
+    // márgenes del limitador proporcionales a la recta (en una recta corta, como en el urbano, más justos)
+    limiteIni: this.envolver(entrada + (this.def.real ? Math.min(95, (salida - entrada) * 0.15) : 95)),   // línea del limitador
+    limiteFin: salida - (this.def.real ? Math.min(100, (salida - entrada) * 0.15) : 100),
+    salida,                           // se vuelve a la pista
     ancho: 16,                        // desde el borde de la pista hasta los garajes
     carril: 9.5,                      // centro del carril (desde el borde)
     muroDe: 3.0, muroA: 3.9,          // muro de boxes entre la pista y el carril
@@ -634,8 +720,10 @@ Circuito.prototype._calleBoxes = function () {
     }
   }
   // 11 garajes, uno por equipo, entre las dos líneas del limitador
-  const ini = this.envolver(pit.limiteIni + 45), tramo = this.envolver(pit.limiteFin - 30 - ini);
+  const total = salida - entrada;
+  const ini = this.envolver(pit.limiteIni + (this.def.real ? Math.min(45, total * 0.06) : 45)), tramo = this.envolver(pit.limiteFin - (this.def.real ? Math.min(30, total * 0.04) : 30) - ini);
   for (let k = 0; k < 11; k++) pit.garajes.push(this.envolver(ini + tramo * (k + 0.5) / 11));
+  pit.anchoGaraje = Math.min(28, tramo / 11 - 0.4);     // en rectas cortas, garajes más estrechos
 };
 
 // Distancia recorrida dentro de la zona de boxes (o -1 si s está fuera)
