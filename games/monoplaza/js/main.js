@@ -33,6 +33,7 @@ import { Camara, NOMBRES_CAMARA } from './render/camara.js';
 import { Sonido } from './audio.js';
 import { Entrada } from './input.js';
 import { PilotosFuera } from './render/pilotoFuera.js';
+import * as ESC from './escuela.js';
 import * as ED from './editorCircuito.js';
 
 const $ = (s) => document.querySelector(s);
@@ -527,6 +528,7 @@ function pausar(si) {
 }
 
 function salirAlMenu() {
+  terminarLeccion();
   salirDeTray();
   if (enRed) { multi.salir(); enRed = false; }
   aplicarHora('dia');
@@ -572,6 +574,7 @@ document.addEventListener('click', (e) => {
   if (destino === 'garaje') { abrirGaraje(); return; }
   if (destino === 'trayectoria') { abrirTrayectoria(); return; }
   if (destino === 'editor') { abrirEditor(); return; }
+  if (destino === 'escuela') { abrirEscuela(); return; }
   if (destino === 'multi') { abrirMulti(); return; }
   if (destino === 'campeonato') { abrirCampeonato(); return; }
   if (destino === 'rankings') { abrirRankings(); return; }
@@ -995,6 +998,7 @@ function procesarEventos() {
       if (e.color === 'morado') radio.decir(`Sector ${e.k + 1} morado. ¡Vas volando!`, { clave: 'morado', cada: 40 });
     }
     else if (e.tipo === 'vuelta' && e.p.jugador) {
+      if (leccion) leccionVuelta = { t: e.t, valida: e.valida };
       sonido.evento('vuelta');
       const txt = e.valida ? fmt(e.t) : fmt(e.t) + ' (anulada)';
       if (e.mejora) { mensaje(sesion.modo === 'carrera' ? 'MEJOR VUELTA PERSONAL' : 'NUEVO MEJOR TIEMPO', txt, 2.4); if (sesion.modo !== 'carrera') radio.decir(`${fmt(e.t)}. ¡Mejor vuelta! Sigue así.`, { clave: 'mejorV', cada: 8 }); }
@@ -1288,7 +1292,7 @@ function bucle(ahora) {
       modeloFantasma.raiz.visible = dist > 3;
     }
   }
-  lineaIdeal.visible = jugando && ajustes.trazada && !enRed;
+  lineaIdeal.visible = jugando && (ajustes.trazada || !!leccion) && !enRed;
   document.body.classList.toggle('en-red', enRed && jugando);
   // en la cámara de cabina el tablero está en el volante (se oculta el del HUD)
   document.body.classList.toggle('vista-cabina', jugando && (camara.modo === 'cabina' || camara.modo === 'cara'));
@@ -1322,6 +1326,7 @@ function bucle(ahora) {
     efectos.actualizar(dt, sesion.coches, camara.cam.position);
     escombros.actualizar(dt);
     actualizarPilotosFuera(dt);
+    actualizarLeccion(dt);
     avisosConduccion();
     for (const e of barreras.actualizar(dt, sesion.participantes)) {
       if (e.tipo === 'bidon' && jugando) { sonido.evento('golpe', 4); if (e.jugador) { mensaje('¡BIDONES DE AGUA!', '', 1.2); entrada.vibrar(120, 0.8); radio.decir('¡Te has llevado los bidones! Revisa que el alerón esté bien.', { clave: 'bidon', cada: 30 }); } }
@@ -2984,3 +2989,78 @@ function mojarCoches(agua, lluvia) {
     if ('clearcoat' in mat) { mat.clearcoat = Math.min(1, b.cc + w); mat.clearcoatRoughness = b.ccr * (1 - 0.6 * w); }
   }
 }
+
+// ─── Escuela de pilotaje ───────────────────────────────────────────────────────────────
+let leccion = null, leccionVuelta = null, leccionK = 0;
+const CLAVE_ESC = 'apexgp.escuela';
+const progresoEsc = (() => { try { return JSON.parse(localStorage.getItem(CLAVE_ESC) || '{}'); } catch { return {}; } })();
+const guardarEsc = () => { try { localStorage.setItem(CLAVE_ESC, JSON.stringify(progresoEsc)); } catch { /* sin espacio */ } };
+
+function abrirEscuela() {
+  mostrar('escuela');
+  $('#escLista').innerHTML = ESC.LECCIONES.map((l, k) => {
+    const pr = progresoEsc[l.id];
+    return `<div class="esc-fila"><span class="esc-ico">${l.icono}</span><div><b>${k + 1}. ${l.titulo}</b><small>${l.texto}</small></div>
+      <span class="esc-med">${pr?.medalla ? ESC.NOMBRE_MEDALLA[pr.medalla] + (pr.mejor ? ` · ${pr.mejor.toFixed(2)} s` : '') : '—'}</span>
+      <button class="btn mini primario" data-lec="${k}">${pr?.medalla ? 'Repetir' : 'Empezar'}</button></div>`;
+  }).join('');
+  document.querySelectorAll('[data-lec]').forEach(b => b.onclick = () => empezarLeccion(+b.dataset.lec));
+  const hechas = Object.keys(progresoEsc).filter(k => progresoEsc[k].medalla).length;
+  if (hechas >= 3) {
+    const rc = ESC.recomendar(progresoEsc);
+    $('#escRecom').innerHTML = `<b>Ayudas recomendadas</b><span>${rc.texto}</span><button class="btn mini" id="escAplicar">Aplicar</button>`;
+    $('#escAplicar').onclick = () => { Object.assign(ajustes, { tc: rc.tc, abs: rc.abs, trazada: rc.linea, direccion: rc.direccion }); guardar(); $('#escAplicar').textContent = '✓ Aplicadas'; };
+  } else $('#escRecom').innerHTML = '<span>Completa al menos tres lecciones y te recomendaremos las ayudas ideales para ti.</span>';
+}
+
+async function empezarLeccion(k) {
+  const def = ESC.LECCIONES[k];
+  leccionK = k;
+  $('#escRes').classList.remove('visible');
+  if (circuito.id !== 'valle') await cargarCircuito('valle');
+  empezar('practica', { clima: 'seco', hora: 'dia' });
+  const car = sesion.jugador.coche;
+  car.colocar(def.inicio.s, def.inicio.d);
+  leccion = new ESC.Leccion(def, circuito); leccionVuelta = null;
+  // la vuelta completa empieza lanzada: la vuelta de salida no cuenta
+  if (def.vuelta) sesion.jugador.valida = false;
+  $('#hEscTit').textContent = `${def.icono} ${def.titulo}`; $('#hEscTxt').textContent = def.texto;
+  $('#hEscuela').classList.add('visible');
+  mensaje(`LECCIÓN ${k + 1}`, def.titulo, 2.5);
+  radio.decir(def.radio, { prioridad: true, clave: 'leccion' + k, cada: 1 });
+}
+
+function actualizarLeccion(dt) {
+  if (!leccion || pausado || !sesion) return;
+  const r = leccion.actualizar(dt, sesion.jugador.coche, { vuelta: leccionVuelta });
+  leccionVuelta = null;
+  $('#hEscT').textContent = leccion.t.toFixed(1) + ' s';
+  if (r === 'corre') return;
+  const def = leccion.def, pr = progresoEsc[def.id] ||= { fallos: 0 };
+  if (r === 'ok') {
+    const mejora = !pr.mejor || leccion.tiempo < pr.mejor;
+    pr.medalla = Math.max(pr.medalla || 0, leccion.medalla);
+    if (mejora) pr.mejor = leccion.tiempo;
+    $('#escResTit').textContent = ESC.NOMBRE_MEDALLA[leccion.medalla];
+    const [b, p, o] = def.medallas;
+    $('#escResTxt').innerHTML = `${def.titulo}: <b>${leccion.tiempo.toFixed(2)} s</b>${mejora ? ' · ¡tu mejor tiempo!' : ''}<br><small>Oro ${o} s · Plata ${p} s · Bronce ${b} s</small>`;
+    radio.decir(leccion.medalla === 3 ? '¡Medalla de oro! Perfecto.' : leccion.medalla === 2 ? 'Plata. Muy bien, un poco más y es oro.' : 'Bronce. Bien hecho; repítela para mejorar.', { prioridad: true });
+    if (leccion.medalla === 3) sonido.ovacion(0.8);
+  } else {
+    pr.fallos = (pr.fallos || 0) + 1;
+    $('#escResTit').textContent = '❌ Inténtalo otra vez';
+    $('#escResTxt').textContent = leccion.motivo;
+    radio.decir(`${leccion.motivo}. No pasa nada, otra vez.`, { prioridad: true });
+  }
+  guardarEsc();
+  $('#escSig').classList.toggle('oculto', leccionK >= ESC.LECCIONES.length - 1 || r !== 'ok');
+  $('#escRes').classList.add('visible');
+  leccion = null;
+  $('#hEscuela').classList.remove('visible');
+}
+
+function terminarLeccion() { leccion = null; $('#hEscuela')?.classList.remove('visible'); $('#escRes')?.classList.remove('visible'); }
+if (!Object.keys(progresoEsc).length) document.querySelector('[data-ir="escuela"]')?.classList.add('nuevo');
+$('#escRepetir').addEventListener('click', () => empezarLeccion(leccionK));
+$('#escSig').addEventListener('click', () => empezarLeccion(leccionK + 1));
+$('#escMenu').addEventListener('click', () => { salirAlMenu(); abrirEscuela(); });

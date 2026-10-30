@@ -38,6 +38,7 @@
       <div class="fila">
         <button class="btn grande" data-ir="carrera">🏁 Carrera</button>
         <button class="btn grande" data-ir="campeonato">🏆 Campeonato</button>
+        <button class="btn grande" data-ir="escuela">🎓 Escuela</button>
       </div>
       <div class="fila">
         <button class="btn grande" data-ir="trayectoria">🧑‍✈️ Modo carrera</button>
@@ -79,6 +80,17 @@
     <div class="opcion"><label>Clima</label><div class="segm" data-campo="clima"><b data-v="seco">☀️ Seco</b><b data-v="variable">🌦️ Variable</b><b data-v="lluvia">🌧️ Lluvia</b></div></div>
     <div class="opcion"><label>Neumático</label><div class="segm compuestos" data-campo="compuesto"><b data-v="blando">Blando</b><b data-v="medio">Medio</b><b data-v="duro">Duro</b><b data-v="inter">Inter</b><b data-v="lluvia">Lluvia</b></div></div>
     <div class="acciones"><button class="btn" data-ir="menu">Atrás</button><button class="btn primario" id="empezarCarrera">A la parrilla</button></div>
+  </div>
+</div>
+
+<!-- Escuela de pilotaje -->
+<div id="escuela" class="pantalla">
+  <div class="panel ancho">
+    <h2>🎓 Escuela de pilotaje</h2>
+    <p class="nota" style="text-align:left">Cinco lecciones cortas en Valle Andino con la línea de trazada: <b style="color:#22c55e">verde</b> acelera, <b style="color:#ffd23f">amarillo</b> levanta, <b style="color:#ff4d4d">rojo</b> frena. Consigue el oro en todas.</p>
+    <div id="escLista" class="esc-lista"></div>
+    <div id="escRecom" class="esc-recom"></div>
+    <div class="acciones"><button class="btn" data-ir="menu">Volver</button></div>
   </div>
 </div>
 
@@ -359,7 +371,9 @@
     <label class="relevo-op" id="opRelevo"><input type="checkbox" id="chkRelevo"> 🔄 Cambio de piloto en esta parada</label>
     <button class="btn" data-box="cancelar">Cancelar</button>
   </div>
-  <div id="hRelevo" class="hrelevo"><span>🔄 Conduce tu compañero</span><button class="btn mini" id="bRelevoRapido">⏩ ×3</button><button class="btn mini primario" id="bRelevoVolver">Volver al volante</button></div>
+  <div id="hEscuela" class="h-escuela"><b id="hEscTit"></b><span id="hEscTxt"></span><i id="hEscT">0.0</i></div>
+<div id="escRes" class="esc-res"><div class="panel"><h2 id="escResTit"></h2><p id="escResTxt"></p><div class="acciones"><button class="btn" id="escMenu">Lecciones</button><button class="btn" id="escRepetir">Repetir</button><button class="btn primario" id="escSig">Siguiente</button></div></div></div>
+<div id="hRelevo" class="hrelevo"><span>🔄 Conduce tu compañero</span><button class="btn mini" id="bRelevoRapido">⏩ ×3</button><button class="btn mini primario" id="bRelevoVolver">Volver al volante</button></div>
   <div id="hFps" class="fps"></div>
   <div id="semaforo"><i></i><i></i><i></i><i></i><i></i></div>
 </div>
