@@ -68,7 +68,7 @@ export class Grabadora {
       d[o + 11] = c.velocidad; d[o + 12] = c.drsAbierto ? 1 : 0; d[o + 13] = c.danoAleron || 0;
       d[o + 14] = dn.aleronTras || 0; d[o + 15] = bits;
       // para el sonido de la repetición
-      d[o + 16] = c.mandos?.acelerador || 0; d[o + 17] = c.mandos?.freno || 0; d[o + 18] = c.fondoToca || 0; d[o + 19] = c.impacto || 0;
+      d[o + 16] = c.mandos?.acelerador || 0; d[o + 17] = c.mandos?.freno || 0; d[o + 18] = c.fondoToca || 0; d[o + 19] = Math.max(c.impacto || 0, c.picoGolpe || 0);
     }
   }
 

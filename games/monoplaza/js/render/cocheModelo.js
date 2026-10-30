@@ -5,7 +5,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { COCHE, COMPUESTOS } from '../config.js';
 import { texturaCarbono } from './texturas.js';
-import { proyectarUV, dibujarLibrea, materialLibrea, texturaCasco } from './librea.js';
+import { proyectarUV, dibujarLibrea, materialLibrea } from './librea.js';
+import { crearPiloto } from './piloto.js';
 
 const A = COCHE.wheelbase * (1 - COCHE.repartoDel); // eje delantero
 const B = COCHE.wheelbase * COCHE.repartoDel;       // eje trasero
@@ -337,14 +338,6 @@ function pintarPantalla(p, car, info = {}) {
   p.tex.needsUpdate = true;
 }
 
-// Brazo: cilindro entre dos puntos (se recoloca cada fotograma)
-function colocarCilindro(m, a, b) {
-  const d = b.clone().sub(a); const L = d.length();
-  m.position.copy(a).addScaledVector(d, 0.5);
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
-  m.scale.set(1, L, 1);
-}
-
 /**
  * Crea el modelo de un monoplaza.
  * opc: { equipo, equipado: { patron, acabado, casco, colores, cascoColores, numero }, imagen, compuesto, calidad, cabina }
@@ -569,51 +562,6 @@ export function crearModelo(opc) {
   luzLluvia.position.set(-2.31, 0.27, 0);
   carroceria.add(luzLluvia);
 
-  // Piloto: mono del equipo, collarín HANS, casco con visera, alerón y toma de aire
-  const traje = new THREE.MeshStandardMaterial({ map: texturaMono(colores), roughness: 0.78 });
-  const guante = new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.8 });
-  const piloto = new THREE.Group();
-  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.105, 0.16, 6, 12), traje);
-  torso.rotation.x = Math.PI / 2; torso.scale.set(1, 1.15, 0.75); torso.position.set(0.0, 0.62, 0);
-  piloto.add(torso);
-  const hans = new THREE.Mesh(new THREE.TorusGeometry(0.095, 0.03, 8, 20, Math.PI * 1.3), matComun('negro'));
-  hans.rotation.set(Math.PI / 2, 0, Math.PI * 0.85); hans.position.set(0.02, 0.70, 0);
-  piloto.add(hans);
-  const cuello = new THREE.Group();          // la cabeza gira e inclina sobre el cuello
-  cuello.position.set(0.04, 0.72, 0);
-  const casco = new THREE.Group();
-  casco.position.set(0.04, 0.085, 0);
-  const matCasco = new THREE.MeshPhysicalMaterial({ map: texturaCasco(eq.casco || 'clasico', eq.cascoColores || { base: colores.tercero, acento: colores.base }), roughness: 0.22, clearcoat: 1, clearcoatRoughness: 0.04 });
-  {
-    // carcasa: esfera alargada y aplanada por los lados, con la mentonera prolongada
-    const gC = new THREE.SphereGeometry(0.135, 36, 24);
-    const p = gC.attributes.position;
-    for (let i = 0; i < p.count; i++) {
-      let x = p.getX(i), y = p.getY(i), z = p.getZ(i);
-      x *= 1.12; z *= 0.92;
-      if (y < -0.02 && x > 0) { x += (-0.02 - y) * 0.55; }          // mentonera hacia delante
-      if (y < -0.07) { y = -0.07 - (-0.07 - y) * 0.6; }               // base recortada
-      p.setXYZ(i, x, y, z);
-    }
-    gC.computeVertexNormals(); gC.rotateY(Math.PI);
-    casco.add(new THREE.Mesh(gC, matCasco));
-  }
-  const visor = new THREE.Mesh(new THREE.SphereGeometry(0.1395, 28, 10, -Math.PI * 0.28, Math.PI * 0.56, Math.PI * 0.42, Math.PI * 0.12),
-    new THREE.MeshPhysicalMaterial({ color: 0x0b0d14, metalness: 0.7, roughness: 0.04, clearcoat: 1, iridescence: 0.9, iridescenceIOR: 1.6 }));
-  visor.rotation.y = Math.PI; visor.scale.set(1.12, 1, 0.92); casco.add(visor);
-  const alerCasco = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.012, 0.16), matCasco); alerCasco.position.set(-0.13, 0.06, 0); alerCasco.rotation.z = -0.25; casco.add(alerCasco);
-  const tomaCasco = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.02, 0.05), matComun('negro')); tomaCasco.position.set(0.04, 0.135, 0); casco.add(tomaCasco);
-  cuello.add(casco);
-  piloto.add(cuello);
-  const geoBrazo = new THREE.CylinderGeometry(0.03, 0.025, 1, 10);
-  const brazos = [];
-  for (let k = 0; k < 4; k++) { const m = new THREE.Mesh(geoBrazo, traje); m.castShadow = true; piloto.add(m); brazos.push(m); }
-  const geoMano = new THREE.SphereGeometry(0.034, 12, 10); geoMano.scale(1.1, 0.9, 1.2);
-  const manos = [new THREE.Mesh(geoMano, guante), new THREE.Mesh(geoMano, guante)];
-  manos.forEach(m => piloto.add(m));
-  piloto.traverse(o => { if (o.isMesh) o.castShadow = true; });
-  carroceria.add(piloto);
-
   // Volante en la columna de dirección
   const volante = crearVolante(cabina);
   const columna = new THREE.Group();
@@ -623,6 +571,12 @@ export function crearModelo(opc) {
   giroVolante.add(volante.g);
   columna.add(giroVolante);
   carroceria.add(columna);
+
+  // Piloto: modelo aparte (render/piloto.js), sentado en la carrocería
+  const piloto = crearPiloto({ traje: new THREE.MeshStandardMaterial({ map: texturaMono(colores), roughness: 0.78 }), guante: new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.8 }),
+    matNegro: matComun('negro'), equipado: eq, colores, columna, calidad });
+  carroceria.add(piloto.grupo);
+  const casco = piloto.casco, cuello = piloto.cuello;
 
   // Ruedas de 18" con perfil bajo, tapacubos aerodinámico y conducto de freno
   const cmp = COMPUESTOS[compuesto] || COMPUESTOS.medio;
@@ -688,11 +642,10 @@ export function crearModelo(opc) {
   sombraC.rotation.x = -Math.PI / 2; sombraC.position.set(-0.15, 0.015, 0); sombraC.renderOrder = -1;
   raiz.add(sombraC);
 
-  const vA = new THREE.Vector3(), vB = new THREE.Vector3(), vC = new THREE.Vector3(), eje = new THREE.Vector3();
   let tPantalla = 0;
   const estadoDanos = { alaDel: false, alaTras: false };
   const modelo = {
-    raiz, carroceria, ruedas, pivDrs, luzLluvia, pintura, alaDel, alaTras, casco, cuello, compuesto,
+    raiz, carroceria, ruedas, pivDrs, luzLluvia, pintura, alaDel, alaTras, casco, cuello, piloto, compuesto,
     mirada: 0,                     // giro de la cabeza (rad) para la cámara de cabina
     alDesprender: null,            // (tipo, objeto3D) → efectos de escombros
     elevar: 0,                     // gatos de boxes
@@ -753,29 +706,10 @@ export function crearModelo(opc) {
       // luz trasera: parpadea al recuperar energía; fija de noche y con lluvia
       const fija = this.luzTrasera?.() ? 2 : 0;
       luzLluvia.material.emissiveIntensity = car.ersPotenciaActual < -1000 ? (Math.sin(performance.now() / 70) > 0 ? 6 : 0.5) : fija;
-      // volante: ~9 vueltas de volante por radián de rueda (bloqueo ≈ ±170°)
-      // girar a la derecha (ángulo positivo) lleva la parte de arriba del volante hacia la derecha (+Z)
-      const angVol = (car.anguloVolante || 0) * 9;
+      // volante y piloto: el piloto lo lleva (o lo suelta y cruza los brazos en un golpe fuerte)
+      const angVol = piloto.actualizar(car, dt);
       giroVolante.rotation.x = angVol;
-      // la cabeza se inclina con la aceleración lateral
-      // la cabeza mira hacia la curva (con el volante) y se inclina con las fuerzas G
-      const objMirar = -Math.max(-0.5, Math.min(0.5, (car.anguloVolante || 0) * 2.6));
-      this.mirada += (objMirar - this.mirada) * Math.min(1, dt * 6);
-      cuello.rotation.y = this.mirada;
-      cuello.rotation.x = Math.max(-0.25, Math.min(0.25, -(car.ayF || 0) * 0.012));
-      cuello.rotation.z = Math.max(-0.15, Math.min(0.2, (car.axF || 0) * 0.006));
-      // brazos hasta las empuñaduras del volante
-      columna.updateMatrix(); giroVolante.updateMatrix();
-      eje.set(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 0, 1), columna.rotation.z);
-      for (let s = 0; s < 2; s++) {
-        const lado = s ? 1 : -1;
-        vA.set(0.0, 0, lado * 0.125).applyAxisAngle(new THREE.Vector3(1, 0, 0), angVol).applyAxisAngle(new THREE.Vector3(0, 0, 1), columna.rotation.z).add(columna.position);
-        const hombro = vB.set(0.06, 0.66, lado * 0.17);
-        const codo = vC.copy(hombro).lerp(vA, 0.5); codo.y -= 0.05; codo.z += lado * 0.06;
-        colocarCilindro(brazos[s * 2], hombro, codo);
-        colocarCilindro(brazos[s * 2 + 1], codo, vA);
-        manos[s].position.copy(vA);
-      }
+      this.mirada = piloto.mirada;
       // LEDs y pantalla del volante
       const nOn = Math.max(0, Math.min(15, Math.floor((car.rpm - 10500) / 4200 * 15)));
       const flash = car.rpm > 14550 && car.marcha > 0 && car.marcha < 8 && Math.floor(performance.now() / 70) % 2 === 0;

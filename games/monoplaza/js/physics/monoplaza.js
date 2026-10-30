@@ -114,6 +114,9 @@ export class Monoplaza {
   }
 
   // Un golpe en el punto (ex, ey) del coche con velocidad normal vn (m/s)
+  /** Fuerza del último golpe fuerte durante medio segundo (para animaciones y la repetición). */
+  get picoGolpe() { return this.reloj - (this._tGolpe ?? -9) < 0.5 ? this._vGolpe || 0 : 0; }
+
   aplicarGolpe(ex, ey, vn, azar = Math.random) {
     if (vn < 4) return;
     // un mismo choque toca varios puntos a la vez: cuenta una sola vez (salvo que sea más fuerte)
