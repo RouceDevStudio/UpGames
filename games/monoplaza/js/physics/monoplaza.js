@@ -3,7 +3,7 @@
 // en el mundo es (cos ψ, sin ψ) en el plano (x, z). Guiñada positiva = giro a la derecha.
 
 import { COCHE, COMPUESTOS, G, RHO_AIRE, REGLAJE_DEF, efectosMejoras, factorAgua } from '../config.js';
-import { SUPERFICIES, SUP_ASFALTO, SUP_BORDILLO, SUP_ESCAPE } from '../track.js';
+import { SUPERFICIES, SUP_ASFALTO, SUP_BORDILLO, SUP_ESCAPE, BARRERAS } from '../track.js';
 import { Neumatico, fuerzasNeumatico, muCarga } from './neumatico.js';
 
 const RPM_A_RAD = Math.PI / 30;
@@ -86,6 +86,31 @@ export class Monoplaza {
     // fondo/pontones (pierden carga), motor (pierde potencia) y piezas sueltas visibles
     this.dano = { aleronTras: 0, susp: [0, 0, 0, 0], pinchazo: [false, false, false, false], suelta: [false, false, false, false], fondo: 0, motor: 0, piezas: 0 };
     this.terminal = false; this.abandono = false; this.motivoAbandono = ''; this.tTerminal = 0;
+    this.desgasteMotor = 0; this.humoMotor = 0; this.cajaBloqueada = false; this.ersAveriado = 0;
+  }
+
+  /**
+   * Averías mecánicas: el motor se gasta con las vueltas altas y los golpes; la caja de cambios
+   * puede quedarse bloqueada en una marcha y el ERS sobrecalentarse en modo ataque.
+   * tasa: 1 = realista (pocas por carrera), 0 = sin averías. Devuelve el tipo de avería o null.
+   */
+  averias(dt, tasa = 1, azar = Math.random) {
+    if (!(tasa > 0) || this.abandono || this.terminal) return null;
+    const rpm = this.rpm / 12500;
+    this.desgasteMotor += dt * rpm * rpm * 1.1e-4 * (1 + 2 * (this.dano.motor || 0));
+    const pMotor = 1.8e-5 * Math.pow(rpm, 4) * (1 + 30 * Math.pow(this.desgasteMotor, 3)) * (1 + 3 * (this.dano.motor || 0));
+    if (azar() < pMotor * dt * tasa) {
+      // humo, pérdida de potencia y, a los pocos segundos, motor roto
+      this.dano.motor = 1; this.humoMotor = 1; this.terminal = true; this.tTerminal = -4; this.motivoAbandono = 'Motor roto';
+      return 'motor';
+    }
+    if (!this.cajaBloqueada && this.marcha >= 3 && azar() < 3e-5 * dt * tasa * (1 + 2 * (this.dano.motor || 0))) {
+      this.cajaBloqueada = true; return 'caja';
+    }
+    if (!(this.ersAveriado > 0) && azar() < (this.mandos.ersModo === 2 ? 1.2e-4 : 3e-5) * dt * tasa) {
+      this.ersAveriado = 25; return 'ers';
+    }
+    return null;
   }
 
   // Un golpe en el punto (ex, ey) del coche con velocidad normal vn (m/s)
@@ -356,7 +381,9 @@ export class Monoplaza {
     const modo = mand.ersModo ?? 1; // 0 recarga, 1 normal, 2 adelantar
     // en modo normal se guarda una reserva para poder adelantar o defenderse
     const reserva = modo === 2 ? 0 : COCHE.ersCapacidad * 0.2;
-    if (acel > 0.9 && this.marcha >= 2 && embragado && this.ers > reserva && this.ersDesplegado < COCHE.ersDespliegueVuelta && modo > 0) {
+    // ERS averiado (sobrecalentado): no despliega hasta que se enfría
+    if (this.ersAveriado > 0) this.ersAveriado -= dt;
+    if (!(this.ersAveriado > 0) && acel > 0.9 && this.marcha >= 2 && embragado && this.ers > reserva && this.ersDesplegado < COCHE.ersDespliegueVuelta && modo > 0) {
       const pot = COCHE.ersPotencia * this.ef.ers * (modo === 2 ? 1 : 0.5);
       const par = Math.min(COCHE.ersParMax, pot / wCig);
       parCig += par;
@@ -389,7 +416,7 @@ export class Monoplaza {
 
     // --- Ruedas -----------------------------------------------------------
     let fxT = 0, fyT = 0, mzT = 0;
-    let deslizMax = 0, bordillo = 0, fuera = 0, superficieMala = 0;
+    let deslizMax = 0, bordillo = 0, fuera = 0, superficieMala = 0, salchicha = 0;
     const kRelax = 0.38;
     // diferencial autoblocante
     const dOmega = rl.omega - rr.omega;
@@ -409,6 +436,7 @@ export class Monoplaza {
       const iw = (p.i + Math.round(along / c.paso) + c.n) % c.n;
       w.sup = c.superficie(iw, w.d);
       w.wy = c.y[iw] + c.caida(iw, w.d);
+      if (c.enSalchicha?.(iw, w.d)) { salchicha++; w.wy += 0.07; }
       const sp = SUPERFICIES[w.sup];
       if (w.sup !== SUP_ASFALTO && w.sup !== SUP_BORDILLO) fuera++;
       if (w.sup === SUP_BORDILLO) bordillo++;
@@ -545,7 +573,18 @@ export class Monoplaza {
     this.enBordillo = bordillo > 0;
     this.enTierra = superficieMala > 0;
     this.deslizMax = deslizMax;
-    this.vibracion = bordillo * 0.25 + superficieMala * 0.2 + this.fondoToca;
+    this.vibracion = bordillo * 0.25 + superficieMala * 0.2 + this.fondoToca + salchicha * 0.5;
+    // bordillo alto (salchicha): el coche salta, se descoloca y, deprisa, rompe el fondo
+    this._tSalchicha = Math.max(0, (this._tSalchicha || 0) - dt);
+    if (salchicha && this._tSalchicha <= 0 && v > 6) {
+      this._tSalchicha = 0.14;
+      const f = Math.min(1, v / 45);
+      this.r += (Math.random() - 0.5) * 0.9 * f;
+      this.vy += (Math.random() - 0.5) * 2.2 * f;
+      this.vx *= 1 - 0.03 * f;
+      if (v > 28) { this.fuenteGolpe = 'salchicha'; this.aplicarGolpe(0.2, 0, 3.5 + v * 0.08); }
+      this.eventos.push('golpe:' + (2 + f * 4).toFixed(1));
+    }
 
     this._muros(dt);
 
@@ -585,7 +624,7 @@ export class Monoplaza {
   }
 
   cambiar(dir) {
-    if (this.cambioT > 0) return;
+    if (this.cambioT > 0 || this.cajaBloqueada) return;
     if (dir > 0 && this.marcha < 8) {
       if (this.marcha === -1) { this.marcha = 1; return; }
       this.cambioDestino = this.marcha + 1; this.cambioT = COCHE.tiempoCambioSubir;
@@ -611,6 +650,7 @@ export class Monoplaza {
     const esquinas = [[2.75, -0.95], [2.75, 0.95], [-2.4, -0.85], [-2.4, 0.85], [0.6, -1.0], [0.6, 1.0]];
     this.impacto = 0;
     this._peor = null;
+    if (!this.golpesMuro || this.golpesMuro.length > 20) this.golpesMuro = [];
     for (const [ex, ey] of esquinas) {
       const ox = cos * ex - sin * ey, oz = sin * ex + cos * ey;
       const along = ox * p.tx + oz * p.tz;
@@ -636,7 +676,9 @@ export class Monoplaza {
       if (vn >= 0) continue;
       const m = this.masa, I = COCHE.inerciaYaw;
       const rxn = ox * wnz - oz * wnx;
-      const e = 0.25;
+      // tipo de barrera: neumáticos y TecPro absorben el golpe; el hormigón rebota
+      const bar = BARRERAS[c.barrera?.[lado]?.[i] ?? 0] || BARRERAS[0];
+      const e = bar.rebote;
       const j = -(1 + e) * vn / (1 / m + rxn * rxn / I);
       // fricción tangencial contra el muro
       const tx = -wnz, tz = wnx;
@@ -651,9 +693,13 @@ export class Monoplaza {
       this.vy = -nvx * sin + nvz * cos;
       const golpe = -vn;
       this.impacto = Math.max(this.impacto, golpe);
-      if (golpe > (this._peor?.v || 0)) this._peor = { ex, ey, v: golpe };
+      if (golpe > (this._peor?.v || 0)) this._peor = { ex, ey, v: golpe * bar.dano, bruto: golpe, x: this.x + ox, z: this.z + oz, lado, i, tipo: c.barrera?.[lado]?.[i] ?? 0, d: lim * (lado ? 1 : -1) };
     }
-    if (this._peor) { this.fuenteGolpe = 'muro'; this.aplicarGolpe(this._peor.ex, this._peor.ey, this._peor.v); }
+    if (this._peor) {
+      this.fuenteGolpe = 'muro'; this.aplicarGolpe(this._peor.ex, this._peor.ey, this._peor.v);
+      // para los efectos: marca en el muro, neumáticos sueltos de la barrera, chispas
+      if (this._peor.bruto > 2.5) this.golpesMuro.push(this._peor);
+    }
     if (this.impacto > 2) this.eventos.push('golpe:' + this.impacto.toFixed(1));
   }
 

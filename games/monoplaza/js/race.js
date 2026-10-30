@@ -36,6 +36,7 @@ export class Sesion {
     this.amarillas = [];           // { s, hasta }
     this.vsc = false; this.tVsc = 0;
     this.permitirVsc = opc.vsc !== false && this.modo === 'carrera';
+    this.tasaAverias = this.modo === 'carrera' && !opc.multijugador ? (opc.averias ?? 1) : 0;
 
     const mp = opc.multijugador || null;
     this.mp = mp;
@@ -288,6 +289,11 @@ export class Sesion {
       // coche de seguridad virtual: todos limitados a un ritmo lento (~35 % más lento) sin DRS
       car.limiteVsc = this.vsc && !p.box ? this.c.perfil[car.proj.i] * 0.64 : 0;
       car.paso(dt);
+      // averías mecánicas (solo en carreras contra la IA, si están activadas)
+      if (this.tasaAverias > 0 && this.estado === 'carrera') {
+        const av = car.averias(dt, this.tasaAverias);
+        if (av) this.eventos.push({ tipo: 'averia', p, averia: av });
+      }
       // golpe fuerte contra el muro: amarilla en esa zona
       if (car.impacto > 9 && this.modo === 'carrera' && this.estado === 'carrera') this.amarilla(car.proj.s, 10);
     }

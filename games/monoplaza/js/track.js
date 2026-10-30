@@ -258,6 +258,7 @@ export class Circuito {
     }
     this.sectores = [this.largo / 3, 2 * this.largo / 3];
     this._calleBoxes();
+    this._protecciones();
   }
 
   // Perfil con el agarre multiplicado por f (pista mojada). Se calcula al pedirlo y se guarda
@@ -669,6 +670,58 @@ Circuito.prototype.enLimitador = function (s, d) {
 Circuito.prototype.hayMuroPit = function (i) {
   const u = this.uPit(i * this.paso), p = this.pit;
   return u >= 0 && u >= this.envolver(p.limiteIni - p.entrada) + 35 && u <= this.envolver(p.limiteFin - p.entrada) - 25;
+};
+
+// Protecciones: tipo de barrera de cada muro (0 hormigón, 1 neumáticos, 2 TecPro),
+// bordillos altos (salchichas) tras los pianos de las chicanes y bidones de agua
+export const BARRERA_HORMIGON = 0, BARRERA_NEUMATICOS = 1, BARRERA_TECPRO = 2;
+// cuánto del golpe llega al coche y cuánto rebota
+export const BARRERAS = [
+  { nombre: 'hormigón', dano: 1.0, rebote: 0.25 },
+  { nombre: 'neumáticos', dano: 0.6, rebote: 0.12 },
+  { nombre: 'TecPro', dano: 0.5, rebote: 0.08 },
+];
+Circuito.prototype._protecciones = function () {
+  const n = this.n, k = this.curvSuave, urbano = !!this.def.urbano;
+  this.barrera = [new Uint8Array(n), new Uint8Array(n)];
+  this.salchicha = [new Uint8Array(n), new Uint8Array(n)];
+  for (const lado of [0, 1]) {
+    for (let i = 0; i < n; i++) {
+      if (lado === 1 && this.enZonaPit[i]) continue;
+      // exterior de la curva: donde se llega de frente
+      const exterior = lado === 1 ? k[i] < -1 / 140 : k[i] > 1 / 140;
+      if (this.grava[lado][i]) this.barrera[lado][i] = BARRERA_NEUMATICOS;
+      else if (exterior && (urbano || Math.abs(k[i]) > 1 / 60)) this.barrera[lado][i] = BARRERA_TECPRO;
+    }
+    // ampliar un poco las zonas para que no queden huecos de un metro
+    const b = this.barrera[lado].slice();
+    for (let i = 0; i < n; i++) if (b[i]) for (let j = -6; j <= 6; j++) { const q = (i + j + n) % n; if (!this.barrera[lado][q] && !(lado === 1 && this.enZonaPit[q])) this.barrera[lado][q] = b[i]; }
+  }
+  // salchichas en el interior de las curvas lentas de las chicanes (no en la ciudad)
+  if (!urbano) for (const cv of this.curvas) {
+    if (cv.r > 30) continue;
+    const i0 = Math.floor(this.envolver(cv.s) / this.paso) % n;
+    const lado = k[i0] > 0 ? 1 : 0;           // interior
+    for (let j = -6; j <= 6; j++) this.salchicha[lado][(i0 + j + n) % n] = 1;
+  }
+  // bidones de agua: en la punta de la entrada a boxes y en las escapatorias de las chicanes
+  this.bidones = [];
+  const pe = this.pit.entrada, iPe = Math.floor(pe / this.paso) % n;
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 3 - (r > 1 ? 1 : 0); c++) this.bidones.push({ s: this.envolver(pe + 26 + r * 1.1), d: this.semiAncho[iPe] + 2.2 + c * 1.0 });
+  for (const cv of this.curvas) {
+    if (cv.r > 25) continue;
+    const i0 = Math.floor(this.envolver(cv.s) / this.paso) % n;
+    const lado = k[i0] > 0 ? 0 : 1;                // exterior
+    const sg = lado ? 1 : -1;
+    if (this.muro[lado][i0] - this.semiAncho[i0] < 5) continue;
+    for (let c = 0; c < 3; c++) this.bidones.push({ s: this.envolver(cv.s + 25), d: sg * (this.muro[lado][(i0 + 12) % n] - 0.9 - c * 1.0) });
+  }
+};
+
+// Bordillo alto en el punto (i, d)?
+Circuito.prototype.enSalchicha = function (i, d) {
+  const lado = d >= 0 ? 1 : 0, ad = Math.abs(d), hw = this.semiAncho[i];
+  return this.salchicha[lado][i] && ad > hw + 1.35 && ad < hw + 2.1;
 };
 
 export const SUP_ASFALTO = 0, SUP_BORDILLO = 1, SUP_ESCAPE = 2, SUP_HIERBA = 3, SUP_GRAVA = 4;

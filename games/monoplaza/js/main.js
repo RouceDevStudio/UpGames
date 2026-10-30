@@ -14,6 +14,7 @@ import { Radio } from './radio.js';
 import { Grabadora, crearProxy, CamarasTV, CAMARAS_REPE, NOMBRES_REPE } from './repeticion.js';
 import { Telemetria } from './telemetria.js';
 import { Lluvia } from './render/lluvia.js';
+import { Barreras } from './render/barreras.js';
 import { construirEscenario } from './render/escenario.js';
 import { crearModelo, dibujarPlantilla } from './render/cocheModelo.js';
 import { GestorBoxes, Escombros } from './render/equipo.js';
@@ -33,7 +34,7 @@ const CLAVE = 'apexgp.v1';
 const AJ_DEF = {
   control: esTactil ? 'inclinacion' : 'tactil', sensibilidad: 1, anguloInclinacion: 24, invertir: false, vibracion: true,
   tc: 2, abs: true, cambioAuto: true, direccion: true, estabilidad: false, trazada: true,
-  calidad: 'auto', fps: false, volumen: 0.8, unidades: 'kmh', camara: 'persecucion', radio: true, ambiente: true,
+  calidad: 'auto', fps: false, volumen: 0.8, unidades: 'kmh', camara: 'persecucion', radio: true, ambiente: true, averias: true,
 };
 const OPC_CARRERA_DEF = { vueltas: 5, rivales: 7, dificultad: 'normal', posSalida: 0, compuesto: 'medio', clima: 'seco' };
 function cargar() {
@@ -99,7 +100,7 @@ let renderer, scene, composer, camara, efectos, escenario, circuito;
 const sonido = new Sonido();
 const entrada = new Entrada(ajustes);
 let sesion = null, modelos = [], modeloFantasma = null, lineaIdeal = null;
-let gestorBoxes = null, escombros = null, lluviaFx = null, camarasTV = null;
+let gestorBoxes = null, escombros = null, lluviaFx = null, camarasTV = null, barreras = null;
 let grabadora = null, telemetria = null, repe = null;
 let qActual = null, carreraCamp = null, fichaCrono = null;
 const multi = new Multijugador();
@@ -157,6 +158,7 @@ async function cargarCircuito(id) {
   gestorBoxes = new GestorBoxes(scene);
   escombros = new Escombros(scene, (x, z) => { const p = circuito.proyectar(x, z, -1, {}); return p.y + circuito.caida(p.i, p.d); });
   lluviaFx = new Lluvia(scene, escenario, calidad);
+  barreras = new Barreras(scene, circuito, { escombros, efectos, calidad });
   camarasTV = new CamarasTV(circuito);
   camara.tv = camarasTV;
   modelos = []; modeloFantasma = null;
@@ -338,7 +340,7 @@ function empezar(modo, extra = {}) {
   modoActual = modo;
   sonido.iniciar();
   sonido.ponerVolumen(ajustes.volumen);
-  const opc = { ...opcBase(modo), ...extra };
+  const opc = { ...opcBase(modo), ...extra, averias: ajustes.averias ? 1 : 0 };
   carreraCamp = extra.campeonato || null;
   if (modo === 'carrera' && !extra.pilotos) {
     // carrera rápida: con clasificación la parrilla la decide Q1-Q2-Q3
@@ -382,6 +384,7 @@ function arrancarSesion(modo) {
   pantallaCompleta();
   if (ajustes.control === 'inclinacion' && esTactil) entrada.activarInclinacion().then(() => setTimeout(() => entrada.calibrar(), 400));
   pedirWakeLock();
+  barreras?.reponer();
   // repetición, telemetría, radio y estado de la carrera
   grabadora = new Grabadora(sesion.participantes.length);
   telemetria = new Telemetria(circuito.largo);
@@ -790,6 +793,13 @@ function procesarEventos() {
   for (const e of sesion.eventos) {
     if (e === 'luz') { sonido.evento('luz'); }
     else if (e === 'salida') { sonido.evento('salida'); sonido.ovacion(1.6); mensaje('¡LUCES FUERA!', '', 1.2); entrada.vibrar(80); }
+    else if (e.tipo === 'averia') {
+      if (e.p.jugador) {
+        if (e.averia === 'motor') { mensaje('¡MOTOR ROTO!', 'Humo y pérdida de potencia', 3); radio.decir('¡Perdemos el motor! Lleva el coche a un lugar seguro.', { prioridad: true }); entrada.vibrar(300, 1); }
+        else if (e.averia === 'caja') { mensaje('CAJA DE CAMBIOS BLOQUEADA', 'Atascado en ' + e.p.coche.marcha + 'ª', 2.6); radio.decir(`Problema en la caja de cambios, estás atascado en ${e.p.coche.marcha}ª. Sigue como puedas.`, { prioridad: true }); }
+        else if (e.averia === 'ers') { mensaje('ERS SOBRECALENTADO', 'Sin despliegue unos segundos', 2.2); radio.decir('El ERS se ha sobrecalentado. Sin batería unos veinte segundos.', { prioridad: true }); }
+      } else if (e.averia === 'motor') radio.decir(`¡Humo en el coche de ${e.p.nombre.replace('@', '')}! Parece el motor.`, { tipo: 'megafonia', clave: 'av:' + e.p.nombre, cada: 999 });
+    }
     else if (e.tipo === 'vsc') {
       if (e.activo) { mensaje('VSC', 'Coche de seguridad virtual · ritmo limitado y sin DRS', 2.5); radio.decir('VSC, VSC. Coche de seguridad virtual, levanta y respeta el delta.', { clave: 'vsc', cada: 5, prioridad: true }); radio.decir('Coche de seguridad virtual desplegado.', { tipo: 'megafonia', clave: 'vscM', cada: 30 }); }
       else { mensaje('PISTA LIBRE', 'Fin del VSC', 1.8); estadoRadio.tVerde = 4; radio.decir('Fin del VSC, fin del VSC. ¡A fondo!', { clave: 'vscFin', cada: 5, prioridad: true }); }
@@ -1077,6 +1087,9 @@ function bucle(ahora) {
   if (!pausado) {
     efectos.actualizar(dt, sesion.coches, camara.cam.position);
     escombros.actualizar(dt);
+    for (const e of barreras.actualizar(dt, sesion.participantes)) {
+      if (e.tipo === 'bidon' && jugando) { sonido.evento('golpe', 4); if (e.jugador) { mensaje('¡BIDONES DE AGUA!', '', 1.2); entrada.vibrar(120, 0.8); } }
+    }
     gestorBoxes.actualizar(dt);
   }
   for (const f of escenario.actualizables) f(dt);

@@ -165,6 +165,27 @@ export function texturaFachada(semilla = 5) {
   return aTextura(c);
 }
 
+// Barrera TecPro: bloques de espuma alternos azul y rojo con publicidad
+export function texturaTecpro() {
+  const c = lienzo(256, 64), ctx = c.getContext('2d');
+  for (let k = 0; k < 4; k++) {
+    ctx.fillStyle = k % 2 ? '#c4101e' : '#0d47ff'; ctx.fillRect(k * 64, 0, 64, 64);
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(k * 64, 0, 3, 64);
+    ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(k * 64 + 4, 6, 56, 6);
+  }
+  ctx.fillStyle = '#ffffff'; ctx.font = '900 italic 16px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('UPGAMES', 64, 36); ctx.fillText('UPGAMES', 192, 36);
+  return aTextura(c);
+}
+
+// Bordillo alto (salchicha) amarillo y negro
+export function texturaSalchicha() {
+  const c = lienzo(64, 64), ctx = c.getContext('2d');
+  ctx.fillStyle = '#f5c518'; ctx.fillRect(0, 0, 64, 64);
+  ctx.fillStyle = '#16161a'; ctx.fillRect(0, 32, 64, 32);
+  return aTextura(c);
+}
+
 export function texturaHierba(tam = 512) {
   const rnd = aleatorio(11);
   const base = fbm(tam, rnd, 6, 4);

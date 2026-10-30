@@ -10,7 +10,7 @@ const ARCHIVOS = [
   './js/main.js', './js/config.js', './js/track.js', './js/race.js', './js/ai.js', './js/audio.js', './js/input.js',
   './js/physics/monoplaza.js', './js/physics/neumatico.js', './js/red.js', './lib/socket.io.esm.min.js',
   './js/render/escenario.js', './js/render/cocheModelo.js', './js/render/efectos.js', './js/render/camara.js', './js/render/texturas.js', './js/render/librea.js', './js/render/equipo.js',
-  './js/clima.js', './js/campeonato.js', './js/radio.js', './js/repeticion.js', './js/telemetria.js', './js/render/lluvia.js',
+  './js/render/barreras.js', './js/clima.js', './js/campeonato.js', './js/radio.js', './js/repeticion.js', './js/telemetria.js', './js/render/lluvia.js',
 ];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(ARCHIVOS)).then(() => self.skipWaiting()));

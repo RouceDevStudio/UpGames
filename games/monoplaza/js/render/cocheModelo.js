@@ -152,6 +152,22 @@ function barraAero(p1, p2, r = 0.016) {
   return g;
 }
 
+// Ondas de aire caliente (se desplazan hacia arriba)
+let texCalor = null;
+function texturaCalor() {
+  if (texCalor) return texCalor;
+  const cv = document.createElement('canvas'); cv.width = 64; cv.height = 128;
+  const x = cv.getContext('2d');
+  for (let y = 0; y < 128; y += 2) {
+    const a = 0.25 + 0.25 * Math.sin(y * 0.35);
+    const g = x.createLinearGradient(0, 0, 64, 0);
+    g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, `rgba(255,230,200,${a})`); g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.fillRect(Math.sin(y * 0.2) * 8, y, 64, 1);
+  }
+  texCalor = new THREE.CanvasTexture(cv); texCalor.wrapS = texCalor.wrapT = THREE.RepeatWrapping;
+  return texCalor;
+}
+
 // Mono ignífugo con los colores del equipo y publicidad
 const cacheMono = new Map();
 function texturaMono(col) {
@@ -644,13 +660,23 @@ export function crearModelo(opc) {
     tapaIn.position.z = -sg * (w / 2 - 0.01); if (sg > 0) tapaIn.rotation.y = Math.PI;
     rot.add(tapaIn);
     // conducto y disco de freno (no giran con la rueda)
-    const conducto = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.55, r * 0.62, 0.12, 20, 1, true), matFreno);
+    // cada conducto con su material: el disco de carbono se pone al rojo al frenar fuerte
+    const matF = matFreno.clone(); matF.emissive = new THREE.Color(0xff3a08); matF.emissiveIntensity = 0;
+    const conducto = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.55, r * 0.62, 0.12, 20, 1, true), matF);
     conducto.rotation.x = Math.PI / 2; conducto.position.z = -sg * (w / 2 - 0.02);
     giro.add(conducto);
     grupo.add(giro);
-    ruedas.push({ giro, rot, neum, tapa, base: new THREE.Vector3(x, r, z), radio: r, ancho: w, suelta: false });
+    const disco = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.48, r * 0.48, 0.035, 24), matF);
+    disco.rotation.x = Math.PI / 2; disco.position.z = -sg * (w / 2 - 0.07);
+    giro.add(disco);
+    ruedas.push({ giro, rot, neum, tapa, matFreno: matF, base: new THREE.Vector3(x, r, z), radio: r, ancho: w, suelta: false });
   }
 
+  // calor del escape: una lámina translúcida que ondula detrás del coche cuando el motor empuja
+  const matCalor = new THREE.MeshBasicMaterial({ map: texturaCalor(), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+  const calor = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.45), matCalor);
+  calor.position.set(-2.55, 0.52, 0); calor.rotation.y = Math.PI / 2;
+  carroceria.add(calor);
   const raiz = new THREE.Group();
   raiz.add(carroceria); raiz.add(grupo);
 
@@ -701,6 +727,15 @@ export function crearModelo(opc) {
         if (pz < 0.05 && g.rota) g.rota = false;
         g.g.visible = !g.rota;
       });
+      // frenos al rojo (por encima de ~600 °C)
+      for (let k = 0; k < 4; k++) {
+        const tf = car.ruedas[k]?.tFreno ?? 0;
+        ruedas[k].matFreno.emissiveIntensity = Math.max(0, Math.min(3, (tf - 600) / 180));
+      }
+      // calor del escape con el acelerador a fondo
+      const acelM = car.mandos?.acelerador ?? 0;
+      matCalor.opacity += (acelM * 0.14 - matCalor.opacity) * Math.min(1, dt * 4);
+      if (matCalor.map) { matCalor.map.offset.y = (matCalor.map.offset.y + dt * 1.7) % 1; calor.scale.x = 1 + Math.sin(performance.now() / 60) * 0.06; }
       const objDrs = car.drsAbierto ? 1.05 : 0.45;
       pivDrs.rotation.z += (objDrs - pivDrs.rotation.z) * Math.min(1, dt * 18);
       luzLluvia.material.emissiveIntensity = car.ersPotenciaActual < -1000 ? (Math.sin(performance.now() / 70) > 0 ? 6 : 0) : 0;

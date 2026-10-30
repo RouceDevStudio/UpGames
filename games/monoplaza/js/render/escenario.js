@@ -194,6 +194,8 @@ export function construirEscenario(scene, renderer, c, calidad) {
   const texMuro = TX.texturaMuro(); texMuro.anisotropy = anis;
   const matMuro = new THREE.MeshStandardMaterial({ map: texMuro, roughness: 0.6 });
   const matNeum = new THREE.MeshStandardMaterial({ map: TX.texturaNeumaticos(), roughness: 0.9 });
+  const matTecpro = new THREE.MeshStandardMaterial({ map: TX.texturaTecpro(), roughness: 0.6 });
+  const matSalchicha = new THREE.MeshStandardMaterial({ map: TX.texturaSalchicha(), roughness: 0.55 });
   const matHormigon = new THREE.MeshStandardMaterial({ color: 0xc9cbc8, roughness: 0.9 });
 
   const hw = (i) => c.semiAncho[i];
@@ -265,14 +267,22 @@ export function construirEscenario(scene, renderer, c, calidad) {
         const w = c.muro[lado][i];
         const y0 = c.caida(i, sg * w);
         return [[sg * w, y0 - 0.1], [sg * w, y0 + alto]];
-      }, { filtro, escalaV: mat === matMuro ? 16 : 2.4, uDe: (j) => 1 - j });
+      }, { filtro, escalaV: mat === matMuro ? 16 : mat === matTecpro ? 4.8 : 2.4, uDe: (j) => 1 - j });
       const m = new THREE.Mesh(g, mat);
       mat.side = THREE.DoubleSide;
       m.castShadow = calidad >= 2; m.receiveShadow = true;
       scene.add(m);
     };
-    muro((i) => !c.grava[lado][i] && noPit(i), matMuro, 1.05);
-    muro((i) => c.grava[lado][i] && noPit(i), matNeum, 1.0);
+    const bar = (i) => c.barrera?.[lado]?.[i] ?? (c.grava[lado][i] ? 1 : 0);
+    muro((i) => bar(i) === 0 && noPit(i), matMuro, 1.05);
+    muro((i) => bar(i) === 1 && noPit(i), matNeum, 1.0);
+    muro((i) => bar(i) === 2 && noPit(i), matTecpro, 1.15);
+    // bordillos altos (salchichas) tras el piano de las chicanes
+    if (c.salchicha) {
+      const g = cinta(c, (i) => [[sg * (hw(i) + 1.35), 0.0], [sg * (hw(i) + 1.55), 0.075], [sg * (hw(i) + 1.9), 0.075], [sg * (hw(i) + 2.1), 0.0]],
+        { filtro: (i) => c.salchicha[lado][i], escalaV: 1.2, uDe: (j) => j / 3 });
+      const m = new THREE.Mesh(g, matSalchicha); m.castShadow = calidad >= 2; m.receiveShadow = true; scene.add(m);
+    }
     // valla de protección sobre los muros
     if (calidad >= 2) {
       const texV = TX.texturaValla(); texV.repeat.set(1, 1);

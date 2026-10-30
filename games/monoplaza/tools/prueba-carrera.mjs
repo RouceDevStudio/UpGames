@@ -14,6 +14,7 @@ while (t < 3000) {
   s.actualizar(1 / 60); t += 1 / 60;
   for (const e of s.eventos) {
     if (e.tipo === 'contacto') contactos++;
+    if (e.tipo === 'averia') console.log('AVERÍA', e.p.nombre, e.averia, 'vuelta', e.p.vuelta);
     if (e.tipo === 'sancion' || e.tipo === 'vsc') console.log(e.tipo, e.p?.nombre || '', e.motivo || e.activo, 't', s.tiempo.toFixed(0));
     if (e.tipo === 'paradaFin' && !process.env.SILENCIO) {}
     if (e.tipo === 'paradaFin') { paradas++; console.log(`parada de ${e.p.nombre}: ${e.duracion.toFixed(1)} s, compuesto ${e.p.coche.reglaje.compuesto}`); }
