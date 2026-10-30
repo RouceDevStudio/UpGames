@@ -306,6 +306,9 @@ export class Escombros {
   constructor(scene, sueloY) { this.scene = scene; this.sueloY = sueloY; this.lista = []; }
 
   // `origen` es un Object3D del coche: se clona con su transformación en el mundo
+  /** En la repetición: los restos solo se ven desde el momento en que se rompieron. */
+  verHasta(t) { for (const e of this.lista) e.obj.visible = !(e.t > t); }
+
   lanzar(origen, vel, extra = {}) {
     origen.updateMatrixWorld(true);
     const obj = origen.clone(true);
@@ -315,7 +318,7 @@ export class Escombros {
     const r = Math.random;
     this.lista.push({
       obj, v: new THREE.Vector3(vel.x + (r() - 0.5) * 6, 3 + r() * 6 + (extra.alto || 0), vel.z + (r() - 0.5) * 6),
-      w: new THREE.Vector3((r() - 0.5) * 18, (r() - 0.5) * 10, (r() - 0.5) * 18), radio: extra.radio || 0.2, vida: 40,
+      w: new THREE.Vector3((r() - 0.5) * 18, (r() - 0.5) * 10, (r() - 0.5) * 18), radio: extra.radio || 0.2, vida: 40, t: this.reloj ?? 0,
     });
     if (this.lista.length > 30) { const v = this.lista.shift(); this.scene.remove(v.obj); }
   }
@@ -331,7 +334,7 @@ export class Escombros {
       const m = new THREE.Mesh(geo, mat); m.position.copy(pos); m.castShadow = true;
       m.scale.setScalar(0.5 + Math.random());
       this.scene.add(m);
-      this.lista.push({ obj: m, v: new THREE.Vector3(vel.x * 0.6 + (Math.random() - 0.5) * 10, 2 + Math.random() * 5, vel.z * 0.6 + (Math.random() - 0.5) * 10), w: new THREE.Vector3(Math.random() * 20, Math.random() * 20, 0), radio: 0.03, vida: 20 });
+      this.lista.push({ obj: m, v: new THREE.Vector3(vel.x * 0.6 + (Math.random() - 0.5) * 10, 2 + Math.random() * 5, vel.z * 0.6 + (Math.random() - 0.5) * 10), w: new THREE.Vector3(Math.random() * 20, Math.random() * 20, 0), radio: 0.03, vida: 20, t: this.reloj ?? 0 });
     }
   }
 

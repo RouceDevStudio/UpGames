@@ -251,7 +251,7 @@ function texturaMono(col) {
 // Goma del neumático (u: alrededor, v: del flanco interior al exterior pasando por la banda).
 // Nueva: negra y lisa. Gastada: la banda se aclara y se marca con surcos; graining: bolitas
 // de goma pegadas; ampollas: cráteres oscuros donde la goma ha reventado.
-function pintarGoma(cv, desgaste, graining, ampollas, semilla = 0) {
+function pintarGoma(cv, desgaste, graining, ampollas, semilla = 0, suciedad = 0, verde = 0) {
   const x = cv.getContext('2d'), W = cv.width, H = cv.height;
   let s = 1234 + semilla * 97; const r = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
   x.fillStyle = '#151516'; x.fillRect(0, 0, W, H);
@@ -275,9 +275,32 @@ function pintarGoma(cv, desgaste, graining, ampollas, semilla = 0) {
     x.fillStyle = 'rgba(0,0,0,0.85)'; x.beginPath(); x.ellipse(cx, cy, rr * 1.6, rr, 0, 0, Math.PI * 2); x.fill();
     x.fillStyle = 'rgba(90,90,92,0.6)'; x.fillRect(cx - rr * 1.6, cy - rr - 0.5, rr * 3.2, 0.8);
   }
+  // tierra y hierba pegadas tras salirse (se van limpiando al rodar por el asfalto)
+  for (let i = 0; i < suciedad * 700; i++) {
+    const enBanda = r() < 0.75, yy = enBanda ? y0 + r() * (y1 - y0) : r() * H;
+    const tono = r() < verde ? `rgba(${60 + r() * 30},${95 + r() * 40},${35 + r() * 20},${0.6 + r() * 0.3})` : `rgba(${95 + r() * 40},${70 + r() * 25},${45 + r() * 20},${0.55 + r() * 0.35})`;
+    x.fillStyle = tono; x.fillRect(r() * W, yy, 1.5 + r() * 4, 1 + r() * 2.5);
+  }
   // letras del flanco (marca del neumático, más clara)
   x.fillStyle = 'rgba(200,200,205,0.55)'; x.font = 'bold 9px Arial';
   for (let i = 0; i < 4; i++) { x.fillText('UPGAMES', i * 64 + 6, H * 0.18); x.fillText('UPGAMES', i * 64 + 30, H * 0.92); }
+}
+
+// Máscara del brillo del disco visto a través de la llanta: el aro entre tapacubos y neumático
+// con huecos entre los radios (blanco = brilla)
+let _brilloLlanta = null;
+function texturaBrilloLlanta() {
+  if (_brilloLlanta) return _brilloLlanta;
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  const x = cv.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, 128, 128); x.translate(64, 64);
+  const g = x.createRadialGradient(0, 0, 36, 0, 0, 50);
+  g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.35, 'rgba(255,255,255,1)'); g.addColorStop(0.8, 'rgba(255,200,160,0.9)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = g; x.beginPath(); x.arc(0, 0, 50, 0, Math.PI * 2); x.fill();
+  // los radios tapan parte del disco
+  x.fillStyle = '#000';
+  for (let k = 0; k < 10; k++) { x.save(); x.rotate(k * Math.PI / 5); x.fillRect(34, -2.5, 18, 5); x.restore(); }
+  _brilloLlanta = new THREE.CanvasTexture(cv);
+  return _brilloLlanta;
 }
 
 function texturaTapacubos(colorCompuesto) {
@@ -701,7 +724,11 @@ export function crearModelo(opc) {
     [-B, -COCHE.viaTras / 2, COCHE.radioTras, 0.405], [-B, COCHE.viaTras / 2, COCHE.radioTras, 0.405]];
   const grupo = new THREE.Group();
   const geoNeum = new Map();
-  const matTapa = new THREE.MeshStandardMaterial({ map: texturaTapacubos(cmp.color), roughness: 0.45, metalness: 0.25 });
+  // tapa de la llanta: el aro entre el tapacubos y el neumático deja ver el disco, que brilla al
+  // rojo cuando está caliente (se ve desde fuera y desde cualquier ángulo); una por eje
+  const brilloLlanta = texturaBrilloLlanta();
+  const nuevaTapa = () => new THREE.MeshStandardMaterial({ map: texturaTapacubos(cmp.color), roughness: 0.45, metalness: 0.25, emissive: new THREE.Color(0xff5a14), emissiveMap: brilloLlanta, emissiveIntensity: 0 });
+  const matTapaDel = nuevaTapa(), matTapaTras = nuevaTapa();
   const matFreno = matComun('freno', () => new THREE.MeshStandardMaterial({ color: 0x1c1c1f, roughness: 0.5, metalness: 0.4 }));
   for (const [k, [x, z, r, w]] of pos.entries()) {
     const giro = new THREE.Group(); giro.position.set(x, r, z);
@@ -728,7 +755,7 @@ export function crearModelo(opc) {
     const neum = new THREE.Mesh(geoNeum.get(clave), calidad >= 1 ? matGoma : matComun('gomaNeum')); neum.castShadow = true; neum.receiveShadow = true;
     rot.add(neum);
     const sg = Math.sign(z);
-    const tapa = new THREE.Mesh(new THREE.CircleGeometry(r * 0.985, 40), matTapa);
+    const tapa = new THREE.Mesh(new THREE.CircleGeometry(r * 0.985, 40), k < 2 ? matTapaDel : matTapaTras);
     tapa.position.z = sg * (w / 2 + 0.006); if (sg < 0) tapa.rotation.y = Math.PI;
     rot.add(tapa);
     const tapaIn = new THREE.Mesh(new THREE.CircleGeometry(r * 0.64, 24), metal);
@@ -888,8 +915,11 @@ export function crearModelo(opc) {
         // la goma cambia de aspecto con el desgaste (solo se repinta cuando cambia algo)
         const nm = w.neum;
         if (calidad >= 1 && nm && nm.desgaste != null) {
-          const cl = `${Math.round(nm.desgaste * 20)}|${Math.round((nm.graining || 0) * 8)}|${Math.round((nm.ampollas || 0) * 8)}`;
-          if (cl !== m.claveGoma) { m.claveGoma = cl; pintarGoma(m.cvGoma, nm.desgaste, nm.graining || 0, nm.ampollas || 0, k); m.texGoma.needsUpdate = true; }
+          const su = w.suciedad || 0;
+          const cl = `${Math.round(nm.desgaste * 20)}|${Math.round((nm.graining || 0) * 8)}|${Math.round((nm.ampollas || 0) * 8)}|${Math.round(su * 6)}`;
+          if (cl !== m.claveGoma) { m.claveGoma = cl; pintarGoma(m.cvGoma, nm.desgaste, nm.graining || 0, nm.ampollas || 0, k, su, w.sucioHierba ?? 0.5); m.texGoma.needsUpdate = true; }
+          // mojado: la goma brilla con el agua de la pista
+          m.neum.material.roughness = 0.88 - 0.45 * Math.min(1, car.aguaAqui || 0);
         }
       }
       carroceria.rotation.z = -car.cabeceo;
@@ -922,11 +952,16 @@ export function crearModelo(opc) {
       if (d?.desintegrado && !desintegrado) { desintegrado = true; partir(this); }
       else if (!d?.desintegrado && desintegrado) { desintegrado = false; recomponer(); }
       if (d?.abolladuras) abollar(d.abolladuras);
-      // frenos al rojo (por encima de ~600 °C)
+      // frenos al rojo (por encima de ~550 °C): el disco y su brillo a través de la llanta
       for (let k = 0; k < 4; k++) {
         const tf = car.ruedas[k]?.tFreno ?? 0;
-        ruedas[k].matFreno.emissiveIntensity = Math.max(0, Math.min(3, (tf - 600) / 180));
+        ruedas[k].matFreno.emissiveIntensity = Math.max(0, Math.min(3.5, (tf - 550) / 160));
       }
+      const tfD = Math.max(car.ruedas[0]?.tFreno ?? 0, car.ruedas[1]?.tFreno ?? 0), tfT = Math.max(car.ruedas[2]?.tFreno ?? 0, car.ruedas[3]?.tFreno ?? 0);
+      matTapaDel.emissiveIntensity = Math.max(0, Math.min(7, (tfD - 560) / 70));
+      matTapaTras.emissiveIntensity = Math.max(0, Math.min(7, (tfT - 560) / 70));
+      // también en el disco borroso de la llanta a alta velocidad (si no, lo tapaba)
+      for (let k = 0; k < 4; k++) ruedas[k].borroso.material.emissiveIntensity = (k < 2 ? matTapaDel : matTapaTras).emissiveIntensity;
       // calor del escape con el acelerador a fondo
       const acelM = car.mandos?.acelerador ?? 0;
       matCalor.opacity += (acelM * 0.14 - matCalor.opacity) * Math.min(1, dt * 4);
@@ -952,7 +987,8 @@ export function crearModelo(opc) {
     // al salir de boxes con un juego nuevo se repinta la banda del compuesto
     cambiarCompuesto(nombre) {
       const c = COMPUESTOS[nombre] || COMPUESTOS.medio;
-      matTapa.map = texturaTapacubos(c.color); matTapa.needsUpdate = true;
+      const tx = texturaTapacubos(c.color);
+      for (const mt of [matTapaDel, matTapaTras]) { mt.map = tx; mt.needsUpdate = true; }
       this.compuesto = nombre;
     },
     reponerPiezas() {
@@ -978,7 +1014,7 @@ function matBorroso(color) {
   g.addColorStop(0.93, color); g.addColorStop(0.97, color); g.addColorStop(1, '#151515');
   x.fillStyle = g; x.beginPath(); x.arc(c, c, c, 0, Math.PI * 2); x.fill();
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
-  const m = new THREE.MeshStandardMaterial({ map: t, transparent: true, opacity: 0, roughness: 0.5, metalness: 0.3, depthWrite: false });
+  const m = new THREE.MeshStandardMaterial({ map: t, transparent: true, opacity: 0, roughness: 0.5, metalness: 0.3, depthWrite: false, emissive: new THREE.Color(0xff5a14), emissiveMap: texturaBrilloLlanta(), emissiveIntensity: 0 });
   cacheBorroso.set(color, m);
   return m.clone();
 }

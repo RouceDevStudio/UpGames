@@ -132,7 +132,7 @@ sonido.motorElegido = ajustes.motorSonido || "ferrari";
 const entrada = new Entrada(ajustes);
 let sesion = null, modelos = [], modeloFantasma = null, lineaIdeal = null;
 // para pruebas automáticas (?depurar): acceso a la sesión desde la consola
-if (new URLSearchParams(location.search).has("depurar")) window.apex = { get sesion() { return sesion; }, empezar: (...a) => empezar(...a), get escenario() { return escenario; }, scene: () => scene, THREE, get renderer() { return renderer; }, get camara() { return camara; }, get modelos() { return modelos; }, get gruas() { return gruas; } };
+if (new URLSearchParams(location.search).has("depurar")) window.apex = { get sesion() { return sesion; }, empezar: (...a) => empezar(...a), get escenario() { return escenario; }, scene: () => scene, THREE, get renderer() { return renderer; }, get camara() { return camara; }, get modelos() { return modelos; }, get gruas() { return gruas; }, get repe() { return repe; }, get grabadora() { return grabadora; } };
 let gruas = null, gestorBoxes = null, escombros = null, lluviaFx = null, camarasTV = null, barreras = null, comisarios = null, cocheSeg = null;
 let pilotosFuera = null, salidasPendientes = [], tAturdido = 0;
 let capaCamara = null;
@@ -775,6 +775,9 @@ function aplicarAjustesEnVivo() {
 }
 
 $('#bContinuar').addEventListener('click', () => pausar(false));
+// para la repetición: el piloto a pie de un coche (si ya salió)
+function pilotoFueraDe(c) { return pilotosFuera?.lista.find(f => f.coche === c) || null; }
+
 // coche nuevo en práctica/contrarreloj tras destrozar el anterior
 function cocheNuevo() {
   if (!sesion || sesion.modo === 'carrera' || enRed || !sesion.jugador.coche.abandono) return;
@@ -1426,7 +1429,7 @@ function bucle(ahora) {
     if (sesion.tiempoLimite && jugando) cicloDiaNoche();
     if (jugando) procesarEventos(); else { sesion.eventos.length = 0; for (const p of sesion.participantes) p.coche.eventos.length = 0; }
     if (jugando) {
-      grabadora?.grabar(dt, sesion.coches, sesion.tiempo);
+      grabadora?.grabar(dt, sesion.coches, sesion.tiempo, pilotoFueraDe);
       vigilarMomentos(dt);
       revisarRepeAuto();
       const pj = sesion.jugador;
@@ -1501,7 +1504,7 @@ function bucle(ahora) {
   luz.position.copy(escenario.sol).multiplyScalar(250).add(luz.target.position);
   if (!pausado) {
     efectos.actualizar(dt, sesion.coches, camara.cam.position);
-    escombros.actualizar(dt);
+    escombros.reloj = sesion.tiempo; escombros.actualizar(dt);
     actualizarPilotosFuera(dt);
     actualizarLeccion(dt);
     actualizarEstrategia(dt);
@@ -2444,12 +2447,30 @@ function actualizarRepe(dt) {
   $('#repeBarra').value = Math.round(r.u * 1000);
   $('#repeT').textContent = fmt(g.tiempoEn(r.u));
   const dtR = r.play ? dt * r.vel : 0;
+  const tRepe = g.tiempoEn(r.u);
   sesion.participantes.forEach((p, k) => {
     const c = r.proxies[k], m = modelos[k];
     if (!m) return;
-    colocarModelo(m, c, 0);
+    // inclinación por la pendiente de la pista (sin ella el coche parecía flotar en las cuestas)
+    const pr = circuito.proyectar(c.x, c.z, c._iProy ?? -1, c._proy ??= {}); c._iProy = pr.i;
+    const pend = pr.i >= 0 ? Math.atan(circuito.pendiente[pr.i] * (Math.cos(c.psi) * pr.tx + Math.sin(c.psi) * pr.tz)) : 0;
+    colocarModelo(m, c, pend);
     m.actualizar(c, dtR);
+    // el piloto: dentro del coche hasta que sale, y a pie donde estaba en ese momento
+    const f = pilotosFuera?.lista.find(q => q.coche === p.coche);
+    if (m.piloto?.grupo) m.piloto.grupo.visible = !c.pilotoFuera;
+    if (f) {
+      f.per.raiz.visible = !!c.pilotoFuera;
+      if (c.pilotoFuera) {
+        f.per.raiz.position.set(c.pilotoFuera.x, c.pilotoFuera.y, c.pilotoFuera.z);
+        f.per.raiz.rotation.set(0, -c.pilotoFuera.rumbo, 0);
+        f.per.andar = c.pilotoFuera.v > 0.3 && r.play ? Math.min(2, c.pilotoFuera.v) : 0;
+        f.per.actualizar(dtR);
+      }
+    }
   });
+  // los restos de los choques solo existen desde que se rompieron
+  escombros?.verHasta?.(tRepe);
   const c = r.proxies[r.coche], m = modelos[r.coche];
   const planoAntes = camRepe.planoActual;
   camRepe.actualizar(camara.cam, c, m, r.cam, dt);
@@ -2483,7 +2504,16 @@ function cerrarRepe() {
   document.body.classList.remove('foto', 'en-repe');
   sonido.modoRepe?.(false);
   // tras la repetición automática no se reconstruyen los coches (sería un tirón en mitad de la carrera)
-  if (desde === 'auto') for (const m of modelos) m.alDesprender = m._alDesp;
+  if (desde === 'auto') {
+    for (const m of modelos) m.alDesprender = m._alDesp;
+    // devolver al piloto a donde está ahora (dentro o fuera del coche) y los restos
+    sesion.participantes.forEach((p, k) => {
+      const f = pilotosFuera?.lista.find(q => q.coche === p.coche);
+      if (modelos[k]?.piloto?.grupo) modelos[k].piloto.grupo.visible = !f;
+      if (f) f.per.raiz.visible = true;
+    });
+    escombros?.verHasta?.(Infinity);
+  }
   else crearModelos();
   if (desde === 'resultados') mostrar('resultados');
   else if (desde === 'auto') { ocultarTodo(); $('#hud').classList.add('visible'); if (esTactil) $('#tactil').classList.add('visible'); }

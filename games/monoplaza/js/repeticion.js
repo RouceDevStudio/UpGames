@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 
 export const HZ = 15;
-const CAMPOS = 22;
+const CAMPOS = 36;
 const MAX_SEG = 3600;
 const BLOQUE = HZ * 60;                    // fotogramas por bloque de memoria
 const MEMORIA = 40e6;                      // bytes como mucho para la repetición
@@ -48,7 +48,7 @@ export class Grabadora {
   }
 
   // estado de cada coche → 16 números
-  grabar(dt, coches, tiempo) {
+  grabar(dt, coches, tiempo, pilotoDe = null) {
     this.t += dt;
     if (this.t < 1 / HZ) return;
     this.t -= 1 / HZ;
@@ -62,7 +62,9 @@ export class Grabadora {
       const dn = c.dano || {};
       let bits = 0;
       for (let r = 0; r < 4; r++) { if (dn.pinchazo?.[r]) bits |= 1 << r; if (dn.suelta?.[r]) bits |= 16 << r; }
-      d[o] = c.x; d[o + 1] = c.y; d[o + 2] = c.z; d[o + 3] = c.psi;
+      // posición tal cual se ve (incluido el coche colgado de la grúa)
+      const gr = c._grua;
+      d[o] = c.x + (gr?.dx || 0); d[o + 1] = c.y + (gr?.dy || 0); d[o + 2] = c.z + (gr?.dz || 0); d[o + 3] = c.psi;
       d[o + 4] = c.anguloVolante || 0; d[o + 5] = c.ruedas[0].angulo; d[o + 6] = c.ruedas[2].giro;
       d[o + 7] = c.cabeceo || 0; d[o + 8] = c.balanceo || 0; d[o + 9] = c.rpm; d[o + 10] = c.marcha;
       d[o + 11] = c.velocidad; d[o + 12] = c.drsAbierto ? 1 : 0; d[o + 13] = c.danoAleron || 0;
@@ -71,6 +73,18 @@ export class Grabadora {
       d[o + 16] = c.mandos?.acelerador || 0; d[o + 17] = c.mandos?.freno || 0; d[o + 18] = c.fondoToca || 0; d[o + 19] = Math.max(c.impacto || 0, c.picoGolpe || 0);
       // vuelos y vuelcos (choque rueda con rueda)
       d[o + 20] = c.giroCab || 0; d[o + 21] = c.giroBal || 0;
+      // daños que se ven: coche partido, daño por zonas (piezas rotas), abolladuras, temperatura
+      // de los frenos y suciedad/desgaste de los neumáticos
+      const pf = pilotoDe?.(c);
+      d[o + 22] = (dn.desintegrado ? 1 : 0) | (pf ? 2 : 0);
+      const z = dn.zona || {};
+      d[o + 23] = z.izq || 0; d[o + 24] = z.der || 0; d[o + 25] = z.del || 0; d[o + 26] = z.tras || 0;
+      d[o + 27] = dn.abolladuras?.length || 0;
+      // el piloto a pie (si ya salió del coche)
+      if (pf) { d[o + 28] = pf.pos.x; d[o + 29] = pf.pos.y; d[o + 30] = pf.pos.z; d[o + 31] = pf.rumbo; }
+      d[o + 32] = Math.max(c.ruedas[0].tFreno || 0, c.ruedas[1].tFreno || 0); d[o + 33] = Math.max(c.ruedas[2].tFreno || 0, c.ruedas[3].tFreno || 0);
+      d[o + 34] = gr ? gr.giro : 0;
+      d[o + 35] = c.vuelo ? 1 : 0;
     }
   }
 
@@ -103,6 +117,16 @@ export class Grabadora {
       // los giros en el aire pasan de -π a π: se interpolan por el camino corto
       const angG = (j) => { let d = db[ob + j] - da[oa + j]; d = Math.atan2(Math.sin(d), Math.cos(d)); return da[oa + j] + d * t; };
       p.giroCab = angG(20); p.giroBal = angG(21);
+      const b2 = da[oa + 22];
+      p.dano.desintegrado = !!(b2 & 1);
+      p.pilotoFuera = b2 & 2 ? { x: L(28), y: L(29), z: L(30), rumbo: da[oa + 31], v: Math.hypot(db[ob + 28] - da[oa + 28], db[ob + 30] - da[oa + 30]) * HZ } : null;
+      p.dano.zona = { izq: da[oa + 23], der: da[oa + 24], del: da[oa + 25], tras: da[oa + 26] };
+      // abolladuras: las que había en ese momento (la lista del coche crece con cada golpe)
+      const n = da[oa + 27], lista = p._coche?.dano?.abolladuras || [];
+      if (p.dano.abolladuras?.length !== n || p._listaAb !== lista) { p.dano.abolladuras = lista.slice(0, n); p._listaAb = lista; }
+      const tfD = L(32), tfT = L(33);
+      p.ruedas.forEach((w, r) => { w.tFreno = r < 2 ? tfD : tfT; });
+      p._grua = da[oa + 34] ? { dx: 0, dy: 0, dz: 0, giro: L(34) } : null;
     }
   }
 
@@ -116,11 +140,12 @@ export class Grabadora {
 /** Objeto con la forma que necesitan los modelos y la cámara (sin física). */
 export function crearProxy(c) {
   return {
+    _coche: c, pilotoFuera: null,
     x: c.x, y: c.y, z: c.z, psi: c.psi, giroCab: 0, giroBal: 0, anguloVolante: 0, cabeceo: 0, balanceo: 0, rpm: 6000, marcha: 1, velocidad: 0,
     drsAbierto: false, danoAleron: 0, ersPotenciaActual: 0, ayF: 0, axF: 0, vibracion: 0,
     alturaDel: c.alturaDel ?? 0.032, alturaTras: c.alturaTras ?? 0.075, mandos: { acelerador: 0, freno: 0, ersModo: 1 }, fondoToca: 0, impacto: 0,
     dano: { pinchazo: [false, false, false, false], suelta: [false, false, false, false], susp: [0, 0, 0, 0], aleronTras: 0 },
-    ruedas: c.ruedas.map(w => ({ angulo: 0, giro: 0, izquierda: w.izquierda, neum: w.neum })),
+    ruedas: c.ruedas.map(w => ({ angulo: 0, giro: 0, izquierda: w.izquierda, neum: w.neum, get suciedad() { return w.suciedad; }, get sucioHierba() { return w.sucioHierba; } })),
     reglaje: c.reglaje, proj: { i: 0 }, combustible: c.combustible, ers: c.ers, drsPermitido: false, limitador: false, limitadorPit: false,
   };
 }

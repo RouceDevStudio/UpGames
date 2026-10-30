@@ -3,7 +3,7 @@
 // en el mundo es (cos ψ, sin ψ) en el plano (x, z). Guiñada positiva = giro a la derecha.
 
 import { COCHE, COMPUESTOS, G, RHO_AIRE, REGLAJE_DEF, efectosMejoras, factorAgua } from '../config.js';
-import { SUPERFICIES, SUP_ASFALTO, SUP_BORDILLO, SUP_ESCAPE, BARRERAS } from '../track.js';
+import { SUPERFICIES, SUP_ASFALTO, SUP_BORDILLO, SUP_ESCAPE, SUP_GRAVA, BARRERAS } from '../track.js';
 import { Neumatico, fuerzasNeumatico, muCarga } from './neumatico.js';
 
 // altura del centro de giro del coche cuando vuela o vuelca (el modelo gira alrededor de él)
@@ -542,7 +542,7 @@ export class Monoplaza {
       const agua = aguaAqui;
       if (agua > 0) mu *= factorAgua(nm.c, agua) * (w.sup > SUP_ESCAPE ? 1 - 0.35 * agua : 1);
       // neumáticos sucios tras pisar hierba o grava: se limpian rodando unos cientos de metros
-      if (w.sup > SUP_ESCAPE && Math.abs(vl) > 2) w.suciedad = Math.min(1, (w.suciedad || 0) + dt * 1.2);
+      if (w.sup > SUP_ESCAPE && Math.abs(vl) > 2) { w.suciedad = Math.min(1, (w.suciedad || 0) + dt * 1.2); w.sucioHierba = w.sup === SUP_GRAVA ? 0.1 : 0.7; }
       else if (w.suciedad > 0) w.suciedad = Math.max(0, w.suciedad - Math.abs(vl) * dt / (w.sup === SUP_ASFALTO ? 650 : 2000));
       if (w.suciedad > 0) mu *= 1 - 0.15 * w.suciedad;
       // la pista gana goma con las vueltas (más agarre en la trazada) y la lluvia se la lleva
@@ -621,7 +621,9 @@ export class Monoplaza {
       // temperatura de frenos
       const potFreno = parFr * Math.abs(w.omega);
       // detrás de otro coche entra aire caliente y menos caudal: los frenos se recalientan
-      w.tFreno += (potFreno * 0.9 - (12 + 1.1 * v) * this.ef.refrigeracion * (1 - 0.45 * this.aireSucio) * (w.tFreno - this.tAmb)) / 1500 * dt;
+      // los discos de carbono se calientan en una frenada fuerte y tardan en enfriarse (masa
+      // grande, poco aire en las curvas lentas): siguen al rojo un buen rato tras frenar
+      w.tFreno += (potFreno * 1.15 - (12 + 1.1 * v) * 0.95 * this.ef.refrigeracion * (1 - 0.45 * this.aireSucio) * (w.tFreno - this.tAmb)) / 1500 * dt;
       // potencia disipada en el contacto
       const vDesl = Math.hypot(w.omega * R - vl, vt);
       w.deslizamiento = vDesl;
