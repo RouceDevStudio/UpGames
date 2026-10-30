@@ -21,7 +21,7 @@ import { SINTOMAS, proponer, frase } from './ingeniero.js';
 import * as TRAY from './trayectoria.js';
 import { Lluvia } from './render/lluvia.js';
 import { Barreras } from './render/barreras.js';
-import { Comisarios, CapaCamara, CocheSeguridad, Fuegos } from './render/vida.js';
+import { Comisarios, CapaCamara, CocheSeguridad, Fuegos, Gruas } from './render/vida.js';
 import { Persona } from './render/personas.js';
 import { construirEscenario, ponerHora, ponerAgua, tv } from './render/escenario.js';
 import { crearModelo, dibujarPlantilla } from './render/cocheModelo.js';
@@ -49,7 +49,7 @@ const CLAVE = 'apexgp.v1';
 const AJ_DEF = {
   control: esTactil ? 'inclinacion' : 'tactil', sensibilidad: 1, anguloInclinacion: 24, invertir: false, vibracion: true,
   tc: 2, abs: true, cambioAuto: true, direccion: true, estabilidad: false, trazada: true,
-  calidad: 'auto', fps: false, volumen: 0.8, unidades: 'kmh', camara: 'persecucion', radio: true, ambiente: true, averias: true,
+  calidad: 'auto', fps: false, volumen: 0.8, unidades: 'kmh', camara: 'persecucion', radio: true, ambiente: true, averias: true, repeAuto: true,
 };
 const OPC_CARRERA_DEF = { vueltas: 5, rivales: 7, dificultad: 'normal', posSalida: 0, compuesto: 'medio', clima: 'seco', hora: 'dia', formacion: 0, duracion: 0 };
 function cargar() {
@@ -129,8 +129,8 @@ const sonido = new Sonido();
 const entrada = new Entrada(ajustes);
 let sesion = null, modelos = [], modeloFantasma = null, lineaIdeal = null;
 // para pruebas automáticas (?depurar): acceso a la sesión desde la consola
-if (new URLSearchParams(location.search).has("depurar")) window.apex = { get sesion() { return sesion; }, empezar: (...a) => empezar(...a), get escenario() { return escenario; }, scene: () => scene, THREE, get renderer() { return renderer; }, get camara() { return camara; }, get modelos() { return modelos; } };
-let gestorBoxes = null, escombros = null, lluviaFx = null, camarasTV = null, barreras = null, comisarios = null, cocheSeg = null;
+if (new URLSearchParams(location.search).has("depurar")) window.apex = { get sesion() { return sesion; }, empezar: (...a) => empezar(...a), get escenario() { return escenario; }, scene: () => scene, THREE, get renderer() { return renderer; }, get camara() { return camara; }, get modelos() { return modelos; }, get gruas() { return gruas; } };
+let gruas = null, gestorBoxes = null, escombros = null, lluviaFx = null, camarasTV = null, barreras = null, comisarios = null, cocheSeg = null;
 let pilotosFuera = null, salidasPendientes = [], tAturdido = 0;
 let capaCamara = null;
 const _vSol = new THREE.Vector3();
@@ -163,6 +163,15 @@ async function iniciar() {
 // Coloca el modelo en el mundo; si vuela o está volcado gira alrededor de su centro (no de las ruedas)
 function colocarModelo(m, c, pend) {
   const gc = c.giroCab || 0, gb = c.giroBal || 0;
+  // colgado de la grúa
+  if (c._grua) {
+    const g = c._grua;
+    m.raiz.position.set(c.x + g.dx, c.y + g.dy, c.z + g.dz);
+    m.raiz.rotation.set(0, -c.psi, 0);
+    if (gc || gb) { m.raiz.rotateZ(gc); m.raiz.rotateX(gb); }
+    m.raiz.rotateX(g.giro);
+    return;
+  }
   if (!gc && !gb) {
     m.raiz.position.set(c.x, c.y, c.z);
     m.raiz.rotation.set(0, -c.psi, 0);
@@ -215,6 +224,7 @@ async function cargarCircuito(id, forzar = false) {
   pilotosFuera = new PilotosFuera(scene, circuito, calidad);
   barreras = new Barreras(scene, circuito, { escombros, efectos, calidad, deformar: (g) => escenario.deformarMuro(g), reparar: () => escenario.repararMuros() });
   comisarios = new Comisarios(scene, circuito, calidad);
+  gruas = new Gruas(scene, circuito);
   cocheSeg = new CocheSeguridad(scene);
   fuegos = new Fuegos(scene, calidad);
   camarasTV = new CamarasTV(circuito);
@@ -961,6 +971,26 @@ function marcarMomento(e) {
 }
 // adelantamientos y golpes fuertes (se revisan dos veces por segundo)
 let tMomentos = 0, posPrev = new Map();
+// ─── Repetición instantánea de los accidentes ───
+// Unos segundos después del golpe (para que quede grabado el final) se ve a cámara lenta con
+// las cámaras de TV y se vuelve a la carrera. Solo sin conexión: en línea no se para el tiempo.
+let repeAuto = null, tUltRepeAuto = -99;
+function pedirRepeAuto(k, texto) {
+  if (enRed || !ajustes.repeAuto || repeAuto || sesion.tiempo - tUltRepeAuto < 20) return;
+  repeAuto = { t: sesion.tiempo, k, texto };
+}
+function revisarRepeAuto() {
+  if (!repeAuto || sesion.tiempo - repeAuto.t < 2.2) return;
+  const r = repeAuto; repeAuto = null; tUltRepeAuto = sesion.tiempo;
+  if (!grabadora || grabadora.cuantos < 30) return;
+  abrirRepe('auto');
+  const g = grabadora;
+  repe.u = Math.max(0, g.uDeTiempo(r.t - 3)); repe.fin = g.uDeTiempo(r.t + 1.8);
+  repe.vel = 0.35; repe.coche = r.k; repe.auto = true; repe.cam = 'director';
+  camRepe.poner('director', camara.cam);
+  rotulo('🔁 REPETICIÓN · ' + r.texto); pintarRepe();
+}
+
 function vigilarMomentos(dt) {
   if (!grabadora || sesion.modo !== 'carrera' || sesion.estado !== 'carrera') return;
   tMomentos += dt;
@@ -968,6 +998,12 @@ function vigilarMomentos(dt) {
   tMomentos = 0;
   sesion.participantes.forEach((p, k) => {
     if (p.coche.impacto > 10) grabadora.marcar(sesion.tiempo - 1.5, 'choque', k, `Golpe de ${p.nombre.replace('@', '')}`);
+    // accidente gordo del jugador o vuelco cerca de él: repetición instantánea
+    const c = p.coche, cerca = Math.hypot(c.x - sesion.jugador.coche.x, c.z - sesion.jugador.coche.z) < 250;
+    if ((p.jugador && c.impacto > 20) || (cerca && (c.vuelo || c.volcado) && !p._repeVista)) {
+      if (c.vuelo || c.volcado) p._repeVista = true;
+      pedirRepeAuto(k, p.jugador ? 'TU ACCIDENTE' : `ACCIDENTE DE ${p.nombre.replace('@', '').toUpperCase()}`);
+    }
     const antes = posPrev.get(p);
     // gana una posición en pista (no por boxes ni abandonos) entre los diez primeros
     if (antes && p.posicion < antes && p.posicion <= 10 && !p.box && !p.coche.limitadorPit) {
@@ -1299,6 +1335,7 @@ function bucle(ahora) {
     if (jugando) {
       grabadora?.grabar(dt, sesion.coches, sesion.tiempo);
       vigilarMomentos(dt);
+      revisarRepeAuto();
       const pj = sesion.jugador;
       if (pj.vuelta > 0) telemetria?.registrar(pj.coche.proj.s, pj.coche, pj.tVuelta);
       if (!espectando) radioPeriodica(dt);
@@ -1379,6 +1416,7 @@ function bucle(ahora) {
     gestorBoxes.actualizar(dt, camara.cam.position);
     actualizarMarcadorParada();
     comisarios.actualizar(dt, sesion);
+    gruas?.actualizar(dt, sesion);
     cocheSeg.actualizar(dt, sesion.sc);
     fuegos?.actualizar(dt);
     actualizarCelebracion(dt);
@@ -2207,7 +2245,7 @@ function abrirRepe(desde) {
   instalarControlesRepe();
   camRepe = new CamaraRepe(circuito, camarasTV, camara);
   camRepe.poner('director', camara.cam);
-  for (const m of modelos) { m.alDesprender = null; m.reponerPiezas?.(); }
+  for (const m of modelos) { m._alDesp = m.alDesprender; m.alDesprender = null; m.reponerPiezas?.(); }
   ocultarTodo();
   $('#hud').classList.remove('visible'); $('#tactil').classList.remove('visible');
   $('#repe').classList.add('visible');
@@ -2270,6 +2308,7 @@ function actualizarRepe(dt) {
     if (r.u >= 1) { r.u = 1; r.play = false; pintarRepe(); }
   }
   if (r.resumen && r.u >= r.resumen.fin) siguienteMomento();
+  if (r.auto && r.u >= r.fin) { cerrarRepe(); return; }
   if (r.ruta && r.u >= r.claves[r.claves.length - 1].u) finRuta();
   g.leer(r.u, r.proxies);
   $('#repeBarra').value = Math.round(r.u * 1000);
@@ -2310,8 +2349,11 @@ function cerrarRepe() {
   document.querySelectorAll('.repe-panel').forEach(p => p.classList.remove('visible'));
   document.body.classList.remove('foto', 'en-repe');
   sonido.modoRepe?.(false);
-  crearModelos();
+  // tras la repetición automática no se reconstruyen los coches (sería un tirón en mitad de la carrera)
+  if (desde === 'auto') for (const m of modelos) m.alDesprender = m._alDesp;
+  else crearModelos();
   if (desde === 'resultados') mostrar('resultados');
+  else if (desde === 'auto') { ocultarTodo(); $('#hud').classList.add('visible'); if (esTactil) $('#tactil').classList.add('visible'); }
   else { mostrar('pausa'); $('#hud').classList.add('visible'); if (esTactil) $('#tactil').classList.add('visible'); }
 }
 // ─── Resumen automático: los momentos apuntados durante la carrera ───

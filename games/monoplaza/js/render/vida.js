@@ -297,3 +297,93 @@ export class Fuegos {
     this.puntos.geometry.attributes.color.needsUpdate = true;
   }
 }
+
+// Grúa de pista: cuando un coche de la IA se queda parado, llega junto al muro, gira el brazo,
+// engancha el coche, lo levanta (se balancea colgado) y lo deja al otro lado del muro.
+// El modelo del coche se desplaza con car._grua = { dx, dy, dz, giro } (lo aplica main.js).
+export class Gruas {
+  constructor(scene, c, max = 2) {
+    this.c = c; this.lista = [];
+    const amarillo = new THREE.MeshStandardMaterial({ color: 0xf2b705, roughness: 0.6, metalness: 0.2 });
+    const negro = new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.8 });
+    const cristal = new THREE.MeshStandardMaterial({ color: 0x223040, roughness: 0.1, metalness: 0.6 });
+    for (let k = 0; k < max; k++) {
+      const g = new THREE.Group(); g.visible = false;
+      const caja = (w, h, d, m, x, y, z, padre = g) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); o.castShadow = true; padre.add(o); return o; };
+      caja(5.2, 1.0, 2.4, amarillo, 0, 1.0, 0);             // chasis
+      caja(1.6, 1.4, 2.3, amarillo, 2.0, 2.2, 0);           // cabina
+      caja(0.05, 0.8, 2.0, cristal, 2.81, 2.3, 0);
+      for (const [x, z] of [[1.8, 1.1], [1.8, -1.1], [-1.6, 1.1], [-1.6, -1.1]]) {
+        const r = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.45, 14), negro); r.rotation.x = Math.PI / 2; r.position.set(x, 0.55, z); g.add(r);
+      }
+      // torre giratoria con el brazo
+      const torre = new THREE.Group(); torre.position.set(-1.2, 1.5, 0); g.add(torre);
+      caja(1.4, 0.8, 1.4, amarillo, 0, 0.4, 0, torre);
+      const brazo = new THREE.Group(); brazo.position.y = 0.8; torre.add(brazo);
+      const largo = 7.5;
+      const viga = caja(largo, 0.45, 0.45, amarillo, largo / 2, 0, 0, brazo);
+      void viga;
+      const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1, 5), negro);
+      cable.position.set(largo, 0, 0); brazo.add(cable);
+      scene.add(g);
+      this.lista.push({ g, torre, brazo, cable, largo, p: null, t: 0 });
+    }
+  }
+
+  actualizar(dt, sesion) {
+    const c = this.c;
+    for (const gr of this.lista) {
+      // sesión nueva (reinicio): la grúa queda libre
+      if (gr.p && !sesion.participantes.includes(gr.p)) { gr.p = null; gr.g.visible = false; }
+      // asignar un coche parado (los de la IA; el del jugador se queda donde está)
+      if (!gr.p) {
+        const libre = sesion.participantes.find(p => p.abandono && !p.retirado && !p.jugador && !p.remoto && !p._grua && p.tAbandono != null && sesion.tiempo - p.tAbandono > 3 && !p.coche.vuelo);
+        if (!libre) { gr.g.visible = false; continue; }
+        gr.p = libre; libre._grua = gr; gr.t = 0;
+        const car = libre.coche, pr = car.proj;
+        // el camión se pone al lado del coche, por fuera (hacia el muro más cercano)
+        const lado = pr.d >= 0 ? 1 : -1;
+        const muro = c.muro[lado > 0 ? 1 : 0][pr.i];
+        const dist = Math.min(muro - 2, pr.d + lado * 5.5) ;
+        const nx = -pr.tz, nz = pr.tx;
+        gr.dir = { x: pr.tx, z: pr.tz };
+        gr.pos = new THREE.Vector3(car.x + nx * (dist - pr.d), car.y, car.z + nz * (dist - pr.d));
+        gr.g.position.copy(gr.pos);
+        gr.g.rotation.set(0, -Math.atan2(pr.tz, pr.tx), 0);
+        gr.inicio = { x: car.x, z: car.z, y: car.y };
+        gr.g.visible = true;
+      }
+      const p = gr.p, car = p.coche;
+      gr.t += dt;
+      const t = gr.t;
+      const f = (a, b) => Math.min(1, Math.max(0, (t - a) / (b - a)));
+      const suave = (x) => x * x * (3 - 2 * x);
+      // plataforma del camión (detrás de la cabina) en el mundo
+      const cosY = Math.cos(-gr.g.rotation.y), sinY = Math.sin(-gr.g.rotation.y);
+      const bed = { x: gr.pos.x - cosY * 1.2, z: gr.pos.z - sinY * 1.2 };
+      // 0-2: gira la torre hacia el coche; 2-3.5: baja el gancho; 3.5-6: sube; 6-8.5: lo pasa a la
+      // plataforma; 8.5-9.5: lo baja; después el camión se va despacio por la escapatoria
+      const angCoche = Math.atan2(gr.inicio.z - gr.pos.z, gr.inicio.x - gr.pos.x);
+      const angLocal = angCoche + gr.g.rotation.y;
+      const girar = suave(f(0, 2)), subir = suave(f(3.5, 6)), llevar = suave(f(6, 8.5)), bajar = suave(f(8.5, 9.5));
+      gr.torre.rotation.y = -angLocal * girar * (1 - llevar) + Math.PI * llevar;
+      const irse = Math.max(0, t - 10.5);
+      const avance = irse > 0 ? Math.min(60, irse * irse * 0.6) : 0;
+      const ax = gr.dir.x * avance, az = gr.dir.z * avance;
+      gr.g.position.set(gr.pos.x + ax, gr.pos.y, gr.pos.z + az);
+      const dx = (bed.x - gr.inicio.x) * llevar + ax, dz = (bed.z - gr.inicio.z) * llevar + az;
+      const dy = subir * 3.2 - bajar * 1.6;
+      car._grua = { dx, dy, dz, giro: Math.sin(t * 2.3) * 0.08 * subir * (1 - bajar) };
+      // brazo y cable hacia el coche
+      const dHor = Math.hypot(gr.inicio.x + dx - gr.g.position.x, gr.inicio.z + dz - gr.g.position.z);
+      gr.brazo.rotation.z = Math.max(0.05, Math.min(1.1, Math.acos(Math.min(1, dHor / gr.largo)) * 0.8));
+      const yPunta = gr.pos.y + 2.3 + Math.sin(gr.brazo.rotation.z) * gr.largo;
+      const yCoche = gr.inicio.y + dy + 1.1;
+      const lc = Math.max(0.3, yPunta - yCoche) * (t > 9.5 ? 0.3 : 1);
+      gr.cable.scale.y = lc; gr.cable.position.set(gr.largo, -lc / 2, 0);
+      gr.cable.rotation.z = -gr.brazo.rotation.z;
+      // terminado (la carrera lo retira): la grúa se va
+      if (p.retirado || !p.abandono) { car._grua = null; gr.p._grua = null; gr.p = null; gr.g.visible = false; }
+    }
+  }
+}

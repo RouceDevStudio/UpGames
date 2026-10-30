@@ -56,8 +56,10 @@ class Particulas {
 
   actualizar(dt, gravedad = 0, arrastre = 1.5) {
     const k = Math.exp(-arrastre * dt);
+    let vivas = 0;
     for (let i = 0; i < this.max; i++) {
       if (this.vida[i] <= 0) { this.alfa[i] = 0; continue; }
+      vivas++;
       this.vida[i] -= dt;
       this.v[i * 3] *= k; this.v[i * 3 + 2] *= k; this.v[i * 3 + 1] = this.v[i * 3 + 1] * k - gravedad * dt;
       this.p[i * 3] += this.v[i * 3] * dt; this.p[i * 3 + 1] += this.v[i * 3 + 1] * dt; this.p[i * 3 + 2] += this.v[i * 3 + 2] * dt;
@@ -65,6 +67,10 @@ class Particulas {
       const t = this.vida[i] / this.vidaMax[i];
       this.alfa[i] = this.alfa0[i] * Math.min(1, t * 1.6) * Math.min(1, (1 - t) * 8 + 0.2);
     }
+    // sin partículas vivas (ni en el cuadro anterior) no hace falta subir nada a la GPU
+    if (!vivas && !this._vivas) return;
+    this._vivas = vivas;
+    this.malla.visible = vivas > 0;
     const a = this.malla.geometry.attributes;
     a.position.needsUpdate = a.tam.needsUpdate = a.alfa.needsUpdate = a.tono.needsUpdate = true;
   }
@@ -119,6 +125,8 @@ export class Efectos {
     this.calidad = calidad;
     this.humo = new Particulas(scene, calidad >= 2 ? 900 : 350, false);
     this.chispas = new Particulas(scene, calidad >= 2 ? 400 : 150, true);
+    // piedras de grava y terrones de hierba que salen despedidos (caen con gravedad, no brillan)
+    this.piedras = new Particulas(scene, calidad >= 2 ? 300 : 120, false);
     this.marcas = new Marcas(scene, calidad >= 2 ? 6000 : 2500);
     this.acum = 0;
     this.agua = 0;             // agua en la pista: spray detrás de los coches
@@ -128,6 +136,7 @@ export class Efectos {
     const e = alturaPx / (2 * Math.tan(fovGrados * Math.PI / 360));
     this.humo.mat.uniforms.escala.value = e;
     this.chispas.mat.uniforms.escala.value = e;
+    this.piedras.mat.uniforms.escala.value = e;
   }
 
   actualizar(dt, coches, camPos) {
@@ -153,6 +162,20 @@ export class Efectos {
         if (enAsfalto && desl > 6 && w.sigma > 1.3 && rnd() < Math.min(1, (desl - 6) / 12) * (this.calidad >= 2 ? 1 : 0.5)) {
           const l = 0.8 + rnd() * 0.15;
           this.humo.emitir(w.wx, w.wy + 0.2, w.wz, car.vx * cos * 0.15 + (rnd() - 0.5), 0.6 + rnd(), car.vx * sin * 0.15 + (rnd() - 0.5), 0.8, 0.45, 1.8 + rnd(), 2.2, l, l, l);
+        }
+        // piedras y terrones lanzados por las ruedas fuera de la pista
+        if (tierra && v > 14 && rnd() < Math.min(0.9, v / 45) * (this.calidad >= 1 ? 1 : 0.5)) {
+          const grava = w.sup === SUP_GRAVA;
+          for (let k = 0; k < (grava ? 3 : 1); k++) {
+            const tono = grava ? 0.55 + rnd() * 0.2 : 0.22 + rnd() * 0.1;
+            this.piedras.emitir(w.wx, w.wy + 0.1, w.wz, cos * v * (0.2 + rnd() * 0.3) + (rnd() - 0.5) * 4, 1.5 + rnd() * 4, sin * v * (0.2 + rnd() * 0.3) + (rnd() - 0.5) * 4,
+              grava ? 0.06 + rnd() * 0.05 : 0.12 + rnd() * 0.1, 1, 0.8 + rnd() * 0.6, 0, tono, tono * (grava ? 0.95 : 1.4), tono * (grava ? 0.85 : 0.6));
+          }
+        }
+        // buje sin rueda arrastrando por el asfalto: chorro de chispas
+        if (car.dano?.suelta?.[w.idx] && v > 4 && enAsfalto) {
+          for (let k = 0; k < 3; k++) this.chispas.emitir(w.wx, w.wy + 0.05, w.wz, -cos * v * (0.3 + rnd() * 0.4) + (rnd() - 0.5) * 3, 0.5 + rnd() * 2, -sin * v * (0.3 + rnd() * 0.4) + (rnd() - 0.5) * 3,
+            0.07, 1, 0.3 + rnd() * 0.3, -0.05, 1, 0.7, 0.3);
         }
         // polvo o grava
         if (tierra && rnd() < Math.min(1, v / 30)) {
@@ -184,6 +207,19 @@ export class Efectos {
             0.07, 1, 0.25 + rnd() * 0.3, -0.05, 1, 0.75, 0.35);
         }
       }
+      // coche volcado o cayendo tras volar: arrastra el arco antivuelco y el morro por el suelo
+      if (!lejos && (car.volcado || (car.vuelo && car.vuelo.h < 0.15)) && v > 3) {
+        const n = Math.min(14, 3 + Math.floor(v / 4));
+        for (let k = 0; k < n; k++) this.chispas.emitir(car.x + (rnd() - 0.5) * 2, car.y + 0.1, car.z + (rnd() - 0.5) * 2, -cos * v * 0.4 + (rnd() - 0.5) * 6, rnd() * 3, -sin * v * 0.4 + (rnd() - 0.5) * 6,
+          0.08, 1, 0.3 + rnd() * 0.4, -0.05, 1, 0.72, 0.32);
+        if (rnd() < 0.5) this.humo.emitir(car.x, car.y + 0.3, car.z, (rnd() - 0.5) * 2, 0.6 + rnd(), (rnd() - 0.5) * 2, 1.4, 0.35, 1.6 + rnd(), 2.4, 0.5, 0.48, 0.45);
+      }
+      // roce entre coches: chispas de carbono y metal en el punto de contacto
+      if (!lejos && car.picoGolpe > 4 && car.fuenteGolpe === 'coche' && car._chispaCoche !== car._tGolpe) {
+        car._chispaCoche = car._tGolpe;
+        for (let k = 0; k < 16; k++) this.chispas.emitir(car.x + (rnd() - 0.5) * 3, car.y + 0.3, car.z + (rnd() - 0.5) * 3, (rnd() - 0.5) * 8 + cos * v * 0.3, rnd() * 4, (rnd() - 0.5) * 8 + sin * v * 0.3,
+          0.07, 1, 0.3 + rnd() * 0.3, -0.05, 1, 0.85, 0.5);
+      }
       // chispas al golpear el muro
       if (!lejos && car.impacto > 3) {
         for (let k = 0; k < 20; k++) {
@@ -193,5 +229,6 @@ export class Efectos {
     }
     this.humo.actualizar(dt, -0.3, 1.2);
     this.chispas.actualizar(dt, 9.8, 0.6);
+    this.piedras.actualizar(dt, 9.8, 0.4);
   }
 }
