@@ -161,7 +161,11 @@ async function cargarCircuito(id) {
   progreso(0.75, 'Montando los coches…');
   await esperar(20);
   efectos = new Efectos(scene, calidad);
-  gestorBoxes = new GestorBoxes(scene);
+  gestorBoxes = new GestorBoxes(scene, calidad, (tipo, pos) => {
+    if (!jugando) return;
+    const d = camara.cam.position.distanceTo(pos), vol = Math.min(1, 25 / Math.max(5, d));
+    if (vol > 0.08) sonido.boxes?.(tipo, vol);
+  });
   escombros = new Escombros(scene, (x, z) => { const p = circuito.proyectar(x, z, -1, {}); return p.y + circuito.caida(p.i, p.d); });
   lluviaFx = new Lluvia(scene, escenario, calidad);
   barreras = new Barreras(scene, circuito, { escombros, efectos, calidad });
@@ -907,10 +911,12 @@ function procesarEventos() {
       else setTimeout(() => { if (jugando && sesion.modo === 'carrera') mostrarResultados(); }, 3500);
     }
     else if (e.tipo === 'vuelta' && e.p.jugador && enRed && e.valida) multi.vuelta(e.t);
-    else if (e.tipo === 'entraBoxes' && e.p.jugador) { mensaje('ENTRANDO A BOXES', 'El equipo conduce: limitador a 80 km/h', 2); radio.decir('Box, box. Te llevamos al garaje, limitador puesto.', { prioridad: true, clave: 'boxEnt', cada: 10 }); }
+    else if (e.tipo === 'entraBoxes') prepararEquipo(e.p);
+    if (e.tipo === 'entraBoxes' && e.p.jugador) { mensaje('ENTRANDO A BOXES', 'El equipo conduce: limitador a 80 km/h', 2); radio.decir('Box, box. Te llevamos al garaje, limitador puesto.', { prioridad: true, clave: 'boxEnt', cada: 10 }); }
     else if (e.tipo === 'paradaIni') {
       const k = sesion.participantes.indexOf(e.p);
-      gestorBoxes.empezar(e.p.coche, modelos[k], e.p.equipo.base, e.duracion, e.morro);
+      gestorBoxes.empezar(k, e.p.coche, modelos[k], { color: e.p.equipo.base, texto: e.p.equipo.corto === 'UPG' ? 'UPGAMES' : e.p.equipo.nombre.split(' ')[0].toUpperCase(), compuesto: e.p.paradaInfo?.compuesto, duracion: e.duracion, morro: e.morro });
+      if (e.p.jugador) paradaJugador = { t0: performance.now(), duracion: e.duracion, k };
       if (e.p.jugador) radio.decir('Gatos arriba. Ruedas fuera…', { clave: 'gatos', cada: 10 });
       if (e.p.jugador) { mensaje('PARADA EN BOXES', e.morro ? 'Neumáticos y morro nuevo' : 'Cambio de neumáticos', 2); estadoRadio.avisoDesg = false; }
     }
@@ -1129,6 +1135,16 @@ function bucle(ahora) {
   // cámara, luz y efectos
   const mJ = modelos[sesion.participantes.indexOf(sesion.jugador)];
   camara.actualizar(dt, j, mJ);
+  // durante la parada del jugador, plano de televisión del equipo trabajando (como en la tele)
+  if (jugando && paradaJugador && sesion.jugador.paradaInfo && ajustes.camParada !== false && !repe) {
+    const tp = sesion.tiempo - sesion.jugador.paradaInfo.inicio, cs = Math.cos(j.psi), sn = Math.sin(j.psi);
+    const lx = 6.2 - tp * 0.3, lz = -5.4 + tp * 0.3;        // un travelling lento por encima del equipo
+    camara.cam.position.set(j.x + cs * lx - sn * lz, j.y + 3.4, j.z + sn * lx + cs * lz);
+    camara.cam.up.set(0, 1, 0);
+    camara.cam.lookAt(j.x + cs * 0.4, j.y + 0.5, j.z + sn * 0.4);
+    camara.cam.fov = 48; camara.cam.updateProjectionMatrix();
+    camara.iniciada = false;
+  }
   const luz = escenario.luzSol;
   luz.target.position.set(j.x, j.y, j.z);
   luz.position.copy(escenario.sol).multiplyScalar(250).add(luz.target.position);
@@ -1138,11 +1154,13 @@ function bucle(ahora) {
     for (const e of barreras.actualizar(dt, sesion.participantes)) {
       if (e.tipo === 'bidon' && jugando) { sonido.evento('golpe', 4); if (e.jugador) { mensaje('¡BIDONES DE AGUA!', '', 1.2); entrada.vibrar(120, 0.8); radio.decir('¡Te has llevado los bidones! Revisa que el alerón esté bien.', { clave: 'bidon', cada: 30 }); } }
     }
-    gestorBoxes.actualizar(dt);
+    gestorBoxes.actualizar(dt, camara.cam.position);
+    actualizarMarcadorParada();
     comisarios.actualizar(dt, sesion);
     cocheSeg.actualizar(dt, sesion.sc);
   }
   actualizarCapaCamara(dt, j);
+  escenario.camPos = camara.cam.position;
   for (const f of escenario.actualizables) f(dt);
   // lluvia, spray y asfalto mojado
   efectos.agua = sesion.clima.agua;
@@ -1192,6 +1210,33 @@ function bucle(ahora) {
     }
     fpsAcum = 0; fpsN = 0;
   }
+}
+
+// --- Equipo de boxes -------------------------------------------------------------
+let paradaJugador = null;
+// en cuanto el coche entra al carril, su equipo sale del garaje a esperarlo
+function prepararEquipo(p) {
+  const k = sesion.participantes.indexOf(p);
+  if (!p.box || k < 0) return;
+  const c = circuito, sB = p.box.sBox, d = c.dCarrilPit(sB) + 2.2, m = c.muestra(sB);
+  gestorBoxes.preparar(k, {
+    color: p.equipo.base, texto: p.equipo.corto === 'UPG' ? 'UPGAMES' : p.equipo.nombre.split(' ')[0].toUpperCase(), compuesto: p.solicitudBox,
+    posicion: { x: m.x - m.tz * d, y: m.y, z: m.z + m.tx * d, psi: Math.atan2(m.tz, m.tx) },
+  });
+}
+// marcador de la parada del jugador: cronómetro y estado de las cuatro ruedas
+function actualizarMarcadorParada() {
+  const el = $('#hParada');
+  if (!paradaJugador || !sesion.jugador.paradaInfo) {
+    if (paradaJugador && performance.now() - paradaJugador.t0 > (paradaJugador.duracion + 2.5) * 1000) paradaJugador = null;
+    el.classList.toggle('visible', !!paradaJugador);
+    return;
+  }
+  el.classList.add('visible');
+  const t = Math.max(0, Math.min(paradaJugador.duracion, sesion.tiempo - sesion.jugador.paradaInfo.inicio));
+  $('#hParadaT').textContent = t.toFixed(1) + ' s';
+  const pr = gestorBoxes.progreso(paradaJugador.k) || [0, 0, 0, 0];
+  el.querySelectorAll('.rp').forEach((r, i) => { r.className = 'rp ' + (pr[i] >= 1 ? 'ok' : pr[i] > 0 ? 'en' : ''); });
 }
 
 // --- Daños y boxes ----------------------------------------------------------------
@@ -2189,7 +2234,7 @@ $('#bRkFantasma').addEventListener('click', async () => {
 });
 
 // acceso para pruebas automáticas desde la consola
-window.apexDebug = { get sesion() { return sesion; }, get sonido() { return sonido; }, get camara() { return camara; }, circuito: () => circuito, multi, get modelos() { return modelos; }, cargarCircuito, get qActual() { return qActual; }, get temporada() { return temporada; }, get repe() { return repe; }, terminarTandaQ, radio };
+window.apexDebug = { get sesion() { return sesion; }, get sonido() { return sonido; }, get renderer() { return renderer; }, get escenario() { return escenario; }, get camara() { return camara; }, circuito: () => circuito, multi, get modelos() { return modelos; }, cargarCircuito, get qActual() { return qActual; }, get temporada() { return temporada; }, get repe() { return repe; }, terminarTandaQ, radio };
 actualizarCuentaMenu();
 refrescarPerfil().then(actualizarCuentaMenu);
 // enlace estable al APK (servido por el servidor de UpGames); dentro de la app no hace falta

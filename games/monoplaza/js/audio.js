@@ -278,6 +278,19 @@ export class Sonido {
     o.connect(g); g.connect(this.maestro); g.connect(this.envioEco); o.start(t); o.stop(t + 0.5);
   }
 
+  /** Sonidos de la parada: pistola neumática (traqueteo rapidísimo) y gato (golpe y siseo). */
+  boxes(tipo, vol = 1) {
+    if (!this.listo) return;
+    if (tipo === 'pistola') {
+      // ~0,35 s de impactos del martillo a ~70 por segundo, con el silbido del aire
+      for (let k = 0; k < 24; k++) this._rafaga(0.012, 1800 + Math.random() * 1200, 'bandpass', 0.22 * vol, k * 0.0145, 3);
+      this._rafaga(0.4, 5200, 'highpass', 0.06 * vol);
+    } else if (tipo === 'gato') {
+      this._impacto(0.35 * vol, 110);
+      this._rafaga(0.5, 3800, 'highpass', 0.05 * vol, 0.05);
+    }
+  }
+
   pitido(f = 880, dur = 0.16, vol = 0.25) {
     if (!this.listo) return;
     const ctx = this.ctx, t = ctx.currentTime;

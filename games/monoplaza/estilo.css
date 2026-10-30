@@ -402,3 +402,13 @@ body.en-red #bRecolocar { display: none; }
 .qred.visible { display: block; }
 .logo-carga { width: min(440px, 70vw); height: auto; border-radius: 18px; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
 @media (max-height: 420px) { .logo-carga { width: min(300px, 50vw); } }
+
+/* marcador de la parada en boxes */
+.hparada { position: absolute; top: calc(70px + var(--sa-t)); left: 50%; transform: translateX(-50%); display: none; align-items: center; gap: 12px; padding: 6px 14px; border-radius: 10px; background: rgba(6,8,14,.72); font-weight: 800; }
+.hparada.visible { display: flex; }
+.hparada b { color: var(--rojo); letter-spacing: 2px; font-size: 12px; }
+#hParadaT { font-size: 22px; font-variant-numeric: tabular-nums; min-width: 64px; }
+.hparada .rps { display: grid; grid-template-columns: 14px 14px; gap: 3px 10px; }
+.hparada .rp { width: 14px; height: 18px; border-radius: 4px; background: #333; border: 1px solid #555; }
+.hparada .rp.en { background: #f5c518; }
+.hparada .rp.ok { background: #18c45a; }

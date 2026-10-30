@@ -306,7 +306,9 @@ export class Monoplaza {
       this.alturaDel = Math.max(0, this.alturaDel); this.alturaTras = Math.max(0, this.alturaTras);
     }
     // ángulos visibles de cabeceo y balanceo (oscilador amortiguado)
-    const objCab = -(this.axF * m * h) / COCHE.rigidezCabeceo * 4 + (this.alturaTras - this.alturaDel - (h0Tras - h0Del)) / L;
+    // el cabeceo sale de la diferencia de alturas de los ejes (más un poco de flexión del chasis):
+    // un F1 apenas se inclina 1-2° al frenar; más haría que el morro tocara el suelo
+    const objCab = clamp(-(this.axF * m * h) / COCHE.rigidezCabeceo * 0.25 + (this.alturaTras - this.alturaDel - (h0Tras - h0Del)) / L, -0.02, 0.026);
     const objBal = (this.ayF * m * (h - hRc)) / COCHE.rigidezBalanceoTotal / ((kDel + kTras) / 1.1);
     this.vCabeceo += ((objCab - this.cabeceo) * 900 - this.vCabeceo * 38) * dt;
     this.cabeceo += this.vCabeceo * dt;

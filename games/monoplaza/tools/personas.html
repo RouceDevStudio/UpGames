@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="UTF-8"><title>Visor de personas</title>
+<style>html,body{margin:0;height:100%;background:#3a3a3a;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{ "imports": { "three": "../lib/three.module.min.js", "three/addons/": "../lib/addons/" } }</script>
+</head><body>
+<script type="module">
+// Visor de mecánicos e ingenieros: ?poses=de_pie,pistola,rueda&vista=lado|frente|3q|cerca
+import * as THREE from 'three';
+import { Persona } from '../js/render/personas.js';
+const q = new URLSearchParams(location.search);
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+r.setSize(innerWidth, innerHeight); r.setPixelRatio(1);
+r.toneMapping = THREE.ACESFilmicToneMapping; r.outputColorSpace = THREE.SRGBColorSpace; r.shadowMap.enabled = true;
+document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x3a3a3a);
+const pm = new THREE.PMREMGenerator(r), env = new THREE.Scene(); env.add(new THREE.HemisphereLight(0xffffff, 0x444444, 3));
+scene.environment = pm.fromScene(env).texture;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x333333, 1.0));
+const sol = new THREE.DirectionalLight(0xffffff, 2.5); sol.position.set(5, 8, 4); sol.castShadow = true; scene.add(sol);
+const suelo = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshStandardMaterial({ color: 0x505050 }));
+suelo.rotation.x = -Math.PI / 2; suelo.receiveShadow = true; scene.add(suelo);
+const poses = (q.get('poses') || 'de_pie,preparado,pistola,rueda,gato,estabiliza,celebra,sentado').split(',');
+const rol = q.get('rol') || 'mecanico';
+poses.forEach((ps, k) => {
+  const p = new Persona({ color: q.get('color') || '#0d47ff', numero: k + 1, rol: k === poses.length - 1 && !q.get('rol') ? 'ingeniero' : rol, calidad: 3 });
+  p.poner(ps, 0.01); p.actualizar(1);
+  p.raiz.position.set(0, 0, (k - (poses.length - 1) / 2) * 1.1);
+  scene.add(p.raiz);
+});
+const cam = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.05, 200);
+const n = poses.length;
+const v = { lado: [[0.2, 1.0, 6 + n * 1.2], [0, 0.8, 0]], frente: [[6 + n, 1.3, 0], [0, 0.8, 0]], '3q': [[3.5 + n * 0.6, 2.2, 3 + n * 0.8], [0, 0.7, 0]], cerca: [[1.3, 1.65, 0.5], [0, 1.5, 0]] }[q.get('vista') || '3q'];
+cam.position.set(...v[0]); cam.lookAt(...v[1]); cam.updateProjectionMatrix();
+r.render(scene, cam);
+window.listo = true;
+</script></body></html>

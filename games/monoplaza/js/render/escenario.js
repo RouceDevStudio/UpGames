@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import * as TX from './texturas.js';
+import { crearGaraje, crearPuestoMuro } from './garaje.js';
 
 const SOL_ELEVACION = 34, SOL_AZIMUT = 215;
 
@@ -375,7 +376,7 @@ export function construirEscenario(scene, renderer, c, calidad) {
   const matTecho = new THREE.MeshStandardMaterial({ color: 0xeef2f6, roughness: 0.5, metalness: 0.3 });
   const matEdif = new THREE.MeshStandardMaterial({ map: TX.texturaEdificio(), roughness: 0.6 });
   for (const [s0, largo] of [[-260, 150], [-90, 160], [120, 170], [330, 140]]) grada(scene, c, s0, largo, -1, matGrada, matTecho, matHormigon);
-  res.garajes = calleBoxes(scene, c, { matAsfalto: matEscape, matLinea, matMuro, matTecho, matHormigon, calidad });
+  res.garajes = calleBoxes(scene, c, { matAsfalto: matEscape, matLinea, matMuro, matTecho, matHormigon, calidad }, res);
   // tribuna en la horquilla y en la Parabólica
   for (const cv of c.curvas) {
     if (/Horquilla|Remanso|Parab/.test(cv.nombre)) {
@@ -751,7 +752,7 @@ function montanas(scene, terreno) {
 const nombreEquipos = ['UpGames Racing', 'Rosso Vulcano', 'Silver Arrowhead', 'Nightbull', 'Papaya Speed', 'Verde Andino', 'Alpine Blue', 'Kraken GP', 'Halcón Dorado', 'Polar Racing', 'Tormenta Roja'];
 const coloresEquipos = ['#0d47ff', '#c4061a', '#b9c2c9', '#14204a', '#ff7a00', '#0b6b4f', '#1060d0', '#1b1b1f', '#f2f2f2', '#e8f4ff', '#5a0b1e'];
 
-function calleBoxes(scene, c, m) {
+function calleBoxes(scene, c, m, res) {
   const p = c.pit;
   const zona = (i) => c.enZonaPit[i];
   // asfalto del carril, desde la escapatoria hasta los garajes
@@ -792,13 +793,13 @@ function calleBoxes(scene, c, m) {
   p.garajes.forEach((sg, k) => {
     const i = Math.floor(c.envolver(sg) / c.paso) % c.n;
     const hw = c.semiAncho[i];
-    const g = new THREE.Group();
-    const cuerpo = new THREE.Mesh(new THREE.BoxGeometry(28, 9, 16), [m.matHormigon, m.matHormigon, m.matTecho, m.matHormigon, matFachada, matFachada]);
-    cuerpo.position.set(0, 4.5, 0);
-    g.add(cuerpo);
+    // garaje abierto con su interior (equipo, pantallas, ruedas, mecánicos)
+    const gar = crearGaraje({ nombre: nombreEquipos[k], color: coloresEquipos[k], calidad: m.calidad, k });
+    const g = gar.grupo;
+    void matFachada;
     const alero = new THREE.Mesh(new THREE.BoxGeometry(28, 0.3, 4), m.matTecho); alero.position.set(0, 9.2, -9.5); g.add(alero);
     const cartel = new THREE.Mesh(new THREE.PlaneGeometry(10, 1.6), new THREE.MeshStandardMaterial({ map: TX.texturaCartel(nombreEquipos[k], coloresEquipos[k], k === 8 || k === 9 || k === 2 ? '#111111' : '#ffffff'), roughness: 0.5 }));
-    cartel.position.set(0, 7.6, -8.02); cartel.rotation.y = Math.PI; g.add(cartel);
+    cartel.position.set(0, 7.6, -8.27); cartel.rotation.y = Math.PI; g.add(cartel);
     // plaza de parada pintada en el suelo con el color del equipo
     const plaza = new THREE.Mesh(new THREE.PlaneGeometry(7, 3.2), new THREE.MeshStandardMaterial({ color: coloresEquipos[k], roughness: 0.7, transparent: true, opacity: 0.55, polygonOffset: true, polygonOffsetFactor: -2 }));
     plaza.rotation.x = -Math.PI / 2; plaza.position.set(0, 0.012 - c.y[i] + c.y[i], 8 + 16 / 2 - (p.ancho - p.carril - 2.2) - 8);
@@ -815,6 +816,17 @@ function calleBoxes(scene, c, m) {
     scene.add(plaza);
     scene.add(g);
     garajes.push({ s: sg, d: dPlaza });
+    // puesto del equipo en el muro de boxes, frente a su garaje
+    const puesto = crearPuestoMuro({ nombre: nombreEquipos[k], color: coloresEquipos[k], calidad: m.calidad });
+    colocarEnPista(c, puesto.grupo, sg, hw + (p.muroDe + p.muroA) / 2);
+    puesto.grupo.position.y += 1.15;
+    if (m.calidad >= 1) scene.add(puesto.grupo);
+    // animación solo con la cámara cerca (son muchas mallas)
+    const pg = g.position.clone();
+    res.actualizables.push((dt) => {
+      const cam = res.camPos, cerca = !!cam && cam.distanceToSquared(pg) < 140 * 140;
+      gar.actualizar(dt, cerca); puesto.actualizar(dt, cerca);
+    });
   });
   return garajes;
 }
