@@ -244,8 +244,8 @@ function actualizarCapaCamara(dt, j) {
   _vSol.copy(escenario.sol).multiplyScalar(5000).add(camara.cam.position).project(camara.cam);
   const sol = _vSol.z < 1 && escenario.sol.y > 0 ? [(_vSol.x + 1) / 2 * innerWidth, (1 - _vSol.y) / 2 * innerHeight] : null;
   capaCamara.actualizar(dt, {
-    lluvia: sesion.clima.lluvia, aBordo: ['cabina', 'cara', 'tcam'].includes(camara.modo),
-    velocidad: j.velocidad, solPantalla: calidad >= 1 ? sol : null, hora: escenario.hora,
+    lluvia: sesion.clima.lluvia, aBordo: ['cabina', 'cara', 'tcam'].includes(camara.modo), casco: camara.modo === 'cabina',
+    velocidad: j.velocidad, spray: j.aireSucio || 0, solPantalla: calidad >= 1 ? sol : null, hora: escenario.hora,
   });
 }
 

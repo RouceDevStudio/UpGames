@@ -65,38 +65,90 @@ export class Comisarios {
   }
 }
 
-// Capa sobre la imagen: gotas en la cámara a bordo y destello del sol
+// Capa sobre la imagen: gotas en la visera/lente, destello del sol y viñeta de velocidad.
+// Rendimiento: las gotas se pintan desde un sprite hecho una vez (antes se creaba un degradado
+// por gota y por cuadro) y la viñeta es un elemento CSS al que solo se le cambia la opacidad.
+function spriteGota() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const x = cv.getContext('2d');
+  // gota con borde oscuro (refracción), brillo arriba a la izquierda y centro claro
+  let gr = x.createRadialGradient(32, 32, 10, 32, 32, 31);
+  gr.addColorStop(0, 'rgba(225,235,245,0.38)'); gr.addColorStop(0.7, 'rgba(140,160,180,0.45)'); gr.addColorStop(0.93, 'rgba(20,28,36,0.7)'); gr.addColorStop(1, 'rgba(20,28,36,0)');
+  x.fillStyle = gr; x.beginPath(); x.arc(32, 32, 31, 0, Math.PI * 2); x.fill();
+  gr = x.createRadialGradient(23, 21, 0, 23, 21, 11);
+  gr.addColorStop(0, 'rgba(255,255,255,0.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = gr; x.beginPath(); x.arc(23, 21, 11, 0, Math.PI * 2); x.fill();
+  return cv;
+}
+
 export class CapaCamara {
   constructor(lienzo) {
     this.cv = lienzo; this.x = lienzo.getContext('2d');
-    this.gotas = [];
-    this.activa = false;
+    this.gotas = [];          // gotas grandes que se mueven
+    this.micro = [];          // microgotas que quedan pegadas a la visera
+    this.activa = false; this._sucio = false;
+    this.sprite = spriteGota();
+    // viñeta de velocidad: un div con degradado fijo, solo cambia su opacidad
+    this.vineta = document.createElement('div');
+    Object.assign(this.vineta.style, { position: 'fixed', inset: '0', pointerEvents: 'none', opacity: '0', zIndex: getComputedStyle(lienzo).zIndex || '1',
+      background: 'radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(0,0,0,1) 100%)' });
+    lienzo.parentNode?.insertBefore(this.vineta, lienzo.nextSibling);
   }
-  actualizar(dt, { lluvia = 0, aBordo = false, velocidad = 0, solPantalla = null, hora = 'dia' }) {
+  /**
+   * lluvia 0..1; aBordo: cámara de cabina/cara/T-cam; casco: visera del piloto (el viento sube
+   * las gotas); velocidad en m/s; spray 0..1 detrás de otro coche (más agua).
+   */
+  actualizar(dt, { lluvia = 0, aBordo = false, casco = false, velocidad = 0, spray = 0, solPantalla = null, hora = 'dia' }) {
     const cv = this.cv, w = cv.clientWidth, h = cv.clientHeight;
-    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; this._sucio = true; }
     const x = this.x;
-    x.clearRect(0, 0, w, h);
+    if (this._sucio) { x.clearRect(0, 0, w, h); this._sucio = false; }
     let algo = false;
-    // gotas que caen sobre la lente y resbalan con la velocidad
+    const v = velocidad;
     if (aBordo && lluvia > 0.05) {
       algo = true;
-      if (this.gotas.length < 70 && Math.random() < lluvia * dt * 45) this.gotas.push({ x: Math.random() * w, y: Math.random() * h * 0.8, r: 3 + Math.random() * 9, vida: 1 + Math.random() * 2 });
-      this.gotas = this.gotas.filter(g => (g.vida -= dt) > 0);
+      const agua = lluvia * (1 + spray * 2.5);
+      const esc = Math.min(w, h) / 400;
+      if (this.gotas.length < 90 && Math.random() < agua * dt * 80) this.gotas.push({ x: Math.random() * w, y: Math.random() * h * (casco ? 1 : 0.8), r: (5 + Math.random() * 11) * esc, vida: 0.8 + Math.random() * 2.2, pegada: Math.random() * 0.4 });
+      const cx = w / 2, cy = h * 0.55;
       for (const g of this.gotas) {
-        g.y += (20 + velocidad * 2.5) * dt * (g.r / 8);
-        g.x += (g.x - w / 2) * dt * velocidad * 0.004;
-        const a = Math.min(1, g.vida) * 0.55;
-        const gr = x.createRadialGradient(g.x - g.r * 0.3, g.y - g.r * 0.3, 0, g.x, g.y, g.r);
-        gr.addColorStop(0, `rgba(255,255,255,${a})`); gr.addColorStop(0.6, `rgba(180,200,220,${a * 0.35})`); gr.addColorStop(1, 'rgba(120,140,160,0)');
-        x.fillStyle = gr; x.beginPath(); x.ellipse(g.x, g.y, g.r * 0.8, g.r, 0, 0, Math.PI * 2); x.fill();
+        g.vida -= dt;
+        // pegada: las gotas tardan un instante en empezar a moverse
+        if ((g.pegada -= dt) > 0) continue;
+        if (casco && v > 12) {
+          // en la visera el aire empuja hacia arriba y hacia los lados; más rápido, más estela
+          g.vx = (g.x - cx) * 0.9 * (v / 60); g.vy = -(40 + v * 4.5) * (g.r / (8 * esc));
+        } else {
+          g.vx = (g.x - cx) * dt * v * 0.2; g.vy = (25 + v * 2.5) * (g.r / (8 * esc));
+        }
+        const ox = g.x, oy = g.y;
+        g.x += g.vx * dt; g.y += g.vy * dt;
+        // al moverse deja microgotas detrás
+        if (Math.random() < dt * 14 && this.micro.length < 160) this.micro.push({ x: ox, y: oy, r: g.r * (0.18 + Math.random() * 0.2), vida: 1.5 + Math.random() * 3 });
       }
-    } else this.gotas.length = 0;
+      this.gotas = this.gotas.filter(g => g.vida > 0 && g.x > -40 && g.x < w + 40 && g.y > -60 && g.y < h + 60);
+      // a mucha velocidad el aire limpia antes las microgotas
+      const limpia = 1 + Math.max(0, v - 30) * 0.05;
+      for (const m of this.micro) m.vida -= dt * limpia;
+      this.micro = this.micro.filter(m => m.vida > 0);
+      x.clearRect(0, 0, w, h);
+      const sp = this.sprite;
+      for (const m of this.micro) { x.globalAlpha = Math.min(1, m.vida) * 0.9; x.drawImage(sp, m.x - m.r, m.y - m.r, m.r * 2, m.r * 2); }
+      for (const g of this.gotas) {
+        // estela: la gota se estira en la dirección en la que corre
+        const vel = Math.hypot(g.vx || 0, g.vy || 0), est = Math.min(3.5, 1 + vel / 260);
+        x.globalAlpha = Math.min(1, g.vida * 1.5);
+        x.drawImage(sp, g.x - g.r * 0.85, g.y - g.r * est * (g.vy < 0 ? 0.2 : 0.8), g.r * 1.7, g.r * 2 * est);
+      }
+      x.globalAlpha = 1;
+      this._sucio = true;
+    } else if (this.gotas.length || this.micro.length) { this.gotas.length = 0; this.micro.length = 0; x.clearRect(0, 0, w, h); }
     // destello del sol cuando se mira hacia él
     if (solPantalla && hora !== 'noche' && lluvia < 0.3) {
       const [sx, sy] = solPantalla;
       if (sx > -0.2 * w && sx < 1.2 * w && sy > -0.2 * h && sy < 1.2 * h) {
         algo = true;
+        if (!(aBordo && lluvia > 0.05)) x.clearRect(0, 0, w, h);
         const cx = w / 2, cy = h / 2;
         const fuerza = Math.max(0, 1 - Math.hypot(sx - cx, sy - cy) / (w * 0.8));
         x.globalCompositeOperation = 'lighter';
@@ -110,17 +162,13 @@ export class CapaCamara {
           x.fillStyle = gr; x.beginPath(); x.arc(px, py, r, 0, Math.PI * 2); x.fill();
         }
         x.globalCompositeOperation = 'source-over';
+        this._sucio = true;
       }
     }
-    // viñeta de velocidad: los bordes se oscurecen y estiran por encima de 250 km/h
-    if (velocidad > 60) {
-      algo = true;
-      const k = Math.min(1, (velocidad - 60) / 35) * 0.35;
-      const gr = x.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.75);
-      gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, `rgba(0,0,0,${k})`);
-      x.fillStyle = gr; x.fillRect(0, 0, w, h);
-    }
-    this.activa = algo;
+    // viñeta de velocidad (CSS): los bordes se oscurecen por encima de ~215 km/h
+    const k = v > 60 ? Math.min(1, (v - 60) / 35) * 0.35 : 0;
+    if (Math.abs(k - (this._vin || 0)) > 0.01) { this._vin = k; this.vineta.style.opacity = k.toFixed(3); }
+    this.activa = algo || k > 0;
   }
 }
 
