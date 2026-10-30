@@ -41,6 +41,11 @@ export class Neumatico {
     this.tNucleo = 70;    // °C carcasa
     this.desgaste = 0;    // 0 nuevo .. 1 destruido
     this.bloqueo = 0;     // plano por bloqueo (vibración)
+    // graining: deslizar con la goma fría arranca bolitas que se pegan a la banda (se limpia
+    // con unas vueltas en temperatura); ampollas: la goma sobrecalentada forma burbujas que
+    // revientan y dejan huecos (no se arreglan: hasta el próximo juego)
+    this.graining = 0;
+    this.ampollas = 0;
   }
 
   ponerCompuesto(c, presion = 5) {
@@ -64,7 +69,7 @@ export class Neumatico {
     const w = this.desgaste;
     const desg = w < 0.75 ? 1 - 0.12 * w : 1 - 0.09 - 0.6 * (w - 0.75);
     // un plano deja la goma irregular: algo menos de agarre y más desgaste
-    return termico * Math.max(0.55, desg) * this.factorMuPresion * this.mejoraMu * (1 - 0.05 * this.bloqueo);
+    return termico * Math.max(0.55, desg) * this.factorMuPresion * this.mejoraMu * (1 - 0.05 * this.bloqueo) * (1 - 0.07 * this.graining) * (1 - 0.11 * this.ampollas);
   }
 
   // potenciaDeslizamiento en W, fz en N, v en m/s
@@ -81,7 +86,15 @@ export class Neumatico {
     const sobre = Math.max(0, this.tSup - this.c.tOpt - 20) / 40;
     // los de lluvia sobre pista seca se destrozan; el agua lubrica y apenas gasta los lisos
     const seco = this.c.lluvia ? 1 + 3 * Math.max(0, 0.25 - agua) * 4 : 1 - 0.5 * Math.min(1, agua);
-    this.desgaste += potenciaDeslizamiento * 2.4e-8 * this.c.desgaste * this.factorDesgastePresion * this.mejoraDesgaste * (1 + sobre) * seco * dt;
+    this.desgaste += potenciaDeslizamiento * 2.4e-8 * this.c.desgaste * this.factorDesgastePresion * this.mejoraDesgaste * (1 + sobre) * seco * dt * (1 + 0.6 * this.ampollas);
     if (this.desgaste > 1) this.desgaste = 1;
+    // graining: goma por debajo de su ventana (más de 12 °C) y deslizando fuerte; los blandos lo sufren más
+    const frio = Math.max(0, this.c.tOpt - 12 - this.tSup) / 15;
+    if (frio > 0 && potenciaDeslizamiento > 2500 && !this.c.lluvia) this.graining = Math.min(1, this.graining + frio * potenciaDeslizamiento * 9e-7 * this.c.calor * dt);
+    // ...y se limpia rodando en temperatura (unas dos o tres vueltas)
+    else if (this.graining > 0 && this.tSup > this.c.tOpt - 8) this.graining = Math.max(0, this.graining - dt * v * 0.000012);
+    // ampollas: superficie más de 28 °C por encima de su ventana
+    const calorExtra = Math.max(0, this.tSup - this.c.tOpt - 28) / 20;
+    if (calorExtra > 0) this.ampollas = Math.min(1, this.ampollas + calorExtra * (0.4 + potenciaDeslizamiento * 4e-5) * 0.004 * dt);
   }
 }

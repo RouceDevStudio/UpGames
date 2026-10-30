@@ -103,7 +103,11 @@ export class Camara {
       if (this.modo === 'cabina' && modelo.mirada) mirar.applyAxisAngle(new THREE.Vector3(0, 1, 0), modelo.mirada * 0.85);
       if (this.mirarAtras) { mirar.x = -30; local.x = this.modo === 'tcam' ? -0.6 : -0.1; local.y += 0.1; }
       // al frenar la cabeza va hacia delante y abajo; al acelerar, atrás; en curva, hacia fuera
-      if (!cara) {
+      const hg = this.modo === 'cabina' ? modelo.piloto?.cabezaG : null;
+      if (hg) {
+        // la vista va con la cabeza del piloto (muelle con inercia: llega tarde y se pasa un poco)
+        local.z += hg.x * 0.16; local.x -= hg.z * 0.14; local.y -= Math.max(0, -hg.z) * 0.05;
+      } else if (!cara) {
         local.x -= THREE.MathUtils.clamp(this.gLong, -6, 4) * 0.012;   // axF > 0 acelerando
         local.y -= Math.max(0, -this.gLong) * 0.004;
         local.z -= THREE.MathUtils.clamp(this.gLat, -6, 6) * (this.modo === 'cabina' ? 0.008 : 0.003);  // ayF hacia el interior
@@ -115,6 +119,7 @@ export class Camara {
       const up = new THREE.Vector3(0, 1, 0).transformDirection(m);
       cam.up.copy(up);
       cam.lookAt(mirar.applyMatrix4(m));
+      if (hg) cam.rotateZ(-hg.x * 0.22);        // el horizonte se inclina con la cabeza
       if (tr > 0.001) { cam.rotateZ(Math.sin(t * 29) * tr * 0.08); cam.rotateX(Math.sin(t * 23 + 2) * tr * 0.05); }
       cam.near = 0.05;
       this.iniciada = false;

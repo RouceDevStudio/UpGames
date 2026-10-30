@@ -155,7 +155,9 @@ export class Efectos {
         if (marca || tierra) {
           const dirx = cos * Math.cos(w.angulo) - sin * Math.sin(w.angulo), dirz = sin * Math.cos(w.angulo) + cos * Math.sin(w.angulo);
           const inten = tierra ? 0.5 : Math.min(1, (desl - 4.5) / 10 + 0.35);
-          this.marcas.anadir(clave, w.wx, w.wy + 0.012, w.wz, dirx, dirz, w.delantera ? 0.3 : 0.4, inten, tierra ? 0.12 : 0.02);
+          // en la hierba el surco es más ancho y oscuro (tierra levantada) si va rápido o derrapando
+          const surco = tierra ? Math.min(1, 0.5 + v / 60 + desl / 30) : inten;
+          this.marcas.anadir(clave, w.wx, w.wy + 0.012, w.wz, dirx, dirz, (w.delantera ? 0.3 : 0.4) * (tierra ? 1.25 : 1), surco, tierra ? 0.07 : 0.02);
         } else this.marcas.cortar(clave);
         if (lejos) continue;
         // humo de goma
@@ -166,10 +168,14 @@ export class Efectos {
         // piedras y terrones lanzados por las ruedas fuera de la pista
         if (tierra && v > 14 && rnd() < Math.min(0.9, v / 45) * (this.calidad >= 1 ? 1 : 0.5)) {
           const grava = w.sup === SUP_GRAVA;
-          for (let k = 0; k < (grava ? 3 : 1); k++) {
+          // en la hierba salen briznas verdes y terrones de tierra; más cuanto más derrapa
+          const n = grava ? 3 : 2 + Math.floor(Math.min(4, desl / 5));
+          for (let k = 0; k < n; k++) {
+            const verde = !grava && rnd() < 0.55;
             const tono = grava ? 0.55 + rnd() * 0.2 : 0.22 + rnd() * 0.1;
-            this.piedras.emitir(w.wx, w.wy + 0.1, w.wz, cos * v * (0.2 + rnd() * 0.3) + (rnd() - 0.5) * 4, 1.5 + rnd() * 4, sin * v * (0.2 + rnd() * 0.3) + (rnd() - 0.5) * 4,
-              grava ? 0.06 + rnd() * 0.05 : 0.12 + rnd() * 0.1, 1, 0.8 + rnd() * 0.6, 0, tono, tono * (grava ? 0.95 : 1.4), tono * (grava ? 0.85 : 0.6));
+            const [cr, cg, cb] = grava ? [tono, tono * 0.95, tono * 0.85] : verde ? [0.16 + rnd() * 0.1, 0.38 + rnd() * 0.15, 0.1] : [tono, tono * 0.75, tono * 0.45];
+            this.piedras.emitir(w.wx, w.wy + 0.1, w.wz, cos * v * (0.2 + rnd() * 0.3) + (rnd() - 0.5) * 4, 1.5 + rnd() * (verde ? 3 : 4), sin * v * (0.2 + rnd() * 0.3) + (rnd() - 0.5) * 4,
+              grava ? 0.06 + rnd() * 0.05 : verde ? 0.07 + rnd() * 0.08 : 0.12 + rnd() * 0.12, 1, 0.8 + rnd() * 0.6, 0, cr, cg, cb);
           }
         }
         // buje sin rueda arrastrando por el asfalto: chorro de chispas

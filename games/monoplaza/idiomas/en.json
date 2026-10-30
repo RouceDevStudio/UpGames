@@ -942,5 +942,16 @@
 "Gran Bulevar Nocturno": "Grand Night Boulevard",
 "Bahía": "Bay",
 "Bulevar": "Boulevard",
-"Está lloviendo en el sector #; el resto del circuito todavía está seco. Cuidado al llegar ahí.": "It is raining in sector #; the rest of the circuit is still dry. Careful when you get there."
+"Está lloviendo en el sector #; el resto del circuito todavía está seco. Cuidado al llegar ahí.": "It is raining in sector #; the rest of the circuit is still dry. Careful when you get there.",
+"MEZCLA AHORRO": "ECONOMY MIX",
+"MEZCLA NORMAL": "NORMAL MIX",
+"MEZCLA RICA": "RICH MIX",
+"Menos potencia, gasta menos": "Less power, uses less fuel",
+"Equilibrada": "Balanced",
+"Más potencia, gasta más y castiga el motor": "More power, uses more fuel and stresses the engine",
+"🎥 TERCERA PERSONA": "🎥 THIRD PERSON",
+"⛑️ CÁMARA CASCO": "⛑️ HELMET CAM",
+"🚁 HELICÓPTERO": "🚁 HELICOPTER",
+"Coche destrozado": "Car destroyed",
+"Nos sobra combustible. Puedes volver a la mezcla normal.": "We have fuel to spare. You can go back to the normal mix."
 }

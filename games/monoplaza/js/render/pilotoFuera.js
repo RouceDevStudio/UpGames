@@ -68,15 +68,29 @@ export class PilotosFuera {
       const suelo = (d) => pr.y + c.caida(i, d);
       const enPista = Math.abs(pr.d) < muro - 0.2;
       if (f.estado === 'sale') {
-        // se levanta, pasa una pierna por encima del habitáculo y salta al suelo de lado
-        const k = Math.min(1, f.t / 1.8);
-        if (f.t > 0.4) per.poner('de_pie', 0.6);
+        // salida en fases (más lenta si está herido): quita el volante, se pone de pie en el
+        // habitáculo agarrado al halo, pasa una pierna por encima del pontón, salta al suelo
+        // (flexiona al caer) y mira el coche un momento antes de irse
+        const r = f.herido ? 1.6 : 1, t = f.t / r;
         const nx = -Math.sin(f.coche.psi) * f.lado, nz = Math.cos(f.coche.psi) * f.lado;   // lateral del coche
-        // ojo: el lateral +d de la pista es (−tz, tx); aquí se usa el del coche
-        _v.set(f.coche.x + nx * 1.25 * k, 0, f.coche.z + nz * 1.25 * k);
-        f.pos.x = _v.x; f.pos.z = _v.z;
-        f.pos.y = suelo(pr.d) + (1 - k) * 0.45 + Math.sin(k * Math.PI) * 0.25;
-        if (k >= 1) { f.estado = 'camina'; f.t = 0; }
+        const ax = Math.cos(f.coche.psi), az = Math.sin(f.coche.psi);                       // hacia el morro
+        const base = f.coche.y;
+        const suave = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+        let lat = 0, alto = 0.45, fase;
+        if (t < 1.1) { fase = 'quita_volante'; }
+        // (alto = altura de los pies: sentado en el asiento 0,45; de pie en el fondo del habitáculo 0,12;
+        // pisando el pontón 0,55)
+        else if (t < 2.3) { fase = 'apoya'; alto = 0.45 - 0.33 * suave((t - 1.1) / 0.8); }
+        else if (t < 3.4) { fase = 'trepa'; const k = suave((t - 2.3) / 1.1); lat = 0.72 * k; alto = 0.12 + 0.43 * Math.sin(Math.min(1, k * 1.3) * Math.PI / 2); }
+        else if (t < 3.9) { fase = 'de_pie'; const k = (t - 3.4) / 0.5; lat = 0.72 + 0.6 * k; alto = (0.55 + (base - suelo(pr.d))) * (1 - k * k) + Math.sin(k * Math.PI) * 0.15; }
+        else if (t < 4.4) { fase = 'preparado'; lat = 1.3; alto = 0; }                        // aterriza flexionando
+        else { fase = f.herido ? 'estabiliza' : 'de_pie'; lat = 1.3; alto = 0; }
+        if (fase !== f.fase) { f.fase = fase; per.poner(fase, fase === 'preparado' ? 0.12 : 0.35); }
+        f.pos.x = f.coche.x + nx * lat - ax * 0.15; f.pos.z = f.coche.z + nz * lat - az * 0.15;
+        f.pos.y = (t < 3.4 ? base : suelo(pr.d)) + alto;
+        // mira hacia delante en el coche, luego hacia el coche (de lado) antes de marcharse
+        f.rumbo = t < 3.4 ? f.coche.psi : Math.atan2(-nz, -nx);
+        if (t > 5.2) { f.estado = 'camina'; f.t = 0; per.poner('de_pie', 0.4); }
       } else if (f.estado === 'camina') {
         // hacia el muro y, al llegar, por encima de él hasta quedar detrás
         const objD = f.lado * (muro + 2.6);

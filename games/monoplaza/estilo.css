@@ -527,3 +527,14 @@ body #lienzo { transition: filter 1.5s; }
 .toast { background: rgba(10,12,18,.9); border: 1px solid #ffd23f; color: #fff; border-radius: 10px; padding: 8px 12px; font-size: 13px; transform: translateX(0); transition: opacity .5s, transform .5s; }
 .toast.fuera { opacity: 0; transform: translateX(30px); }
 .tr-cab .tr-barra { padding: 0; border: 0; border-radius: 3px; background: #2a2d36; }
+/* mezcla de combustible (mismo estilo que el botón de ERS) */
+.mezcla-bt .pila { fill: none; stroke: rgba(255,255,255,.75); stroke-width: 2.5; }
+.mezcla-bt .borne { fill: none; stroke: rgba(255,255,255,.75); stroke-width: 2.5; }
+.mezcla-bt .carga { fill: rgba(47,224,122,.45); }
+.mezcla-bt.activo { border-color: #ff9a3c; }
+/* salida del piloto: bandas de cine, sin HUD, y el nombre de la cámara */
+body.cine-salida #hud, body.cine-salida #tactil { opacity: 0; pointer-events: none; transition: opacity .4s; }
+body.cine-salida::before, body.cine-salida::after { content: ''; position: fixed; left: 0; right: 0; height: 9vh; background: #000; z-index: 30; pointer-events: none; }
+body.cine-salida::before { top: 0; } body.cine-salida::after { bottom: 0; }
+#cineEtiqueta { position: fixed; top: calc(9vh + 10px); left: 50%; transform: translateX(-50%); z-index: 31; font: 800 13px/1 system-ui, sans-serif; letter-spacing: .12em; color: #fff; background: rgba(0,0,0,.55); padding: 7px 12px; border-radius: 6px; opacity: 0; transition: opacity .3s; pointer-events: none; }
+#cineEtiqueta.visible { opacity: 1; }

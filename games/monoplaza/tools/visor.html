@@ -31,7 +31,7 @@ scene.add(m.raiz);
 // ?caras=1: las caras vistas por detrás salen en rojo (normales o sentido de giro al revés)
 if (q.get('caras')) { const lista = []; m.raiz.traverse(o => { if (o.isMesh && o.material && !o.material.transparent) lista.push(o); });
   for (const o of lista) { const r2 = new THREE.Mesh(o.geometry, new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.BackSide })); o.add(r2); } }
-const coche = { ruedas: [0, 1, 2, 3].map(k => ({ angulo: k < 2 ? +(q.get('giro') || 0) : 0, giro: 0, izquierda: k % 2 === 0, neum: { tSup: 90, desgaste: 0, c: { tOpt: 90 } } })), dano: { pinchazo: [0, 0, 0, 0], suelta: [0, 0, 0, 0], susp: [0, 0, 0, 0], aleronTras: 0 }, cabeceo: 0, balanceo: 0, alturaDel: 0.032, alturaTras: 0.075, danoAleron: 0, drsAbierto: false, ersPotenciaActual: 0, anguloVolante: +(q.get('giro') || 0), ayF: 0, axF: 0, rpm: 11000, marcha: 5, velocidad: 50, mandos: { ersModo: 1 }, combustible: 50, ers: 3e6 };
+const coche = { ruedas: [0, 1, 2, 3].map(k => ({ angulo: k < 2 ? +(q.get('giro') || 0) : 0, giro: 0, izquierda: k % 2 === 0, neum: { tSup: 90, desgaste: +(q.get('desgaste') || 0), graining: +(q.get('graining') || 0), ampollas: +(q.get('ampollas') || 0), c: { tOpt: 90 } } })), dano: { pinchazo: [0, 0, 0, 0], suelta: [0, 0, 0, 0], susp: [0, 0, 0, 0], aleronTras: 0 }, cabeceo: 0, balanceo: 0, alturaDel: 0.032, alturaTras: 0.075, danoAleron: 0, drsAbierto: false, ersPotenciaActual: 0, anguloVolante: +(q.get('giro') || 0), ayF: 0, axF: 0, rpm: 11000, marcha: 5, velocidad: 50, mandos: { ersModo: 1 }, combustible: 50, ers: 3e6 };
 // ?golpes=n: n golpes en el lateral izquierdo y en el morro, como si viniera de varios choques
 const nG = +(q.get('golpes') || 0);
 if (nG) {
@@ -42,11 +42,12 @@ if (nG) {
     if (Math.abs(z) > 0.3) coche.dano.zona[z > 0 ? 'izq' : 'der'] += (vn - 4) * 0.045; else coche.dano.zona.del += (vn - 4) * 0.04; }
   coche.danoAleron = Math.min(1, coche.dano.zona.del * 1.2);
 }
+if (q.get('desintegrado')) { coche.dano.desintegrado = true; coche.dano.suelta[2] = coche.dano.suelta[3] = true; coche.danoAleron = 0.8; }
 m.actualizar(coche, 0.2);
 const cam = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.02, 200);
 const vistas = {
   '3q': [[4.2, 2.6, 4.6], [0.2, 0.3, 0]], lado: [[0, 0.6, 7.5], [0.2, 0.4, 0]], arriba: [[0.2, 9, 0.01], [0.2, 0, 0]],
-  frente: [[7, 1.1, 0], [0, 0.4, 0]], trasera: [[-6, 1.6, 2.5], [0, 0.5, 0]], blender: [[3.6, 4.2, -3.2], [0.2, 0.2, 0]],
+  frente: [[7, 1.1, 0], [0, 0.4, 0]], rueda: [[2.6, 0.55, 1.6], [1.7, 0.33, 0.8]], trasera: [[-6, 1.6, 2.5], [0, 0.5, 0]], blender: [[3.6, 4.2, -3.2], [0.2, 0.2, 0]],
   cabina: [[0.16, 0.9, 0], [30, -0.2, 0]], cara: [[0.60, 0.94, 0], [0.0, 0.83, 0]],
 };
 const [p, t] = vistas[q.get('vista') || '3q'];

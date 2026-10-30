@@ -19,6 +19,7 @@
 <body>
 <canvas id="lienzo"></canvas>
 <canvas id="capaCamara"></canvas>
+<div id="cineEtiqueta"></div>
 
 <!-- Carga -->
 <div id="carga" class="pantalla visible">
@@ -436,6 +437,10 @@
     <button id="bErs" class="bt energia ers-bt" aria-label="ERS: modo de despliegue de la batería">
       <svg viewBox="0 0 64 40" aria-hidden="true"><rect class="pila" x="10" y="8" width="40" height="24" rx="4"/><rect class="borne" x="50" y="15" width="5" height="10" rx="1.5"/><rect class="carga" x="13" y="11" width="34" height="18" rx="2"/><path class="rayo" d="M33 9 L22 22 L30 22 L27 31 L40 17 L32 17 Z"/></svg>
       <span id="bErsTxt">ERS</span>
+    </button>
+    <button id="bMezcla" class="bt energia mezcla-bt" aria-label="Mezcla de combustible: ahorro, normal o rica">
+      <svg viewBox="0 0 64 40" aria-hidden="true"><path class="pila" d="M18 34 V12 Q18 6 24 6 H36 Q42 6 42 12 V34 Z"/><path class="borne" d="M42 14 L50 18 V30 Q50 33 47 33"/><rect class="carga" x="22" y="12" width="16" height="9" rx="1.5"/></svg>
+      <span id="bMezclaTxt">MIX</span>
     </button>
   </div>
 </div>

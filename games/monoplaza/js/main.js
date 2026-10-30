@@ -38,7 +38,7 @@ import * as ESTR from './estrategia.js';
 import * as PROG from './progresion.js';
 import * as ED from './editorCircuito.js';
 import { iniciarIdioma } from './idioma.js';
-import { PIVOTE_VUELO } from './physics/monoplaza.js';
+import { PIVOTE_VUELO, MEZCLA_NOMBRES } from './physics/monoplaza.js';
 
 const $ = (s) => document.querySelector(s);
 const esTactil = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -456,6 +456,7 @@ function opcBase(modo) {
 
 function empezar(modo, extra = {}) {
   modoActual = modo;
+  fuelVuelta.inicio = null; fuelVuelta.porVuelta = null;
   sonido.iniciar();
   sonido.ponerVolumen(ajustes.volumen);
   const opc = { ...opcBase(modo), ...extra, averias: ajustes.averias ? 1 : 0, formacion: opcCarrera.formacion === 1 };
@@ -512,7 +513,7 @@ function arrancarSesion(modo) {
   iniciarEstrategia();
   progCarrera = { parrilla: sesion.jugador?.posicion || 1, sanciones: 0, vr: false, pole: vengoDeQ && sesion.jugador?.posicion === 1, km: 0, cerrada: false };
   vengoDeQ = false;
-  pilotosFuera?.limpiar(); salidasPendientes = []; tAturdido = 0; document.body.classList.remove('aturdido');
+  pilotosFuera?.limpiar(); salidasPendientes = []; tAturdido = 0; cineSalida = null; finPendiente = null; document.body.classList.remove('cine-salida'); document.body.classList.remove('aturdido');
   // repetición, telemetría, radio y estado de la carrera
   grabadora = new Grabadora(sesion.participantes.length);
   posPrev = new Map();
@@ -787,7 +788,7 @@ $('#bResTele').addEventListener('click', () => abrirTelemetria());
 
 entrada.conectarTactil({
   acel: $('#pedalAcel'), freno: $('#pedalFreno'), volante: $('#zonaVolante'), pomo: $('#pomo'),
-  subir: $('#bSubir'), bajar: $('#bBajar'), drs: $('#bDrs'), ers: $('#bErs'), camara: $('#bCam'), pausa: $('#bPausa'),
+  subir: $('#bSubir'), bajar: $('#bBajar'), drs: $('#bDrs'), ers: $('#bErs'), mezcla: $('#bMezcla'), camara: $('#bCam'), pausa: $('#bPausa'),
   atras: $('#bAtras'), recolocar: $('#bRecolocar'),
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden && jugando && !pausado) pausar(true); });
@@ -891,6 +892,8 @@ function actualizarHud(dt) {
   const bE = $('#bErs'), modoE = c.mandos.ersModo ?? 1;
   bE.classList.toggle('m0', modoE === 0); bE.classList.toggle('m2', modoE === 2);
   $('#bErsTxt').textContent = ['RECARGA', 'ERS', 'ATAQUE'][modoE];
+  $('#bMezclaTxt').textContent = ['AHORRO', 'MIX', 'RICA'][c.mandos.mezcla ?? 1];
+  $('#bMezcla').classList.toggle('activo', (c.mandos.mezcla ?? 1) !== 1);
   bE.querySelector('.carga').style.transform = `scaleX(${(c.ers / COCHE.ersCapacidad).toFixed(2)})`;
   // banderas
   const bandera = $('#hBandera');
@@ -1002,6 +1005,7 @@ let tMomentos = 0, posPrev = new Map();
 // Unos segundos después del golpe (para que quede grabado el final) se ve a cámara lenta con
 // las cámaras de TV y se vuelve a la carrera. Solo sin conexión: en línea no se para el tiempo.
 let repeAuto = null, tUltRepeAuto = -99;
+const fuelVuelta = { inicio: null, porVuelta: null };
 function pedirRepeAuto(k, texto) {
   if (enRed || !ajustes.repeAuto || repeAuto || sesion.tiempo - tUltRepeAuto < 20) return;
   repeAuto = { t: sesion.tiempo, k, texto };
@@ -1025,12 +1029,14 @@ function vigilarMomentos(dt) {
   tMomentos = 0;
   sesion.participantes.forEach((p, k) => {
     if (p.coche.impacto > 10) grabadora.marcar(sesion.tiempo - 1.5, 'choque', k, `Golpe de ${p.nombre.replace('@', '')}`);
-    // accidente gordo del jugador o vuelco cerca de él: repetición instantánea
-    const c = p.coche, cerca = Math.hypot(c.x - sesion.jugador.coche.x, c.z - sesion.jugador.coche.z) < 250;
-    if ((p.jugador && c.impacto > 20) || (cerca && (c.vuelo || c.volcado) && !p._repeVista)) {
+    // accidente gordo del jugador: repetición instantánea (los de la IA quedan apuntados como
+    // momentos y se ven en la repetición completa del final)
+    const c = p.coche;
+    if (p.jugador && (c.impacto > 20 || ((c.vuelo || c.volcado) && !p._repeVista))) {
       if (c.vuelo || c.volcado) p._repeVista = true;
-      pedirRepeAuto(k, p.jugador ? 'TU ACCIDENTE' : `ACCIDENTE DE ${p.nombre.replace('@', '').toUpperCase()}`);
+      pedirRepeAuto(k, 'TU ACCIDENTE');
     }
+    if ((c.vuelo || c.volcado) && !p._momentoVuelo) { p._momentoVuelo = true; grabadora.marcar(sesion.tiempo - 2, 'choque', k, `${p.nombre.replace('@', '')} sale volando`); }
     const antes = posPrev.get(p);
     // gana una posición en pista (no por boxes ni abandonos) entre los diez primeros
     if (antes && p.posicion < antes && p.posicion <= 10 && !p.box && !p.coche.limitadorPit) {
@@ -1100,8 +1106,18 @@ function procesarEventos() {
     else if (e.tipo === 'sector') {
       const el = $('#hS' + (e.k + 1)); el.className = e.color;
       if (e.color === 'morado') radio.decir(`Sector ${e.k + 1} morado. ¡Vas volando!`, { clave: 'morado', cada: 40 });
+      else radioSector(e);
     }
     else if (e.tipo === 'vuelta' && e.p.jugador) {
+      // consumo por vuelta (media móvil) para la pantalla del volante y la radio
+      const cf = e.p.coche.combustible;
+      if (fuelVuelta.inicio != null && fuelVuelta.inicio > cf) { const g = fuelVuelta.inicio - cf; fuelVuelta.porVuelta = fuelVuelta.porVuelta ? fuelVuelta.porVuelta * 0.6 + g * 0.4 : g; }
+      fuelVuelta.inicio = cf;
+      if (sesion.modo === 'carrera' && fuelVuelta.porVuelta) {
+        const quedan = sesion.vueltasTotales - e.p.vuelta + 1, da = cf / fuelVuelta.porVuelta;
+        if (da < quedan - 0.2) radio.decir(`Vamos justos de combustible: nos falta ${((quedan - da) * fuelVuelta.porVuelta).toFixed(1).replace('.', ',')} kilos. Pon la mezcla en ahorro y levanta antes de las frenadas.`, { clave: 'fuelCorto', cada: 90, prioridad: true });
+        else if (da > quedan + 1.5 && (e.p.coche.mandos.mezcla ?? 1) === 0) radio.decir('Nos sobra combustible. Puedes volver a la mezcla normal.', { clave: 'fuelSobra', cada: 120 });
+      }
       if (leccion) leccionVuelta = { t: e.t, valida: e.valida };
       progresar('vuelta', { valida: e.valida });
       estrategiaVuelta(e.p);
@@ -1167,8 +1183,9 @@ function procesarEventos() {
       if (e.p.jugador) {
         mensaje('ABANDONO', e.motivo || 'Coche demasiado dañado', 3.5);
         radio.decir('Se acabó, lo siento. Deja el coche en un lugar seguro.', { prioridad: true });
-        if (enRed) { multi.abandono(informeIncidentes()); setTimeout(() => { if (jugando && enRed) mostrarFueraRed(e.motivo); }, 3500); }
-        else if (sesion.modo === 'carrera') setTimeout(() => { if (jugando) mostrarResultados(); }, 4500);
+        // la pantalla final espera a que termine la salida del piloto (con sus cámaras)
+        if (enRed) { multi.abandono(informeIncidentes()); trasSalida(() => { if (jugando && enRed) mostrarFueraRed(e.motivo); }, 3500); }
+        else if (sesion.modo === 'carrera') trasSalida(() => { if (jugando) mostrarResultados(); }, 4500);
         else setTimeout(() => { if (jugando && sesion.jugador.coche.abandono) { const c = sesion.jugador.coche; c.repararTodo(); c.repararEnBoxes(); c.recolocar(); sesion.jugador.abandono = false; sesion.jugador.valida = false; barreras?.reponer(); pilotosFuera?.limpiar(); crearModelos(); mensaje('COCHE NUEVO', 'Vuelta anulada', 2); } }, 3500);
       }
     }
@@ -1224,6 +1241,25 @@ function radioRivales(p, pr) {
     const n = Math.max(1, Math.round(pr.en / (isFinite(p.mejor) ? p.mejor : 90)));
     if (n <= 4) radio.decir(`Lluvia prevista en unas ${n} vuelta${n > 1 ? 's' : ''}. Tenemos los intermedios listos.`, { clave: 'lluviaVueltas', cada: 150 });
   }
+}
+
+// El ingeniero comenta cada sector en directo (sin agobiar: como mucho uno cada ~20 s)
+function radioSector(e) {
+  if (e.color === 'rojo' || !jugando) return;
+  const dec = (x) => { const d = Math.round(Math.abs(x) * 10); return d <= 0 ? 'unas centésimas' : d === 1 ? 'una décima' : d < 10 ? `${['', '', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve'][d]} décimas` : `${(Math.abs(x)).toFixed(1).replace('.', ',')} segundos`; };
+  const sec = `sector ${e.k + 1}`;
+  // curva más lenta del sector (donde suele estar el tiempo)
+  const L = circuito.largo, ini = e.k === 0 ? 0 : circuito.sectores[e.k - 1], fin = e.k === 2 ? L : circuito.sectores[e.k];
+  const curva = circuito.curvas.filter(c => c.s >= ini && c.s < fin).sort((a, b) => a.r - b.r)[0];   // la de menor radio
+  let frase = null;
+  if (e.delta != null && e.delta < -0.08) frase = `${sec.charAt(0).toUpperCase() + sec.slice(1)}, ${dec(e.delta)} más rápido que tu mejor. Bien.`;
+  else if (e.delta != null && e.delta > 0.35) frase = `Pierdes ${dec(e.delta)} en el ${sec}${curva ? `, sobre todo en ${curva.nombre}` : ''}.`;
+  if (e.rival != null && sesion.modo === 'carrera' && e.nombreRival) {
+    const n = e.nombreRival.replace('@', '');
+    if (e.rival < -0.15) frase = `Le sacas ${dec(e.rival)} a ${n} en el ${sec}. Lo tienes.`;
+    else if (e.rival > 0.3 && !frase) frase = `${n} es ${dec(e.rival)} más rápido en el ${sec}.`;
+  }
+  if (frase) radio.decir(frase, { clave: 'sectorRadio', cada: 20 });
 }
 
 function radioPeriodica(dt) {
@@ -1335,6 +1371,7 @@ function bucle(ahora) {
       else if (e === 'bajar') j.cambiar(-1);
       else if (e === 'camara') { const m = camara.siguiente(); ajustes.camara = m; guardar(); mensaje(NOMBRES_CAMARA[m].toUpperCase(), '', 0.8); }
       else if (e === 'ers') { j.mandos.ersModo = ((j.mandos.ersModo ?? 1) + 1) % 3; mensaje(ERS_NOMBRES[j.mandos.ersModo], '', 0.8); }
+      else if (e === 'mezcla') { j.mandos.mezcla = ((j.mandos.mezcla ?? 1) + 1) % 3; mensaje('MEZCLA ' + MEZCLA_NOMBRES[j.mandos.mezcla], ['Menos potencia, gasta menos', 'Equilibrada', 'Más potencia, gasta más y castiga el motor'][j.mandos.mezcla], 1.2); }
       else if (e === 'recolocar' && enRed) mensaje('SIN REINICIOS EN LÍNEA', '', 1);
       else if (e === 'recolocar') {
         if (j.abandono && sesion.modo !== 'carrera') continue;
@@ -1418,11 +1455,15 @@ function bucle(ahora) {
     tiempo: pj.vuelta > 0 ? fmt(pj.tVuelta) : '',
     delta: sesion.modo !== 'carrera' ? sesion.delta() : null,
     box: !!pj.solicitudBox,
+    vueltasFuel: fuelVuelta.porVuelta ? pj.coche.combustible / fuelVuelta.porVuelta : null,
+    vueltasQuedan: sesion.modo === 'carrera' ? sesion.vueltasTotales - pj.vuelta + 1 : 0,
   };
 
   // cámara, luz y efectos
   const mJ = modelos[sesion.participantes.indexOf(sesion.jugador)];
   camara.actualizar(dt, j, mJ);
+  if (cineSalida && jugando) actualizarCineSalida(dt);
+  if (finPendiente && !cineSalida && !repe && !salidasPendientes.some(x => x.p.jugador)) { const fn = finPendiente; finPendiente = null; fn(); }
   if (jugando && espectando && camEsp) actualizarEspectador(dt, j, mJ);
   // durante la parada del jugador, plano de televisión del equipo trabajando (como en la tele)
   if (jugando && !espectando && paradaJugador && sesion.jugador.paradaInfo && ajustes.camParada !== false && !repe) {
@@ -3112,6 +3153,66 @@ function eliminarCircuitoEd() {
   editarCircuito(circuitosCom[0] || null);
 }
 
+// ─── Salida del piloto (jugador): momento con cámaras de tercera persona, casco y helicóptero ───
+let cineSalida = null, finPendiente = null;
+function trasSalida(fn, ms) {
+  setTimeout(() => {
+    // si el piloto aún no ha salido, o se está viendo su salida o la repetición, se espera
+    if (cineSalida || repe || salidasPendientes.some(x => x.p.jugador)) finPendiente = fn; else fn();
+  }, ms);
+}
+function iniciarCineSalida(f) {
+  cineSalida = { f, t: 0, plano: -1, a0: f.coche.psi + Math.PI * 0.65 };
+  document.body.classList.add('cine-salida');
+  const salta = () => { if (cineSalida) cineSalida.t = 99; };
+  cineSalida.salta = salta;
+  setTimeout(() => { addEventListener('pointerdown', salta, { once: true }); addEventListener('keydown', salta, { once: true }); }, 600);
+}
+const _cv = new THREE.Vector3(), _cv2 = new THREE.Vector3();
+function actualizarCineSalida(dt) {
+  const c = cineSalida, f = c.f, per = f.per, cam = camara.cam;
+  c.t += dt;
+  const P = per.raiz.position;
+  const plano = c.t < 4.6 ? 0 : c.t < 8.4 ? 1 : 2;
+  if (plano !== c.plano) {
+    c.plano = plano;
+    const el = $('#cineEtiqueta');
+    el.textContent = ['🎥 TERCERA PERSONA', '⛑️ CÁMARA CASCO', '🚁 HELICÓPTERO'][plano]; el.classList.add('visible');
+    clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('visible'), 1800);
+  }
+  cam.up.set(0, 1, 0);
+  if (plano === 0) {
+    // alrededor del habitáculo, a la altura del piloto, girando despacio
+    const a = c.a0 + c.t * 0.22, r = 3.4 - c.t * 0.12;
+    cam.position.set(P.x + Math.cos(a) * r, P.y + 1.35 + c.t * 0.05, P.z + Math.sin(a) * r);
+    _cv.set(P.x, P.y + 0.9, P.z);
+    cam.lookAt(_cv);
+  } else if (plano === 1) {
+    // desde el casco: lo que ve el piloto al bajar y alejarse (con el balanceo de los pasos)
+    per.cabeza.getWorldPosition(_cv);
+    const rum = f.rumbo, paso = c.t * 7.5;
+    cam.position.set(_cv.x + Math.cos(rum) * 0.12, _cv.y + 0.05 + Math.abs(Math.sin(paso)) * 0.025, _cv.z + Math.sin(rum) * 0.12);
+    // primero mira al coche destrozado, luego hacia donde camina
+    const k = Math.min(1, (c.t - 4.6) / 1.6);
+    _cv2.set(f.coche.x, f.coche.y + 0.5, f.coche.z).lerp(_cv.clone().add(new THREE.Vector3(Math.cos(rum) * 6, -1.2, Math.sin(rum) * 6)), k);
+    cam.lookAt(_cv2);
+    cam.rotateZ(Math.sin(paso) * 0.02);
+  } else {
+    // plano general desde el helicóptero, bajando y girando alrededor
+    const tt = c.t - 8.4, a = c.a0 + 1.2 + tt * 0.12;
+    cam.position.set(P.x + Math.cos(a) * (34 - tt * 1.5), P.y + 24 - tt * 1.2, P.z + Math.sin(a) * (34 - tt * 1.5));
+    _cv.set((P.x + f.coche.x) / 2, P.y + 0.5, (P.z + f.coche.z) / 2);
+    cam.lookAt(_cv);
+  }
+  cam.fov = plano === 1 ? 78 : plano === 2 ? 38 : 50; cam.near = plano === 1 ? 0.05 : 0.1; cam.updateProjectionMatrix();
+  if (c.t > 14) {
+    cineSalida = null; document.body.classList.remove('cine-salida');
+    removeEventListener('pointerdown', c.salta); removeEventListener('keydown', c.salta);
+    camara.iniciada = false;
+    if (finPendiente) { const fn = finPendiente; finPendiente = null; fn(); }
+  }
+}
+
 // ─── Pilotos a pie: salen del coche tras abandonar; atropellos y golpes que aturden ───────
 function actualizarPilotosFuera(dt) {
   if (!pilotosFuera || !sesion) return;
@@ -3120,7 +3221,8 @@ function actualizarPilotosFuera(dt) {
     if (x.p.coche.velocidad > 1 && x.t < 12) return true;
     if (x.t < 1.5) return true;
     const k = sesion.participantes.indexOf(x.p);
-    pilotosFuera.salir({ coche: x.p.coche, modelo: modelos[k], equipo: x.p.equipo, numero: x.p.numeroPiloto || 1, herido: x.herido, participante: x.p });
+    const f = pilotosFuera.salir({ coche: x.p.coche, modelo: modelos[k], equipo: x.p.equipo, numero: x.p.numeroPiloto || 1, herido: x.herido, participante: x.p });
+    if (x.p.jugador && f && !espectando) iniciarCineSalida(f);
     if (x.p.jugador) radio.decir(x.herido ? 'Sal despacio, los médicos van hacia ti. ¿Puedes andar?' : 'Sal del coche y ponte detrás del muro, rápido.', { prioridad: true, clave: 'salir', cada: 10 });
     return false;
   });

@@ -728,13 +728,19 @@ export class Sesion {
   _cerrarSector(p, k) {
     const t = p.tSector;
     p.sectores[k] = t;
+    const antes = p.mejoresSectores[k];
     const personal = t < p.mejoresSectores[k];
     const general = t < this.mejoresSectoresSesion[k];
     if (p.valida) {
       if (personal) p.mejoresSectores[k] = t;
       if (general) this.mejoresSectoresSesion[k] = t;
     }
-    if (p.jugador) this.eventos.push({ tipo: 'sector', k, t, color: !p.valida ? 'rojo' : general ? 'morado' : personal ? 'verde' : 'amarillo' });
+    if (p.jugador) {
+      // para la radio: diferencia con tu mejor sector y con el piloto de delante en ese sector
+      const del = this.modo === 'carrera' ? this.participantes.find(o => o.posicion === p.posicion - 1) : null;
+      this.eventos.push({ tipo: 'sector', k, t, antes, delta: Number.isFinite(antes) ? t - antes : null, rival: del?.sectores?.[k] != null ? t - del.sectores[k] : null, nombreRival: del?.nombre,
+        color: !p.valida ? 'rojo' : general ? 'morado' : personal ? 'verde' : 'amarillo' });
+    }
     p.tSector = 0; p.sector = k + 1;
   }
 

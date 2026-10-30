@@ -216,6 +216,38 @@ function texturaMono(col) {
   return t;
 }
 
+// Goma del neumático (u: alrededor, v: del flanco interior al exterior pasando por la banda).
+// Nueva: negra y lisa. Gastada: la banda se aclara y se marca con surcos; graining: bolitas
+// de goma pegadas; ampollas: cráteres oscuros donde la goma ha reventado.
+function pintarGoma(cv, desgaste, graining, ampollas, semilla = 0) {
+  const x = cv.getContext('2d'), W = cv.width, H = cv.height;
+  let s = 1234 + semilla * 97; const r = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+  x.fillStyle = '#151516'; x.fillRect(0, 0, W, H);
+  // banda de rodadura (centro del perfil)
+  const y0 = H * 0.3, y1 = H * 0.7;
+  const tono = Math.round(22 + desgaste * 34);
+  x.fillStyle = `rgb(${tono},${tono},${tono + 2})`; x.fillRect(0, y0, W, y1 - y0);
+  // surcos del desgaste a lo largo de la banda
+  for (let i = 0; i < 6 + desgaste * 30; i++) {
+    const y = y0 + r() * (y1 - y0), a = 0.08 + desgaste * 0.25;
+    x.fillStyle = `rgba(${r() < 0.5 ? '70,70,72' : '8,8,9'},${a})`; x.fillRect(0, y, W, 0.6 + r() * 1.4);
+  }
+  // graining: bolitas de goma
+  for (let i = 0; i < graining * 900; i++) {
+    const g = 50 + r() * 40;
+    x.fillStyle = `rgba(${g},${g},${g},${0.5 + r() * 0.4})`; x.fillRect(r() * W, y0 + r() * (y1 - y0), 1 + r() * 2, 1 + r() * 1.5);
+  }
+  // ampollas: cráteres
+  for (let i = 0; i < ampollas * 60; i++) {
+    const cx = r() * W, cy = y0 + 3 + r() * (y1 - y0 - 6), rr = 1.5 + r() * 3.5;
+    x.fillStyle = 'rgba(0,0,0,0.85)'; x.beginPath(); x.ellipse(cx, cy, rr * 1.6, rr, 0, 0, Math.PI * 2); x.fill();
+    x.fillStyle = 'rgba(90,90,92,0.6)'; x.fillRect(cx - rr * 1.6, cy - rr - 0.5, rr * 3.2, 0.8);
+  }
+  // letras del flanco (marca del neumático, más clara)
+  x.fillStyle = 'rgba(200,200,205,0.55)'; x.font = 'bold 9px Arial';
+  for (let i = 0; i < 4; i++) { x.fillText('UPGAMES', i * 64 + 6, H * 0.18); x.fillText('UPGAMES', i * 64 + 30, H * 0.92); }
+}
+
 function texturaTapacubos(colorCompuesto) {
   const cv = document.createElement('canvas'); cv.width = cv.height = 256;
   const x = cv.getContext('2d');
@@ -345,6 +377,10 @@ function pintarPantalla(p, car, info = {}) {
   x.font = '800 18px Arial'; x.fillStyle = '#8a94a6'; x.fillText(['ERS RECARGA', 'ERS NORMAL', 'ERS ATAQUE'][car.mandos.ersModo ?? 1], 14, 220);
   x.fillStyle = car.drsAbierto ? '#2fe07a' : car.drsPermitido ? '#fff' : '#3a4250'; x.font = '900 24px Arial'; x.fillText('DRS', 14, 250);
   x.fillStyle = car.limitadorPit ? '#3a7bff' : '#3a4250'; x.fillText('PIT', 84, 250);
+  // combustible: kg, vueltas que da y mezcla
+  x.font = '800 17px Arial'; x.fillStyle = (info.vueltasFuel ?? 99) < (info.vueltasQuedan ?? 0) ? '#ff3b3b' : '#cfd6e2';
+  x.fillText(`FUEL ${(car.combustible ?? 0).toFixed(1)}kg${info.vueltasFuel != null ? ` · ${info.vueltasFuel.toFixed(1)}v` : ''}`, 170, 220);
+  x.fillStyle = ['#2fe07a', '#8a94a6', '#ff9a3c'][car.mandos.mezcla ?? 1]; x.fillText(`MIX ${['AHORRO', 'NORMAL', 'RICA'][car.mandos.mezcla ?? 1]}`, 170, 250);
   // derecha: neumáticos (temperatura y desgaste) y daños
   const opt = car.ruedas[0].neum.c.tOpt;
   const col = (t) => t < opt - 35 ? '#2f7bff' : t < opt - 15 ? '#36c4ff' : t < opt + 15 ? '#2fe07a' : t < opt + 30 ? '#ffd23f' : '#ff3b3b';
@@ -516,9 +552,10 @@ export function crearModelo(opc) {
   const carroceria = new THREE.Group();
   const cuerpo = unir(geo.librea, pintura, true);
   carroceria.add(cuerpo);
-  carroceria.add(unir(geo.carbono, carbono));
-  carroceria.add(unir(geo.negro, negro));
-  if (geo.metal.length) carroceria.add(unir(geo.metal, metal));
+  const mCarbono = unir(geo.carbono, carbono), mNegro = unir(geo.negro, negro);
+  carroceria.add(mCarbono); carroceria.add(mNegro);
+  const mMetal = geo.metal.length ? unir(geo.metal, metal) : null;
+  if (mMetal) carroceria.add(mMetal);
   // piezas sueltas (con su pivote en el centro para que salgan volando al romperse)
   const matEspejo = matComun('espejo', () => new THREE.MeshStandardMaterial({ color: 0xaab6c4, metalness: 1, roughness: 0.04 }));
   const gruposPieza = piezas.map(pz => {
@@ -621,7 +658,7 @@ export function crearModelo(opc) {
   const geoNeum = new Map();
   const matTapa = new THREE.MeshStandardMaterial({ map: texturaTapacubos(cmp.color), roughness: 0.45, metalness: 0.25 });
   const matFreno = matComun('freno', () => new THREE.MeshStandardMaterial({ color: 0x1c1c1f, roughness: 0.5, metalness: 0.4 }));
-  for (const [x, z, r, w] of pos) {
+  for (const [k, [x, z, r, w]] of pos.entries()) {
     const giro = new THREE.Group(); giro.position.set(x, r, z);
     const rot = new THREE.Group(); giro.add(rot);
     const clave = `${r}|${w}|${calidad}`;
@@ -638,7 +675,12 @@ export function crearModelo(opc) {
       const gT = new THREE.LatheGeometry(perfil, calidad >= 2 ? 48 : 28); gT.rotateX(Math.PI / 2);
       geoNeum.set(clave, gT);
     }
-    const neum = new THREE.Mesh(geoNeum.get(clave), matComun('gomaNeum')); neum.castShadow = true; neum.receiveShadow = true;
+    // cada neumático con su goma: el desgaste, el graining y las ampollas se ven en la banda
+    const cvGoma = document.createElement('canvas'); cvGoma.width = 256; cvGoma.height = 64;
+    const texGoma = new THREE.CanvasTexture(cvGoma); texGoma.colorSpace = THREE.SRGBColorSpace; texGoma.wrapS = THREE.RepeatWrapping;
+    pintarGoma(cvGoma, 0, 0, 0, k);
+    const matGoma = new THREE.MeshStandardMaterial({ map: texGoma, roughness: 0.88, metalness: 0, side: THREE.DoubleSide });
+    const neum = new THREE.Mesh(geoNeum.get(clave), calidad >= 1 ? matGoma : matComun('gomaNeum')); neum.castShadow = true; neum.receiveShadow = true;
     rot.add(neum);
     const sg = Math.sign(z);
     const tapa = new THREE.Mesh(new THREE.CircleGeometry(r * 0.985, 40), matTapa);
@@ -661,7 +703,7 @@ export function crearModelo(opc) {
     const borroso = new THREE.Mesh(new THREE.CircleGeometry(r * 0.975, 40), matBorroso(cmp.color));
     borroso.position.z = sg * (w / 2 + 0.009); if (sg < 0) borroso.rotation.y = Math.PI;
     giro.add(borroso);
-    ruedas.push({ giro, rot, neum, tapa, borroso, matFreno: matF, base: new THREE.Vector3(x, r, z), radio: r, ancho: w, suelta: false });
+    ruedas.push({ giro, rot, neum, tapa, borroso, matFreno: matF, base: new THREE.Vector3(x, r, z), radio: r, ancho: w, suelta: false, cvGoma, texGoma, claveGoma: '' });
   }
 
   // calor del escape: una lámina translúcida que ondula detrás del coche cuando el motor empuja
@@ -717,6 +759,61 @@ export function crearModelo(opc) {
     nAbol = lista.length;
   }
 
+  // Desintegración: todo lo que queda por detrás del asiento (x < CORTE) se separa en varios
+  // trozos que salen despedidos; la célula se queda con un borde roto e irregular.
+  const CORTE = -0.32;
+  let desintegrado = false;
+  function partir(modelo3d) {
+    const mallas = [cuerpo, mCarbono, mNegro, mMetal].filter(Boolean);
+    for (const malla of mallas) {
+      const g = malla.geometry, p = g.attributes.position, P = p.array;
+      if (!malla.userData.orig) malla.userData.orig = (malla === cuerpo && posOrig) ? posOrig.slice() : P.slice();
+      const trozos = [[], [], []];          // pontones/cubierta, caja de cambios, difusor y escape
+      for (let t = 0; t < p.count; t += 3) {
+        const cx = (P[t * 3] + P[t * 3 + 3] + P[t * 3 + 6]) / 3;
+        if (cx >= CORTE) {
+          // borde roto: los vértices que pasan del corte se quedan en él, con dientes
+          for (let q = 0; q < 3; q++) { const i = (t + q) * 3; if (P[i] < CORTE) P[i] = CORTE - 0.04 * Math.abs(Math.sin(P[i + 2] * 41 + P[i + 1] * 17)); }
+          continue;
+        }
+        trozos[cx > -1.2 ? 0 : cx > -1.9 ? 1 : 2].push(t);
+      }
+      for (const lista of trozos) {
+        if (!lista.length) continue;
+        const pos = new Float32Array(lista.length * 9), nrm = new Float32Array(lista.length * 9), uv = new Float32Array(lista.length * 6);
+        const N = g.attributes.normal.array, U = g.attributes.uv?.array;
+        lista.forEach((t, j) => {
+          pos.set(P.subarray(t * 3, t * 3 + 9), j * 9); nrm.set(N.subarray(t * 3, t * 3 + 9), j * 9);
+          if (U) uv.set(U.subarray(t * 2, t * 2 + 6), j * 6);
+          for (let q = 0; q < 9; q++) P[t * 3 + q] = 0;           // fuera de la célula: triángulo vacío
+        });
+        const gg = new THREE.BufferGeometry();
+        gg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); gg.setAttribute('normal', new THREE.BufferAttribute(nrm, 3)); gg.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+        gg.computeBoundingSphere();
+        // centrado en su propio centro para que gire sobre sí mismo al volar
+        const c = gg.boundingSphere.center.clone(); gg.translate(-c.x, -c.y, -c.z);
+        const trozo = new THREE.Mesh(gg, malla.material); trozo.position.copy(c); trozo.castShadow = true;
+        carroceria.add(trozo);
+        modelo3d.alDesprender?.('motor', trozo);
+        carroceria.remove(trozo);
+      }
+      p.needsUpdate = true; g.computeBoundingSphere();
+    }
+    alaTras.visible = false; estadoDanos.alaTras = true;
+    for (const gp of gruposPieza) gp.g.visible = false;
+    calor.visible = false; pivDrs.visible = false; luzLluvia.visible = false;
+  }
+  function recomponer() {
+    for (const malla of [cuerpo, mCarbono, mNegro, mMetal].filter(Boolean)) {
+      if (!malla.userData.orig) continue;
+      malla.geometry.attributes.position.array.set(malla.userData.orig); malla.geometry.attributes.position.needsUpdate = true;
+    }
+    calor.visible = true; pivDrs.visible = true; luzLluvia.visible = true;
+    if (posOrig) cuerpo.geometry.attributes.normal.array.set(nrmOrig);
+    cuerpo.geometry.attributes.normal.needsUpdate = true;
+    posOrig = null; nrmOrig = null; nAbol = 0;          // las abolladuras se vuelven a tomar desde el coche entero
+  }
+
   let tPantalla = 0;
   const estadoDanos = { alaDel: false, alaTras: false };
   const modelo = {
@@ -743,6 +840,12 @@ export function crearModelo(opc) {
         if (d?.suelta[k] && !m.suelta) { m.suelta = true; this.alDesprender?.('rueda', m.giro, k); }
         else if (!d?.suelta[k] && m.suelta) m.suelta = false;      // coche reparado (o la repetición vuelve atrás)
         m.giro.visible = !m.suelta && !this.ruedaOculta[k];
+        // la goma cambia de aspecto con el desgaste (solo se repinta cuando cambia algo)
+        const nm = w.neum;
+        if (calidad >= 1 && nm && nm.desgaste != null) {
+          const cl = `${Math.round(nm.desgaste * 20)}|${Math.round((nm.graining || 0) * 8)}|${Math.round((nm.ampollas || 0) * 8)}`;
+          if (cl !== m.claveGoma) { m.claveGoma = cl; pintarGoma(m.cvGoma, nm.desgaste, nm.graining || 0, nm.ampollas || 0, k); m.texGoma.needsUpdate = true; }
+        }
       }
       carroceria.rotation.z = -car.cabeceo;
       carroceria.rotation.x = -car.balanceo;
@@ -771,6 +874,8 @@ export function crearModelo(opc) {
         // antes de romperse se tuerce
         if (!g.rota) g.g.rotation.set(lado * 0.25 * g.sg, 0, -lado * 0.3);
       });
+      if (d?.desintegrado && !desintegrado) { desintegrado = true; partir(this); }
+      else if (!d?.desintegrado && desintegrado) { desintegrado = false; recomponer(); }
       if (d?.abolladuras) abollar(d.abolladuras);
       // frenos al rojo (por encima de ~600 °C)
       for (let k = 0; k < 4; k++) {

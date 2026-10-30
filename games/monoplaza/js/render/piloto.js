@@ -71,6 +71,20 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
   const hebilla = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.012, 16), new THREE.MeshStandardMaterial({ color: 0xb8bcc4, metalness: 1, roughness: 0.3 }));
   hebilla.rotation.z = Math.PI / 2 - 0.5; hebilla.position.set(0.108, 0.617, 0); grupo.add(hebilla);
   void cintas;
+  // resto del arnés de 6 puntos: cintas de la cadera, la de la entrepierna y las hebillas
+  // de ajuste de los hombros (como en el modelo de referencia)
+  const metal = hebilla.material;
+  const cinta = (a, b, ancho = 0.045) => {
+    const m = new THREE.Mesh(geoCinta, matCinta);
+    const dd = b.clone().sub(a); m.position.copy(a).addScaledVector(dd, 0.5); m.scale.set(ancho / 0.045, dd.length(), 1);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dd.normalize()); grupo.add(m); return m;
+  };
+  for (const l of [-1, 1]) {
+    cinta(new THREE.Vector3(0.06, 0.60, l * 0.15), new THREE.Vector3(0.105, 0.612, l * 0.02), 0.05);      // cadera
+    const aj = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.03, 0.05), metal);                            // ajuste del hombro
+    aj.position.set(0.055, 0.672, l * 0.07); aj.rotation.z = -0.9; grupo.add(aj);
+  }
+  cinta(new THREE.Vector3(0.105, 0.612, 0), new THREE.Vector3(0.16, 0.585, 0), 0.04);                     // entrepierna
   // hombros redondeados (de ellos cuelgan los brazos)
   const geoHombro = new THREE.SphereGeometry(0.048, hi ? 18 : 12, hi ? 14 : 10);
   const hombros = [-1, 1].map(l => { const m = new THREE.Mesh(geoHombro, traje); m.position.set(0.05, 0.665, l * 0.165); grupo.add(m); return m; });
@@ -132,6 +146,7 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
 
   return {
     grupo, cuello, casco: cabeza,
+    cabezaG: { x: 0, vx: 0, z: 0, vz: 0 },   // inclinación de la cabeza (la usa la cámara de cabina)
     mirada: 0,
     /** Devuelve el ángulo que debe tener el volante (rad) y coloca brazos y cabeza. */
     actualizar(car, dt) {
@@ -165,8 +180,23 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
       const objMirar = -Math.max(-0.5, Math.min(0.5, (car.anguloVolante || 0) * 2.6)) * (1 - choque.soltar);
       this.mirada += (objMirar - this.mirada) * Math.min(1, dt * 6);
       cuello.rotation.y = this.mirada + (enChoque ? Math.sin(choque.t * 31) * 0.05 * Math.exp(-choque.t * 2) : 0);
-      cuello.rotation.x = Math.max(-0.25, Math.min(0.25, -(car.ayF || 0) * 0.012));
-      cuello.rotation.z = Math.max(-0.15, Math.min(0.2, (car.axF || 0) * 0.006)) - choque.soltar * 0.18;   // barbilla al pecho
+      // la cabeza es un muelle con inercia (como un cuello real con el casco): se va hacia fuera
+      // en las curvas, hacia delante al frenar, se pasa un poco al volver y tiembla en los baches
+      const hg = this.cabezaG;
+      if (dt > 0) {
+        const objLat = Math.max(-0.32, Math.min(0.32, -(car.ayF || 0) * 0.014));
+        const objLon = Math.max(-0.22, Math.min(0.16, (car.axF || 0) * 0.009));
+        const vib = (car.vibracion || 0) + (enChoque ? 0.6 * Math.exp(-choque.t * 3) : 0);
+        let resto = Math.min(dt, 0.1);
+        while (resto > 0) {
+          const h = Math.min(resto, 1 / 120); resto -= h;
+          if (vib > 0.02) { hg.vx += (Math.random() - 0.5) * vib * 9; hg.vz += (Math.random() - 0.5) * vib * 6; }
+          hg.vx += ((objLat - hg.x) * 150 - hg.vx * 12) * h; hg.x += hg.vx * h;
+          hg.vz += ((objLon - hg.z) * 130 - hg.vz * 11) * h; hg.z += hg.vz * h;
+        }
+      }
+      cuello.rotation.x = hg.x;
+      cuello.rotation.z = hg.z - choque.soltar * 0.18;   // barbilla al pecho
       cuello.position.y = 0.72 - choque.soltar * 0.012;
       // brazos: empuñadura del volante ↔ brazos cruzados sobre el pecho
       for (let s = 0; s < 2; s++) {

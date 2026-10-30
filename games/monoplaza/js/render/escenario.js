@@ -695,6 +695,33 @@ function grada(scene, c, s0, largo, lado, matGrada, matTecho, matBase, { publico
       pilar.position.set(x, (filas * 0.9 + 4) / 2, lado * filas * 1.5);
       g.add(pilar);
     }
+    // estructura de verdad: cerchas del techo en voladizo, pilares intermedios, muro trasero,
+    // laterales con escalera, pasillos entre sectores y una banda de publicidad en el techo
+    const altoT = filas * 0.9 + 4, fondoT = filas * 1.6 + 3;
+    const nCer = Math.max(2, Math.round(L / 8));
+    for (let c = 0; c <= nCer; c++) {
+      const x = -L / 2 + 0.3 + c * (L - 0.6) / nCer;
+      const cercha = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.55, fondoT), matTecho);
+      cercha.position.set(x, altoT - 0.3, lado * filas * 0.8); cercha.rotation.x = lado * 0.08; g.add(cercha);
+      const tirante = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, Math.hypot(fondoT * 0.55, 2.4)), matTecho);
+      tirante.position.set(x, altoT - 1.4, lado * (filas * 1.35)); tirante.rotation.x = lado * Math.atan2(2.4, fondoT * 0.55); g.add(tirante);
+      if (c > 0 && c < nCer) { const pm = new THREE.Mesh(new THREE.BoxGeometry(0.3, altoT, 0.3), matBase); pm.position.set(x, altoT / 2, lado * filas * 1.5); g.add(pm); }
+    }
+    const muroT = new THREE.Mesh(new THREE.BoxGeometry(L, filas * 0.9 + 1, 0.3), matBase);
+    muroT.position.set(0, (filas * 0.9 + 1) / 2, lado * (filas * 1.6 - 0.6)); g.add(muroT);
+    for (const sx of [-1, 1]) {
+      const lat = new THREE.Mesh(new THREE.BoxGeometry(0.3, filas * 0.9 + 1, filas * 1.6), matBase);
+      lat.position.set(sx * L / 2, (filas * 0.9 + 1) / 2, lado * (filas * 0.8 - 0.8)); g.add(lat);
+    }
+    // pasillos con escalones cada ~10 m
+    for (let x = -L / 2 + 10; x < L / 2 - 5; x += 10) for (let f = 0; f < filas; f++) {
+      const esc = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.95 + f * 0.9, 1.62), matBase);
+      esc.position.set(x, (0.95 + f * 0.9) / 2, -lado * (-f * 1.6)); g.add(esc);
+    }
+    // banda publicitaria en el borde del techo
+    grada.matBanda ??= new THREE.MeshStandardMaterial({ map: (() => { const t = TX.texturaMuro('UPGAMES'); t.repeat.set(3, 1); return t; })(), roughness: 0.6 });
+    const banda = new THREE.Mesh(new THREE.BoxGeometry(L, 1.1, 0.15), grada.matBanda);
+    banda.position.set(0, altoT - 0.75, lado * (filas * 0.8) - lado * fondoT / 2); g.add(banda);
     g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.userData.fijo = true; } });
     colocarEnPista(c, g, s, d);
     scene.add(g);

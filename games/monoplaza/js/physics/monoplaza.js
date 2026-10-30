@@ -8,6 +8,9 @@ import { Neumatico, fuerzasNeumatico, muCarga } from './neumatico.js';
 
 // altura del centro de giro del coche cuando vuela o vuelca (el modelo gira alrededor de él)
 export const PIVOTE_VUELO = 0.45;
+// mezcla de combustible (desde el volante): potencia, consumo y desgaste del motor
+export const MEZCLA_POT = [0.955, 1, 1.025], MEZCLA_GASTO = [0.82, 1, 1.15], MEZCLA_MOTOR = [0.8, 1, 1.35];
+export const MEZCLA_NOMBRES = ['AHORRO', 'NORMAL', 'RICA'];
 
 const RPM_A_RAD = Math.PI / 30;
 const tmpF = { fx: 0, fy: 0, sigma: 0 };
@@ -74,7 +77,7 @@ export class Monoplaza {
     this.combustible = opciones.combustible ?? 40;
     this.tAmb = opciones.tAmbiente ?? 26;
     this.reiniciarEstado();
-    this.mandos = { direccion: 0, acelerador: 0, freno: 0, drs: false, ersModo: 1 };
+    this.mandos = { direccion: 0, acelerador: 0, freno: 0, drs: false, ersModo: 1, mezcla: 1 };   // mezcla: 0 ahorro, 1 normal, 2 rica
     this.rebufo = 0;
     this.aireSucio = 0;
     this.drsPermitido = false;
@@ -103,7 +106,7 @@ export class Monoplaza {
   averias(dt, tasa = 1, azar = Math.random) {
     if (!(tasa > 0) || this.abandono || this.terminal) return null;
     const rpm = this.rpm / 12500;
-    this.desgasteMotor += dt * rpm * rpm * 1.1e-4 * (1 + 2 * (this.dano.motor || 0));
+    this.desgasteMotor += dt * rpm * rpm * 1.1e-4 * (1 + 2 * (this.dano.motor || 0)) * MEZCLA_MOTOR[this.mandos.mezcla ?? 1];
     const pMotor = 1.8e-5 * Math.pow(rpm, 4) * (1 + 30 * Math.pow(this.desgasteMotor, 3)) * (1 + 3 * (this.dano.motor || 0));
     if (azar() < pMotor * dt * tasa) {
       // humo, pérdida de potencia y, a los pocos segundos, motor roto
@@ -146,6 +149,9 @@ export class Monoplaza {
       const ab = d.abolladuras || (d.abolladuras = []);
       if (ab.length < 32) ab.push({ x: Math.max(-2.3, Math.min(3.0, ex)), z: Math.max(-0.9, Math.min(0.9, ey)), prof: Math.min(0.2, (vn - 5) * 0.013), r: Math.min(0.8, 0.3 + vn * 0.014), sem: (this.reloj * 997) % 1 });
     }
+    // golpe brutal (o el tercero muy fuerte en la misma zona): el coche se parte y solo queda
+    // la célula de supervivencia con el piloto; la parte trasera y sus ruedas salen despedidas
+    if (!d.desintegrado && (vn > 28 || (vn > 16 && Math.max(z.tras, z.izq, z.der) > 2.2))) this.desintegrar(ex, ey, vn);
     // fondo y pontones: cada golpe fuerte les quita carga
     if (vn > 4.5) {
       const antes = d.fondo;
@@ -180,6 +186,21 @@ export class Monoplaza {
     } else if (!d.pinchazo[k] && vn > 5 && azar() < Math.min(0.7, (vn - 5) * 0.08)) {
       d.pinchazo[k] = true; avisar('pinchazo' + k);
     }
+  }
+
+  desintegrar(ex = -2, ey = 0, vn = 30) {
+    const d = this.dano;
+    d.desintegrado = true;
+    d.suelta[2] = d.suelta[3] = true; d.pinchazo[2] = d.pinchazo[3] = true;
+    d.aleronTras = 1; d.fondo = 1; d.motor = 1; d.piezas = 1;
+    this.danoAleron = Math.max(this.danoAleron, vn > 34 ? 1 : 0.7);
+    if (d.zona) for (const k in d.zona) d.zona[k] = Math.max(d.zona[k], 1.5);
+    // la célula queda muy abollada donde ha pegado
+    const ab = d.abolladuras || (d.abolladuras = []);
+    for (let i = 0; i < 4; i++) ab.push({ x: Math.max(-0.3, Math.min(2.8, ex > 0 ? ex - i * 0.4 : 0.5 + i * 0.5)), z: (ey || (i % 2 ? 0.9 : -0.9)) * (i % 2 ? 1 : -1), prof: 0.16, r: 0.6, sem: Math.random() });
+    if (!this.terminal) { this.terminal = true; this.tTerminal = 0; }
+    this.motivoAbandono = 'Coche destrozado';
+    this.eventos.push('desintegrado');
   }
 
   // En boxes: neumáticos nuevos, alerones nuevos (la suspensión doblada no se arregla en una parada)
@@ -416,7 +437,7 @@ export class Monoplaza {
     }
     this.limitador = false;
     if (relacion !== 0 && !cambiando && (embragado || acel > 0.02)) {
-      const pT = parMotor(this.rpm) * this.ef.potencia * (1 - 0.35 * (this.dano.motor || 0));
+      const pT = parMotor(this.rpm) * this.ef.potencia * (1 - 0.35 * (this.dano.motor || 0)) * MEZCLA_POT[mand.mezcla ?? 1];
       const fm = COCHE.frenoMotor[0] + COCHE.frenoMotor[1] * this.rpm;
       parCig = pT * acel - fm * (1 - acel) * (embragado ? 1 : 0);
       if (this.rpm > COCHE.rpmLimite) { parCig = Math.min(parCig, -fm); this.limitador = true; }
@@ -451,7 +472,7 @@ export class Monoplaza {
     }
     this.ers = clamp(this.ers, 0, COCHE.ersCapacidad);
     // combustible
-    this.combustible = Math.max(0, this.combustible - COCHE.consumoMax * Math.max(0.03, acel) * (this.rpm / COCHE.rpmLimite) * dt);
+    this.combustible = Math.max(0, this.combustible - COCHE.consumoMax * Math.max(0.03, acel) * (this.rpm / COCHE.rpmLimite) * MEZCLA_GASTO[this.mandos.mezcla ?? 1] * dt);
     if (this.combustible <= 0) parCig = Math.min(parCig, 0);
     const parEntrada = parCig * relacion * COCHE.eficiencia;
     const inerciaReflejada = embragado ? COCHE.inerciaMotor * relacion * relacion * 0.5 : 0;
@@ -761,6 +782,7 @@ export class Monoplaza {
     this.vx *= roce; this.vy *= roce;
     if (arriba > 0.5) {
       // cae sobre las ruedas: suspensión, alerones y fondo sufren según la altura de la caída
+      if (golpe > 13 && !this.dano.desintegrado) this.desintegrar(-2, 0, golpe * 2.2);
       this.aplicarGolpe(1.4, f.bal > 0 ? 1 : -1, golpe * 1.4 + 2);
       this.aplicarGolpe(-1.6, f.bal > 0 ? -1 : 1, golpe * 1.2 + 2);
       if (golpe > 3.5 && f.botes < 4) { f.vh = golpe * 0.32; f.wCab *= 0.35; f.wBal *= 0.35; return; }
@@ -891,6 +913,13 @@ export class Monoplaza {
     }
     if (this._peor) {
       this.fuenteGolpe = 'muro'; this.aplicarGolpe(this._peor.ex, this._peor.ey, this._peor.v);
+      // golpe muy fuerte de lado o de esquina (no de frente): la rueda se clava en el muro y el
+      // coche se levanta y da vueltas de campana
+      const pe = this._peor;
+      if (pe.bruto > 24 && Math.abs(pe.ey) > 0.5 && !this.vuelo && !this.volcado && Math.random() < 0.55) {
+        const lado = Math.sign(pe.ey);
+        this.despegar(2 + pe.bruto * 0.07, (Math.random() - 0.5) * 2.5, -lado * (2.5 + Math.random() * 3), (Math.random() - 0.5) * 1.5);
+      }
       // para los efectos: marca en el muro, neumáticos sueltos de la barrera, chispas
       // (como mucho ~8 por segundo al ir rozando el muro: cada una deforma la barrera)
       if (this._peor.bruto > 2.5 && (this.reloj - (this._tMarca ?? -9) > 0.12 || this._peor.bruto > (this._bMarca || 0) + 3)) {
