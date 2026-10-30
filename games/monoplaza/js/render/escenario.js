@@ -416,6 +416,8 @@ export function construirEscenario(scene, renderer, c, calidad) {
       grada(scene, c, cv.s - 60, 110, lado, matGrada, matTecho, matHormigon, gradaOpc);
     }
   }
+  // escalones, techos y pilares de todas las gradas: una malla por material
+  fusionarEntreGrupos(scene, grada.lista || [], o => o.userData.fijo); grada.lista = [];
   // puente publicitario sobre una recta larga de cada circuito
   const recta = { valle: 'Recta del Río', veloz: 'Recta del Serraglio', puerto: 'Subida del Casino' }[c.id];
   const rr = recta && c._sDeSegmento(recta);
@@ -693,9 +695,11 @@ function grada(scene, c, s0, largo, lado, matGrada, matTecho, matBase, { publico
       pilar.position.set(x, (filas * 0.9 + 4) / 2, lado * filas * 1.5);
       g.add(pilar);
     }
-    g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.userData.fijo = true; } });
     colocarEnPista(c, g, s, d);
     scene.add(g);
+    // las piezas fijas se unen con las de las demás gradas al final (ver fusionarEntreGrupos)
+    (grada.lista ??= []).push(g);
     publico?.agregarGrada(g, L, filas, lado);
   }
 }
@@ -990,8 +994,37 @@ function calleBoxes(scene, c, m, res) {
       const cam = res.camPos, cerca = !!cam && cam.distanceToSquared(pg) < 140 * 140;
       gar.actualizar(dt, cerca); puesto.actualizar(dt, cerca);
     });
+    (res._estaticos ??= []).push(g);
+    if (m.calidad >= 1) res._estaticos.push(puesto.grupo);
   });
+  fusionarEntreGrupos(scene, res._estaticos);
   return garajes;
+}
+
+// Une en una sola malla por material las piezas fijas que comparten material entre varios
+// grupos (paredes, techos, luces y metal de los 11 garajes y los puestos del muro): de más de
+// un centenar de llamadas de dibujo a unas pocas. Lo que se anima (mecánicos) no se toca.
+function fusionarEntreGrupos(scene, grupos, filtro = () => true) {
+  const usos = new Map();
+  for (const g of grupos) { g.updateMatrixWorld(true); for (const o of g.children) if (o.isMesh && !o.userData.suelta && filtro(o)) usos.set(o.material, (usos.get(o.material) || 0) + 1); }
+  const porMat = new Map();
+  for (const g of grupos) for (const o of [...g.children]) {
+    if (!o.isMesh || o.userData.suelta || !filtro(o) || (usos.get(o.material) || 0) < 2) continue;
+    const geo = o.geometry.clone().applyMatrix4(o.matrixWorld);
+    for (const k of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv'].includes(k)) geo.deleteAttribute(k);
+    if (!geo.attributes.uv) geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(geo.attributes.position.count * 2), 2));
+    const gi = geo.index ? geo.toNonIndexed() : geo;
+    if (!porMat.has(o.material)) porMat.set(o.material, { lista: [], sombra: o.castShadow });
+    porMat.get(o.material).lista.push(gi);
+    g.remove(o);
+  }
+  for (const [mat, { lista, sombra }] of porMat) {
+    const geo = mergeGeometries(lista, false);
+    if (!geo) continue;
+    const f = new THREE.Mesh(geo, mat);
+    f.castShadow = sombra; f.receiveShadow = true;
+    scene.add(f);
+  }
 }
 
 // coche que sigue el helicóptero de la tele (lo actualiza el bucle del juego)

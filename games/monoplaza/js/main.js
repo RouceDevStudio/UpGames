@@ -129,7 +129,7 @@ const sonido = new Sonido();
 const entrada = new Entrada(ajustes);
 let sesion = null, modelos = [], modeloFantasma = null, lineaIdeal = null;
 // para pruebas automáticas (?depurar): acceso a la sesión desde la consola
-if (new URLSearchParams(location.search).has("depurar")) window.apex = { get sesion() { return sesion; }, empezar: (...a) => empezar(...a), get escenario() { return escenario; }, scene: () => scene, THREE, get renderer() { return renderer; }, get camara() { return camara; } };
+if (new URLSearchParams(location.search).has("depurar")) window.apex = { get sesion() { return sesion; }, empezar: (...a) => empezar(...a), get escenario() { return escenario; }, scene: () => scene, THREE, get renderer() { return renderer; }, get camara() { return camara; }, get modelos() { return modelos; } };
 let gestorBoxes = null, escombros = null, lluviaFx = null, camarasTV = null, barreras = null, comisarios = null, cocheSeg = null;
 let pilotosFuera = null, salidasPendientes = [], tAturdido = 0;
 let capaCamara = null;
@@ -2162,22 +2162,32 @@ $('#bResOtra').addEventListener('click', (e) => {
 // los cercanos proyectan sombra.
 const vLod = new THREE.Vector3();
 function prepararLod(m) {
-  m._detalle = []; m._mallas = [];
+  m._detalle = []; m._medio = []; m._mallas = [];
   m.raiz.traverse(o => {
     if (!o.isMesh) return;
     m._mallas.push(o);
     o.geometry.computeBoundingSphere?.();
-    if ((o.geometry.boundingSphere?.radius ?? 1) < 0.16) m._detalle.push(o);
+    const r = o.geometry.boundingSphere?.radius ?? 1;
+    // detalle: piezas pequeñas; medio: piloto, bujes, discos y tapacubos (lejos solo quedan
+    // carrocería, alerones y neumáticos: de ~104 mallas por coche a ~20)
+    let piloto = false; for (let q = o; q && q !== m.raiz; q = q.parent) if (q.name === 'piloto') piloto = true;
+    if (r < 0.16) m._detalle.push(o);
+    else if (piloto || r < 0.36) m._medio.push(o);
   });
-  m._lejos = false; m._sombra = true;
+  m._nivel = 0; m._sombra = true;
 }
 function nivelDetalle() {
   const cp = camara.cam.position;
+  const dSombra = calidad >= 2 ? 55 : calidad >= 1 ? 45 : 32;
   for (const m of modelos) {
     if (!m._mallas) prepararLod(m);
     const d = vLod.copy(m.raiz.position).sub(cp).length();
-    const lejos = d > 85, sombra = d < 55 && calidad >= 1;
-    if (lejos !== m._lejos) { m._lejos = lejos; for (const o of m._detalle) o.visible = !lejos; }
+    const nivel = d > 130 ? 2 : d > 85 ? 1 : 0, sombra = d < dSombra;
+    if (nivel !== m._nivel) {
+      m._nivel = nivel;
+      for (const o of m._detalle) o.visible = nivel === 0 && !o.userData.oculto;
+      for (const o of m._medio) o.visible = nivel < 2 && !o.userData.oculto;
+    }
     if (sombra !== m._sombra) { m._sombra = sombra; for (const o of m._mallas) o.castShadow = sombra; }
   }
 }
