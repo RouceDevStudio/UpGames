@@ -1647,7 +1647,7 @@ function alternarPanelBox() {
   $('#panelBox').classList.toggle('visible');
   // desgaste actual, vueltas que aguantan y lo que dice el plan
   { const car = sesion.jugador.coche, d = Math.max(...car.ruedas.map(w => w.neum.desgaste)), comp = car.reglaje.compuesto;
-    const quedan = COMPUESTOS[comp].lluvia ? '' : ` · aguantan ~${Math.max(0, Math.floor((0.45 - d) * 100 / ESTR.desgastePorVuelta(comp, circuito.largo)))} vueltas más`;
+    const quedan = COMPUESTOS[comp].lluvia ? '' : ` · aguantan ~${Math.max(0, Math.floor((0.45 - d) * 100 / ESTR.desgastePorVuelta(comp, circuito.largo, sesion?.multDesgaste || 1)))} vueltas más`;
     const sig = ESTR.siguienteParada(estr.plan, sesion.jugador.vuelta, estr.paradas);
     $('#boxInfo').textContent = `Desgaste ${Math.round(d * 100)} %${quedan}${sig ? ` · plan: parar en la vuelta ${sig.vuelta} (${COMPUESTOS[sig.compuesto].nombre})` : ''}`; }
 }
@@ -3137,7 +3137,7 @@ function pintarEstrategia() {
   const lluvia = opcCarrera.clima === 'lluvia';
   const ps = ESTR.planes({ vueltas: v, circuito, lluvia });
   const pb = ESTR.perdidaBoxes(circuito);
-  $('#estrInfo').innerHTML = `${circuito.def.corto} · ${v} vueltas · parar cuesta ~${pb.toFixed(0)} s · los neumáticos aguantan unas ${ESTR.vida('blando', circuito.largo)} (blando), ${ESTR.vida('medio', circuito.largo)} (medio) y ${ESTR.vida('duro', circuito.largo)} vueltas (duro).${v > 8 ? ' En seco hay que usar dos compuestos distintos.' : ''}`;
+  $('#estrInfo').innerHTML = `${circuito.def.corto} · ${v} vueltas · parar cuesta ~${pb.toFixed(0)} s · los neumáticos aguantan unas ${ESTR.vida('blando', circuito.largo, ESTR.multDesgasteCarrera(v))} (blando), ${ESTR.vida('medio', circuito.largo, ESTR.multDesgasteCarrera(v))} (medio) y ${ESTR.vida('duro', circuito.largo, ESTR.multDesgasteCarrera(v))} vueltas (duro).${v > 8 ? ' En seco hay que usar dos compuestos distintos.' : ''}`;
   $('#estrLista').innerHTML = ps.map((p, k) => `<div class="esc-fila"><span class="esc-ico">${['🥇', '🥈', '🥉', '4️⃣'][k]}</span><div><b>${p.paradas === 0 ? 'Sin paradas' : p.paradas === 1 ? '1 parada' : '2 paradas'}</b><small>${p.texto}${p.paradasEn?.length ? ` · paradas en la vuelta ${p.paradasEn.join(' y ')}` : ''}</small></div><span class="esc-med">${k ? '+' + p.delta.toFixed(1) + ' s' : 'el más rápido'}</span><button class="btn mini primario" data-plan="${k}">Elegir</button></div>`).join('');
   document.querySelectorAll('[data-plan]').forEach(b => b.onclick = () => {
     planElegido = ps[+b.dataset.plan];
@@ -3201,7 +3201,7 @@ function estrategiaVuelta(p) {
   const desg = Math.max(...car.ruedas.map(w => w.neum.desgaste));
   if (desg > 0.55 && quedan >= 3 && !estr.avisado.has('desg' + estr.paradas)) {
     estr.avisado.add('desg' + estr.paradas);
-    const nuevo = quedan > ESTR.vida('medio', circuito.largo) ? 'duro' : quedan > ESTR.vida('blando', circuito.largo) ? 'medio' : 'blando';
+    const mD = sesion?.multDesgaste || 1, nuevo = quedan > ESTR.vida('medio', circuito.largo, mD) ? 'duro' : quedan > ESTR.vida('blando', circuito.largo, mD) ? 'medio' : 'blando';
     decidir(`Las ruedas están al ${Math.round(desg * 100)} %. ¿Paramos a por ${COMPUESTOS[nuevo].nombre.toLowerCase()}s?`, () => pararAhora(nuevo), 20);
   }
 }

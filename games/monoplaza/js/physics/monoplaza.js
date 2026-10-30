@@ -87,7 +87,10 @@ export class Monoplaza {
   repararTodo() {
     this.danoAleron = 0;
     // fondo/pontones (pierden carga), motor (pierde potencia) y piezas sueltas visibles
-    this.dano = { aleronTras: 0, susp: [0, 0, 0, 0], pinchazo: [false, false, false, false], suelta: [false, false, false, false], fondo: 0, motor: 0, piezas: 0 };
+    // zona: daño acumulado por lado (cada golpe suma; las piezas de esa zona se rompen poco a poco)
+    // abolladuras: dónde y cuánto se ha hundido la carrocería (las dibuja el modelo)
+    this.dano = { aleronTras: 0, susp: [0, 0, 0, 0], pinchazo: [false, false, false, false], suelta: [false, false, false, false], fondo: 0, motor: 0, piezas: 0,
+      zona: { del: 0, tras: 0, izq: 0, der: 0 }, abolladuras: [] };
     this.terminal = false; this.abandono = false; this.motivoAbandono = ''; this.tTerminal = 0;
     this.desgasteMotor = 0; this.humoMotor = 0; this.cajaBloqueada = false; this.ersAveriado = 0;
   }
@@ -129,25 +132,38 @@ export class Monoplaza {
     const delante = ex > 1.2, detras = ex < -1.4;
     const k = (ex > 0 ? 0 : 2) + (ey > 0 ? 1 : 0);   // rueda más cercana
     const avisar = (e) => this.eventos.push('dano:' + e);
-    // cualquier golpe fuerte rompe algo: fondo y pontones (carga), espejos y deflectores (piezas)
+    // Cada golpe daña la zona donde pega y SUMA a lo que ya tenía: un primer golpe dobla o
+    // rompe algo, el segundo rompe más y el tercero deja el coche destrozado. Antes un solo
+    // golpe fuerte llevaba todas las piezas al máximo y los siguientes ya no hacían nada.
+    const z = d.zona || (d.zona = { del: 0, tras: 0, izq: 0, der: 0 });
+    const f = Math.max(0, vn - 4);
+    if (delante) z.del += f * 0.04;
+    if (detras) z.tras += f * 0.04;
+    if (Math.abs(ey) > 0.3) z[ey > 0 ? 'izq' : 'der'] += f * (delante || detras ? 0.025 : 0.045);
+    d.piezas = Math.min(1, Math.max(z.izq, z.der, z.del * 0.8, z.tras * 0.8));
+    // abolladura visible donde ha pegado (la profundidad crece con la fuerza; se acumulan)
+    if (vn > 6) {
+      const ab = d.abolladuras || (d.abolladuras = []);
+      if (ab.length < 32) ab.push({ x: Math.max(-2.3, Math.min(3.0, ex)), z: Math.max(-0.9, Math.min(0.9, ey)), prof: Math.min(0.2, (vn - 5) * 0.013), r: Math.min(0.8, 0.3 + vn * 0.014), sem: (this.reloj * 997) % 1 });
+    }
+    // fondo y pontones: cada golpe fuerte les quita carga
     if (vn > 4.5) {
       const antes = d.fondo;
-      d.fondo = Math.min(1, d.fondo + (vn - 4.5) * 0.045);
-      d.piezas = Math.min(1, d.piezas + (vn - 4.5) * 0.08);
+      d.fondo = Math.min(1, d.fondo + (vn - 4.5) * 0.022);
       if (antes < 0.35 && d.fondo >= 0.35) avisar('fondo');
     }
     if (delante && vn > 4.5) {
       const antes = this.danoAleron;
-      this.danoAleron = Math.min(1, this.danoAleron + (vn - 4.5) * 0.10);
+      this.danoAleron = Math.min(1, this.danoAleron + (vn - 4.5) * 0.055);
       if (antes < 1 && this.danoAleron >= 1) avisar('aleronDel');
       else if (antes < 0.3 && this.danoAleron >= 0.3) avisar('aleronDelTocado');
     }
     if (detras && vn > 5.5) {
       const antes = d.aleronTras;
-      d.aleronTras = Math.min(1, d.aleronTras + (vn - 5.5) * 0.09);
+      d.aleronTras = Math.min(1, d.aleronTras + (vn - 5.5) * 0.05);
       if (antes < 0.5 && d.aleronTras >= 0.5) avisar('aleronTras');
       // un golpe trasero fuerte toca la caja de cambios y el motor
-      if (vn > 9) { const am = d.motor; d.motor = Math.min(1, d.motor + (vn - 9) * 0.08); if (am < 0.3 && d.motor >= 0.3) avisar('motor'); }
+      if (vn > 9) { const am = d.motor; d.motor = Math.min(1, d.motor + (vn - 9) * 0.06); if (am < 0.3 && d.motor >= 0.3) avisar('motor'); }
     }
     // la rueda del lado del golpe: suspensión, pinchazo o arrancada
     const lateral = Math.abs(ey) > 0.8 || Math.abs(ex - this.ruedas[k].px) < 0.8;
@@ -169,6 +185,9 @@ export class Monoplaza {
   // En boxes: neumáticos nuevos, alerones nuevos (la suspensión doblada no se arregla en una parada)
   repararEnBoxes(compuesto) {
     this.danoAleron = 0;
+    // morro nuevo: desaparecen sus golpes (los del resto de la carrocería siguen ahí)
+    if (this.dano.zona) this.dano.zona.del = 0;
+    if (this.dano.abolladuras) this.dano.abolladuras = this.dano.abolladuras.filter(a => a.x < 1.2);
     this.dano.aleronTras = 0;
     this.dano.pinchazo = this.dano.pinchazo.map((_, k) => this.dano.suelta[k]);
     if (compuesto) this.reglaje.compuesto = compuesto;
@@ -754,6 +773,7 @@ export class Monoplaza {
     this.danoAleron = 1;
     const d = this.dano;
     d.aleronTras = Math.min(1, d.aleronTras + 0.6); d.fondo = 1; d.piezas = 1;
+    if (d.zona) for (const k in d.zona) d.zona[k] = Math.max(d.zona[k], 1.2);
     if (golpe > 2.5 && f.botes < 6) {
       // rebota y sigue dando vueltas
       f.vh = golpe * 0.42; f.wCab *= 0.6; f.wBal = f.wBal * 0.6 + (Math.random() - 0.5) * 3;
@@ -869,7 +889,10 @@ export class Monoplaza {
     if (this._peor) {
       this.fuenteGolpe = 'muro'; this.aplicarGolpe(this._peor.ex, this._peor.ey, this._peor.v);
       // para los efectos: marca en el muro, neumáticos sueltos de la barrera, chispas
-      if (this._peor.bruto > 2.5) this.golpesMuro.push(this._peor);
+      // (como mucho ~8 por segundo al ir rozando el muro: cada una deforma la barrera)
+      if (this._peor.bruto > 2.5 && (this.reloj - (this._tMarca ?? -9) > 0.12 || this._peor.bruto > (this._bMarca || 0) + 3)) {
+        this.golpesMuro.push(this._peor); this._tMarca = this.reloj; this._bMarca = this._peor.bruto;
+      }
     }
     if (this.impacto > 2) this.eventos.push('golpe:' + this.impacto.toFixed(1));
   }

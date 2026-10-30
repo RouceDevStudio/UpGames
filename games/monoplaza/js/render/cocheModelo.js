@@ -11,6 +11,24 @@ import { crearPiloto } from './piloto.js';
 const A = COCHE.wheelbase * (1 - COCHE.repartoDel); // eje delantero
 const B = COCHE.wheelbase * COCHE.repartoDel;       // eje trasero
 
+// Las caras tienen que mirar hacia fuera: si las secciones van del morro hacia atrás el giro de
+// los triángulos queda al revés y se ve el interior de la pieza (el coche parecía transparente,
+// con la pintura por dentro). Con el volumen con signo se detecta y se corrige.
+function orientarFuera(g) {
+  const p = g.attributes.position, ix = g.index.array;
+  let vol = 0;
+  for (let i = 0; i < ix.length; i += 3) {
+    const a = ix[i] * 3, b = ix[i + 1] * 3, c = ix[i + 2] * 3, P = p.array;
+    vol += P[a] * (P[b + 1] * P[c + 2] - P[b + 2] * P[c + 1]) - P[a + 1] * (P[b] * P[c + 2] - P[b + 2] * P[c]) + P[a + 2] * (P[b] * P[c + 1] - P[b + 1] * P[c]);
+  }
+  if (vol < 0) {
+    for (let i = 0; i < ix.length; i += 3) { const t = ix[i + 1]; ix[i + 1] = ix[i + 2]; ix[i + 2] = t; }
+    g.index.needsUpdate = true;
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
 // Superficie por secciones superelípticas a lo largo de X
 function loft(secciones, segs = 20, zc = 0) {
   const pos = [], idx = [], uv = [];
@@ -47,8 +65,7 @@ function loft(secciones, segs = 20, zc = 0) {
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   g.setIndex(idx);
-  g.computeVertexNormals();
-  return g;
+  return orientarFuera(g);
 }
 
 // Perfil alar extruido a lo largo de Z (envergadura)
@@ -125,8 +142,7 @@ function loftS(secciones, segs = 24) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setIndex(idx);
-  g.computeVertexNormals();
-  return g;
+  return orientarFuera(g);
 }
 
 // Perfil alar con muchos cortes a lo largo de la envergadura para poder curvarlo
@@ -231,6 +247,8 @@ const CREAR_MAT = {
   negro: () => new THREE.MeshStandardMaterial({ color: 0x0a0a0b, roughness: 0.6 }),
   metal: () => new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.25, metalness: 1 }),
   goma: () => new THREE.MeshStandardMaterial({ color: 0x161616, roughness: 0.88, metalness: 0 }),
+  // el neumático es un perfil abierto (se ve también su cara interior junto a la llanta)
+  gomaNeum: () => new THREE.MeshStandardMaterial({ color: 0x161616, roughness: 0.88, metalness: 0, side: THREE.DoubleSide }),
 };
 function matComun(nombre, crear = CREAR_MAT[nombre]) {
   if (!cacheMat.has(nombre)) cacheMat.set(nombre, crear());
@@ -456,7 +474,8 @@ export function crearModelo(opc) {
     }
     // difusor: canales que suben hacia atrás y paredes
     for (let k = -3; k <= 3; k++) geo.carbono.push(caja(0.62, 0.24, 0.010, -1.98, 0.17, k * 0.15, 0, 0, -0.33));
-    const dif = new THREE.PlaneGeometry(0.66, 1.0); dif.rotateX(-Math.PI / 2); dif.rotateZ(-0.33); dif.translate(-1.98, 0.17, 0);
+    const dif = new THREE.PlaneGeometry(0.66, 1.0); dif.rotateX(Math.PI / 2);   // mira hacia abajo: se ve desde atrás y desde el suelo
+    dif.rotateZ(-0.33); dif.translate(-1.98, 0.17, 0);
     geo.carbono.push(dif);
   }
   // halo de titanio (elevado para despejar la vista del piloto) con su pilar central
@@ -495,7 +514,8 @@ export function crearModelo(opc) {
   geo.carbono.push(loftS([S(-1.6, 0.11, 0.36, 0.14, 3, 3), S(-2.0, 0.08, 0.34, 0.16, 3, 3), S(-2.30, 0.05, 0.32, 0.20, 2.6, 2.6)], 14));
   geo.metal.push(loftS([S(-2.25, 0.035, 0.42, 0.37, 2, 2), S(-2.36, 0.04, 0.425, 0.365, 2, 2)], 12));
   const carroceria = new THREE.Group();
-  carroceria.add(unir(geo.librea, pintura, true));
+  const cuerpo = unir(geo.librea, pintura, true);
+  carroceria.add(cuerpo);
   carroceria.add(unir(geo.carbono, carbono));
   carroceria.add(unir(geo.negro, negro));
   if (geo.metal.length) carroceria.add(unir(geo.metal, metal));
@@ -618,7 +638,7 @@ export function crearModelo(opc) {
       const gT = new THREE.LatheGeometry(perfil, calidad >= 2 ? 48 : 28); gT.rotateX(Math.PI / 2);
       geoNeum.set(clave, gT);
     }
-    const neum = new THREE.Mesh(geoNeum.get(clave), goma); neum.castShadow = true; neum.receiveShadow = true;
+    const neum = new THREE.Mesh(geoNeum.get(clave), matComun('gomaNeum')); neum.castShadow = true; neum.receiveShadow = true;
     rot.add(neum);
     const sg = Math.sign(z);
     const tapa = new THREE.Mesh(new THREE.CircleGeometry(r * 0.985, 40), matTapa);
@@ -655,6 +675,47 @@ export function crearModelo(opc) {
   const sombraC = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 5.8), matSombraContacto(calidad));
   sombraC.rotation.x = -Math.PI / 2; sombraC.position.set(-0.15, 0.015, 0); sombraC.renderOrder = -1;
   raiz.add(sombraC);
+
+  // Abolladuras: hunde la carrocería donde ha pegado cada golpe (se acumulan). Las caras que se
+  // mueven toman la normal de su triángulo: el carbono roto se ve arrugado, con aristas.
+  let nAbol = 0, posOrig = null, nrmOrig = null;
+  function abollar(lista) {
+    if (lista.length === nAbol) return;
+    const g = cuerpo.geometry, p = g.attributes.position, nr = g.attributes.normal, P = p.array, N = nr.array;
+    if (!posOrig) { posOrig = P.slice(); nrmOrig = N.slice(); }
+    if (lista.length < nAbol) { P.set(posOrig); N.set(nrmOrig); nAbol = 0; }
+    const tocados = new Uint8Array(p.count);
+    for (let k = nAbol; k < lista.length; k++) {
+      const a = lista[k];
+      const lateral = Math.abs(a.z) > 0.3 && a.x > -2.0 && a.x < 2.6;
+      for (let i = 0; i < p.count; i++) {
+        const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2];
+        let dist;
+        if (lateral) { if (z * a.z <= 0.02) continue; dist = Math.hypot(x - a.x, (y - 0.38) * 1.4); }
+        else dist = Math.hypot(x - a.x, (y - 0.3) * 1.2, (z - a.z * 0.4) * 0.8);
+        if (dist >= a.r) continue;
+        const h = Math.sin(i * 12.9898 + a.sem * 78.233) * 43758.5453;
+        // arrugas: ruido por vértice más pliegues a lo largo del coche
+        const ruido = 0.55 + 0.9 * (h - Math.floor(h)) + 0.35 * Math.sin(x * 38 + a.sem * 9) * Math.sin(y * 31);
+        const f = (1 - dist / a.r) ** 2 * a.prof * ruido;
+        if (lateral) P[i * 3 + 2] -= Math.sign(z) * f * Math.min(1, Math.abs(z) / 0.25);
+        else P[i * 3] -= Math.sign(a.x) * f;
+        P[i * 3 + 1] -= f * 0.25 * (ruido - 1);
+        tocados[i] = 1;
+      }
+    }
+    // normales de cara en los triángulos tocados
+    const v0 = new THREE.Vector3(), v1 = new THREE.Vector3(), v2 = new THREE.Vector3();
+    for (let t = 0; t < p.count; t += 3) {
+      if (!tocados[t] && !tocados[t + 1] && !tocados[t + 2]) continue;
+      v0.fromArray(P, t * 3); v1.fromArray(P, t * 3 + 3); v2.fromArray(P, t * 3 + 6);
+      v1.sub(v0); v2.sub(v0); v1.cross(v2).normalize();
+      for (let q = 0; q < 3; q++) { N[(t + q) * 3] = v1.x; N[(t + q) * 3 + 1] = v1.y; N[(t + q) * 3 + 2] = v1.z; }
+    }
+    p.needsUpdate = true; nr.needsUpdate = true;
+    g.computeBoundingSphere();
+    nAbol = lista.length;
+  }
 
   let tPantalla = 0;
   const estadoDanos = { alaDel: false, alaTras: false };
@@ -698,14 +759,19 @@ export function crearModelo(opc) {
       if (dt2 >= 0.95 && !estadoDanos.alaTras) { estadoDanos.alaTras = true; this.alDesprender?.('alaTras', alaTras); }
       if (dt2 < 0.05 && estadoDanos.alaTras) estadoDanos.alaTras = false;
       alaTras.visible = !estadoDanos.alaTras;
-      // espejos y deflectores se rompen con los golpes (orden fijo: primero un espejo, luego deflectores)
-      const pz = d?.piezas || 0;
-      gruposPieza.forEach((g, k) => {
-        const umbral = [0.35, 0.55, 0.7, 0.9][k] ?? 1;
-        if (pz >= umbral && !g.rota) { g.rota = true; this.alDesprender?.(g.tipo, g.g); }
-        if (pz < 0.05 && g.rota) g.rota = false;
+      // espejos y deflectores se rompen según el daño acumulado en SU lado: el primer golpe
+      // en la izquierda puede llevarse el espejo izquierdo; el segundo, los deflectores
+      const zn = d?.zona;
+      gruposPieza.forEach((g) => {
+        const lado = zn ? (g.sg > 0 ? zn.izq : zn.der) + (g.tipo === 'deflector' ? zn.del * 0.35 : 0) : (d?.piezas || 0);
+        const umbral = g.tipo === 'espejo' ? 0.45 : 0.8;
+        if (lado >= umbral && !g.rota) { g.rota = true; this.alDesprender?.(g.tipo, g.g); }
+        if (lado < 0.05 && (d?.piezas || 0) < 0.05 && g.rota) g.rota = false;
         g.g.visible = !g.rota;
+        // antes de romperse se tuerce
+        if (!g.rota) g.g.rotation.set(lado * 0.25 * g.sg, 0, -lado * 0.3);
       });
+      if (d?.abolladuras) abollar(d.abolladuras);
       // frenos al rojo (por encima de ~600 °C)
       for (let k = 0; k < 4; k++) {
         const tf = car.ruedas[k]?.tFreno ?? 0;

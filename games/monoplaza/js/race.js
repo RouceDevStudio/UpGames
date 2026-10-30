@@ -5,6 +5,7 @@ import { EQUIPOS, COCHE, compuestoParaAgua } from './config.js';
 import { Monoplaza } from './physics/monoplaza.js';
 import { PilotoIA, PilotoBox } from './ai.js';
 import { Clima } from './clima.js';
+import { planes } from './estrategia.js';
 
 const AVISOS_LIMITES = 3;          // a la cuarta salida de pista, +5 s
 const PENALIZACION = 5;
@@ -165,6 +166,21 @@ export class Sesion {
     // desgaste proporcional a la distancia: una carrera da para ~1,5 juegos de neumáticos
     this.multDesgaste = this.modo === 'carrera' ? Math.max(1, Math.min(3, 30 / this.vueltasTotales)) : 1;
     for (const p of this.participantes) p.coche.ponerMultDesgaste(this.multDesgaste);
+    // cada piloto de la IA sale con su propio plan de paradas (no todos con el mejor: unos
+    // arriesgan, otros conservan) y con el compuesto de su primer relevo
+    if (this.modo === 'carrera' && !this.depositoMax && this.clima.agua <= 0.13 && this.vueltasTotales >= 4) {
+      let lista = [];
+      try { lista = planes({ vueltas: this.vueltasTotales, circuito: this.c, mult: this.multDesgaste }); } catch { lista = []; }
+      if (lista.length) for (const p of this.participantes) {
+        if (!p.ia || p.remoto) continue;
+        const plan = lista[Math.min(lista.length - 1, Math.floor(Math.random() ** 1.6 * Math.min(3, lista.length)))];
+        // vuelta de cada parada, con algo de variación entre pilotos
+        let acum = 0; const vueltasParada = [];
+        for (let k = 0; k < plan.relevos.length - 1; k++) { acum += plan.relevos[k].vueltas; vueltasParada.push(Math.max(1, Math.min(this.vueltasTotales - 1, acum + Math.round((Math.random() - 0.5) * 3)))); }
+        p.plan = { relevos: plan.relevos.map(r => r.c), vueltasParada, siguiente: 0 };
+        if (p.coche.reglaje.compuesto !== plan.relevos[0].c) p.coche.ponerCompuesto(plan.relevos[0].c);
+      }
+    }
     // espectador: no hay coche propio; se sigue a uno cualquiera (el 'foco' de la cámara)
     this.jugador = this.participantes.find(p => p.jugador) || this.participantes[0];
     this.espectador = !!mp?.espectador;
@@ -247,8 +263,13 @@ export class Sesion {
     if (p.solicitudBox) return;
     const desg = Math.max(...car.ruedas.map(w => w.neum.desgaste));
     const danado = car.dano.pinchazo.some(Boolean) || car.danoAleron > 0.3 || car.dano.aleronTras > 0.4;
+    // plan de paradas (sale de la estrategia elegida al principio)
+    const pl = p.plan;
+    if (pl && !esLluvia(actual) && pl.siguiente < pl.vueltasParada.length && p.vuelta >= pl.vueltasParada[pl.siguiente] && restantes >= 1) {
+      this.pedirBox(p, pl.relevos[pl.siguiente + 1]); pl.siguiente++; return;
+    }
     if (danado && restantes >= 1) this.pedirBox(p, esLluvia(actual) ? actual : seco);
-    else if (desg > 0.45 && restantes >= 3 && this.vueltasTotales >= 8) this.pedirBox(p, esLluvia(actual) ? actual : restantes > 15 ? 'duro' : 'medio');
+    else if (desg > 0.5 && restantes >= 2) this.pedirBox(p, esLluvia(actual) ? actual : restantes > 15 ? 'duro' : 'medio');
   }
 
   get coches() { return this.participantes.map(p => p.coche); }
@@ -283,13 +304,17 @@ export class Sesion {
   _paso(dt) {
     this.tiempo += dt;
     const lista = this.participantes;
-    const coches = this.coches;
+    // la física va a 300 Hz, pero no todo tiene que ir tan rápido: la IA decide a 100 Hz
+    // (cada coche en un paso distinto), el rebufo y las posiciones a 100 y 60 Hz
+    const n = this._nPaso = (this._nPaso || 0) + 1;
+    if (!this._coches || this._coches.length !== lista.length) this._coches = lista.map(q => q.coche);
+    const coches = this._coches;
     this.clima.actualizar(dt);
     this.c.agua = this.clima.agua;
     this._banderas(dt);
     this._moverSc(dt);
     this._neutralizar(dt);
-    this._aerodinamicaRelativa();
+    if (n % 3 === 0) this._aerodinamicaRelativa();
     this._vientoYGoma(dt);
     for (const p of lista) {
       if (p.remoto) continue;           // lo mueve la red
@@ -321,7 +346,8 @@ export class Sesion {
         if (p.tAbandono && this.tiempo - p.tAbandono > 20 && !p.retirado && !p.jugador) { p.retirado = true; car.colocar(c0Retiro(this.c, p), this.c.semiAncho[0] + this.c.pit.ancho - 1); car.retenido = true; }
       } else if (p.box) p.box.conducir(dt);
       else if (p.ia && !car.retenido) {
-        p.ia.conducir(dt, coches);
+        if (car.velocidad < 8) p.ia.conducir(dt, coches);
+        else if ((n + car.id) % 3 === 0) p.ia.conducir(dt * 3, coches);
         if (p.terminado) { car.mandos.acelerador *= 0.5; car.mandos.drs = false; }
       }
       // coche de seguridad virtual: todos limitados a un ritmo lento (~35 % más lento) sin DRS
@@ -342,7 +368,7 @@ export class Sesion {
       this.carreraTerminada = true; this.eventos.push({ tipo: 'finCarrera' });
     }
     if (this.modo !== 'carrera') this._grabarFantasma(dt);
-    if (this.modo === 'carrera') this._posiciones();
+    if (this.modo === 'carrera' && (n % 5 === 0 || this.estado !== 'carrera')) this._posiciones();
   }
 
   // viento con rachas que cambian poco a poco; la goma crece con los km de todos los coches
@@ -392,6 +418,9 @@ export class Sesion {
     for (let a = 0; a < lista.length; a++) {
       for (let b = a + 1; b < lista.length; b++) {
         if (lista[a].retirado || lista[b].retirado) continue;
+        // dentro de la calle de boxes los coches van en fila controlados por el limitador; sin
+        // colisiones entre ellos (si no, con 20 coches parando se arrancaban ruedas en el pit lane)
+        if (lista[a].box && lista[b].box) continue;
         const A = lista[a].coche, B = lista[b].coche;
         const dx0 = B.x - A.x, dz0 = B.z - A.z;
         if (dx0 * dx0 + dz0 * dz0 > 64) continue;

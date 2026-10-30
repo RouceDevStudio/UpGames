@@ -352,7 +352,7 @@ export function construirEscenario(scene, renderer, c, calidad) {
       mat.side = THREE.DoubleSide;
       m.castShadow = calidad >= 2; m.receiveShadow = true;
       scene.add(m);
-      registrarDeformable(res, g, lado, mat === matMuro ? 0.55 : 1.0);
+      registrarDeformable(res, g, lado, mat === matMuro ? 0.8 : mat === matNeum ? 1.3 : 1.15);
     };
     const bar = (i) => c.barrera?.[lado]?.[i] ?? (c.grava[lado][i] ? 1 : 0);
     muro((i) => bar(i) === 0 && noPit(i), matMuro, 1.05);
@@ -450,38 +450,63 @@ export function construirEscenario(scene, renderer, c, calidad) {
 // cercanas (más arriba que abajo) y al reiniciar todo vuelve a su sitio.
 function registrarDeformable(res, geo, lado, blandura) {
   const pos = geo.attributes.position;
-  res.deformables.push({ geo, lado, blandura, orig: Float32Array.from(pos.array), tocada: false });
+  if (!geo.attributes.normal) geo.computeVertexNormals();
+  res.deformables.push({ geo, lado, blandura, orig: Float32Array.from(pos.array), normOrig: Float32Array.from(geo.attributes.normal.array), tocada: false });
 }
 
 function deformarMuro(res, c, g) {
   if (!g || g.lado == null || g.i == null) return;
-  const fuerza = Math.min(1, Math.max(0, (g.bruto - 3) / 22));      // 3 m/s apenas marca, 25 m/s abolla a fondo
+  const fuerza = Math.min(1, Math.max(0, (g.bruto - 3) / 20));      // 3 m/s apenas marca, 23 m/s abolla a fondo
   if (fuerza <= 0) return;
-  const sg = g.lado ? 1 : -1, R = 4;                               // ±4 filas (≈ ±8 m)
+  const sg = g.lado ? 1 : -1, R = 5;                               // ±5 filas (≈ ±10 m)
   for (const d of res.deformables) {
     if (d.lado !== g.lado) continue;
     const pos = d.geo.attributes.position, arr = pos.array;
     const filas = c.n + 1, K = pos.count / filas;
+    const filasTocadas = [];
     for (let dr = -R; dr <= R; dr++) {
       const i = (g.i + dr + c.n) % c.n;
-      const caida = Math.exp(-(dr * dr) / 5);
+      // la barrera se hunde más en el centro del golpe y hace ondas a los lados
+      const caida = Math.exp(-(dr * dr) / 6) * (0.8 + 0.35 * Math.sin(i * 1.7 + g.bruto));
       const nx = -c.tz[i] * sg, nz = c.tx[i] * sg;
       for (const row of (i === 0 ? [0, c.n] : [i])) {
+        filasTocadas.push(row);
         for (let j = 0; j < K; j++) {
           const alto = K > 1 ? j / (K - 1) : 1;
-          const empuje = fuerza * caida * d.blandura * (0.35 + 0.65 * alto) * 0.6;
+          const empuje = fuerza * caida * d.blandura * (0.3 + 0.7 * alto) * 0.75;
           const k = (row * K + j) * 3;
-          // tope: nada se mueve más de ~0,9 m de su sitio
+          // tope: nada se mueve más de ~1,5 m de su sitio; los golpes siguientes la hunden más
           const ox = arr[k] - d.orig[k], oz = arr[k + 2] - d.orig[k + 2];
-          if (ox * ox + oz * oz > 0.8) continue;
+          if (ox * ox + oz * oz > 2.2) continue;
           arr[k] += nx * empuje; arr[k + 2] += nz * empuje;
-          arr[k + 1] -= empuje * alto * 0.25;                       // la parte alta se dobla y cae un poco
+          // la parte alta se tuerce hacia fuera y cae (la barrera se vence)
+          arr[k + 1] -= empuje * alto * 0.55;
         }
       }
     }
     pos.needsUpdate = true; d.tocada = true;
-    d.geo.computeVertexNormals();
+    normalesFilas(d.geo, filasTocadas, filas, K);
   }
+}
+
+// Recalcula las normales solo de las filas tocadas (antes se recalculaba el muro de todo el
+// circuito en cada golpe, y al rozar un muro eso eran cientos de veces por segundo)
+function normalesFilas(geo, filasTocadas, filas, K) {
+  const P = geo.attributes.position.array, nAttr = geo.attributes.normal, N = nAttr.array;
+  const v = (row, j, o) => { const k = (row * K + j) * 3; o[0] = P[k]; o[1] = P[k + 1]; o[2] = P[k + 2]; return o; };
+  const a = [0, 0, 0], b = [0, 0, 0], c2 = [0, 0, 0], e = [0, 0, 0];
+  for (const row of filasTocadas) for (let j = 0; j < K; j++) {
+    v(Math.min(filas - 1, row + 1), j, a); v(Math.max(0, row - 1), j, b);
+    const tx = a[0] - b[0], ty = a[1] - b[1], tz = a[2] - b[2];
+    v(row, Math.min(K - 1, j + 1), c2); v(row, Math.max(0, j - 1), e);
+    const ux = c2[0] - e[0], uy = c2[1] - e[1], uz = c2[2] - e[2];
+    let nx = ty * uz - tz * uy, ny = tz * ux - tx * uz, nz = tx * uy - ty * ux;
+    const l = Math.hypot(nx, ny, nz) || 1; nx /= l; ny /= l; nz /= l;
+    const k = (row * K + j) * 3;
+    if (nx * N[k] + ny * N[k + 1] + nz * N[k + 2] < 0) { nx = -nx; ny = -ny; nz = -nz; }
+    N[k] = nx; N[k + 1] = ny; N[k + 2] = nz;
+  }
+  nAttr.needsUpdate = true;
 }
 
 function repararMuros(res) {
@@ -489,7 +514,7 @@ function repararMuros(res) {
     if (!d.tocada) continue;
     d.geo.attributes.position.array.set(d.orig);
     d.geo.attributes.position.needsUpdate = true;
-    d.geo.computeVertexNormals();
+    d.geo.attributes.normal.array.set(d.normOrig); d.geo.attributes.normal.needsUpdate = true;
     d.tocada = false;
   }
 }

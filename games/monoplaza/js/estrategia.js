@@ -11,11 +11,13 @@ const DESGASTE = { blando: 2.1, medio: 1.35, duro: 0.86 };
 const SEG_POR_PCT = 0.11;                           // pérdida por cada 1 % de desgaste
 const ACANTILADO = 45;                              // a partir de aquí el neumático se cae
 
-export function desgastePorVuelta(comp, largo) { return DESGASTE[comp] * largo / REF; }
+// mult: multiplicador de desgaste de la carrera (en las cortas se gasta más para que haya paradas)
+export function multDesgasteCarrera(vueltas) { return Math.max(1, Math.min(3, 30 / vueltas)); }
+export function desgastePorVuelta(comp, largo, mult = 1) { return DESGASTE[comp] * largo / REF * mult; }
 
 /** Tiempo de un relevo de `n` vueltas con un compuesto (s), sobre la vuelta base T. */
-export function tiempoRelevo(comp, n, T, largo) {
-  const f = largo / REF, d = desgastePorVuelta(comp, largo);
+export function tiempoRelevo(comp, n, T, largo, mult = 1) {
+  const f = largo / REF, d = desgastePorVuelta(comp, largo, mult);
   let t = 0;
   for (let k = 0; k < n; k++) {
     const w = d * (k + 0.5);
@@ -25,7 +27,7 @@ export function tiempoRelevo(comp, n, T, largo) {
 }
 
 /** Vueltas que aguanta un compuesto antes del acantilado. */
-export function vida(comp, largo) { return Math.floor(ACANTILADO / desgastePorVuelta(comp, largo)); }
+export function vida(comp, largo, mult = 1) { return Math.floor(ACANTILADO / desgastePorVuelta(comp, largo, mult)); }
 
 /** Pérdida de pasar por boxes (s): calle a 80 km/h, parada y salida en frío. */
 export function perdidaBoxes(circuito) {
@@ -39,20 +41,20 @@ export function perdidaBoxes(circuito) {
  * Planes ordenados por tiempo total: [{ paradas, relevos: [{ c, vueltas }], total, delta, texto }].
  * Con más de 8 vueltas en seco se exige usar dos compuestos distintos (como en la F1).
  */
-export function planes({ vueltas, circuito, T = circuito.def.ritmoIA || 80, lluvia = false }) {
+export function planes({ vueltas, circuito, T = circuito.def.ritmoIA || 80, lluvia = false, mult = multDesgasteCarrera(vueltas) }) {
   if (lluvia) return [{ paradas: 0, relevos: [{ c: 'lluvia', vueltas }], total: 0, delta: 0, texto: 'Lluvia: neumáticos de lluvia o intermedios según el agua. El ingeniero te avisa si cambia.' }];
   const largo = circuito.largo, pb = perdidaBoxes(circuito), secos = ['blando', 'medio', 'duro'];
   const exigeDos = vueltas > 8;
   const minimo = vueltas >= 10 ? 3 : 1;              // nada de relevos de una vuelta
   const res = [];
   // sin parar
-  for (const c of secos) if (!exigeDos && vueltas * desgastePorVuelta(c, largo) < 70) res.push({ paradas: 0, relevos: [{ c, vueltas }], total: tiempoRelevo(c, vueltas, T, largo) });
+  for (const c of secos) if (!exigeDos && vueltas * desgastePorVuelta(c, largo, mult) < 70) res.push({ paradas: 0, relevos: [{ c, vueltas }], total: tiempoRelevo(c, vueltas, T, largo, mult) });
   // una parada: el mejor reparto para cada pareja
   for (const a of secos) for (const b of secos) {
     if (exigeDos && a === b) continue;
     let mejor = null;
     for (let n1 = minimo; n1 <= vueltas - minimo; n1++) {
-      const t = tiempoRelevo(a, n1, T, largo) + pb + tiempoRelevo(b, vueltas - n1, T, largo);
+      const t = tiempoRelevo(a, n1, T, largo, mult) + pb + tiempoRelevo(b, vueltas - n1, T, largo, mult);
       if (!mejor || t < mejor.total) mejor = { paradas: 1, relevos: [{ c: a, vueltas: n1 }, { c: b, vueltas: vueltas - n1 }], total: t };
     }
     if (mejor) res.push(mejor);
@@ -62,7 +64,7 @@ export function planes({ vueltas, circuito, T = circuito.def.ritmoIA || 80, lluv
     if (exigeDos && a === b && b === c) continue;
     let mejor = null;
     for (let n1 = minimo; n1 <= vueltas - 2 * minimo; n1++) for (let n2 = minimo; n1 + n2 <= vueltas - minimo; n2++) {
-      const t = tiempoRelevo(a, n1, T, largo) + tiempoRelevo(b, n2, T, largo) + tiempoRelevo(c, vueltas - n1 - n2, T, largo) + 2 * pb;
+      const t = tiempoRelevo(a, n1, T, largo, mult) + tiempoRelevo(b, n2, T, largo, mult) + tiempoRelevo(c, vueltas - n1 - n2, T, largo, mult) + 2 * pb;
       if (!mejor || t < mejor.total) mejor = { paradas: 2, relevos: [{ c: a, vueltas: n1 }, { c: b, vueltas: n2 }, { c, vueltas: vueltas - n1 - n2 }], total: t };
     }
     if (mejor) res.push(mejor);
