@@ -47,6 +47,13 @@ const PerfilSchema = new mongoose.Schema({
     sr:         { type: Number, default: A.SR_INICIAL },  // safety rating (0..5)
 }, { collection: 'apexgp_perfiles', timestamps: true });
 
+// Partida guardada en la nube: copia del progreso del juego de cada usuario
+const GuardadoSchema = new mongoose.Schema({
+    usuario:     { type: String, required: true, unique: true },
+    datos:       { type: String, default: '' },
+    actualizado: { type: Date, default: Date.now },
+}, { collection: 'apexgp_guardados' });
+
 // Mejor vuelta de contrarreloj por piloto, circuito y semana ('global' = de siempre)
 const TiempoSchema = new mongoose.Schema({
     usuario:  { type: String, required: true },
@@ -89,6 +96,7 @@ function registrar(app, deps) {
     const Tiempo = mongoose.models.ApexTiempo || mongoose.model('ApexTiempo', TiempoSchema);
     const Mundial = mongoose.models.ApexMundial || mongoose.model('ApexMundial', MundialSchema);
     const Resultado = mongoose.models.ApexResultado || mongoose.model('ApexResultado', ResultadoSchema);
+    const Guardado = mongoose.models.ApexGuardado || mongoose.model('ApexGuardado', GuardadoSchema);
     const SECRETO = `${JWT_SECRET || 'apexgp-dev'}:apexgp-fichas`;
     const firmar = d => jwt.sign({ ...d, jti: crypto.randomBytes(12).toString('hex') }, SECRETO, { expiresIn: '6h' });
     const leerFicha = (f, u, tipo) => { try { const d = jwt.verify(String(f || ''), SECRETO); return d.u === u && d.tipo === tipo ? d : null; } catch (_) { return null; } };
@@ -142,6 +150,27 @@ function registrar(app, deps) {
     app.get('/apexgp/perfil', verificarToken, async (req, res) => {
         try { ok(res, { usuario: req.usuario, ...publico(await perfilDe(req.usuario)), upcoins: await totalUC(req.usuario) }); }
         catch (e) { logger.error(`[apexgp] perfil: ${e.message}`); err(res, 500, 'No se pudo cargar tu garaje'); }
+    });
+
+    // ─── Guardado en la nube ─────────────────────────────────────────────────
+    const GUARDADO_MAX = 400 * 1024;
+    app.get('/apexgp/guardado', verificarToken, async (req, res) => {
+        try {
+            const g = await Guardado.findOne({ usuario: req.usuario }).lean();
+            ok(res, g ? { datos: g.datos, actualizado: +g.actualizado } : { datos: null });
+        } catch (e) { logger.error(`[apexgp] guardado: ${e.message}`); err(res, 500, 'No se pudo leer tu partida'); }
+    });
+    app.put('/apexgp/guardado', verificarToken, async (req, res) => {
+        const datos = req.body?.datos;
+        if (typeof datos !== 'string' || !datos.length) return err(res, 400, 'Faltan los datos');
+        if (datos.length > GUARDADO_MAX) return err(res, 413, 'La partida guardada es demasiado grande');
+        try { const o = JSON.parse(datos); if (!o || typeof o !== 'object' || Array.isArray(o)) throw new Error('formato'); }
+        catch { return err(res, 400, 'Datos no válidos'); }
+        try {
+            const actualizado = new Date();
+            await Guardado.updateOne({ usuario: req.usuario }, { $set: { datos, actualizado } }, { upsert: true });
+            ok(res, { actualizado: +actualizado });
+        } catch (e) { logger.error(`[apexgp] guardado: ${e.message}`); err(res, 500, 'No se pudo guardar tu partida'); }
     });
 
     app.post('/apexgp/comprar', verificarToken, async (req, res) => {

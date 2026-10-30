@@ -35,6 +35,7 @@ import { Entrada } from './input.js';
 import { PilotosFuera } from './render/pilotoFuera.js';
 import * as ESC from './escuela.js';
 import * as ESTR from './estrategia.js';
+import * as PROG from './progresion.js';
 import * as ED from './editorCircuito.js';
 
 const $ = (s) => document.querySelector(s);
@@ -476,6 +477,8 @@ function arrancarSesion(modo) {
   pedirWakeLock();
   barreras?.reponer();
   iniciarEstrategia();
+  progCarrera = { parrilla: sesion.jugador?.posicion || 1, sanciones: 0, vr: false, pole: vengoDeQ && sesion.jugador?.posicion === 1, km: 0, cerrada: false };
+  vengoDeQ = false;
   pilotosFuera?.limpiar(); salidasPendientes = []; tAturdido = 0; document.body.classList.remove('aturdido');
   // repetición, telemetría, radio y estado de la carrera
   grabadora = new Grabadora(sesion.participantes.length);
@@ -577,6 +580,7 @@ document.addEventListener('click', (e) => {
   if (destino === 'trayectoria') { abrirTrayectoria(); return; }
   if (destino === 'editor') { abrirEditor(); return; }
   if (destino === 'escuela') { abrirEscuela(); return; }
+  if (destino === 'progreso') { abrirProgreso(); return; }
   if (destino === 'multi') { abrirMulti(); return; }
   if (destino === 'campeonato') { abrirCampeonato(); return; }
   if (destino === 'rankings') { abrirRankings(); return; }
@@ -944,6 +948,7 @@ function vigilarMomentos(dt) {
       const pasado = sesion.participantes.find(o => o.posicion === p.posicion + 1);
       if (pasado && !pasado.box && !pasado.abandono && !pasado.coche.limitadorPit) grabadora.marcar(sesion.tiempo - 2.5, 'adelanta', k, `${p.nombre.replace('@', '')} adelanta a ${pasado.nombre.replace('@', '')}`);
     }
+    if (p.jugador && antes && p.posicion < antes && !p.box && sesion.modo === 'carrera' && sesion.estado === 'carrera') for (let q = 0; q < Math.min(3, antes - p.posicion); q++) progresar('adelanto');
     posPrev.set(p, p.posicion);
   });
 }
@@ -977,7 +982,7 @@ function procesarEventos() {
       if (ds < 700) radio.decir('Bandera amarilla más adelante, cuidado.', { clave: 'amarilla', cada: 15 });
     }
     else if (e.tipo === 'sancion') {
-      if (e.p.jugador) incRed.sanciones++;
+      if (e.p.jugador) { incRed.sanciones++; progCarrera.sanciones++; }
       if (e.p.jugador) { mensaje(`+${e.seg} s DE SANCIÓN`, e.motivo, 2.6); radio.decir(`Nos han puesto cinco segundos de sanción por ${e.motivo.toLowerCase()}. Llevamos ${e.total} en total.`, { prioridad: true }); }
     }
     else if (e.tipo === 'avisoLimites' && e.p.jugador) {
@@ -985,6 +990,7 @@ function procesarEventos() {
       else if (e.n >= 2) radio.decir(`Cuidado con los límites de pista, llevas ${e.n} avisos.`, { clave: 'limites', cada: 20 });
     }
     else if (e.tipo === 'vueltaRapida' && sesion.modo === 'carrera' && sesion.estado === 'carrera') {
+      progCarrera.vr = !!e.p.jugador;
       radio.decir(`Vuelta rápida para ${e.p.nombre.replace('@', '')}: ${fmt(e.p.mejor)}.`, { tipo: 'megafonia', clave: 'vr', cada: 40 });
       if (e.p.jugador) radio.decir('¡Vuelta rápida! Muy bien.', { clave: 'vrJ', cada: 30 });
       escenario.puestosMuro?.[e.p.indiceEquipo ?? -1]?.celebrar(3.5);
@@ -1001,6 +1007,7 @@ function procesarEventos() {
     }
     else if (e.tipo === 'vuelta' && e.p.jugador) {
       if (leccion) leccionVuelta = { t: e.t, valida: e.valida };
+      progresar('vuelta', { valida: e.valida });
       estrategiaVuelta(e.p);
       sonido.evento('vuelta');
       const txt = e.valida ? fmt(e.t) : fmt(e.t) + ' (anulada)';
@@ -1050,7 +1057,7 @@ function procesarEventos() {
       if (e.p.jugador) { mensaje('PARADA EN BOXES', e.morro ? 'Neumáticos y morro nuevo' : 'Cambio de neumáticos', 2); estadoRadio.avisoDesg = false; }
     }
     else if (e.tipo === 'paradaFin') {
-      if (e.p.jugador) estr.paradas++;
+      if (e.p.jugador) { estr.paradas++; progresar('parada', { seg: e.duracion }); }
       const k = sesion.participantes.indexOf(e.p);
       modelos[k].cambiarCompuesto(e.p.coche.reglaje.compuesto);
       if (e.p.jugador) radio.decir(e.duracion < 3 ? `¡Parada de ${e.duracion.toFixed(1)} segundos! Vamos, vamos, vamos.` : `Parada de ${e.duracion.toFixed(1)} segundos. Sal con cuidado, neumáticos fríos.`, { prioridad: true });
@@ -1180,6 +1187,7 @@ function radioPeriodica(dt) {
 }
 
 function mostrarResultados() {
+  cerrarCarreraProgreso(sesion.jugador?.posicion, sesion.participantes.length, false);
   jugando = false;
   $('#hud').classList.remove('visible'); $('#tactil').classList.remove('visible');
   document.body.classList.remove('jugando');
@@ -1332,6 +1340,7 @@ function bucle(ahora) {
     actualizarPilotosFuera(dt);
     actualizarLeccion(dt);
     actualizarEstrategia(dt);
+    kmProgreso(dt);
     avisosConduccion();
     for (const e of barreras.actualizar(dt, sesion.participantes)) {
       if (e.tipo === 'bidon' && jugando) { sonido.evento('golpe', 4); if (e.jugador) { mensaje('¡BIDONES DE AGUA!', '', 1.2); entrada.vibrar(120, 0.8); radio.decir('¡Te has llevado los bidones! Revisa que el alerón esté bien.', { clave: 'bidon', cada: 30 }); } }
@@ -2084,6 +2093,7 @@ function mostrarFueraRed(motivo) {
 }
 
 function mostrarResultadosRed(r) {
+  { const yo = r.find(x => x.id === multi.yo); if (yo && !espectando && !yo.abandono) cerrarCarreraProgreso(yo.pos, r.length, true); }
   jugando = false;
   $('#hud').classList.remove('visible'); $('#tactil').classList.remove('visible');
   document.body.classList.remove('jugando');
@@ -2634,6 +2644,7 @@ $('#bQSeguir').addEventListener('click', () => {
 });
 $('#bQSaltar').addEventListener('click', () => { if (qActual) { qActual.mejor = null; terminarTandaQ(); } });
 function empezarCarreraTrasQ() {
+  vengoDeQ = true;
   const q = qActual; qActual = null;
   const parrilla = q.clasif.parrilla();
   const cfg = q.cfg;
@@ -2763,6 +2774,7 @@ function cerrarCarreraCampeonato(orden) {
     txt += ` · reputación ${r.reputacion >= 0 ? '+' : ''}${r.reputacion} · ${r.titulares[0]}`;
     if (temporada.terminada) TRAY.finTemporada(tray, CAMP.tablaPilotos(temporada).findIndex(p => p.jugador) + 1);
   }
+  if (temporada.terminada && CAMP.tablaPilotos(temporada).findIndex(p => p.jugador) === 0) progresar('campeon');
   $('#resPremio').textContent = txt;
   guardar();
   // puntos al ranking mundial (validados por el servidor); las UpCoins solo llegan al top 5 semanal
@@ -3056,6 +3068,7 @@ function actualizarLeccion(dt) {
     $('#escResTxt').innerHTML = `${def.titulo}: <b>${leccion.tiempo.toFixed(2)} s</b>${mejora ? ' · ¡tu mejor tiempo!' : ''}<br><small>Oro ${o} s · Plata ${p} s · Bronce ${b} s</small>`;
     radio.decir(leccion.medalla === 3 ? '¡Medalla de oro! Perfecto.' : leccion.medalla === 2 ? 'Plata. Muy bien, un poco más y es oro.' : 'Bronce. Bien hecho; repítela para mejorar.', { prioridad: true });
     if (leccion.medalla === 3) sonido.ovacion(0.8);
+    progresar('leccion', { medalla: leccion.medalla, todasOro: ESC.LECCIONES.every(l => (l.id === def.id ? pr.medalla : progresoEsc[l.id]?.medalla) === 3) });
   } else {
     pr.fallos = (pr.fallos || 0) + 1;
     $('#escResTit').textContent = '❌ Inténtalo otra vez';
@@ -3158,4 +3171,91 @@ function estrategiaVuelta(p) {
 // la tarjeta de decisión se cierra sola; el panel de boxes muestra el desgaste y lo que aguantan
 function actualizarEstrategia(dt) {
   if (estr.tDec > 0) { estr.tDec -= dt; if (estr.tDec <= 0) { estr.accion = null; $('#decision').classList.remove('visible'); } }
+}
+
+// ─── Progresión: experiencia, temporada, misiones diarias y logros ────────────────────
+const CLAVE_PROG = 'apexgp.progresion';
+const prog = new PROG.Progresion((() => { try { return JSON.parse(localStorage.getItem(CLAVE_PROG) || 'null'); } catch { return null; } })());
+let progCarrera = { parrilla: 1, sanciones: 0, vr: false, pole: false, km: 0, cerrada: true }, vengoDeQ = false;
+const guardarProg = () => { try { localStorage.setItem(CLAVE_PROG, JSON.stringify(prog.d)); } catch { /* sin espacio */ } };
+
+function progresar(tipo, datos) {
+  if (enRed && espectando) return;
+  const out = prog.evento(tipo, datos);
+  if (out.length) { guardarProg(); anunciar(out); }
+  else if (tipo !== 'km') guardarProg();
+}
+
+function kmProgreso(dt) {
+  if (!sesion || pausado || !jugando) return;
+  progCarrera.km += (sesion.jugador?.coche?.velocidad || 0) * dt / 1000;
+  if (progCarrera.km >= 1) { progCarrera.km -= 1; progresar('km', { km: 1 }); }
+}
+
+function cerrarCarreraProgreso(pos, n, enLinea) {
+  if (progCarrera.cerrada || !sesion || sesion.modo !== 'carrera' || !pos) return;
+  progCarrera.cerrada = true;
+  const j = sesion.jugador, car = j?.coche;
+  if (!car || j.abandono || car.abandono) return;
+  const danado = car.danoAleron > 0.15 || (car.dano?.aleronTras || 0) > 0.15 || car.dano?.pinchazo.some(Boolean);
+  progresar('carrera', { pos, n, parrilla: progCarrera.parrilla, lluvia: sesion.clima.agua > 0.2, limpia: !danado && !progCarrera.sanciones, vueltas: sesion.vueltasTotales,
+    vr: progCarrera.vr, pole: progCarrera.pole, enLinea, circuito: circuito.id, comunidad: !!circuito.def.comunidad, resistencia: (sesion.tiempoLimite || 0) >= 1800 });
+  subirNube();
+}
+
+// avisos pequeños arriba a la derecha (no tapan la conducción)
+function anunciar(out) {
+  for (const o of out) {
+    const txt = o.tipo === 'logro' ? `${o.logro.icono} Logro: ${o.logro.nombre}` : o.tipo === 'mision' ? `✅ Misión: ${o.mision.texto} (+${o.mision.xp} XP)` : `⭐ ¡Nivel ${o.nivel}!`;
+    const el = document.createElement('div'); el.className = 'toast'; el.textContent = txt;
+    $('#toasts').appendChild(el);
+    setTimeout(() => el.classList.add('fuera'), 4200); setTimeout(() => el.remove(), 4800);
+    sonido.pitido?.(o.tipo === 'logro' ? 1175 : 1568, 0.12, 0.12);
+  }
+}
+
+function abrirProgreso() {
+  mostrar('progreso');
+  prog.revisarDia();
+  const d = prog.d, sig = prog.xpParaSiguiente();
+  $('#prNivel').innerHTML = `<b>Nivel ${d.nivel}</b><div class="tr-barra"><i style="width:${Math.round(d.xpNivel / sig * 100)}%"></i></div><small>${d.xpNivel} / ${sig} XP · ${d.xp} XP en total</small>`;
+  const esc = prog.escalon;
+  $('#prTemporada').innerHTML = `<b>Temporada ${d.temporada}</b><div class="tr-barra"><i style="width:${Math.round(esc / PROG.ESCALONES_TEMPORADA * 100)}%"></i></div><small>Escalón ${esc} de ${PROG.ESCALONES_TEMPORADA} · se reinicia cada mes</small>`;
+  $('#prMisiones').innerHTML = d.misiones.map(m => `<div class="esc-fila"><span class="esc-ico">${m.hecha ? '✅' : '🎯'}</span><div><b>${m.texto}</b><small>${m.id === 'parada' ? (m.hecha ? 'conseguida' : 'pendiente') : `${Math.min(m.n, Math.round(m.prog * 10) / 10)} / ${m.n}`}</small></div><span class="esc-med">+${m.xp} XP</span></div>`).join('');
+  $('#prLogros').innerHTML = PROG.LOGROS.map(l => `<div class="logro ${d.logros[l.id] ? 'si' : ''}" title="${l.desc}"><span>${l.icono}</span><b>${l.nombre}</b><small>${l.desc}</small></div>`).join('');
+  const st = d.stats;
+  $('#prStats').textContent = `${st.carreras} carreras · ${st.victorias} victorias · ${st.vueltas} vueltas · ${Math.round(st.km)} km · ${st.adelantos} adelantamientos · ${Object.keys(d.logros).length}/${PROG.LOGROS.length} logros`;
+  pintarNube();
+}
+
+// ─── Guardado en la nube (cuenta de UpGames) ──────────────────────────────────────────
+const CLAVES_NUBE = [CLAVE, 'apexgp.campeonato', 'apexgp.trayectoria', 'apexgp.escuela', 'apexgp.circuitos', CLAVE_PROG];
+function datosLocales() { const o = {}; for (const k of CLAVES_NUBE) { const v = localStorage.getItem(k); if (v != null) o[k] = v; } return o; }
+let tSubida = 0;
+async function subirNube(forzar = false) {
+  if (!cuenta.conectado() || (!forzar && Date.now() - tSubida < 60000)) return;
+  tSubida = Date.now();
+  guardar(); guardarProg();
+  try { const d = await cuenta.subirGuardado(JSON.stringify(datosLocales())); localStorage.setItem('apexgp.nube', String(d.actualizado || Date.now())); pintarNube(); }
+  catch (e) { console.warn('nube', e.message); }
+}
+async function recuperarNube() {
+  const d = await cuenta.bajarGuardado();
+  if (!d?.datos) throw new Error('No hay ninguna partida guardada en tu cuenta');
+  const o = JSON.parse(d.datos);
+  for (const k of CLAVES_NUBE) if (typeof o[k] === 'string') localStorage.setItem(k, o[k]);
+  localStorage.setItem('apexgp.nube', String(d.actualizado || Date.now()));
+  location.reload();
+}
+function pintarNube() {
+  const el = $('#prNube'); if (!el) return;
+  if (!cuenta.conectado()) { el.innerHTML = '☁️ Inicia sesión con tu cuenta de UpGames para guardar tu progreso en la nube y seguir en otro dispositivo.'; return; }
+  const t = +localStorage.getItem('apexgp.nube') || 0;
+  el.innerHTML = `☁️ Guardado en la nube${t ? ` · última copia ${new Date(t).toLocaleString()}` : ' · aún sin copia'} <button class="btn mini" id="nubeSubir">Subir ahora</button> <button class="btn mini" id="nubeBajar">Recuperar</button>`;
+  $('#nubeSubir').onclick = () => subirNube(true);
+  $('#nubeBajar').onclick = () => { if (confirm('¿Sustituir el progreso de este dispositivo por el de la nube?')) recuperarNube().catch(e => alert(e.message)); };
+}
+// en un dispositivo nuevo (sin progreso) se recupera solo lo que haya en la cuenta
+if (cuenta.conectado() && !localStorage.getItem(CLAVE_PROG) && !localStorage.getItem('apexgp.nube')) {
+  cuenta.bajarGuardado().then(d => { if (d?.datos) recuperarNube(); else localStorage.setItem('apexgp.nube', '0'); }).catch(() => {});
 }

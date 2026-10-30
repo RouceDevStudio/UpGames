@@ -517,3 +517,13 @@ body #lienzo { transition: filter 1.5s; }
 .decision.visible { display: flex; }
 .decision div { display: flex; gap: 8px; }
 #estrategia .panel { max-height: 90vh; overflow: auto; }
+
+/* progreso */
+.logros { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.logro { background: rgba(255,255,255,.04); border: 1px solid var(--borde); border-radius: 10px; padding: 8px; opacity: .45; filter: grayscale(1); text-align: left; }
+.logro.si { opacity: 1; filter: none; border-color: #ffd23f; }
+.logro span { font-size: 20px; } .logro b { display: block; font-size: 13px; } .logro small { color: var(--tenue); font-size: 11px; }
+.toasts { position: fixed; top: 64px; right: 12px; display: flex; flex-direction: column; gap: 6px; z-index: 80; pointer-events: none; }
+.toast { background: rgba(10,12,18,.9); border: 1px solid #ffd23f; color: #fff; border-radius: 10px; padding: 8px 12px; font-size: 13px; transform: translateX(0); transition: opacity .5s, transform .5s; }
+.toast.fuera { opacity: 0; transform: translateX(30px); }
+.tr-cab .tr-barra { padding: 0; border: 0; border-radius: 3px; background: #2a2d36; }

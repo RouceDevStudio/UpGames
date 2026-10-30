@@ -39,6 +39,7 @@
         <button class="btn grande" data-ir="carrera">🏁 Carrera</button>
         <button class="btn grande" data-ir="campeonato">🏆 Campeonato</button>
         <button class="btn grande" data-ir="escuela">🎓 Escuela</button>
+        <button class="btn grande" data-ir="progreso">🏅 Progreso</button>
       </div>
       <div class="fila">
         <button class="btn grande" data-ir="trayectoria">🧑‍✈️ Modo carrera</button>
@@ -81,6 +82,21 @@
     <div class="opcion"><label>Estrategia<span class="desc" id="estrResumen">El equipo propone un plan de paradas</span></label><button class="btn mini" id="bEstrategia">📋 Ver planes</button></div>
     <div class="opcion"><label>Neumático</label><div class="segm compuestos" data-campo="compuesto"><b data-v="blando">Blando</b><b data-v="medio">Medio</b><b data-v="duro">Duro</b><b data-v="inter">Inter</b><b data-v="lluvia">Lluvia</b></div></div>
     <div class="acciones"><button class="btn" data-ir="menu">Atrás</button><button class="btn primario" id="empezarCarrera">A la parrilla</button></div>
+  </div>
+</div>
+
+<!-- Progreso: nivel, temporada, misiones diarias y logros -->
+<div id="progreso" class="pantalla">
+  <div class="panel ancho">
+    <h2>🏅 Progreso</h2>
+    <div class="tr-cab"><div id="prNivel"></div><div id="prTemporada"></div></div>
+    <h3>Misiones de hoy</h3>
+    <div id="prMisiones" class="esc-lista"></div>
+    <h3>Logros</h3>
+    <div id="prLogros" class="logros"></div>
+    <p class="nota" id="prStats"></p>
+    <p class="nota esc-recom" id="prNube"></p>
+    <div class="acciones"><button class="btn" data-ir="menu">Volver</button></div>
   </div>
 </div>
 
@@ -381,6 +397,7 @@
     <label class="relevo-op" id="opRelevo"><input type="checkbox" id="chkRelevo"> 🔄 Cambio de piloto en esta parada</label>
     <button class="btn" data-box="cancelar">Cancelar</button>
   </div>
+  <div id="toasts" class="toasts"></div>
   <div id="decision" class="decision"><span id="decTxt"></span><div><button class="btn mini primario" id="decSi">Sí</button><button class="btn mini" id="decNo">No</button></div></div>
   <div id="hEscuela" class="h-escuela"><b id="hEscTit"></b><span id="hEscTxt"></span><i id="hEscT">0.0</i></div>
 <div id="escRes" class="esc-res"><div class="panel"><h2 id="escResTit"></h2><p id="escResTxt"></p><div class="acciones"><button class="btn" id="escMenu">Lecciones</button><button class="btn" id="escRepetir">Repetir</button><button class="btn primario" id="escSig">Siguiente</button></div></div></div>
