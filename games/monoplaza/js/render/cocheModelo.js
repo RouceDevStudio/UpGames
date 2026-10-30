@@ -436,6 +436,7 @@ function pintarPantalla(p, car, info = {}) {
   x.font = '800 17px Arial'; x.fillStyle = (info.vueltasFuel ?? 99) < (info.vueltasQuedan ?? 0) ? '#ff3b3b' : '#cfd6e2';
   x.fillText(`FUEL ${(car.combustible ?? 0).toFixed(1)}kg${info.vueltasFuel != null ? ` · ${info.vueltasFuel.toFixed(1)}v` : ''}`, 170, 220);
   x.fillStyle = ['#2fe07a', '#8a94a6', '#ff9a3c'][car.mandos.mezcla ?? 1]; x.fillText(`MIX ${['AHORRO', 'NORMAL', 'RICA'][car.mandos.mezcla ?? 1]}`, 170, 250);
+  x.fillStyle = car.mandos.bb ? '#ffd23f' : '#cfd6e2'; x.fillText(`BB ${((car.reglaje?.repartoFreno ?? 57) + (car.mandos.bb || 0)).toFixed(1)}`, 300, 250);
   // derecha: neumáticos (temperatura y desgaste) y daños
   const opt = car.ruedas[0].neum.c.tOpt;
   const col = (t) => t < opt - 35 ? '#2f7bff' : t < opt - 15 ? '#36c4ff' : t < opt + 15 ? '#2fe07a' : t < opt + 30 ? '#ffd23f' : '#ff3b3b';
@@ -572,8 +573,10 @@ export function crearModelo(opc) {
   // halo de titanio (elevado para despejar la vista del piloto) con su pilar central
   {
     const curva = new THREE.CatmullRomCurve3([
-      [-0.20, 0.72, -0.30], [-0.10, 0.865, -0.33], [0.10, 0.955, -0.30], [0.36, 0.995, -0.20], [0.52, 1.0, -0.06],
-      [0.52, 1.0, 0.06], [0.36, 0.995, 0.20], [0.10, 0.955, 0.30], [-0.10, 0.865, 0.33], [-0.20, 0.72, 0.30],
+      // patas apoyadas sobre la carrocería tras el habitáculo (y = superficie en x = −0,26) y el
+      // aro a la altura del casco, como en un monoplaza real
+      [-0.27, 0.655, -0.245], [-0.15, 0.80, -0.29], [0.07, 0.885, -0.285], [0.31, 0.93, -0.19], [0.46, 0.94, -0.06],
+      [0.46, 0.94, 0.06], [0.31, 0.93, 0.19], [0.07, 0.885, 0.285], [-0.15, 0.80, 0.29], [-0.27, 0.655, 0.245],
     ].map(p => new THREE.Vector3(...p)));
     // como el modelo de referencia: aro de sección ovalada (más ancho que alto), patas traseras
     // que se ensanchan al unirse a la carrocería, pilar delantero en forma de pala con su base
@@ -582,15 +585,19 @@ export function crearModelo(opc) {
       const pie = Math.max(0, 1 - Math.min(t, 1 - t) / 0.12);          // ensanche en las patas
       return [0.030 + pie * 0.035, 0.021 + pie * 0.022];
     }));
-    const pilar = new THREE.CatmullRomCurve3([[0.84, 0.64, 0], [0.74, 0.78, 0], [0.62, 0.95, 0], [0.53, 0.995, 0]].map(p => new THREE.Vector3(...p)));
+    const pilar = new THREE.CatmullRomCurve3([[0.82, 0.635, 0], [0.70, 0.77, 0], [0.57, 0.905, 0], [0.47, 0.94, 0]].map(p => new THREE.Vector3(...p)));
     geo.librea.push(barridoOval(pilar, fisico ? 24 : 14, fisico ? 14 : 8, (t) => {
       const base = Math.max(0, 1 - t / 0.25);
       return [0.016 + base * 0.02, 0.03 + base * 0.035];               // pala: estrecha de lado, larga de frente
     }));
+    // pies de las patas: carenado que funde el halo con la carrocería
+    for (const sg of [-1, 1]) {
+      const pie = new THREE.SphereGeometry(0.06, 16, 10); pie.scale(1.6, 0.55, 1.0); pie.translate(-0.265, 0.655, sg * 0.245); geo.librea.push(pie);
+    }
     // placa de anclaje del pilar sobre el morro (con sus tornillos)
-    geo.negro.push(caja(0.12, 0.012, 0.075, 0.86, 0.637, 0, 0, 0, -0.32));
+    geo.negro.push(caja(0.12, 0.012, 0.075, 0.84, 0.632, 0, 0, 0, -0.32));
     for (const [dx, dz] of [[-0.035, -0.025], [-0.035, 0.025], [0.035, -0.025], [0.035, 0.025]]) {
-      const t = new THREE.CylinderGeometry(0.006, 0.006, 0.008, 8); t.translate(0.86 + dx, 0.646 - dx * 0.33, dz); geo.metal.push(t);
+      const t = new THREE.CylinderGeometry(0.006, 0.006, 0.008, 8); t.translate(0.84 + dx, 0.641 - dx * 0.33, dz); geo.metal.push(t);
     }
   }
   // suspensión: triángulos y bieletas con perfil aerodinámico
@@ -714,6 +721,7 @@ export function crearModelo(opc) {
   // Piloto: modelo aparte (render/piloto.js), sentado en la carrocería
   const piloto = crearPiloto({ traje: new THREE.MeshStandardMaterial({ map: texturaMono(colores), roughness: 0.78, normalMap: calidad >= 1 ? normalPliegues() : null, normalScale: new THREE.Vector2(0.6, 0.6) }), guante: new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.8 }),
     matNegro: matComun('negro'), equipado: eq, colores, columna, calidad });
+  piloto.grupo.position.y = -0.04;          // sentado bajo, como en un monoplaza real
   carroceria.add(piloto.grupo);
   const casco = piloto.casco, cuello = piloto.cuello;
 

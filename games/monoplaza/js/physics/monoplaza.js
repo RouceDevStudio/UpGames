@@ -77,7 +77,7 @@ export class Monoplaza {
     this.combustible = opciones.combustible ?? 40;
     this.tAmb = opciones.tAmbiente ?? 26;
     this.reiniciarEstado();
-    this.mandos = { direccion: 0, acelerador: 0, freno: 0, drs: false, ersModo: 1, mezcla: 1 };   // mezcla: 0 ahorro, 1 normal, 2 rica
+    this.mandos = { direccion: 0, acelerador: 0, freno: 0, drs: false, ersModo: 1, mezcla: 1, bb: 0 };   // mezcla: 0 ahorro, 1 normal, 2 rica
     this.rebufo = 0;
     this.aireSucio = 0;
     this.drsPermitido = false;
@@ -130,7 +130,7 @@ export class Monoplaza {
     if (vn < 4) return;
     // un mismo choque toca varios puntos a la vez: cuenta una sola vez (salvo que sea más fuerte)
     if (this.reloj - (this._tGolpe ?? -9) < 0.3 && vn <= (this._vGolpe || 0) + 3) return;
-    this._tGolpe = this.reloj; this._vGolpe = vn;
+    this._tGolpe = this.reloj; this._vGolpe = vn; this._exG = ex; this._eyG = ey;
     const d = this.dano;
     const delante = ex > 1.2, detras = ex < -1.4;
     const k = (ex > 0 ? 0 : 2) + (ey > 0 ? 1 : 0);   // rueda más cercana
@@ -478,7 +478,8 @@ export class Monoplaza {
     const inerciaReflejada = embragado ? COCHE.inerciaMotor * relacion * relacion * 0.5 : 0;
 
     // --- Frenos -----------------------------------------------------------
-    const reparto = rg.repartoFreno / 100;
+    // reparto de frenada: el del reglaje más el ajuste que haga el piloto desde el volante
+    const reparto = Math.max(45, Math.min(70, rg.repartoFreno + (mand.bb || 0))) / 100;
     const parFreno = COCHE.parFrenoMax * this.ef.freno * freno;
 
     // --- Ruedas -----------------------------------------------------------
@@ -543,7 +544,7 @@ export class Monoplaza {
       if (agua > 0) mu *= factorAgua(nm.c, agua) * (w.sup > SUP_ESCAPE ? 1 - 0.35 * agua : 1);
       // neumáticos sucios tras pisar hierba o grava: se limpian rodando unos cientos de metros
       if (w.sup > SUP_ESCAPE && Math.abs(vl) > 2) { w.suciedad = Math.min(1, (w.suciedad || 0) + dt * 1.2); w.sucioHierba = w.sup === SUP_GRAVA ? 0.1 : 0.7; }
-      else if (w.suciedad > 0) w.suciedad = Math.max(0, w.suciedad - Math.abs(vl) * dt / (w.sup === SUP_ASFALTO ? 650 : 2000));
+      else if (w.suciedad > 0) w.suciedad = Math.max(0, w.suciedad - Math.abs(vl) * dt / (w.sup === SUP_ASFALTO ? 200 : 800));
       if (w.suciedad > 0) mu *= 1 - 0.15 * w.suciedad;
       // la pista gana goma con las vueltas (más agarre en la trazada) y la lluvia se la lleva
       if (w.sup === SUP_ASFALTO) mu *= 0.975 + 0.04 * (c.goma ?? 0.6);

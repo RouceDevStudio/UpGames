@@ -146,6 +146,9 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
   const agarre = new THREE.Vector3(), pecho = new THREE.Vector3(), arriba = new THREE.Vector3(0, 1, 0);
   // estado del choque
   const choque = { t: 99, dur: 0, w: 0, ang: 0, soltar: 0, golpePrevio: 0 };
+  // pulsaciones en el volante: el pulgar va al botón (o los dedos tiran de la leva) y vuelve
+  const pulsos = [{ t: 9, dur: 0.45, tipo: 'boton' }, { t: 9, dur: 0.45, tipo: 'boton' }];
+  const despl = new THREE.Vector3();
 
   const cilindro = (m, a, b) => {
     tmp.copy(b).sub(a); const L = tmp.length();
@@ -176,6 +179,11 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
     grupo, cuello, casco: cabeza,
     cabezaG: { x: 0, vx: 0, z: 0, vz: 0 },   // inclinación de la cabeza (la usa la cámara de cabina)
     mirada: 0,
+    /** La mano de ese lado (-1 izq., 1 dcha.) pulsa un botón del volante o tira de la leva. */
+    pulsar(lado = 1, tipo = 'boton') {
+      const p = pulsos[lado > 0 ? 1 : 0];
+      p.t = 0; p.tipo = tipo; p.dur = tipo === 'leva' ? 0.22 : 0.45;
+    },
     /** Devuelve el ángulo que debe tener el volante (rad) y coloca brazos y cabeza. */
     actualizar(car, dt) {
       const angPiloto = (car.anguloVolante || 0) * 9;
@@ -229,7 +237,15 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
       // brazos: empuñadura del volante ↔ brazos cruzados sobre el pecho
       for (let s = 0; s < 2; s++) {
         const lado = s ? 1 : -1;
-        agarre.set(0, 0, lado * 0.125).applyAxisAngle(_x, angVol).applyAxisAngle(_z, columna.rotation.z).add(columna.position);
+        const p = pulsos[s];
+        if (dt > 0) p.t += dt;
+        // curva de la pulsación: va rápido, se queda apretando un instante y vuelve
+        const u = p.t < p.dur ? Math.sin(Math.PI * Math.min(1, p.t / p.dur)) ** 0.7 : 0;
+        // botón: la mano se desliza hacia el centro y se adelanta (el pulgar a la pantalla);
+        // leva: los dedos tiran hacia atrás del volante
+        if (p.tipo === 'leva') despl.set(-0.035 * u, 0, -lado * 0.01 * u);
+        else despl.set(0.03 * u, 0.025 * u, -lado * 0.05 * u);
+        agarre.set(despl.x, despl.y, lado * 0.125 + despl.z).applyAxisAngle(_x, angVol).applyAxisAngle(_z, columna.rotation.z).add(columna.position);
         // cruzados: cada mano al hombro contrario, una algo por encima de la otra
         pecho.set(0.13 + s * 0.02, 0.63 + s * 0.035, -lado * 0.1);
         T.copy(agarre).lerp(pecho, choque.soltar);

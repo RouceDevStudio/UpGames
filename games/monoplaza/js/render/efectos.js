@@ -132,6 +132,51 @@ export class Efectos {
     this.agua = 0;             // agua en la pista: spray detrás de los coches
   }
 
+  /** Estallido en el punto del golpe: chispas que barren en la dirección del roce, astillas de
+   *  carbono que vuelan y caen, nube de polvo y goma; y mientras roza el muro, un chorro fino. */
+  _golpe(car, cos, sin, v, rnd) {
+    const nuevo = car.picoGolpe > 4 && car._fxGolpe !== car._tGolpe;
+    // punto del golpe en el mundo (en la repetición no se sabe: el lado del coche al azar)
+    const ex = car._exG ?? (rnd() - 0.5) * 3, ey = car._eyG ?? (rnd() - 0.5) * 1.4;
+    const px = car.x + ex * cos - ey * sin, pz = car.z + ex * sin + ey * cos, py = car.y + 0.3;
+    const vl = car.vx ?? car.velocidad ?? 0, vt = car.vy || 0;
+    const vxw = vl * cos - vt * sin, vzw = vl * sin + vt * cos;
+    if (nuevo || (car._tGolpe === undefined && car.impacto > 8 && !car._fxRepe)) {
+      car._fxGolpe = car._tGolpe; car._fxRepe = car._tGolpe === undefined;
+      const f = Math.min(1, (car.picoGolpe || car.impacto) / 30);
+      const q = this.calidad >= 2 ? 1 : 0.55;
+      // destello y chispas: salen con la velocidad del coche y se abren en abanico
+      this.chispas.emitir(px, py, pz, vxw * 0.3, 0.5, vzw * 0.3, 0.5 + f * 0.6, 1, 0.09, 4, 1, 0.9, 0.6);
+      const nc = Math.round((14 + 50 * f) * q);
+      for (let k = 0; k < nc; k++) {
+        const r = 0.3 + rnd() * 0.6;
+        this.chispas.emitir(px, py + rnd() * 0.3, pz, vxw * r + (rnd() - 0.5) * 9, 0.5 + rnd() * 5, vzw * r + (rnd() - 0.5) * 9,
+          0.05 + rnd() * 0.05, 1, 0.25 + rnd() * 0.5, -0.05, 1, 0.65 + rnd() * 0.3, 0.25 + rnd() * 0.3);
+      }
+      // astillas de carbono (negras, algunas con el color del coche) que giran y caen
+      const na = Math.round((5 + 26 * f) * q);
+      for (let k = 0; k < na; k++) {
+        const t = rnd() < 0.7 ? 0.04 + rnd() * 0.06 : 0.35 + rnd() * 0.3;
+        this.piedras.emitir(px, py + rnd() * 0.4, pz, vxw * (0.2 + rnd() * 0.5) + (rnd() - 0.5) * 7, 1.5 + rnd() * (3 + 6 * f), vzw * (0.2 + rnd() * 0.5) + (rnd() - 0.5) * 7,
+          0.06 + rnd() * 0.12, 1, 1 + rnd() * 1.4, 0, t, t, t * 1.05);
+      }
+      // nube de polvo, goma y fibra pulverizada que se queda flotando
+      const nh = Math.round((3 + 12 * f) * q);
+      for (let k = 0; k < nh; k++) {
+        const l = 0.55 + rnd() * 0.2;
+        this.humo.emitir(px + (rnd() - 0.5) * 0.8, car.y + 0.25 + rnd() * 0.4, pz + (rnd() - 0.5) * 0.8, vxw * 0.15 + (rnd() - 0.5) * 3, 0.4 + rnd() * 1.6, vzw * 0.15 + (rnd() - 0.5) * 3,
+          0.9 + f * 1.2, 0.5, 1.4 + rnd() * 1.6, 2.2 + f * 1.5, l, l * 0.96, l * 0.9);
+      }
+    } else if (car.impacto > 3 && v > 5) {
+      // rozando el muro: chorro de chispas hacia atrás desde el punto de contacto
+      for (let k = 0; k < 6; k++) {
+        this.chispas.emitir(px, car.y + 0.15 + rnd() * 0.2, pz, -vxw * (rnd() * 0.15) + vxw * 0.25 + (rnd() - 0.5) * 3, rnd() * 2.5, -vzw * (rnd() * 0.15) + vzw * 0.25 + (rnd() - 0.5) * 3,
+          0.06, 1, 0.2 + rnd() * 0.3, -0.05, 1, 0.75, 0.35);
+      }
+    }
+    if (car._tGolpe === undefined && car.impacto < 2) car._fxRepe = false;
+  }
+
   ajustarEscala(alturaPx, fovGrados) {
     const e = alturaPx / (2 * Math.tan(fovGrados * Math.PI / 360));
     this.humo.mat.uniforms.escala.value = e;
@@ -220,18 +265,7 @@ export class Efectos {
           0.08, 1, 0.3 + rnd() * 0.4, -0.05, 1, 0.72, 0.32);
         if (rnd() < 0.5) this.humo.emitir(car.x, car.y + 0.3, car.z, (rnd() - 0.5) * 2, 0.6 + rnd(), (rnd() - 0.5) * 2, 1.4, 0.35, 1.6 + rnd(), 2.4, 0.5, 0.48, 0.45);
       }
-      // roce entre coches: chispas de carbono y metal en el punto de contacto
-      if (!lejos && car.picoGolpe > 4 && car.fuenteGolpe === 'coche' && car._chispaCoche !== car._tGolpe) {
-        car._chispaCoche = car._tGolpe;
-        for (let k = 0; k < 16; k++) this.chispas.emitir(car.x + (rnd() - 0.5) * 3, car.y + 0.3, car.z + (rnd() - 0.5) * 3, (rnd() - 0.5) * 8 + cos * v * 0.3, rnd() * 4, (rnd() - 0.5) * 8 + sin * v * 0.3,
-          0.07, 1, 0.3 + rnd() * 0.3, -0.05, 1, 0.85, 0.5);
-      }
-      // chispas al golpear el muro
-      if (!lejos && car.impacto > 3) {
-        for (let k = 0; k < 20; k++) {
-          this.chispas.emitir(car.x, car.y + 0.4, car.z, (rnd() - 0.5) * 12, rnd() * 5, (rnd() - 0.5) * 12, 0.08, 1, 0.4, 0, 1, 0.8, 0.4);
-        }
-      }
+      if (!lejos) this._golpe(car, cos, sin, v, rnd);
     }
     this.humo.actualizar(dt, -0.3, 1.2);
     this.chispas.actualizar(dt, 9.8, 0.6);

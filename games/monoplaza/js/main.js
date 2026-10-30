@@ -164,7 +164,26 @@ async function iniciar() {
 }
 
 // Coloca el modelo en el mundo; si vuela o está volcado gira alrededor de su centro (no de las ruedas)
-function colocarModelo(m, c, pend) {
+// Sacudida de la carrocería al chocar: el chasis rebota sobre la suspensión y los neumáticos
+// (balanceo hacia el lado del golpe, cabeceo y un pequeño salto) y se calma en medio segundo.
+function sacudida(m, c, dt) {
+  const g = Math.max(c.impacto || 0, c.picoGolpe || 0);
+  const s = m._sac ??= { t: 9, a: 0, lado: 1, frente: 1, prev: 0 };
+  if (g > 5 && (g > s.prev + 3 || s.t > 0.6) && (c._tGolpe === undefined || c._tGolpe !== s.tg)) {
+    s.tg = c._tGolpe; s.t = 0; s.a = Math.min(0.11, 0.012 + g * 0.0028);
+    s.lado = c._eyG !== undefined ? (c._eyG > 0 ? 1 : -1) : (Math.random() < 0.5 ? -1 : 1);
+    s.frente = c._exG !== undefined ? (c._exG > 0.5 ? 1 : c._exG < -0.5 ? -1 : 0) : 0;
+  }
+  s.prev = g;
+  if (dt > 0) s.t += dt;
+  if (s.t > 1.2) return;
+  const e = Math.exp(-s.t * 5.5), t = s.t;
+  m.raiz.rotateX(-s.lado * s.a * e * Math.sin(t * 26));
+  m.raiz.rotateZ(-s.frente * s.a * 0.6 * e * Math.sin(t * 22 + 0.6));
+  m.raiz.translateY(s.a * 0.9 * e * Math.abs(Math.sin(t * 17)));
+}
+
+function colocarModelo(m, c, pend, dt = 0) {
   const gc = c.giroCab || 0, gb = c.giroBal || 0;
   // colgado de la grúa
   if (c._grua) {
@@ -179,6 +198,7 @@ function colocarModelo(m, c, pend) {
     m.raiz.position.set(c.x, c.y, c.z);
     m.raiz.rotation.set(0, -c.psi, 0);
     if (pend) m.raiz.rotateZ(pend);
+    sacudida(m, c, dt);
     return;
   }
   m.raiz.position.set(c.x, c.y + PIVOTE_VUELO, c.z);
@@ -186,6 +206,7 @@ function colocarModelo(m, c, pend) {
   m.raiz.rotateZ(pend + gc);
   m.raiz.rotateX(gb);
   m.raiz.translateY(-PIVOTE_VUELO);
+  sacudida(m, c, dt);
 }
 
 // Construye (o reconstruye) el circuito y todo su escenario
@@ -775,6 +796,10 @@ function aplicarAjustesEnVivo() {
 }
 
 $('#bContinuar').addEventListener('click', () => pausar(false));
+// el piloto pulsa un botón del volante con el pulgar (lado −1 izquierdo, 1 derecho)
+let drsPulsado = false;
+function pulsarVolante(lado, tipo) { modelos[sesion?.participantes.indexOf(sesion.jugador)]?.piloto?.pulsar?.(lado, tipo); }
+
 // para la repetición: el piloto a pie de un coche (si ya salió)
 function pilotoFueraDe(c) { return pilotosFuera?.lista.find(f => f.coche === c) || null; }
 
@@ -810,7 +835,7 @@ $('#bResTele').addEventListener('click', () => abrirTelemetria());
 
 entrada.conectarTactil({
   acel: $('#pedalAcel'), freno: $('#pedalFreno'), volante: $('#zonaVolante'), pomo: $('#pomo'),
-  subir: $('#bSubir'), bajar: $('#bBajar'), drs: $('#bDrs'), ers: $('#bErs'), mezcla: $('#bMezcla'), camara: $('#bCam'), pausa: $('#bPausa'),
+  subir: $('#bSubir'), bajar: $('#bBajar'), drs: $('#bDrs'), ers: $('#bErs'), mezcla: $('#bMezcla'), bb: $('#bBB'), camara: $('#bCam'), pausa: $('#bPausa'),
   atras: $('#bAtras'), recolocar: $('#bRecolocar'),
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden && jugando && !pausado) pausar(true); });
@@ -915,6 +940,7 @@ function actualizarHud(dt) {
   bE.classList.toggle('m0', modoE === 0); bE.classList.toggle('m2', modoE === 2);
   $('#bErsTxt').textContent = ['RECARGA', 'ERS', 'ATAQUE'][modoE];
   $('#bMezclaTxt').textContent = ['AHORRO', 'MIX', 'RICA'][c.mandos.mezcla ?? 1];
+  $('#bBBTxt').textContent = 'BB ' + (c.reglaje.repartoFreno + (c.mandos.bb || 0)).toFixed(1).replace('.0', '');
   $('#bMezcla').classList.toggle('activo', (c.mandos.mezcla ?? 1) !== 1);
   bE.querySelector('.carga').style.transform = `scaleX(${(c.ers / COCHE.ersCapacidad).toFixed(2)})`;
   // banderas
@@ -1391,11 +1417,19 @@ function bucle(ahora) {
     for (const e of evs) {
       if (e === 'pausa') pausar(!pausado);
       else if (pausado) continue;
-      else if (e === 'subir') j.cambiar(1);
-      else if (e === 'bajar') j.cambiar(-1);
+      else if (e === 'subir') { j.cambiar(1); pulsarVolante(1, 'leva'); }
+      else if (e === 'bajar') { j.cambiar(-1); pulsarVolante(-1, 'leva'); }
       else if (e === 'camara') { const m = camara.siguiente(); ajustes.camara = m; guardar(); mensaje(NOMBRES_CAMARA[m].toUpperCase(), '', 0.8); }
-      else if (e === 'ers') { j.mandos.ersModo = ((j.mandos.ersModo ?? 1) + 1) % 3; mensaje(ERS_NOMBRES[j.mandos.ersModo], '', 0.8); }
-      else if (e === 'mezcla') { j.mandos.mezcla = ((j.mandos.mezcla ?? 1) + 1) % 3; mensaje('MEZCLA ' + MEZCLA_NOMBRES[j.mandos.mezcla], ['Menos potencia, gasta menos', 'Equilibrada', 'Más potencia, gasta más y castiga el motor'][j.mandos.mezcla], 1.2); }
+      else if (e === 'ers') { pulsarVolante(1); j.mandos.ersModo = ((j.mandos.ersModo ?? 1) + 1) % 3; mensaje(ERS_NOMBRES[j.mandos.ersModo], '', 0.8); }
+      else if (e === 'bbMas' || e === 'bbMenos' || e === 'bbCiclo') {
+        // reparto de frenada desde el volante (±3 % sobre el del reglaje, en pasos de 0,5)
+        const m = j.mandos;
+        m.bb = e === 'bbCiclo' ? (m.bb >= 3 ? -3 : m.bb + 0.5) : Math.max(-3, Math.min(3, m.bb + (e === 'bbMas' ? 0.5 : -0.5)));
+        const v = j.reglaje.repartoFreno + m.bb;
+        mensaje(`FRENOS ${v.toFixed(1)} %`, m.bb > 0 ? 'Más delante: estable, bloquea antes delante' : m.bb < 0 ? 'Más detrás: gira mejor, cuidado con el trompo' : 'Reparto del reglaje', 1);
+        pulsarVolante(-1);
+      }
+      else if (e === 'mezcla') { pulsarVolante(-1); j.mandos.mezcla = ((j.mandos.mezcla ?? 1) + 1) % 3; mensaje('MEZCLA ' + MEZCLA_NOMBRES[j.mandos.mezcla], ['Menos potencia, gasta menos', 'Equilibrada', 'Más potencia, gasta más y castiga el motor'][j.mandos.mezcla], 1.2); }
       else if (e === 'recolocar' && enRed) mensaje('SIN REINICIOS EN LÍNEA', '', 1);
       else if (e === 'recolocar') {
         if (j.abandono && sesion.modo !== 'carrera') { cocheNuevo(); continue; }
@@ -1413,6 +1447,9 @@ function bucle(ahora) {
     // donuts de celebración: gas a fondo, volante girado (antes de la física)
     if (celebracion?.donuts > 0) { j.mandos.acelerador = 1; j.mandos.freno = 0; j.mandos.direccion = 1; if (j.marcha > 2) j.marcha = 2; }
     j.mandos.drs = entrada.drs || (j.drsPermitido && esTactil && ajustes.cambioAuto && !entrada.usandoMando);
+    // el piloto pulsa el botón del DRS (el alerón) en el volante al abrirlo
+    if (j.mandos.drs && j.drsPermitido && !drsPulsado) pulsarVolante(1);
+    drsPulsado = !!(j.mandos.drs && j.drsPermitido);
     camara.mirarAtras = entrada.mirarAtras;
   } else {
     // menú: el coche del jugador da vueltas solo como fondo (en el garaje se queda quieto)
@@ -1450,7 +1487,7 @@ function bucle(ahora) {
     const c = p.coche, m = modelos[k];
     // inclinación por la pendiente de la pista
     const pend = Math.atan(circuito.pendiente[c.proj.i] * (Math.cos(c.psi) * c.proj.tx + Math.sin(c.psi) * c.proj.tz));
-    colocarModelo(m, c, pend);
+    colocarModelo(m, c, pend, dt);
     m.actualizar(c, dt);
   });
   // fantasma
@@ -2454,7 +2491,7 @@ function actualizarRepe(dt) {
     // inclinación por la pendiente de la pista (sin ella el coche parecía flotar en las cuestas)
     const pr = circuito.proyectar(c.x, c.z, c._iProy ?? -1, c._proy ??= {}); c._iProy = pr.i;
     const pend = pr.i >= 0 ? Math.atan(circuito.pendiente[pr.i] * (Math.cos(c.psi) * pr.tx + Math.sin(c.psi) * pr.tz)) : 0;
-    colocarModelo(m, c, pend);
+    colocarModelo(m, c, pend, dtR);
     m.actualizar(c, dtR);
     // el piloto: dentro del coche hasta que sale, y a pie donde estaba en ese momento
     const f = pilotosFuera?.lista.find(q => q.coche === p.coche);

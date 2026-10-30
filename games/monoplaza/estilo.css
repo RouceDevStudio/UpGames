@@ -532,6 +532,9 @@ body #lienzo { transition: filter 1.5s; }
 .mezcla-bt .borne { fill: none; stroke: rgba(255,255,255,.75); stroke-width: 2.5; }
 .mezcla-bt .carga { fill: rgba(47,224,122,.45); }
 .mezcla-bt.activo { border-color: #ff9a3c; }
+.bb-bt .pila { fill: none; stroke: rgba(255,255,255,.75); stroke-width: 2.5; }
+.bb-bt .borne { fill: none; stroke: rgba(255,90,60,.85); stroke-width: 3; stroke-linecap: round; }
+.bb-bt .carga { fill: rgba(255,90,60,.55); }
 /* salida del piloto: bandas de cine, sin HUD, y el nombre de la cámara */
 body.cine-salida #hud, body.cine-salida #tactil { opacity: 0; pointer-events: none; transition: opacity .4s; }
 body.cine-salida::before, body.cine-salida::after { content: ''; position: fixed; left: 0; right: 0; height: 9vh; background: #000; z-index: 30; pointer-events: none; }

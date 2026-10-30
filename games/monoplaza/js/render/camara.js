@@ -97,8 +97,8 @@ export class Camara {
     } else {
       // cámaras a bordo: siguen el cabeceo y balanceo de la carrocería
       const cara = this.modo === 'cara';
-      const local = this.modo === 'tcam' ? new THREE.Vector3(-0.32, 1.13, 0) : cara ? new THREE.Vector3(0.60, 0.94, 0) : new THREE.Vector3(0.16, 0.90, 0);
-      const mirar = this.modo === 'tcam' ? new THREE.Vector3(30, 0.4, 0) : cara ? new THREE.Vector3(0.0, 0.83, 0) : new THREE.Vector3(30, -0.2, 0);
+      const local = this.modo === 'tcam' ? new THREE.Vector3(-0.32, 1.13, 0) : cara ? new THREE.Vector3(0.60, 0.90, 0) : new THREE.Vector3(0.16, 0.86, 0);
+      const mirar = this.modo === 'tcam' ? new THREE.Vector3(30, 0.4, 0) : cara ? new THREE.Vector3(0.0, 0.79, 0) : new THREE.Vector3(30, -0.24, 0);
       // en la cabina la vista acompaña el giro de la cabeza del piloto hacia la curva
       if (this.modo === 'cabina' && modelo.mirada) mirar.applyAxisAngle(new THREE.Vector3(0, 1, 0), modelo.mirada * 0.85);
       if (this.mirarAtras) { mirar.x = -30; local.x = this.modo === 'tcam' ? -0.6 : -0.1; local.y += 0.1; }
