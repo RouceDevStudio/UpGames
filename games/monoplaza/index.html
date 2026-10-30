@@ -173,6 +173,9 @@
       <p><b>Límites de pista:</b> si sacas las cuatro ruedas fuera, la vuelta no cuenta. En carrera tienes 3 avisos (bandera blanca y negra); desde el cuarto, +5 s. Provocar un choque también son +5 s.</p>
       <p><b>Banderas:</b> amarilla = peligro en esa zona, sin DRS. VSC (coche de seguridad virtual) = todos limitados a un ritmo lento hasta que retiran el coche accidentado.</p>
       <p><b>Lluvia:</b> con agua en la pista los neumáticos lisos no agarran. Intermedios para pista húmeda; de lluvia para mucha agua. La pista se seca poco a poco: tu ingeniero te avisará por radio.</p>
+      <p><b>Cámaras:</b> persecución, cercana, T-cam, cabina (la vista acompaña el giro de la cabeza), cara del piloto y TV/boxes.</p>
+      <p><b>Boxes:</b> pulsa BOX o entra al carril: el equipo toma el coche, lo lleva al garaje con el limitador y lo devuelve a la salida.</p>
+      <p><b>En línea:</b> sin ayudas (control de tracción, ABS, dirección asistida, trazada) y sin reinicios: si destrozas el coche quedas fuera.</p>
       <p><b>Repetición y foto:</b> desde la pausa o al terminar, mira la repetición con cámaras de TV y saca fotos.</p>
     </div>
     <div class="acciones"><button class="btn primario" data-ir="menu">Entendido</button></div>
@@ -218,7 +221,8 @@
   <div class="panel ancho">
     <h2>Multijugador</h2>
     <div id="mEstado" class="nota" style="text-align:left"></div>
-    <h3>Partida rápida</h3>
+    <h3>Partida rápida · 22 coches · 20 vueltas</h3>
+    <p class="nota" style="text-align:left">6 minutos de clasificación deciden la parrilla. Sin ayudas a la conducción ni reinicios: si destrozas el coche, quedas fuera. Los huecos los completan pilotos de la IA.</p>
     <div class="opcion"><label>Rivales de tu nivel (ELO) y de tu región<span class="desc" id="mElo"></span></label><div class="segm" data-mp="region"><b data-v="america">América</b><b data-v="europa">Europa</b><b data-v="asia">Asia</b></div></div>
     <div class="acciones"><button class="btn primario" id="bBuscar">⚡ Buscar partida</button></div>
     <h3>Crear sala</h3>
@@ -296,6 +300,7 @@
   <div id="hRadio" class="radio"></div>
   <div id="hClima" class="clima-hud"></div>
   <div id="hPen" class="pen"></div>
+  <div id="hQRed" class="qred"></div>
   <div id="panelBox" class="panel-box">
     <div class="mini">ENTRAR A BOXES · NEUMÁTICOS</div>
     <div class="fila-box"><button class="btn" data-box="blando">Blando</button><button class="btn" data-box="medio">Medio</button><button class="btn" data-box="duro">Duro</button></div>

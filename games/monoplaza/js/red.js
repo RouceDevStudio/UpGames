@@ -142,6 +142,8 @@ export class Multijugador {
       s.on('livery', (d) => { this.libreas.set(d.id, d.livery); this._emitirLocal('livery', d); });
       s.on('evento', (d) => this._emitirLocal('evento', d));
       s.on('emparejado', (d) => { this.sala = d.sala; this.yo = d.yo; this._emitirLocal('emparejado', d); });
+      s.on('clasif', (d) => this._emitirLocal('clasif', { ...d, tFinLocal: d.tFin - this.offset }));
+      s.on('tablaQ', (t) => this._emitirLocal('tablaQ', t));
       s.on('elo', (d) => this._emitirLocal('elo', d));
       s.on('error_sala', (e) => this._emitirLocal('aviso', e));
       s.on('disconnect', () => this._emitirLocal('desconectado'));
@@ -168,6 +170,10 @@ export class Multijugador {
   listo(v) { this.socket?.emit('listo', v); }
   iniciar() { return new Promise(r => this.socket.emit('iniciar', r)); }
   revancha() { this.socket?.emit('revancha'); }
+  vueltaQ(t) { this.socket?.emit('vueltaQ', t); }
+  enviarBots(lista) { this.socket?.volatile.emit('estadosBots', lista.map(([id, e]) => [id, e.map(v => Math.round(v * 1000) / 1000)])); }
+  botMeta(id) { this.socket?.emit('botMeta', id); }
+  botAbandono(id) { this.socket?.emit('botAbandono', id); }
   buscar(datos) { return new Promise(r => this.socket.emit('buscar', datos, r)); }
   cancelarBusqueda() { this.socket?.emit('cancelarBusqueda'); }
   salir() { this.socket?.emit('salir'); this.sala = null; this.buffers.clear(); }

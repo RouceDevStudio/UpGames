@@ -390,6 +390,37 @@ function crearMundo(monedas) {
         const b = S.crear('b', {}, { circuito: 'luna', clima: 'nieve' }).sala;
         assert.deepStrictEqual([b.circuito, b.clima], ['valle', 'seco']);
     });
+    await test('partida rápida: clasificación, bots que completan 22 y parrilla por tiempos', () => {
+        let ahora = 1_000_000;
+        const S = new A.Salas({ ahora: () => ahora });
+        const { sala } = S.crear('a', { nombre: 'Ana' }, { tipo: 'abierta', max: 22, vueltas: 20, rapida: true, clasifSeg: 360, circuito: 'valle' });
+        S.unirse('b', sala.codigo, { nombre: 'Beto' }); S.listo('b', true);
+        const r = S.iniciar('a');
+        assert.ok(r.ok && r.clasif);
+        assert.strictEqual(sala.estado, 'clasif');
+        assert.strictEqual(sala.bots.length, 20);
+        assert.strictEqual(S.vueltaQ('a', 30), null);                    // imposible
+        assert.ok(S.vueltaQ('a', 70)); assert.ok(S.vueltaQ('a', 74));
+        assert.strictEqual(sala.jugadores.get('a').tQ, 70);
+        assert.strictEqual(S.revisarClasif().length, 0);
+        ahora = sala.tFinQ + 1;
+        assert.strictEqual(S.revisarClasif().length, 1);
+        assert.strictEqual(sala.estado, 'carrera');
+        assert.strictEqual(sala.parrilla.length, 22);
+        assert.strictEqual(sala.parrilla[0], 'a');                        // 70 s: pole
+        assert.strictEqual(sala.parrilla[21], 'b');                       // sin tiempo: al fondo
+        // solo el anfitrión mueve a los bots
+        assert.strictEqual(S.estadoBots('b', [['bot:0', [1, 2, 3]]]), null);
+        assert.ok(S.estadoBots('a', [['bot:0', [1, 2, 3]]]));
+        assert.ok(S.paquete(sala).some(([id]) => id === 'bot:0'));
+        ahora = sala.tSalida + 20 * 80 * 1000;
+        assert.ok(S.botMeta('a', 'bot:3'));
+        ahora += 5000; S.meta('b'); S.abandono('a');
+        const res = S.resultados(sala);
+        assert.strictEqual(res.length, 22);
+        assert.strictEqual(res[0].bot, 3);
+        assert.strictEqual(res.find(x => x.id === 'a').abandono, true);
+    });
     await test('limpiarNombre: sin HTML ni nombres larguísimos', () => {
         assert.strictEqual(A.limpiarNombre('<b>Ana</b>'), 'bAnab');
         assert.strictEqual(A.limpiarNombre('x'.repeat(60)).length, 18);

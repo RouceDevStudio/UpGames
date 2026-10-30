@@ -8,6 +8,7 @@ Juego de carreras de monoplazas en 3D que corre en el navegador (WebGL con Three
 ## Modos
 
 - **Carrera** contra hasta 21 rivales con IA (11 equipos de 2 coches): semáforo de salida, posiciones, rebufo, DRS con detección a 1 s, contactos, estrategia de boxes y abandonos.
+- **Partida rápida en línea**: 22 coches (la IA completa la parrilla y la simula el anfitrión; si se va, la simula el siguiente), 20 vueltas y 6 minutos de clasificación que deciden la parrilla. En línea no hay ayudas ni reinicios: quien destroza el coche queda fuera.
 - **Multijugador**: duelos 1 vs 1 o salas abiertas de hasta 22 pilotos (Socket.IO, espacio `/apexgp` del backend). Salida sincronizada con el reloj del servidor, rivales interpolados y resultados validados en el servidor.
 - **Contrarreloj** con fantasma de tu mejor vuelta, delta en vivo y sectores de colores (morado, verde, amarillo).
 - **Práctica libre** para probar el reglaje.

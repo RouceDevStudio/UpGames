@@ -2,8 +2,8 @@
 
 import * as THREE from 'three';
 
-export const MODOS_CAMARA = ['persecucion', 'cercana', 'tcam', 'cabina'];
-export const NOMBRES_CAMARA = { persecucion: 'Persecución', cercana: 'Cercana', tcam: 'T-Cam', cabina: 'Cabina' };
+export const MODOS_CAMARA = ['persecucion', 'cercana', 'tcam', 'cabina', 'cara', 'tv'];
+export const NOMBRES_CAMARA = { persecucion: 'Persecución', cercana: 'Cercana', tcam: 'T-Cam', cabina: 'Cabina', cara: 'Cara del piloto', tv: 'TV y boxes' };
 
 export class Camara {
   constructor(aspecto) {
@@ -49,6 +49,21 @@ export class Camara {
       return;
     }
     if (cam.view?.enabled) cam.clearViewOffset();
+    if (this.modo === 'tv' && this.tv) {
+      // en la calle de boxes, cámara fija junto al garaje; en pista, las cámaras de TV
+      const c = this.tv.c;
+      if (c.uPit(car.proj.s) >= 0) {
+        const m = c.muestra(car.proj.s + 9), i = m.i;
+        const d = c.semiAncho[i] + c.pit.ancho - 1.2;
+        cam.position.set(m.x - m.tz * d, m.y + 2.3, m.z + m.tx * d);
+        cam.up.set(0, 1, 0);
+        cam.lookAt(car.x, car.y + 0.5, car.z);
+        cam.fov += (48 - cam.fov) * Math.min(1, dt * 3); cam.near = 0.1;
+      } else this.tv.actualizar(cam, car, 'tv', dt);
+      cam.updateProjectionMatrix();
+      this.iniciada = false;
+      return;
+    }
     if (this.modo === 'persecucion' || this.modo === 'cercana') {
       const cerca = this.modo === 'cercana';
       const dist = cerca ? 4.6 : 6.8, alto = cerca ? 1.45 : 2.05;
@@ -74,8 +89,11 @@ export class Camara {
       cam.near = 0.1;
     } else {
       // cámaras a bordo: siguen el cabeceo y balanceo de la carrocería
-      const local = this.modo === 'tcam' ? new THREE.Vector3(-0.32, 1.13, 0) : new THREE.Vector3(0.16, 0.9, 0);
-      const mirar = this.modo === 'tcam' ? new THREE.Vector3(30, 0.4, 0) : new THREE.Vector3(30, -0.2, 0);
+      const cara = this.modo === 'cara';
+      const local = this.modo === 'tcam' ? new THREE.Vector3(-0.32, 1.13, 0) : cara ? new THREE.Vector3(0.60, 0.94, 0) : new THREE.Vector3(0.16, 0.90, 0);
+      const mirar = this.modo === 'tcam' ? new THREE.Vector3(30, 0.4, 0) : cara ? new THREE.Vector3(0.0, 0.83, 0) : new THREE.Vector3(30, -0.2, 0);
+      // en la cabina la vista acompaña el giro de la cabeza del piloto hacia la curva
+      if (this.modo === 'cabina' && modelo.mirada) mirar.applyAxisAngle(new THREE.Vector3(0, 1, 0), modelo.mirada * 0.85);
       if (this.mirarAtras) { mirar.x = -30; local.x = this.modo === 'tcam' ? -0.6 : -0.1; local.y += 0.1; }
       modelo.raiz.updateMatrixWorld(true);
       const m = modelo.carroceria.matrixWorld;
@@ -88,7 +106,7 @@ export class Camara {
       this.iniciada = false;
     }
     // el campo de visión se abre con la velocidad
-    const fov = this.fovBase + Math.min(14, v * 0.13) + (this.modo === 'cabina' ? 6 : 0);
+    const fov = this.modo === 'cara' ? 56 : this.fovBase + Math.min(14, v * 0.13) + (this.modo === 'cabina' ? 6 : 0);
     cam.fov += (fov - cam.fov) * Math.min(1, dt * 3);
     cam.updateProjectionMatrix();
   }

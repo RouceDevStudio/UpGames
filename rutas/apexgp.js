@@ -397,7 +397,8 @@ function registrar(app, deps) {
             if (!acc()) return;
             const r = salas.iniciar(id);
             if (!r.ok) return typeof cb === 'function' ? cb(r) : socket.emit('error_sala', r.error);
-            ns.to(rid(r.sala.codigo)).emit('salida', { tSalida: r.sala.tSalida, ahora: Date.now(), parrilla: r.sala.parrilla });
+            if (r.clasif) ns.to(rid(r.sala.codigo)).emit('clasif', { tFin: r.sala.tFinQ, ahora: Date.now(), seg: r.sala.clasifSeg });
+            else ns.to(rid(r.sala.codigo)).emit('salida', { tSalida: r.sala.tSalida, ahora: Date.now(), parrilla: r.sala.parrilla });
             emitirSala(r.sala);
             emitirLista();
             typeof cb === 'function' && cb({ ok: true });
@@ -405,6 +406,13 @@ function registrar(app, deps) {
         socket.on('revancha', () => { if (!acc()) return; const s = salas.reiniciar(id); if (s) emitirSala(s); });
         socket.on('reloj', (t, cb) => typeof cb === 'function' && cb(Date.now()));
         socket.on('estado', d => { if (lim(id)) salas.estado(id, d); });
+        socket.on('estadosBots', d => { if (lim(id)) salas.estadoBots(id, d); });
+        socket.on('botMeta', b => { const s = salas.botMeta(id, String(b)); if (s) emitirSala(s); });
+        socket.on('botAbandono', b => { const s = salas.botAbandono(id, String(b)); if (s) emitirSala(s); });
+        socket.on('vueltaQ', t => {
+            const s = salas.vueltaQ(id, t);
+            if (s) ns.to(rid(s.codigo)).emit('tablaQ', salas.tablaQ(s));
+        });
         socket.on('vuelta', t => { const s = salas.vuelta(id, t); if (s) ns.to(rid(s.codigo)).emit('vuelta', { id, t: +t }); });
         socket.on('meta', () => { const s = salas.meta(id); if (!s) return; emitirSala(s); if (s.estado === 'fin') cerrarCarrera(s); });
         socket.on('abandono', () => { const s = salas.abandono(id); if (!s) return; emitirSala(s); if (s.estado === 'fin') cerrarCarrera(s); });
@@ -425,6 +433,10 @@ function registrar(app, deps) {
             if (p.length) ns.to(rid(s.codigo)).volatile.emit('estados', { t: Date.now(), c: p });
         }
         for (const s of salas.revisarPlazos()) cerrarCarrera(s);
+        for (const s of salas.revisarClasif()) {
+            ns.to(rid(s.codigo)).emit('salida', { tSalida: s.tSalida, ahora: Date.now(), parrilla: s.parrilla });
+            emitirSala(s);
+        }
     }, 66).unref();
 
     // partida rápida: cada segundo se forman grupos por ELO y región y salen solos
@@ -434,7 +446,8 @@ function registrar(app, deps) {
             const vivos = g.filter(x => ns.sockets.get(x.id));
             if (vivos.length < 2) { for (const x of vivos) emparejador.entrar(x.id, x.jugador, x.elo, x.region); continue; }
             const [h, ...resto] = vivos;
-            const opciones = { tipo: 'abierta', max: vivos.length, vueltas: 3, publica: false, rapida: true, nombre: 'Partida rápida',
+            // 22 coches (la IA completa la parrilla), 20 vueltas y 6 minutos de clasificación
+            const opciones = { tipo: 'abierta', max: A.MAX_JUGADORES, vueltas: 20, publica: false, rapida: true, nombre: 'Partida rápida', clasifSeg: +process.env.APEXGP_CLASIF_SEG || 360,
                 circuito: CIRC[Math.floor(Math.random() * CIRC.length)], clima: Math.random() < 0.2 ? 'variable' : 'seco' };
             const { sala } = salas.crear(h.id, h.jugador, opciones);
             for (const x of resto) salas.unirse(x.id, sala.codigo, x.jugador);
@@ -445,7 +458,8 @@ function registrar(app, deps) {
                 sk.emit('emparejado', { sala: salas.publico(sala), yo: x.id });
                 enviarLibreasA(sk, sala);
             }
-            if (r.ok) ns.to(rid(sala.codigo)).emit('salida', { tSalida: sala.tSalida, ahora: Date.now(), parrilla: sala.parrilla });
+            if (r.ok && r.clasif) ns.to(rid(sala.codigo)).emit('clasif', { tFin: sala.tFinQ, ahora: Date.now(), seg: sala.clasifSeg });
+            else if (r.ok) ns.to(rid(sala.codigo)).emit('salida', { tSalida: sala.tSalida, ahora: Date.now(), parrilla: sala.parrilla });
             emitirSala(sala);
         }
     }, 1000).unref();

@@ -230,7 +230,13 @@ export class PilotoBox {
     this.duracion = duracion; this.alParar = alParar; this.alTerminar = alTerminar;
     this.estado = 'entrada'; this.t = 0;
     this._o = { x: 0, z: 0 };
+    // el ingeniero conduce con todas las ayudas (las del jugador vuelven al salir)
+    this.ayudasPiloto = coche.ayudas;
+    coche.ayudas = { tc: 2, abs: true, cambioAuto: true, direccion: false, estabilidad: true };
+    coche.pilotoAuto = true;
   }
+
+  _devolver() { if (this.coche.pilotoAuto) { this.coche.ayudas = this.ayudasPiloto; this.coche.pilotoAuto = false; } }
 
   conducir(dt) {
     const car = this.coche, c = this.c, m = car.mandos;
@@ -277,13 +283,16 @@ export class PilotoBox {
       if (pasado) vObj = 0;
       if ((aBox < 0.9 || pasado) && v < 1.5) { this.estado = 'parada'; this.t = 0; this.alParar?.(); return; }
       // si por lo que sea sale de la calle de boxes sin parar, se anula la parada
-      if (c.uPit(s) < 0 && this.dentro) { this.estado = 'fin'; return; }
+      if (c.uPit(s) < 0 && this.dentro) { this.estado = 'fin'; this._devolver(); return; }
       if (c.uPit(s) >= 0) this.dentro = true;
-    } else if (c.uPit(s) < 0) { this.estado = 'fin'; return; }
+    } else if (c.uPit(s) < 0) { this.estado = 'fin'; this._devolver(); return; }
     else if (!c.enLimitador(s, c.dCarrilPit(s)) && c.envolver(s - c.pit.limiteFin) < 200) vObj = 75;
     const err = vObj - v;
     m.acelerador = err > 0 ? clamp(0.3 + err * 0.4, 0, 1) : 0;
     m.freno = err < -0.5 ? clamp(-err * 0.25, 0, 1) : 0;
+    // con el morro lejos del objetivo, gas suave para no hacer trompos
+    const desvio = Math.abs(Math.atan2(ly, Math.max(0.1, lx)));
+    if (desvio > 0.45) m.acelerador = Math.min(m.acelerador, 0.25);
     m.drs = false;
   }
 }

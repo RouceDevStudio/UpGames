@@ -152,13 +152,16 @@ class Salas {
             codigo: this._codigo(),
             tipo: unoContraUno ? '1v1' : 'abierta',
             max: unoContraUno ? 2 : Math.max(2, Math.min(MAX_JUGADORES, Math.floor(+opc.max) || MAX_JUGADORES)),
-            vueltas: Math.max(1, Math.min(30, Math.floor(+opc.vueltas) || 3)),
+            vueltas: Math.max(1, Math.min(70, Math.floor(+opc.vueltas) || 3)),
             publica: opc.publica !== false,
             mejoras: !!opc.mejoras,            // ¿cuentan las mejoras compradas?
             circuito: circuitoOk(opc.circuito),
             clima: CLIMAS.includes(opc.clima) ? opc.clima : 'seco',
             semilla: Math.floor(this.azar() * 1e9),   // mismo tiempo variable para todos
             rapida: !!opc.rapida,
+            // partida rápida: clasificación previa (s) y pilotos de la IA que completan la parrilla
+            clasifSeg: Math.max(0, Math.min(600, Math.floor(+opc.clasifSeg) || 0)),
+            bots: [], tFinQ: 0,
             nombre: limpiarNombre(opc.nombre || `Sala de ${limpiarNombre(jugador?.nombre)}`).slice(0, 24),
             host: id, estado: 'espera', jugadores: new Map(), parrilla: [], tSalida: 0, tPrimero: 0, creada: this.ahora(),
         };
@@ -173,7 +176,7 @@ class Salas {
         if (!sala) return { ok: false, error: 'No existe ninguna sala con ese código' };
         if (sala.jugadores.has(id)) return { ok: true, sala };
         if (sala.estado !== 'espera') return { ok: false, error: 'La carrera ya empezó' };
-        if (sala.jugadores.size >= sala.max) return { ok: false, error: 'La sala está llena' };
+        if (sala.jugadores.size + sala.bots.length >= sala.max) return { ok: false, error: 'La sala está llena' };
         if (this.de.has(id)) this.salir(id);
         sala.jugadores.set(id, this._jugador(id, jugador));
         this.de.set(id, sala.codigo);
@@ -218,16 +221,100 @@ class Salas {
         if (sala.tipo === '1v1' && n !== 2) return { ok: false, error: 'El duelo es de 2 pilotos' };
         const noListos = [...sala.jugadores.values()].filter(j => j.id !== id && !j.listo).length;
         if (noListos) return { ok: false, error: `Faltan ${noListos} piloto(s) por marcar "Listo"` };
+        for (const j of sala.jugadores.values()) { j.terminado = false; j.tiempo = null; j.abandono = false; j.mejor = null; j.tQ = null; }
+        // partida rápida: la IA completa la parrilla hasta el máximo de la sala
+        if (sala.rapida) this._crearBots(sala);
+        if (sala.clasifSeg > 0) {
+            sala.estado = 'clasif';
+            sala.tFinQ = this.ahora() + sala.clasifSeg * 1000 + 6000;   // 6 s para cargar y salir a pista
+            return { ok: true, sala, clasif: true };
+        }
         // parrilla aleatoria
-        const ids = [...sala.jugadores.keys()];
+        const ids = [...sala.jugadores.keys(), ...sala.bots.map(b => b.id)];
         for (let i = ids.length - 1; i > 0; i--) { const k = Math.floor(this.azar() * (i + 1)); [ids[i], ids[k]] = [ids[k], ids[i]]; }
-        sala.parrilla = ids;
+        this._salida(sala, ids);
+        return { ok: true, sala };
+    }
+
+    _salida(sala, parrilla) {
+        sala.parrilla = parrilla;
         sala.estado = 'carrera';
         // semáforo: 1,5 s + 5 luces + apagado aleatorio, todo decidido por el servidor
-        sala.tSalida = this.ahora() + 8000 + Math.floor(this.azar() * 2000);
+        sala.tSalida = this.ahora() + 9000 + Math.floor(this.azar() * 2000);
         sala.tInicio = this.ahora();
-        for (const j of sala.jugadores.values()) { j.terminado = false; j.tiempo = null; j.abandono = false; j.mejor = null; }
-        return { ok: true, sala };
+        sala.tPrimero = 0;
+        for (const b of sala.bots) Object.assign(b, { terminado: false, tiempo: null, abandono: false });
+    }
+
+    _crearBots(sala) {
+        const n = Math.max(0, sala.max - sala.jugadores.size);
+        const minV = CIRCUITOS[sala.circuito]?.minVuelta || 60;
+        sala.bots = Array.from({ length: n }, (_, k) => {
+            const hab = Math.round((0.945 + this.azar() * 0.05) * 1000) / 1000;
+            // vuelta de clasificación: el ritmo de la IA con algo de dispersión
+            return { id: `bot:${k}`, k, hab, tQ: Math.round(minV * 1.285 / hab * (1 + (this.azar() - 0.5) * 0.01) * 1000) / 1000, estado: null, terminado: false, tiempo: null, abandono: false };
+        });
+    }
+
+    /** Vuelta de clasificación de un piloto (se guarda la mejor). */
+    vueltaQ(id, t) {
+        const sala = this.salaDe(id);
+        const j = sala?.jugadores.get(id);
+        const s = +t;
+        const min = Math.max(VUELTA_MIN_S, CIRCUITOS[sala?.circuito]?.minVuelta || 0);
+        if (!j || sala.estado !== 'clasif' || !(s >= min && s < 600)) return null;
+        if (j.tQ == null || s < j.tQ) j.tQ = Math.round(s * 1000) / 1000;
+        return sala;
+    }
+
+    /** Tabla de la clasificación (personas y bots). */
+    tablaQ(sala) {
+        return [...[...sala.jugadores.values()].filter(j => !j.desconectado).map(j => ({ id: j.id, nombre: j.nombre, t: j.tQ })),
+            ...sala.bots.map(b => ({ id: b.id, bot: b.k, t: b.tQ }))]
+            .sort((a, b) => (a.t ?? Infinity) - (b.t ?? Infinity));
+    }
+
+    /** Salas cuya clasificación terminó: se forma la parrilla y se da la salida. */
+    revisarClasif() {
+        const out = [];
+        for (const s of this.salas.values()) {
+            if (s.estado !== 'clasif' || this.ahora() < s.tFinQ) continue;
+            this._salida(s, this.tablaQ(s).map(x => x.id));
+            out.push(s);
+        }
+        return out;
+    }
+
+    /** El anfitrión simula a los bots y manda su estado. */
+    estadoBots(id, lista) {
+        const sala = this.salaDe(id);
+        if (!sala || sala.host !== id || sala.estado !== 'carrera' || !Array.isArray(lista) || lista.length > 22) return null;
+        for (const it of lista) {
+            if (!Array.isArray(it) || it.length !== 2) continue;
+            const b = sala.bots.find(x => x.id === it[0]);
+            const d = it[1];
+            if (!b || !Array.isArray(d) || d.length > ESTADO_LARGO || !d.every(v => Number.isFinite(+v) && Math.abs(+v) <= 1e6)) continue;
+            b.estado = d.map(v => Math.round(+v * 1000) / 1000);
+        }
+        return sala;
+    }
+
+    botMeta(id, botId) {
+        const sala = this.salaDe(id);
+        const b = sala?.bots.find(x => x.id === botId);
+        if (!b || sala.host !== id || sala.estado !== 'carrera' || b.terminado) return null;
+        const t = (this.ahora() - sala.tSalida) / 1000;
+        if (t < sala.vueltas * Math.max(VUELTA_MIN_S, CIRCUITOS[sala.circuito]?.minVuelta || 0)) return null;
+        b.terminado = true; b.tiempo = Math.round(t * 1000) / 1000;
+        return sala;
+    }
+
+    botAbandono(id, botId) {
+        const sala = this.salaDe(id);
+        const b = sala?.bots.find(x => x.id === botId);
+        if (!b || sala.host !== id || sala.estado !== 'carrera' || b.terminado) return null;
+        b.abandono = true;
+        return sala;
     }
 
     /** Último estado de un coche (array de números). Devuelve la sala o null si se descarta. */
@@ -294,22 +381,23 @@ class Salas {
     reiniciar(id) {
         const sala = this.salaDe(id);
         if (!sala || sala.host !== id || sala.estado !== 'fin') return null;
-        for (const [k, j] of sala.jugadores) if (j.desconectado) sala.jugadores.delete(k); else Object.assign(j, { listo: false, estado: null, terminado: false, tiempo: null, abandono: false, mejor: null });
-        Object.assign(sala, { estado: 'espera', parrilla: [], tSalida: 0, tPrimero: 0 });
+        for (const [k, j] of sala.jugadores) if (j.desconectado) sala.jugadores.delete(k); else Object.assign(j, { listo: false, estado: null, terminado: false, tiempo: null, abandono: false, mejor: null, tQ: null });
+        Object.assign(sala, { estado: 'espera', parrilla: [], tSalida: 0, tPrimero: 0, bots: [], tFinQ: 0 });
         return sala;
     }
 
     resultados(sala) {
-        const js = [...sala.jugadores.values()];
+        const js = [...sala.jugadores.values(), ...sala.bots.map(b => ({ ...b, bot: b.k, nombre: null, usuario: null, mejor: null }))];
         const fin = js.filter(j => j.terminado).sort((a, b) => a.tiempo - b.tiempo);
         const resto = js.filter(j => !j.terminado);
-        return [...fin, ...resto].map((j, i) => ({ pos: i + 1, id: j.id, nombre: j.nombre, usuario: j.usuario, tiempo: j.tiempo, mejor: j.mejor, abandono: !j.terminado, desconectado: !!j.desconectado }));
+        return [...fin, ...resto].map((j, i) => ({ pos: i + 1, id: j.id, nombre: j.nombre, usuario: j.usuario, bot: j.bot ?? null, tiempo: j.tiempo, mejor: j.mejor, abandono: !j.terminado, desconectado: !!j.desconectado }));
     }
 
     publico(sala) {
         return {
             codigo: sala.codigo, tipo: sala.tipo, max: sala.max, vueltas: sala.vueltas, publica: sala.publica, mejoras: sala.mejoras,
             circuito: sala.circuito, clima: sala.clima, semilla: sala.semilla, rapida: sala.rapida,
+            clasifSeg: sala.clasifSeg, tFinQ: sala.tFinQ, bots: sala.bots.map(b => ({ id: b.id, k: b.k, hab: b.hab, terminado: b.terminado, abandono: b.abandono })),
             nombre: sala.nombre, host: sala.host, estado: sala.estado, parrilla: sala.parrilla, tSalida: sala.tSalida,
             jugadores: [...sala.jugadores.values()].map(j => ({ id: j.id, nombre: j.nombre, usuario: j.usuario, equipado: j.equipado,
                 mejoras: sala.mejoras ? j.mejoras : {}, listo: j.listo, terminado: j.terminado, abandono: j.abandono })),
@@ -326,6 +414,7 @@ class Salas {
     paquete(sala) {
         const out = [];
         for (const j of sala.jugadores.values()) if (j.estado && !j.desconectado) out.push([j.id, j.estado]);
+        for (const b of sala.bots) if (b.estado) out.push([b.id, b.estado]);
         return out;
     }
 }
@@ -440,7 +529,7 @@ const regionOk = r => (REGIONES.includes(r) ? r : 'otra');
  * crece con la espera; tras 20 s se acepta cualquier región.
  */
 class Emparejador {
-    constructor({ ahora = () => Date.now(), maximo = 8, espera = 12000 } = {}) {
+    constructor({ ahora = () => Date.now(), maximo = MAX_JUGADORES, espera = 45000 } = {}) {
         this.cola = new Map();   // id → { id, elo, region, t, jugador }
         this.ahora = ahora; this.maximo = maximo; this.espera = espera;
     }

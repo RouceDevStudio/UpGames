@@ -368,3 +368,9 @@ body:not(.tactil-on) .radio { bottom: calc(150px + var(--sa-b)); }
 body.foto .repe { display: none !important; }
 .flash { position: fixed; inset: 0; z-index: 60; background: #fff; opacity: 0; pointer-events: none; transition: opacity .35s; }
 .flash.on { opacity: .85; transition: none; }
+
+/* En línea: sin reinicios */
+body.en-red #bRecolocar { display: none; }
+
+.qred { position: absolute; top: calc(44px + var(--sa-t)); left: 50%; transform: translateX(-50%); display: none; background: rgba(184,77,255,.85); color: #fff; font-weight: 900; font-size: 13px; letter-spacing: 1px; padding: 3px 10px; border-radius: 6px; }
+.qred.visible { display: block; }

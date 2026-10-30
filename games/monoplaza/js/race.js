@@ -59,6 +59,18 @@ export class Sesion {
     if (mp) {
       // multijugador: un coche local y los demás llegan por la red
       mp.parrilla.forEach((id, k) => {
+        // pilotos de la IA de la partida rápida: los simula el anfitrión y los demás los reciben por la red
+        const bot = (mp.bots || []).find(b => b.id === id);
+        if (bot) {
+          const ie = bot.k % EQUIPOS.length, ip = Math.floor(bot.k / EQUIPOS.length) % 2;
+          const coche = new Monoplaza(circuito, { reglaje: { compuesto: this.clima.agua > 0.13 ? compuestoParaAgua(this.clima.agua) : 'medio' }, ayudas: { tc: 2, abs: true, cambioAuto: true }, combustible, ia: true });
+          const p = { ...plantilla(), coche, equipo: EQUIPOS[ie], indiceEquipo: ie, numeroPiloto: ip, nombre: EQUIPOS[ie].pilotos[ip], jugador: false, bot: true,
+            remoto: !mp.soyHost, idRed: id, ia: mp.soyHost ? new PilotoIA(coche, circuito, bot.hab, 0.3 + Math.random() * 0.5) : null, hab: bot.hab, posicion: k + 1 };
+          colocarParrilla(coche, k);
+          p.sAnterior = coche.proj.s;
+          this.participantes.push(p);
+          return;
+        }
         const j = mp.jugadores.find(x => x.id === id);
         if (!j) return;
         const local = id === mp.yo;
@@ -159,9 +171,19 @@ export class Sesion {
       if (p.box.estado === 'fin') { p.box = null; p.solicitudBox = null; p.porClima = false; }
       return;
     }
+    // si el jugador mete el coche en el carril sin pedir parada, el equipo le espera igual
+    const u = c.uPit(car.proj.s);
+    const enCarril = u >= 0 && u < 140 && car.proj.d > c.semiAncho[car.proj.i] + 1.2;
+    if (!p.solicitudBox && enCarril && !car.abandono && !p.remoto && this.modo !== 'contrarreloj') p.solicitudBox = car.reglaje.compuesto;
     if (!p.solicitudBox || car.abandono) return;
+    // el ingeniero toma el coche con margen para frenar en recta (desde 300 km/h hacen falta ~300 m)
     const antes = c.envolver(c.pit.entrada - car.proj.s);
-    if (antes > 25 || antes < 2) return;
+    const margen = Math.min(380, 30 + car.velocidad * car.velocidad / 22);
+    if (!enCarril && (antes > margen || antes < 2)) return;
+    // solo con el coche encarrilado (tras un trompo, primero hay que recuperarlo)
+    const rumbo = Math.atan2(car.proj.tz, car.proj.tx);
+    let err = car.psi - rumbo; err = Math.atan2(Math.sin(err), Math.cos(err));
+    if (!enCarril && (Math.abs(err) > 0.5 || car.velocidad < 8)) return;
     const compuesto = p.solicitudBox;
     // trabajo de la parada: neumáticos siempre; morro nuevo si está dañado
     const morro = car.danoAleron > 0.12 || car.dano.aleronTras > 0.2;

@@ -109,7 +109,7 @@ const radio = new Radio({
   sonido,
   alSubtitulo: (m, on) => {
     const el = $('#hRadio');
-    if (on) { el.innerHTML = `<b>${m.tipo === 'megafonia' ? '📢 MEGAFONÍA' : '📻 RADIO DEL EQUIPO'}</b>${m.texto}`; el.classList.add('visible'); clearTimeout(tRadio); }
+    if (on) { el.innerHTML = `<b>${m.tipo === 'megafonia' ? '📢 MEGAFONÍA' : '📻 JEFE DE MECÁNICOS'}</b>${m.texto}`; el.classList.add('visible'); clearTimeout(tRadio); }
     else tRadio = setTimeout(() => el.classList.remove('visible'), 1200);
   },
 });
@@ -158,6 +158,7 @@ async function cargarCircuito(id) {
   escombros = new Escombros(scene, (x, z) => { const p = circuito.proyectar(x, z, -1, {}); return p.y + circuito.caida(p.i, p.d); });
   lluviaFx = new Lluvia(scene, escenario, calidad);
   camarasTV = new CamarasTV(circuito);
+  camara.tv = camarasTV;
   modelos = []; modeloFantasma = null;
   construirLineaIdeal();
   dibujarMinimapaBase();
@@ -319,7 +320,11 @@ function crearModelos() {
   }
 }
 
-function ayudasDe() {
+// En línea todos corren igual: sin control de tracción, ABS, dirección asistida, estabilidad
+// ni trazada ideal (el cambio automático queda para todos, igual que en el resto de pilotos)
+const AYUDAS_RED = { tc: 0, abs: false, cambioAuto: true, direccion: false, estabilidad: false };
+function ayudasDe(red = enRed) {
+  if (red) return { ...AYUDAS_RED };
   return { tc: +ajustes.tc, abs: ajustes.abs, cambioAuto: ajustes.cambioAuto, direccion: ajustes.direccion, estabilidad: ajustes.estabilidad };
 }
 
@@ -416,7 +421,8 @@ function pausar(si) {
   pausado = si;
   if (si) {
     mostrar('pausa');
-    $('#bPausaReglaje').style.display = modoActual === 'carrera' ? 'none' : '';
+    $('#bPausaReglaje').style.display = modoActual === 'carrera' || enRed ? 'none' : '';
+    $('#bReiniciar').style.display = enRed ? 'none' : '';
     $('#bCalibrar').style.display = ajustes.control === 'inclinacion' && esTactil ? '' : 'none';
     telemetriaPausa();
     sonido.silenciar(true);
@@ -428,6 +434,7 @@ function pausar(si) {
 
 function salirAlMenu() {
   if (enRed) { multi.salir(); enRed = false; }
+  qRed = null;
   qActual = null; carreraCamp = null; radio.callar();
   jugando = false; pausado = false;
   $('#panelBox').classList.remove('visible');
@@ -804,6 +811,7 @@ function procesarEventos() {
     else if (e.tipo === 'limites' && e.jugador) mensaje('LÍMITES DE PISTA', 'Vuelta anulada', 1.8);
     else if (e.tipo === 'sector') {
       const el = $('#hS' + (e.k + 1)); el.className = e.color;
+      if (e.color === 'morado') radio.decir(`Sector ${e.k + 1} morado. ¡Vas volando!`, { clave: 'morado', cada: 40 });
     }
     else if (e.tipo === 'vuelta' && e.p.jugador) {
       sonido.evento('vuelta');
@@ -815,17 +823,21 @@ function procesarEventos() {
         records[clave] = e.t; guardar();
       }
       telemetria?.cerrarVuelta(e.t, e.valida);
+      if (qRed && e.valida) multi.vueltaQ(e.t);
       if (qActual) finVueltaClasif(e);
       if (sesion.modo === 'carrera' && e.p.vuelta === sesion.vueltasTotales) { mensaje('ÚLTIMA VUELTA', '', 1.8); radio.decir('Última vuelta. ¡Tráelo a casa!', { clave: 'ultima', cada: 60 }); }
-      else if (sesion.modo === 'carrera' && e.p.vuelta % 2 === 0) {
+      else if (sesion.modo === 'carrera') {
         const g = sesion.diferencias(e.p);
-        radio.decir(`Vas P${e.p.posicion}${g.del != null ? `, a ${g.del.toFixed(1)} del coche de delante` : ''}${g.tras != null && g.tras < 1.2 ? `. Te sigue de cerca a ${g.tras.toFixed(1)}` : ''}.`, { clave: 'gap', cada: 50 });
-      }
+        radio.decir(`P${e.p.posicion}, ${sesion.vueltasTotales - e.p.vuelta + 1} vueltas para el final.${g.del != null ? ` A ${g.del.toFixed(1)} del de delante.` : ' Lideras la carrera.'}${g.tras != null && g.tras < 1.5 ? ` El de detrás a ${g.tras.toFixed(1)}.` : ''}`, { clave: 'gap', cada: 20 });
+        if (e.p.vuelta === Math.ceil(sesion.vueltasTotales / 2) + 1) radio.decir('Mitad de carrera. Buen ritmo, sigue así.', { clave: 'mitad', cada: 999 });
+      } else if (!qActual && e.p.mejor && e.valida && !e.mejora) radio.decir(`${fmt(e.t)}, a ${(e.t - e.p.mejor).toFixed(2)} de tu mejor vuelta.`, { clave: 'vueltaPr', cada: 15 });
     }
     else if (e.tipo === 'nuevoFantasma') {
       if (sesion.modo === 'contrarreloj' && !qActual && (!fantasmaGuardado || e.fantasma.tiempo < fantasmaGuardado.tiempo)) { fantasmaGuardado = e.fantasma; guardar(); }
       if (sesion.modo === 'contrarreloj' && !qActual) subirTiempo(e.fantasma);
     }
+    if (enRed && e.p?.bot && !e.p.remoto) { if (e.tipo === 'meta') multi.botMeta(e.p.idRed); if (e.tipo === 'abandono') multi.botAbandono(e.p.idRed); }
+    if (e === 'luz' || e === 'salida') { /* ya tratado */ }
     else if (e.tipo === 'meta' && e.p.posicion === 1 && !estadoRadio.ganador) {
       estadoRadio.ganador = true; sonido.ovacion(2.5);
       radio.decir(`¡${e.p.nombre.replace('@', '')} gana en el ${circuito.def.corto}!`, { tipo: 'megafonia' });
@@ -838,15 +850,17 @@ function procesarEventos() {
       else setTimeout(() => { if (jugando && sesion.modo === 'carrera') mostrarResultados(); }, 3500);
     }
     else if (e.tipo === 'vuelta' && e.p.jugador && enRed && e.valida) multi.vuelta(e.t);
-    else if (e.tipo === 'entraBoxes' && e.p.jugador) mensaje('ENTRANDO A BOXES', 'Limitador a 80 km/h', 2);
+    else if (e.tipo === 'entraBoxes' && e.p.jugador) { mensaje('ENTRANDO A BOXES', 'El equipo conduce: limitador a 80 km/h', 2); radio.decir('Box, box. Te llevamos al garaje, limitador puesto.', { prioridad: true, clave: 'boxEnt', cada: 10 }); }
     else if (e.tipo === 'paradaIni') {
       const k = sesion.participantes.indexOf(e.p);
       gestorBoxes.empezar(e.p.coche, modelos[k], e.p.equipo.base, e.duracion, e.morro);
+      if (e.p.jugador) radio.decir('Gatos arriba. Ruedas fuera…', { clave: 'gatos', cada: 10 });
       if (e.p.jugador) { mensaje('PARADA EN BOXES', e.morro ? 'Neumáticos y morro nuevo' : 'Cambio de neumáticos', 2); estadoRadio.avisoDesg = false; }
     }
     else if (e.tipo === 'paradaFin') {
       const k = sesion.participantes.indexOf(e.p);
       modelos[k].cambiarCompuesto(e.p.coche.reglaje.compuesto);
+      if (e.p.jugador) radio.decir(e.duracion < 3 ? `¡Parada de ${e.duracion.toFixed(1)} segundos! Vamos, vamos, vamos.` : `Parada de ${e.duracion.toFixed(1)} segundos. Sal con cuidado, neumáticos fríos.`, { prioridad: true });
       if (e.p.jugador) { mensaje(`PARADA: ${e.duracion.toFixed(1)} s`, `Neumáticos ${COMPUESTOS[e.p.coche.reglaje.compuesto].nombre.toLowerCase()}`, 2.4); $('#bBox').classList.remove('activo'); }
     }
     else if (e.tipo === 'abandono') {
@@ -854,7 +868,7 @@ function procesarEventos() {
       if (e.p.jugador) {
         mensaje('ABANDONO', e.motivo || 'Coche demasiado dañado', 3.5);
         radio.decir('Se acabó, lo siento. Deja el coche en un lugar seguro.', { prioridad: true });
-        if (enRed) multi.abandono();
+        if (enRed) { multi.abandono(); setTimeout(() => { if (jugando && enRed) mostrarFueraRed(e.motivo); }, 3500); }
         else if (sesion.modo === 'carrera') setTimeout(() => { if (jugando) mostrarResultados(); }, 4500);
         else setTimeout(() => { if (jugando && sesion.jugador.coche.abandono) { const c = sesion.jugador.coche; c.repararTodo(); c.repararEnBoxes(); c.recolocar(); sesion.jugador.abandono = false; sesion.jugador.valida = false; crearModelos(); mensaje('COCHE NUEVO', 'Vuelta anulada', 2); } }, 3500);
       }
@@ -899,7 +913,28 @@ function radioPeriodica(dt) {
     if (desg > 0.55 && !estadoRadio.avisoDesg) { estadoRadio.avisoDesg = true; radio.decir('Los neumáticos están muy gastados. Entra a boxes cuando quieras.'); }
     if (c.danoAleron > 0.3) radio.decir('Tienes el alerón delantero dañado. Entra a boxes a cambiar el morro.', { clave: 'morro', cada: 60 });
   }
+  // neumáticos, frenos, batería y combustible
+  const tN = c.ruedas.reduce((a, w) => a + w.neum.tSup, 0) / 4, tOpt = COMPUESTOS[comp].tOpt;
+  if (c.velocidad > 30 && p.vuelta > 0) {
+    if (tN < tOpt - 22) radio.decir('Los neumáticos están fríos. Caliéntalos: frena fuerte y acelera progresivo.', { clave: 'neumFrio', cada: 60 });
+    else if (tN > tOpt + 22) radio.decir('Neumáticos sobrecalentados. Cuida las ruedas, menos derrapes.', { clave: 'neumCal', cada: 60 });
+    const tF = Math.max(...c.ruedas.map(w => w.tFreno));
+    if (tF > 1050) radio.decir('Frenos muy calientes. Levanta antes y frena más suave.', { clave: 'frenos', cada: 60 });
+    const bat = c.ers / COCHE.ersCapacidad;
+    if (bat < 0.12) radio.decir('Batería baja. Modo recarga un par de curvas.', { clave: 'batBaja', cada: 70 });
+    else if (bat > 0.95 && (c.mandos.ersModo ?? 1) !== 2) radio.decir('Batería llena. Usa el modo ataque en la recta.', { clave: 'batLlena', cada: 90 });
+    if (sesion.modo === 'carrera') {
+      const faltan = sesion.vueltasTotales - p.vuelta + 1, necesita = faltan * 1.45;
+      if (c.combustible < necesita * 0.97) radio.decir('Vamos justos de combustible. Levanta y deja correr antes de frenar.', { clave: 'gasolina', cada: 90 });
+    }
+  }
+  if (c.drsPermitido && !c.drsAbierto && sesion.modo === 'carrera') radio.decir('DRS disponible. ¡Ábrelo!', { clave: 'drs', cada: 45 });
+  if (sesion.modo === 'carrera' && sesion.vueltasTotales >= 8 && p.vuelta === Math.round(sesion.vueltasTotales * 0.4) && !p.paradas) radio.decir('La ventana de paradas está abierta. Avísanos cuando quieras entrar.', { clave: 'ventana', cada: 999 });
   if (sesion.modo === 'carrera' && sesion.estado === 'carrera' && sesion.orden) {
+    const g = sesion.diferencias(p);
+    if (g.del != null && g.del < 1 && g.del > 0.2) radio.decir(`Estás a ${g.del.toFixed(1)} del de delante. ¡Ataca!`, { clave: 'ataca', cada: 40 });
+    if (g.tras != null && g.tras < 0.7) radio.decir(`Te atacan, está a ${g.tras.toFixed(1)}. Defiende la posición.`, { clave: 'defiende', cada: 40 });
+    if (azulPara(p)) radio.decir('Bandera azul. Deja pasar al coche que te dobla.', { clave: 'azul', cada: 30 });
     if (estadoRadio.ultimaPos != null && p.posicion < estadoRadio.ultimaPos) { sonido.ovacion(0.7); if (Math.random() < 0.5) radio.decir(`¡Buen adelantamiento! P${p.posicion}.`, { clave: 'adel', cada: 20 }); }
     estadoRadio.ultimaPos = p.posicion;
     const lider = sesion.orden[0];
@@ -949,6 +984,7 @@ function bucle(ahora) {
       else if (e === 'bajar') j.cambiar(-1);
       else if (e === 'camara') { const m = camara.siguiente(); ajustes.camara = m; guardar(); mensaje(NOMBRES_CAMARA[m].toUpperCase(), '', 0.8); }
       else if (e === 'ers') { j.mandos.ersModo = ((j.mandos.ersModo ?? 1) + 1) % 3; mensaje(ERS_NOMBRES[j.mandos.ersModo], '', 0.8); }
+      else if (e === 'recolocar' && enRed) mensaje('SIN REINICIOS EN LÍNEA', '', 1);
       else if (e === 'recolocar') {
         if (j.abandono && sesion.modo !== 'carrera') continue;
         if (j.velocidad < 8 || j.fueraPista) { j.recolocar(); sesion.jugador.valida = false; mensaje('DE VUELTA A LA PISTA', 'Vuelta anulada', 1.2); }
@@ -971,7 +1007,9 @@ function bucle(ahora) {
     if (!enGaraje) sesion._piloto?.conducir(dt, sesion.coches);
   }
   if (repe) { actualizarRepe(dt); return; }
-  if (enRed && jugando) actualizarRed(dt);
+  if (enRed && jugando && !qRed) actualizarRed(dt);
+  if (qRed) actualizarQRed();
+  else $('#hQRed').classList.remove('visible');
   if (!pausado && !enGaraje) {
     sesion.actualizar(dt);
     if (jugando) procesarEventos(); else { sesion.eventos.length = 0; for (const p of sesion.participantes) p.coche.eventos.length = 0; }
@@ -1015,9 +1053,10 @@ function bucle(ahora) {
       modeloFantasma.raiz.visible = dist > 3;
     }
   }
-  lineaIdeal.visible = jugando && ajustes.trazada;
+  lineaIdeal.visible = jugando && ajustes.trazada && !enRed;
+  document.body.classList.toggle('en-red', enRed && jugando);
   // en la cámara de cabina el tablero está en el volante (se oculta el del HUD)
-  document.body.classList.toggle('vista-cabina', jugando && camara.modo === 'cabina');
+  document.body.classList.toggle('vista-cabina', jugando && (camara.modo === 'cabina' || camara.modo === 'cara'));
   const pj = sesion.jugador, mj = modelos[sesion.participantes.indexOf(pj)];
   if (mj) mj.info = {
     pos: sesion.modo === 'carrera' ? pj.posicion : null,
@@ -1385,7 +1424,7 @@ async function unirse(codigo) {
 }
 $('#bSalirMulti').addEventListener('click', () => { multi.desconectar(); mostrar('menu'); });
 function entrarSala(sala) { salaActual = sala; mostrar('sala'); pintarSala(); }
-multi.on('sala', (sala) => { salaActual = sala; if ($('#sala').classList.contains('visible')) pintarSala(); });
+multi.on('sala', (sala) => { salaActual = sala; if ($('#sala').classList.contains('visible')) pintarSala(); tomarBots(); });
 multi.on('livery', (d) => {
   const im = new Image(); im.onload = () => { imagenesRed.set(d.id, im); if (enRed && jugando) crearModelos(); }; im.src = d.livery;
 });
@@ -1421,8 +1460,10 @@ multi.on('salida', async (d) => {
   if (s.clima === 'lluvia' && !COMPUESTOS[rc.compuesto]?.lluvia) rc.compuesto = 'lluvia';
   sesion = new Sesion(circuito, {
     modo: 'carrera', vueltas: s.vueltas, reglaje: rc, ayudas: ayudasDe(), clima: s.clima, semilla: s.semilla,
-    multijugador: { parrilla: d.parrilla, yo: multi.yo, jugadores: s.jugadores.map(j => j.id === multi.yo ? { ...j, mejoras: perfilApex.mejoras } : j), mejoras: s.mejoras },
+    multijugador: { parrilla: d.parrilla, yo: multi.yo, jugadores: s.jugadores.map(j => j.id === multi.yo ? { ...j, mejoras: perfilApex.mejoras } : j), mejoras: s.mejoras,
+      bots: s.bots || [], soyHost: s.host === multi.yo },
   });
+  qRed = null;
   sesion.tSalidaLocal = d.tSalidaLocal;
   carreraRed = { resultados: null };
   arrancarSesion('carrera');
@@ -1447,12 +1488,89 @@ function actualizarRed(dt) {
     aplicarEstado(p.coche, e, circuito);
     p.distancia = e[11]; p.vuelta = e[12];
     for (const w of p.coche.ruedas) w.giro += p.coche.vx / w.radio * dt;
-    const j = salaActual?.jugadores.find(x => x.id === p.idRed);
+    const j = salaActual?.jugadores.find(x => x.id === p.idRed) || salaActual?.bots?.find(x => x.id === p.idRed);
     if (j) { p.terminado = j.terminado; p.abandono = j.abandono; if (j.terminado) sesion.banderaFinal = true; }
   }
-  // mi coche, ~15 veces por segundo
-  tEnvio += dt;
-  if (tEnvio >= 1 / 15) { tEnvio = 0; multi.enviarEstado(empaquetar(sesion.jugador.coche, sesion.jugador)); }
+  // mi coche, ~15 veces por segundo (y los bots si soy el anfitrión)
+  // (los bots van en otro fotograma: dos paquetes volátiles seguidos hacen que se pierda el segundo)
+  tEnvio += dt; tEnvioBots += dt;
+  const bots = sesion.participantes.filter(p => p.bot && !p.remoto);
+  const tocaBots = bots.length && tEnvioBots >= 1 / 10 && (ultimoEnvio === 'estado' || tEnvio < 1 / 15);
+  if (tocaBots) { tEnvioBots = 0; ultimoEnvio = 'bots'; multi.enviarBots(bots.map(p => [p.idRed, empaquetar(p.coche, p)])); }
+  else if (tEnvio >= 1 / 15) { tEnvio = 0; ultimoEnvio = 'estado'; multi.enviarEstado(empaquetar(sesion.jugador.coche, sesion.jugador)); }
+}
+let ultimoEnvio = 'estado';
+let tEnvioBots = 0;
+
+// Si el anfitrión se va, el nuevo anfitrión pasa a simular a los bots desde donde estaban
+function tomarBots() {
+  if (!enRed || !sesion?.mp || salaActual?.host !== multi.yo) return;
+  import('./ai.js').then(({ PilotoIA }) => {
+    for (const p of sesion.participantes) {
+      if (!p.bot || !p.remoto) continue;
+      p.remoto = false;
+      p.coche.esIA = true;
+      p.ia = new PilotoIA(p.coche, circuito, p.hab || 0.97, 0.4);
+      p.coche.colocar(p.coche.proj.s, p.coche.proj.d);
+      p.coche.vx = Math.max(10, p.coche.vx || 0); for (const w of p.coche.ruedas) w.omega = p.coche.vx / w.radio;
+    }
+  });
+}
+
+// ─── Clasificación en línea (partida rápida): cada piloto marca vueltas solo en pista ───
+let qRed = null;
+multi.on('clasif', async (d) => {
+  const s = salaActual;
+  if (s?.circuito && s.circuito !== circuito?.id) await cargarCircuito(s.circuito);
+  enRed = true; modoActual = 'red'; carreraCamp = null; qActual = null;
+  qRed = { tFin: d.tFinLocal, tabla: [], terminada: false };
+  sonido.iniciar(); sonido.ponerVolumen(ajustes.volumen);
+  const opc = opcBase('contrarreloj');
+  opc.ayudas = ayudasDe(true);
+  opc.clima = s?.clima === 'lluvia' ? 'lluvia' : 'seco';
+  if (opc.clima === 'lluvia') opc.reglaje.compuesto = 'lluvia';
+  sesion = new Sesion(circuito, opc);
+  arrancarSesion('contrarreloj');
+  mensaje('CLASIFICACIÓN', `${Math.round(d.seg / 60)} minutos · marca tu mejor vuelta`, 3);
+  radio.decir(`Clasificación de ${Math.round(d.seg / 60)} minutos. Tu mejor vuelta decide la parrilla de la carrera.`, { prioridad: true });
+});
+multi.on('tablaQ', (t) => { if (qRed) qRed.tabla = t; });
+function nombreQ(x) {
+  if (x.bot != null) { const ie = x.bot % EQUIPOS.length, ip = Math.floor(x.bot / EQUIPOS.length) % 2; return EQUIPOS[ie].pilotos[ip]; }
+  return String(x.nombre || '').replace(/</g, '');
+}
+function actualizarQRed() {
+  if (!qRed) return;
+  const falta = Math.max(0, (qRed.tFin - Date.now()) / 1000);
+  const pos = qRed.tabla.findIndex(x => x.id === multi.yo) + 1;
+  const el = $('#hQRed');
+  el.classList.add('visible');
+  el.textContent = `CLASIFICACIÓN ${Math.floor(falta / 60)}:${String(Math.floor(falta % 60)).padStart(2, '0')}${pos ? ` · P${pos}/${qRed.tabla.length}` : ''}`;
+  if (falta <= 0 && !qRed.terminada && jugando) {
+    qRed.terminada = true;
+    jugando = false;
+    $('#hud').classList.remove('visible'); $('#tactil').classList.remove('visible');
+    document.body.classList.remove('jugando');
+    sonido.silenciar(true);
+    $('#qTitulo').textContent = 'Clasificación terminada';
+    $('#qInfo').textContent = 'Formando la parrilla… la salida es en unos segundos.';
+    $('#qLista').innerHTML = qRed.tabla.map((x, i) => `<div class="fila-q ${x.id === multi.yo ? 'yo' : ''}"><b>${i + 1}</b><span>${nombreQ(x)}${x.bot != null ? ' <small style="color:var(--tenue)">IA</small>' : ''}</span><span>${fmt(x.t)}</span><span></span></div>`).join('');
+    $('#bQSeguir').classList.add('oculto'); $('#bQSaltar').classList.add('oculto');
+    mostrar('clasif');
+  }
+}
+
+// En línea no hay coche nuevo: quien destroza el coche queda fuera y pierde la carrera
+function mostrarFueraRed(motivo) {
+  jugando = false;
+  $('#hud').classList.remove('visible'); $('#tactil').classList.remove('visible');
+  document.body.classList.remove('jugando');
+  sonido.silenciar(true); radio.callar();
+  $('#resTitulo').textContent = '💥 Fuera de carrera';
+  $('#resLista').innerHTML = `<p class="nota" style="text-align:left">${motivo || 'Coche demasiado dañado'}. En línea no se puede reiniciar: la carrera ha terminado para ti y cuentas como último (abandono).</p>`;
+  $('#resPremio').textContent = cuenta.conectado() ? 'El ELO se actualiza al terminar la carrera de los demás.' : '';
+  $('#bResOtra').textContent = 'Volver a la sala';
+  mostrar('resultados');
 }
 
 function mostrarResultadosRed(r) {
@@ -1464,7 +1582,7 @@ function mostrarResultadosRed(r) {
   $('#resTitulo').textContent = yo?.pos === 1 && !yo.abandono ? '🏆 ¡Victoria en línea!' : `Resultado: P${yo?.pos ?? '-'}`;
   const ganador = r[0];
   $('#resPremio').textContent = ultimoElo ? textoElo(ultimoElo) : cuenta.conectado() ? 'Calculando ELO…' : '';
-  $('#resLista').innerHTML = r.map(x => `<div class="fila-res ${x.id === multi.yo ? 'yo' : ''}"><b>${x.pos}</b><span>${String(x.nombre).replace(/</g, '')}</span><span>${x.abandono ? 'Abandono' : x === ganador ? fmt(x.tiempo) : '+' + (x.tiempo - ganador.tiempo).toFixed(3)}</span><span>${fmt(x.mejor)}</span></div>`).join('');
+  $('#resLista').innerHTML = r.map(x => `<div class="fila-res ${x.id === multi.yo ? 'yo' : ''}"><b>${x.pos}</b><span>${nombreQ(x)}${x.bot != null ? ' <small style="color:var(--tenue)">IA</small>' : ''}</span><span>${x.abandono ? 'Abandono' : x === ganador ? fmt(x.tiempo) : '+' + (x.tiempo - ganador.tiempo).toFixed(3)}</span><span>${fmt(x.mejor)}</span></div>`).join('');
   mostrar('resultados');
   $('#bResOtra').textContent = 'Volver a la sala';
 }
