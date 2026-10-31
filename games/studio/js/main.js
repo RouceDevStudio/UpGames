@@ -100,8 +100,12 @@ instalarGestos(lienzo, camOrb, {
 const dialogoFoto = instalarDialogoFoto({
   aviso,
   alCrear: (m) => {
-    m.position.set(camOrb.centro.x, 0, camOrb.centro.z);
-    escena.anadir(m, 'Modelo desde foto');
+    // una malla o varias piezas (carrocería y ruedas), todas con el mismo origen
+    for (const pieza of Array.isArray(m) ? m : [m]) {
+      pieza.position.set(camOrb.centro.x, 0, camOrb.centro.z);
+      escena.anadir(pieza, 'Modelo desde foto');
+    }
+    escena.seleccionar(Array.isArray(m) ? m[0] : m);
     enfocar();
     aviso('Modelo creado. Puedes moverlo, girarlo, escalarlo y exportarlo a GLB.');
   },

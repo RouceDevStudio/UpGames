@@ -42,7 +42,7 @@ export function instalarDialogoFoto({ alCrear, aviso }) {
     $('filaGrosor').hidden = n !== 1;
     $('filaInvertir').hidden = n !== 2;
     $('filaIA').hidden = n === 3;
-    $('filaRuedas').hidden = n !== 3;
+    $('filaMonoplaza').hidden = n !== 3;
     $('filaPintar').hidden = n !== 3;
     fotos.forEach((f, i) => f && analizar(i));
     ayuda();
@@ -137,7 +137,7 @@ export function instalarDialogoFoto({ alCrear, aviso }) {
         estado('');
       }
       await new Promise((r) => setTimeout(r, 30)); // deja pintar el «Creando…»
-      const malla = n === 3 ? desdePlanos(fotos, +detalle.value, $('fRuedas').checked, $('fPintar').checked)
+      const malla = n === 3 ? desdePlanos(fotos, +detalle.value, $('fMonoplaza').checked, $('fPintar').checked)
         : n === 1 ? desdeUnaFoto(fotos[0], +grosor.value / 100, +detalle.value, prof)
         : desdeDosFotos(fotos[0], fotos[1], +detalle.value, invertir.checked);
       if (!malla) aviso('No se encontró el objeto en la foto. Tócalo en la foto o cambia el recorte.');
@@ -249,11 +249,11 @@ function lienzoDe({ data, width, height }) {
 
 // Planos: volumen tallado con todas las vistas y pintado proyectando cada una según hacia dónde
 // mira la superficie (de lado → vista de lado, hacia delante → frente, hacia arriba → arriba…).
-function desdePlanos(fotos, detalle, ruedas, pintar) {
+function desdePlanos(fotos, detalle, monoplaza, pintar) {
   const [lado, frente, arriba, atras] = fotos;
   const r = cascoPlanos({ lado: lado.mk, frente: frente.mk, arriba: valida(arriba) ? arriba.mk : null, atras: valida(atras) ? atras.mk : null },
-    { res: Math.round(detalle * 4), suavizado: 8, ruedas });
-  if (r && ruedas) console.info('ruedas', JSON.stringify(r.ruedas));
+    { res: Math.round(detalle * 4), suavizado: 16, monoplaza });
+  if (r && monoplaza) console.info('ruedas', JSON.stringify(r.ruedas));
   if (!r) return null;
   const nv = r.posiciones.length / 3, col = new Float32Array(nv * 3), nr = r.normales;
   const c = [0, 0, 0], lin = new THREE.Color();
@@ -285,7 +285,40 @@ function desdePlanos(fotos, detalle, ruedas, pintar) {
   if (!pintar) geo.deleteAttribute('color');
   const mat = pintar ? new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.1 })
                      : new THREE.MeshStandardMaterial({ color: 0xc4c8cf, roughness: 0.45, metalness: 0.05 });
-  return mallaFinal(geo, mat, 'Planos');
+  const cuerpo = mallaFinal(geo, mat, monoplaza ? 'carroceria' : 'Planos');
+  if (!monoplaza || !r.ruedas.length) return cuerpo;
+  // las ruedas, como piezas aparte con los nombres que entiende APEX GP
+  const piezas = [cuerpo];
+  for (const w of r.ruedas) {
+    const g = geometriaRueda(w.radio * ALTO_MODELO, w.ancho * ALTO_MODELO);
+    g.translate(w.x * ALTO_MODELO, w.y * ALTO_MODELO, w.z * ALTO_MODELO);
+    const rueda = mallaFinal(g, new THREE.MeshStandardMaterial({ color: 0x4a4e55, roughness: 0.8, metalness: 0.05 }), w.nombre);
+    rueda.userData.tipo = 'rueda';
+    piezas.push(rueda);
+  }
+  return piezas;
+}
+
+// Rueda de competición girando un perfil alrededor del eje: neumático con el flanco un poco
+// abombado y la banda de rodadura con cantos redondos, llanta hundida y buje. Eje = x.
+export function geometriaRueda(r, ancho) {
+  const a = ancho / 2, rl = r * 0.64, c = Math.min(a * 0.35, r * 0.14);
+  const pts = [];
+  const p = (radio, h) => pts.push(new THREE.Vector2(Math.max(radio, 1e-4), h));
+  // de un lado del eje al otro, por fuera
+  p(0, -a * 0.6); p(r * 0.16, -a * 0.6); p(r * 0.2, -a * 0.72);   // buje
+  p(rl * 0.93, -a * 0.78); p(rl, -a * 0.97);                       // cara de la llanta y su borde
+  p(rl * 1.04, -a);                                                 // talón del neumático
+  p((rl + r) / 2, -a * 1.05);                                       // flanco abombado
+  for (let i = 0; i <= 6; i++) { const t = (Math.PI / 2) * (i / 6); p(r - c + Math.sin(t) * c, -a + c - Math.cos(t) * c); }
+  for (let i = 0; i <= 6; i++) { const t = (Math.PI / 2) * (i / 6); p(r - c + Math.cos(t) * c, a - c + Math.sin(t) * c); }
+  p((rl + r) / 2, a * 1.05); p(rl * 1.04, a); p(rl, a * 0.97); p(rl * 0.93, a * 0.78);
+  p(r * 0.2, a * 0.72); p(r * 0.16, a * 0.6); p(0, a * 0.6);
+  const g = new THREE.LatheGeometry(pts.reverse(), 48);
+  g.deleteAttribute('uv');
+  g.rotateZ(-Math.PI / 2); // eje y → eje x
+  g.computeVertexNormals();
+  return g;
 }
 
 function mallaFinal(geo, mat, nombre) {

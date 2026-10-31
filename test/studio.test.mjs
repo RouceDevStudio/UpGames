@@ -156,7 +156,7 @@ test('planos: lado + frente + arriba (arriba al revés) → caja cerrada con el 
   assert.ok(alto < 0.56, `alto del morro ${alto}`);
 });
 
-test('planos de un coche: las ruedas tapadas por la carrocería salen redondas', () => {
+test('planos de un monoplaza: ruedas medidas como piezas y carrocería sin la franja de los neumáticos', () => {
   // lado: carrocería alta en el centro que tapa las esquinas de dos ruedas que tocan el suelo
   const rueda = (x, y, cx) => Math.hypot(x - cx, y - 60) < 20;
   const lado = mascaraDePlano(imagen(240, 100, (x, y) => rueda(x, y, 50) || rueda(x, y, 190) || (x >= 20 && x < 220 && y >= 30 && y < 70 && (x > 75 && x < 165 || y < 45))));
@@ -164,11 +164,12 @@ test('planos de un coche: las ruedas tapadas por la carrocería salen redondas',
   // arriba: ruedas a los lados (separadas) y carrocería estrecha en el centro
   const arriba = mascaraDePlano(imagen(240, 120, (x, y) => (y >= 10 && y < 110 && x >= 20 && x < 220 && (y >= 40 && y < 80)) || ((y >= 10 && y < 30 || y >= 90 && y < 110) && (Math.abs(x - 50) < 20 || Math.abs(x - 190) < 20))));
   const sin = cascoPlanos({ lado, frente, arriba }, { res: 120, suavizado: 0 });
-  const con = cascoPlanos({ lado, frente, arriba }, { res: 120, suavizado: 0, ruedas: true });
-  assert.strictEqual(con.ruedas.length, 2, JSON.stringify(con.ruedas));
-  for (const r of con.ruedas) assert.ok(r.bandas[0] && r.bandas[1]);
-  // de caja (lado 2r) a cilindro (π r²): se quita ≈ 21 % del volumen de cada neumático
-  assert.ok(volumen(con.posiciones, con.indices) < volumen(sin.posiciones, sin.indices) * 0.99);
+  const con = cascoPlanos({ lado, frente, arriba }, { res: 120, suavizado: 0, monoplaza: true });
+  assert.strictEqual(con.ruedas.length, 4, 'cuatro ruedas (dos por eje): ' + JSON.stringify(con.ruedas));
+  assert.deepStrictEqual(con.ruedas.map((r) => r.nombre).sort(), ['rueda_del_der', 'rueda_del_izq', 'rueda_tra_der', 'rueda_tra_izq']);
+  for (const r of con.ruedas) assert.ok(Math.abs(r.y - r.radio) < 0.05, 'la rueda apoya en el suelo');
+  // la carrocería ya no lleva los neumáticos ni sus cajas
+  assert.ok(volumen(con.posiciones, con.indices) < volumen(sin.posiciones, sin.indices) * 0.9);
   assert.ok(esCerrada(con.indices));
 });
 

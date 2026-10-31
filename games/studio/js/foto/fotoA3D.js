@@ -415,10 +415,13 @@ export function cascoVisual(mkFrente, mkLado, { res = 56, invertirLado = false, 
 // - frente: visto desde +z.  - atrás (opcional): visto desde −z.
 // - arriba: visto desde +y, con el largo en horizontal y el frente a la derecha o a la izquierda:
 //   se detecta solo comparando su perfil con el de la vista de lado (ruedas, alerones…).
-// ruedas: para vehículos. Las siluetas no pueden redondear una rueda si otras piezas (morro,
-// alerón, fondo) tapan sus esquinas en la vista de lado: queda una caja. Con esta opción se buscan
-// las ruedas (lo único que toca el suelo), se mide su radio y su ancho y se recortan en cilindro.
-export function cascoPlanos(vistas, { res = 256, suavizado = 4, ruedas = false } = {}) {
+// monoplaza: coche de ruedas descubiertas (F1, karts…). Las siluetas mezclan piezas: en la vista de
+// frente los neumáticos tapan una franja entera y en el tallado se vuelven cajas a lo largo de todo
+// el coche. Con esta opción se buscan las ruedas (lo único que toca el suelo), se miden (radio,
+// ancho, posición) y se BORRAN de las vistas de frente, atrás y arriba antes de tallar; el resto del
+// coche sale sin cajas fantasma y las ruedas se devuelven aparte para construirlas como piezas
+// reales. Delante del neumático delantero se respeta la parte baja (el alerón llega hasta ahí).
+export function cascoPlanos(vistas, { res = 256, suavizado = 4, monoplaza = false } = {}) {
   const { lado, frente, arriba, atras } = vistas;
   const cl = cajaDeMascara(lado), cf = cajaDeMascara(frente), ca = arriba ? cajaDeMascara(arriba) : null, cb = atras ? cajaDeMascara(atras) : null;
   if (!cl || !cf) return null;
@@ -453,15 +456,47 @@ export function cascoPlanos(vistas, { res = 256, suavizado = 4, ruedas = false }
       A[k * nx + i] = muestra(arriba, ca, arribaInvertido ? 1 - u : u, (i + 0.5) / nx);
     }
   } else A.fill(1);
+  const ruedas = monoplaza ? detectarRuedas(lado, cl, A, nx, ny, nz) : [];
+  // franjas de los neumáticos fuera de las vistas (de frente y atrás: toda su altura; desde arriba:
+  // su rectángulo). Delante de las ruedas delanteras se deja la parte baja de la vista de frente.
+  const Forig = F.slice();
+  // Fuera del largo de las ruedas (p. ej. los pontones entre ellas) la franja del neumático no se deja
+  // vacía: toma la sección de la columna vecina hacia dentro (la carrocería se prolonga hacia
+  // fuera) y la vista de arriba pone el límite del ancho.
+  const Fext = F.slice(), Bext = B.slice();
+  let kAlaDel = nz, jAla = 0;
+  const enRueda = new Uint8Array(nz);
+  for (const r of ruedas) {
+    const jTope = Math.min(ny - 1, Math.ceil(2 * r.ry * 1.05) + 1);
+    for (let k = Math.max(0, Math.floor(r.zc - r.rz * 1.04) - 1); k <= Math.min(nz - 1, Math.ceil(r.zc + r.rz * 1.04) + 1); k++) enRueda[k] = 1;
+    for (const [b0, b1] of r.bandas) {
+      const izq = b0 < nx / 2, vecina = izq ? Math.min(nx - 1, b1 + 1) : Math.max(0, b0 - 2);
+      for (let i = Math.max(0, b0 - 1); i < Math.min(nx, b1 + 1); i++) {
+        for (let j = 0; j <= jTope; j++) {
+          F[i * ny + j] = 0; B[i * ny + j] = 0;
+          Fext[i * ny + j] = Forig[vecina * ny + j]; Bext[i * ny + j] = Bext[vecina * ny + j];
+        }
+        for (let k = Math.max(0, Math.floor(r.zc - r.rz * 1.04) - 1); k <= Math.min(nz - 1, Math.ceil(r.zc + r.rz * 1.04) + 1); k++) A[k * nx + i] = 0;
+      }
+    }
+  }
+  if (ruedas.length) {
+    const del = ruedas.reduce((a, b) => (b.zc > a.zc ? b : a)); // la más adelantada
+    kAlaDel = Math.ceil(del.zc + del.rz * 1.02);
+    jAla = Math.round(del.ry * 0.5);
+  }
   const X = nx + 2, Y = ny + 2, Z = nz + 2;
   let campo = new Float32Array(X * Y * Z);
   for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) {
     if (!L[k * ny + j]) continue;
+    const ala = k >= kAlaDel && j < jAla;
+    const Fk = ruedas.length && !enRueda[k] && k < kAlaDel ? Fext : F, Bk = Fk === Fext ? Bext : B;
     for (let i = 0; i < nx; i++) {
-      if (F[i * ny + j] && B[i * ny + j] && A[k * nx + i]) campo[(i + 1) + X * ((j + 1) + Y * (k + 1))] = 1;
+      const f = Fk[i * ny + j] || (ala && Forig[i * ny + j]);
+      if (f && (Bk[i * ny + j] || ala) && A[k * nx + i]) campo[(i + 1) + X * ((j + 1) + Y * (k + 1))] = 1;
     }
   }
-  const ruedasHalladas = ruedas ? redondearRuedas(campo, X, Y, lado, cl, A, nx, ny, nz) : [];
+  if (ruedas.length >= 2) seccionMonoplaza(campo, X, Y, nx, ny, ruedas);
   campo = desenfocar(campo, X, Y, Z);
   const malla = surfaceNets(campo, X, Y, Z, 0.5);
   if (!malla.indices.length) return null;
@@ -474,6 +509,15 @@ export function cascoPlanos(vistas, { res = 256, suavizado = 4, ruedas = false }
   for (let v = 1; v < p.length; v += 3) if (p[v] < ymin) ymin = p[v];
   for (let v = 1; v < p.length; v += 3) p[v] -= ymin;
   const normales = normalesDeVertice(p, malla.indices);
+  // ruedas en las mismas coordenadas que la malla (x > 0 es la izquierda mirando hacia delante)
+  const ruedasMundo = [];
+  for (const r of ruedas) for (const [b0, b1] of r.bandas) {
+    const x = ((b0 + b1) / 2 - 0.5 - nx / 2) * esc;
+    ruedasMundo.push({
+      x, y: (r.ry - 0.5) * esc - ymin, z: (r.zc - 0.5 - nz / 2) * esc, radio: r.ry * esc, ancho: (b1 - b0) * esc,
+      nombre: `rueda_${r.zc > nz / 2 ? 'del' : 'tra'}_${x > 0 ? 'izq' : 'der'}`,
+    });
+  }
   // dónde cae cada vértice en cada imagen (0..1 de la imagen completa, v hacia arriba como las UV)
   const nv = p.length / 3, uv = { lado: new Float32Array(nv * 2), frente: new Float32Array(nv * 2), arriba: new Float32Array(nv * 2), atras: new Float32Array(nv * 2) };
   const anchoM = nx * esc, largoM = nz * esc;
@@ -489,12 +533,12 @@ export function cascoPlanos(vistas, { res = 256, suavizado = 4, ruedas = false }
     poner(uv.atras, atras, cb, v, 1 - x, y);
     poner(uv.arriba, arriba, ca, v, arribaInvertido ? 1 - z : z, x);
   }
-  return { posiciones: p, normales, indices: malla.indices, uv, arribaInvertido, ruedas: ruedasHalladas, medidas: { ancho: anchoM, alto: 1, largo: largoM } };
+  return { posiciones: p, normales, indices: malla.indices, uv, arribaInvertido, ruedas: ruedasMundo, medidas: { ancho: anchoM, alto: 1, largo: largoM } };
 }
 
-// Busca las ruedas en la vista de lado y las deja cilíndricas en el campo de vóxeles.
-// Devuelve [{ z, r, anchoIzq, anchoDer }] en unidades de la rejilla.
-function redondearRuedas(campo, X, Y, lado, cl, A, nx, ny, nz) {
+// Busca las ruedas en la vista de lado (lo que toca el suelo; radio por la cuerda del círculo) y su
+// ancho en la vista de arriba. Devuelve [{ zc, rz, ry, bandas: [[i0, i1], [i0, i1]] }] en la rejilla.
+function detectarRuedas(lado, cl, A, nx, ny, nz) {
   const m = lado.mascara, w = lado.width, y1 = cl.y0 + cl.h - 1;
   // columnas que tocan el suelo (el último 1,5 % del alto)
   const toca = new Uint8Array(w);
@@ -555,21 +599,37 @@ function redondearRuedas(campo, X, Y, lado, cl, A, nx, ny, nz) {
       lados[0].borde !== undefined ? [lados[0].borde, lados[0].borde + ancho] : null,
       lados[1].borde !== undefined ? [lados[1].borde - ancho, lados[1].borde] : null,
     ];
-    // recortar en cilindro (eje x) dentro de la banda de cada neumático
-    const jc = ry - 0.5;
-    for (const bd of banda) {
-      if (!bd) continue;
-      for (let k = Math.max(0, Math.floor(zc - rz * 1.04)); k <= Math.min(nz - 1, Math.ceil(zc + rz * 1.04)); k++) {
-        for (let j = 0; j <= Math.min(ny - 1, Math.ceil(2 * ry * 1.04)); j++) {
-          const dz = (k + 0.5 - zc) / rz, dy = (j + 0.5 - jc) / ry;
-          if (dz * dz + dy * dy <= 1) continue;
-          for (let i = bd[0]; i < bd[1]; i++) campo[(i + 1) + X * ((j + 1) + Y * (k + 1))] = 0;
-        }
-      }
-    }
-    halladas.push({ z: +zc.toFixed(1), r: +rz.toFixed(1), bandas: banda });
+    halladas.push({ zc, rz, ry, bandas: banda.filter(Boolean) });
   }
   return halladas;
+}
+
+// Entre las ruedas, cada corte transversal de un monoplaza es alto en el centro (cubierta del motor)
+// y más bajo hacia los costados (pontones). Las siluetas no lo ven y dejan una pared vertical:
+// aquí cada corte se limita a una superelipse |x/a|^n + (y/h)^n ≤ 1 con su propio ancho y alto
+// (con borde suave: el campo baja de 1 a 0 alrededor de la curva).
+function seccionMonoplaza(campo, X, Y, nx, ny, ruedas, n = 2.6) {
+  const zs = ruedas.map((r) => r.zc).sort((a, b) => a - b);
+  const tra = ruedas.find((r) => r.zc === zs[0]), del = ruedas.find((r) => r.zc === zs[zs.length - 1]);
+  const k0 = Math.ceil(tra.zc + tra.rz * 1.05), k1 = Math.floor(del.zc - del.rz * 1.05);
+  const cx = nx / 2;
+  for (let k = k0; k <= k1; k++) {
+    let a = 0, h = 0;
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      if (!campo[(i + 1) + X * ((j + 1) + Y * (k + 1))]) continue;
+      a = Math.max(a, Math.abs(i + 0.5 - cx)); h = Math.max(h, j + 1);
+    }
+    if (!a || !h) continue;
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const id = (i + 1) + X * ((j + 1) + Y * (k + 1));
+      if (!campo[id]) continue;
+      const u = Math.abs(i + 0.5 - cx) / a;
+      if (u < 0.2) continue;
+      // valor continuo (no 0/1) para que la superficie pase suave entre vóxeles, sin escalones
+      const e = u ** n + ((j + 0.5) / h) ** n;
+      campo[id] = Math.min(campo[id], Math.max(0, Math.min(1, 0.5 + (1 - e) * Math.min(a, h) * 0.3)));
+    }
+  }
 }
 
 function correlacion(a, b) {
