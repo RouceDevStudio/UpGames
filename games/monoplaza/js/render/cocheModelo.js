@@ -774,6 +774,7 @@ export function crearModelo(opc) {
   if (mMetal) carroceria.add(mMetal);
   // piezas sueltas (con su pivote en el centro para que salgan volando al romperse)
   const matEspejo = matComun('espejo', () => new THREE.MeshStandardMaterial({ color: 0xaab6c4, metalness: 1, roughness: 0.04 }));
+  const espejos = [];       // el coche del jugador los convierte en espejos de verdad (main.js)
   const gruposPieza = piezas.map(pz => {
     const g = new THREE.Group();
     const c = new THREE.Vector3(...pz.centro);
@@ -782,7 +783,8 @@ export function crearModelo(opc) {
     if (pz.tipo === 'espejo') {
       const espejo = new THREE.Mesh(new THREE.PlaneGeometry(0.11, 0.045), matEspejo);
       espejo.rotation.y = -Math.PI / 2; espejo.position.set(0.715 - c.x, 0.684 - c.y, pz.sg * 0.50 - c.z);
-      g.add(espejo);
+      espejo.userData.lado = pz.sg;
+      g.add(espejo); espejos.push(espejo);
     }
     g.position.copy(c);
     carroceria.add(g);
@@ -1038,7 +1040,7 @@ export function crearModelo(opc) {
   let tPantalla = 0;
   const estadoDanos = { alaDel: false, alaTras: false };
   const modelo = {
-    raiz, carroceria, ruedas, pivDrs, luzLluvia, pintura, alaDel, alaTras, casco, cuello, piloto, compuesto,
+    raiz, carroceria, ruedas, pivDrs, luzLluvia, pintura, alaDel, alaTras, casco, cuello, piloto, compuesto, espejos,
     mirada: 0,                     // giro de la cabeza (rad) para la cámara de cabina
     alDesprender: null,            // (tipo, objeto3D) → efectos de escombros
     elevar: 0,                     // gatos de boxes

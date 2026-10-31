@@ -64,8 +64,10 @@ export class Neumatico {
   // Agarre por temperatura y desgaste
   factorAgarre() {
     const t = 0.65 * this.tSup + 0.35 * this.tNucleo;
-    const x = (t - this.c.tOpt) / this.c.ancho;
-    const termico = 0.80 + 0.20 * Math.exp(-x * x);
+    // ventana térmica asimétrica: en frío el agarre cae deprisa (la goma no «muerde»), y por
+    // encima de la ventana se pierde más despacio
+    const x = (t - this.c.tOpt) / (this.c.ancho * (t < this.c.tOpt ? 0.85 : 1.15));
+    const termico = (t < this.c.tOpt ? 0.74 : 0.80) + (t < this.c.tOpt ? 0.26 : 0.20) * Math.exp(-x * x);
     const w = this.desgaste;
     const desg = w < 0.75 ? 1 - 0.12 * w : 1 - 0.09 - 0.6 * (w - 0.75);
     // un plano deja la goma irregular: algo menos de agarre y más desgaste
@@ -74,12 +76,14 @@ export class Neumatico {
 
   // potenciaDeslizamiento en W, fz en N, v en m/s
   termico(dt, potenciaDeslizamiento, fz, v, tAmb, agua = 0) {
-    const calor = potenciaDeslizamiento * 0.55 * this.c.calor * this.factorCalorPresion * (1 - 0.4 * agua)
-      + Math.max(0, fz) * v * 0.0027 * this.factorCalorPresion;
+    // los lisos (de seco) entran en temperatura antes: más histéresis y menos masa de goma
+    const lisos = this.c.lluvia ? 1 : 1.3;
+    const calor = (potenciaDeslizamiento * 0.55 * this.c.calor * this.factorCalorPresion * (1 - 0.4 * agua)
+      + Math.max(0, fz) * v * 0.0027 * this.factorCalorPresion) * lisos;
     // el agua que levanta la rueda la enfría muchísimo (evaporación)
     const hAire = (20 + 1.05 * v) * (1 + 2.2 * agua);
     const kCond = 90;
-    const cSup = 3800, cNuc = 26000;
+    const cSup = this.c.lluvia ? 3800 : 3200, cNuc = this.c.lluvia ? 26000 : 21000;
     this.tSup += (calor - kCond * (this.tSup - this.tNucleo) - hAire * (this.tSup - tAmb)) / cSup * dt;
     this.tNucleo += (kCond * (this.tSup - this.tNucleo) - 6 * (this.tNucleo - tAmb)) / cNuc * dt;
     // el desgaste se acelera fuera de la ventana térmica

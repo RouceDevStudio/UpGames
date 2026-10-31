@@ -324,15 +324,142 @@ function pixelRatio() {
 }
 
 function configurarPost() {
-  composer = null;
-  if (calidad < 2) return;
+  composer = null; pasoCalor = null; pasoVelocidad = null;
+  if (calidad < 1) return;
   const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: calidad >= 3 ? 4 : 2 });
   composer = new EffectComposer(renderer, rt);
   composer.setPixelRatio(pixelRatio());
   composer.addPass(new RenderPass(scene, camara.cam));
-  composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.22, 0.45, 0.93));
-  composer.addPass(pasoVelocidad = new ShaderPass(DESENFOQUE_VELOCIDAD));
+  if (calidad >= 2) composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.22, 0.45, 0.93));
+  composer.addPass(pasoCalor = new ShaderPass(DISTORSION_CALOR));
+  if (calidad >= 2) composer.addPass(pasoVelocidad = new ShaderPass(DESENFOQUE_VELOCIDAD));
   composer.addPass(new OutputPass());
+}
+// Retrovisores de verdad en el coche del jugador: una textura pequeña con dos mitades (izquierda
+// y derecha), cada una con su cámara mirando hacia atrás desde el espejo. Se pinta un lado por
+// fotograma y sin recalcular las sombras, para que apenas cueste.
+let retro = null;
+function prepararRetrovisores(m) {
+  if (!m?.espejos?.length || calidad < 1) return;
+  if (!retro) {
+    const rt = new THREE.WebGLRenderTarget(calidad >= 2 ? 512 : 320, calidad >= 2 ? 112 : 70);
+    rt.texture.colorSpace = THREE.SRGBColorSpace;
+    retro = { rt, cam: new THREE.PerspectiveCamera(32, (rt.width / 2) / rt.height, 0.3, 400), lado: 0, mat: {}, modelo: null };
+  }
+  retro.modelo = m;
+  for (const e of m.espejos) {
+    const izq = e.userData.lado < 0;
+    // cada espejo ve su mitad de la textura, invertida en horizontal (como un espejo)
+    const g = e.geometry.clone(), uv = g.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setX(i, (izq ? 0.5 : 1) - uv.getX(i) * 0.5);
+    e.geometry = g;
+    e.material = retro.mat[izq ? 'i' : 'd'] ??= new THREE.MeshBasicMaterial({ map: retro.rt.texture, toneMapped: false });
+  }
+}
+const _pe = new THREE.Vector3(), _de = new THREE.Vector3();
+function pintarRetrovisores() {
+  if (!retro?.modelo || !['cabina', 'tcam'].includes(camara.modo)) return;
+  const m = retro.modelo, e = m.espejos[retro.lado % m.espejos.length];
+  retro.lado++;
+  if (!e?.visible || !e.parent?.visible) return;
+  const izq = e.userData.lado < 0;
+  e.getWorldPosition(_pe);
+  // mirando hacia atrás y un poco hacia fuera, como un retrovisor real
+  m.carroceria.updateMatrixWorld();
+  _de.set(-1, -0.04, (izq ? -1 : 1) * 0.16).transformDirection(m.carroceria.matrixWorld);
+  retro.cam.position.copy(_pe); retro.cam.lookAt(_pe.clone().add(_de));
+  const W = retro.rt.width / 2, H = retro.rt.height;
+  const auto = renderer.shadowMap.autoUpdate; renderer.shadowMap.autoUpdate = false;
+  renderer.setRenderTarget(retro.rt);
+  retro.rt.viewport.set(izq ? 0 : W, 0, W, H); retro.rt.scissor.set(izq ? 0 : W, 0, W, H); retro.rt.scissorTest = true;
+  m.piloto && (m.piloto.grupo.visible = false);
+  renderer.render(scene, retro.cam);
+  m.piloto && (m.piloto.grupo.visible = true);
+  renderer.setRenderTarget(null);
+  renderer.shadowMap.autoUpdate = auto;
+}
+
+/** En calidad media el compositor solo se usa mientras hay calor que dibujar (ahorra un pase). */
+function renderizar() {
+  const usar = composer && (calidad >= 2 || pasoCalor?.enabled);
+  if (usar) composer.render(); else renderer.render(scene, camara.cam);
+}
+
+// Distorsión por calor: el aire caliente del escape ondula lo que hay detrás (cada coche
+// cercano es una columna que sube y se abre), y en días de calor la calima hace temblar la
+// franja del horizonte al final de las rectas
+const MAX_CALOR = 8;
+let pasoCalor = null;
+const DISTORSION_CALOR = {
+  uniforms: {
+    tDiffuse: { value: null }, tiempo: { value: 0 }, n: { value: 0 },
+    puntos: { value: Array.from({ length: MAX_CALOR }, () => new THREE.Vector4()) },   // x, y (uv), radio, intensidad
+    aspecto: { value: 1 }, calima: { value: 0 }, horizonte: { value: 0.55 },
+  },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float tiempo; uniform int n; uniform vec4 puntos[${MAX_CALOR}];
+    uniform float aspecto; uniform float calima; uniform float horizonte; varying vec2 vUv;
+    void main() {
+      vec2 off = vec2(0.0);
+      for (int k = 0; k < ${MAX_CALOR}; k++) {
+        if (k >= n) break;
+        vec4 p = puntos[k];
+        vec2 d = (vUv - p.xy) * vec2(aspecto, 1.0);
+        // columna: más ancha y débil según sube (y > 0), casi nada por debajo del escape
+        float sube = clamp(d.y / (p.z * 3.0), -0.3, 1.0);
+        float ancho = p.z * (0.8 + sube * 1.2);
+        float w = exp(-(d.x * d.x) / (ancho * ancho)) * smoothstep(-0.3, 0.05, sube) * (1.0 - smoothstep(0.4, 1.0, sube));
+        float onda = sin(vUv.y * 160.0 - tiempo * 14.0 + d.x * 40.0) + 0.6 * sin(vUv.y * 310.0 - tiempo * 23.0);
+        off += vec2(onda, 0.6 * cos(vUv.x * 140.0 + tiempo * 11.0)) * w * p.w * 0.0038;
+      }
+      // calima: banda alrededor del horizonte, ondas finas que suben
+      float banda = exp(-pow((vUv.y - horizonte) / 0.07, 2.0));
+      off.x += calima * banda * 0.0016 * sin(vUv.y * 420.0 - tiempo * 9.0 + sin(vUv.x * 30.0 + tiempo));
+      gl_FragColor = texture2D(tDiffuse, vUv + off);
+    }`,
+};
+const _pc = new THREE.Vector3(), _fw = new THREE.Vector3();
+/** Calcula dónde están los escapes calientes en pantalla (solo de día y sin lluvia). */
+function actualizarCalor(dt, coches, jugadorCoche) {
+  if (!pasoCalor) return;
+  const u = pasoCalor.uniforms, cam = camara.cam;
+  const dia = escenario?.hora === 'noche' ? 0 : escenario?.hora === 'atardecer' ? 0.55 : 1;
+  const seco = 1 - Math.min(1, (sesion?.clima?.lluvia || 0) * 8);
+  const fuerza = dia * seco * (ajustes.efectosCalor === false ? 0 : 1);
+  u.tiempo.value += dt; u.aspecto.value = innerWidth / innerHeight;
+  let k = 0;
+  if (fuerza > 0.01 && coches) {
+    cam.getWorldDirection(_fw);
+    const lista = [];
+    for (const c of coches) {
+      if (!c || c.abandono && c.velocidad < 1) continue;
+      const cs = Math.cos(c.psi), sn = Math.sin(c.psi);
+      _pc.set(c.x - cs * 2.35, c.y + 0.5, c.z - sn * 2.35);
+      const dx = _pc.x - cam.position.x, dy = _pc.y - cam.position.y, dz = _pc.z - cam.position.z;
+      const dist = Math.hypot(dx, dy, dz);
+      if (dist < 0.8 || dist > 70 || dx * _fw.x + dy * _fw.y + dz * _fw.z < 0) continue;
+      lista.push({ c, dist, p: _pc.clone() });
+    }
+    lista.sort((a, b) => a.dist - b.dist);
+    const f = (cam.projectionMatrix.elements[5]) * 0.5;      // de metros a unidades de pantalla
+    for (const { c, dist, p } of lista.slice(0, MAX_CALOR)) {
+      p.project(cam);
+      if (Math.abs(p.x) > 1.2 || Math.abs(p.y) > 1.2) continue;
+      const carga = 0.45 + 0.55 * Math.min(1, c.mandos?.acelerador ?? 0.5);
+      const parado = c.velocidad < 25 ? 1 : 0.55;           // parado o lento el chorro sube recto y se ve más
+      u.puntos.value[k].set(p.x * 0.5 + 0.5, p.y * 0.5 + 0.5, Math.max(0.006, 0.35 * f / dist), fuerza * carga * parado * Math.min(1, 25 / dist + 0.25));
+      k++;
+    }
+  }
+  u.n.value = k;
+  // calima: día de calor, en recta y yendo deprisa
+  const j = jugadorCoche;
+  const obj = fuerza * (j && j.velocidad > 50 && Math.abs(j.anguloVolante || 0) < 0.03 ? 1 : 0.35) * (escenario?.hora === 'dia' ? 1 : 0.4);
+  u.calima.value += (obj - u.calima.value) * Math.min(1, dt * 1.5);
+  // el horizonte en pantalla: proyección de un punto lejano a la altura de la cámara
+  _pc.copy(cam.position).addScaledVector(cam.getWorldDirection(_fw).setY(0).normalize(), 500).project(cam);
+  u.horizonte.value = Math.min(0.95, Math.max(0.05, _pc.y * 0.5 + 0.5));
+  pasoCalor.enabled = k > 0 || u.calima.value > 0.02;
 }
 
 // Desenfoque por velocidad: zoom radial suave hacia los bordes (el centro queda nítido)
@@ -444,6 +571,7 @@ function crearModelos() {
     };
     scene.add(m.raiz);
     modelos.push(m);
+    if (p.jugador) prepararRetrovisores(m);
   });
   if (modeloFantasma) { scene.remove(modeloFantasma.raiz); modeloFantasma = null; }
   if (sesion.modo !== 'carrera') {
@@ -1170,6 +1298,7 @@ function procesarEventos() {
       if (leccion) leccionVuelta = { t: e.t, valida: e.valida };
       progresar('vuelta', { valida: e.valida });
       estrategiaVuelta(e.p);
+      radioDistancias(e);
       sonido.evento('vuelta');
       const txt = e.valida ? fmt(e.t) : fmt(e.t) + ' (anulada)';
       if (e.mejora) { mensaje(sesion.modo === 'carrera' ? 'MEJOR VUELTA PERSONAL' : 'NUEVO MEJOR TIEMPO', txt, 2.4); if (sesion.modo !== 'carrera') radio.decir(`${fmt(e.t)}. ¡Mejor vuelta! Sigue así.`, { clave: 'mejorV', cada: 8 }); }
@@ -1311,6 +1440,29 @@ function radioSector(e) {
     else if (e.rival > 0.3 && !frase) frase = `${n} es ${dec(e.rival)} más rápido en el ${sec}.`;
   }
   if (frase) radio.decir(frase, { clave: 'sectorRadio', cada: 20 });
+}
+
+// Al cerrar la vuelta en carrera, el ingeniero da las distancias con el de delante y el de
+// detrás y lo que ha hecho cada uno en su última vuelta (como en la radio real)
+function radioDistancias(e) {
+  if (sesion.modo !== 'carrera' || e.p.vuelta < 2 || !sesion.orden || Math.random() > 0.65) return;
+  const o = sesion.orden.filter(q => !q.abandono && !q.retirado), k = o.indexOf(e.p);
+  if (k < 0) return;
+  const L = circuito.largo, vm = L / Math.max(40, e.t || 90);
+  const rec = (q) => q.vuelta * L + (q.coche.proj?.s || 0);
+  const n = (q) => q.nombre.replace('@', '').split(' ').pop();
+  const seg = (x) => x.toFixed(1).replace('.', ',');
+  const partes = [];
+  const del = o[k - 1], tras = o[k + 1];
+  if (del) {
+    const g = (rec(del) - rec(e.p)) / vm;
+    if (g > 0 && g < 30) partes.push(`${n(del)} a ${seg(g)} delante${del.ultimaVuelta?.t ? `, hizo ${fmt(del.ultimaVuelta.t)}` : ''}`);
+  }
+  if (tras) {
+    const g = (rec(e.p) - rec(tras)) / vm;
+    if (g > 0 && g < 30) partes.push(`${n(tras)} a ${seg(g)} detrás${tras.ultimaVuelta?.t ? `, ${tras.ultimaVuelta.t < e.t ? 'más rápido que tú' : 'más lento'}` : ''}`);
+  }
+  if (partes.length) radio.decir(`Tú ${fmt(e.t)}. ${partes.join('. ')}.`, { clave: 'gaps', cada: 50 });
 }
 
 function radioPeriodica(dt) {
@@ -1594,6 +1746,7 @@ function bucle(ahora) {
       lluvia: sesion.clima.lluvia, agua: sesion.clima.agua, grada: sj < 600 || sj > circuito.largo - 300 ? 1 : 0,
       reflejo: enTunel ? 1 : Math.max(0, Math.min(0.6, 1 - (circuito.muro[0][ij] + circuito.muro[1][ij]) / 30)),
       aBordo: ['cabina', 'cara', 'tcam'].includes(camara.modo),
+      perfil: ['cabina', 'cara', 'tcam'].includes(camara.modo) ? 'cabina' : camara.modo === 'tv' ? 'lejos' : 'atras',
     });
     // vibración en bordillos
     if (j.enBordillo && j.velocidad > 15 && Math.random() < dt * 12) entrada.vibrar(12, 0.3);
@@ -1603,7 +1756,9 @@ function bucle(ahora) {
 
   // render
   actualizarDesenfoque(sesion.jugador?.coche?.velocidad || 0, dt);
-  if (composer) composer.render(); else renderer.render(scene, camara.cam);
+  actualizarCalor(dt, sesion.coches, sesion.jugador?.coche);
+  if (jugando) pintarRetrovisores();
+  renderizar();
   if (fotoPendiente) guardarFoto();
 
   // rendimiento: baja la calidad si el móvil no llega
@@ -2543,7 +2698,7 @@ function actualizarRepe(dt) {
   if (r.sonido) sonido.actualizarRepe?.(dt, r.proxies, r.coche, camara.cam, r.play ? r.vel : 0, ['cabina', 'cara', 'tcam', 'morro', 'rueda', 'ruedaTras', 'trasera'].includes(camRepe.planoActual));
   else sonido.actualizarRepe?.(dt, [], 0, camara.cam, 0, false);
   if (cineActivo()) cine.render(scene, camara.cam, camara.cam.position.distanceTo(m.raiz.position), dt);
-  else if (composer) { if (pasoVelocidad) pasoVelocidad.uniforms.fuerza.value = 0; composer.render(); } else renderer.render(scene, camara.cam);
+  else { if (pasoVelocidad) pasoVelocidad.uniforms.fuerza.value = 0; actualizarCalor(dt, r.proxies, r.coche != null ? r.proxies[r.coche] : null); renderizar(); }
   if (fotoPendiente) guardarFoto();
   if (grabVideo?.grabando) $('#repeGrab').textContent = '● ' + fmt(grabVideo.segundos).replace(/\.\d+$/, '');
 }

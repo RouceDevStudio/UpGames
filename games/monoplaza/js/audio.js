@@ -177,6 +177,17 @@ class VozMuestras {
   }
 }
 
+// Perfiles del sonido del motor según dónde está la cámara
+const PERFILES_MOTOR = {
+  // en la cabina: duro, comprimido, con la caja de aire y la vibración del monocasco; el
+  // escape queda detrás y llega apagado
+  cabina: { graves: 8, medios: -2, agudos: -7, cuerpo: 5, escape: -2, aire: 7500, corteG: 30, sucio: 0.45, seco: 0.8, umbral: -22, ratio: 5, eco: 0.3 },
+  // detrás del coche: el escape de cara, rudo y fuerte
+  atras: { graves: 5, medios: 0, agudos: 1, cuerpo: 1, escape: 6, aire: 14000, corteG: 25, sucio: 0.55, seco: 0.85, umbral: -18, ratio: 3.5, eco: 1 },
+  // de lejos (cámara de TV): fino y agudo, sin graves, el clásico «siauuu» al pasar
+  lejos: { graves: -9, medios: 3, agudos: 2, cuerpo: -4, escape: 5, aire: 9000, corteG: 220, sucio: 0.15, seco: 1, umbral: -14, ratio: 2, eco: 2.2 },
+};
+
 export class Sonido {
   constructor() {
     this.ctx = null;
@@ -210,9 +221,23 @@ export class Sonido {
     const graves = ctx.createBiquadFilter(); graves.type = 'lowshelf'; graves.frequency.value = 160; graves.gain.value = 5;
     const medios = ctx.createBiquadFilter(); medios.type = 'peaking'; medios.frequency.value = 3400; medios.Q.value = 0.8; medios.gain.value = -3.5;
     const agudos = ctx.createBiquadFilter(); agudos.type = 'highshelf'; agudos.frequency.value = 7000; agudos.gain.value = -3;
+    // perfil por cámara (se ajusta en vivo): «cuerpo» resalta la admisión y la caja de aire,
+    // «escape» la aspereza del tubo, el paso bajo hace de aire que se come los agudos con la
+    // distancia y una rama saturada le da la dureza de un micro cerca del motor
+    const cuerpo = ctx.createBiquadFilter(); cuerpo.type = 'peaking'; cuerpo.frequency.value = 520; cuerpo.Q.value = 0.9; cuerpo.gain.value = 0;
+    const escape = ctx.createBiquadFilter(); escape.type = 'peaking'; escape.frequency.value = 1900; escape.Q.value = 1.1; escape.gain.value = 0;
+    const aire = ctx.createBiquadFilter(); aire.type = 'lowpass'; aire.frequency.value = 16000; aire.Q.value = 0.5;
+    const corteG = ctx.createBiquadFilter(); corteG.type = 'highpass'; corteG.frequency.value = 20; corteG.Q.value = 0.6;
+    const sat = ctx.createWaveShaper(); sat.curve = curvaSaturacion(2.6); sat.oversample = '2x';
+    const seco = ctx.createGain(), sucio = ctx.createGain(); seco.gain.value = 1; sucio.gain.value = 0;
     const compM = ctx.createDynamicsCompressor(); compM.threshold.value = -16; compM.knee.value = 8; compM.ratio.value = 2.5; compM.attack.value = 0.004; compM.release.value = 0.12;
-    this.busMotor.connect(graves); graves.connect(medios); medios.connect(agudos); agudos.connect(compM);
-    compM.connect(this.maestro); compM.connect(this.envioEco);
+    this.busMotor.connect(graves); graves.connect(medios); medios.connect(agudos); agudos.connect(cuerpo); cuerpo.connect(escape);
+    escape.connect(corteG); corteG.connect(aire); aire.connect(seco); aire.connect(sat); sat.connect(sucio);
+    seco.connect(compM); sucio.connect(compM);
+    this.envioMotor = ctx.createGain(); this.envioMotor.gain.value = 1;
+    compM.connect(this.maestro); compM.connect(this.envioMotor); this.envioMotor.connect(this.envioEco);
+    this.perfilM = { graves, medios, agudos, cuerpo, escape, aire, corteG, seco, sucio, compM };
+    this.camPerfil = null;
 
     this.motor = new VozMotor(ctx, this.busMotor, this.ruido, true);
     this.rivales = [];
@@ -312,6 +337,7 @@ export class Sonido {
       this.muestras = true;
     } catch (e) { console.warn('motor grabado no disponible', e); }
     try { this.bufChoque = await this._buffer('choque.mp3'); } catch { /* sintetizado */ }
+    try { [this.bufRadioIni, this.bufRadioFin] = await Promise.all([this._buffer('radio_ini.mp3'), this._buffer('radio_fin.mp3')]); } catch { /* sintetizado */ }
     try {
       const [pub, ova] = await Promise.all([this._buffer('publico.mp3'), this._buffer('ovacion.mp3')]);
       this.bufOvacion = ova;
@@ -373,10 +399,20 @@ export class Sonido {
   }
 
   // chasquido y estática de la radio del equipo
+  /** Chasquido de la radio del equipo (grabación real): apertura antes de la voz y cierre al
+   *  terminar. Devuelve cuánto dura (ms) para que la voz empiece justo después. */
   radio(fin = false) {
-    if (!this.listo) return;
+    if (!this.listo) return 0;
+    const buf = fin ? this.bufRadioFin : this.bufRadioIni;
+    if (buf) {
+      const s = this.ctx.createBufferSource(); s.buffer = buf;
+      const g = this.ctx.createGain(); g.gain.value = 0.55;
+      s.connect(g); g.connect(this.maestro); s.start();
+      return buf.duration * 1000;
+    }
     this._rafaga(fin ? 0.09 : 0.14, 2400, 'bandpass', 0.18);
     this.pitido(fin ? 1250 : 1650, 0.06, 0.06);
+    return 180;
   }
 
   ponerAmbiente(on) { if (this.ambiente) this.ambiente.gain.setTargetAtTime(on ? 1 : 0, this.ctx.currentTime, 0.2); }
@@ -521,7 +557,20 @@ export class Sonido {
     const aBordo = !!entorno.aBordo;
     // a bordo se oye más la admisión y la mecánica; desde fuera, el escape
     const corte = car.cambioT > 0;
-    this.motor.ajustar(car.rpm, carga, aBordo ? 0.62 : 0.55, t, 1, aBordo ? 0.25 : 1, corte);
+    // perfil según la cámara; de lejos además cuenta la distancia y el efecto Doppler
+    const perfil = entorno.perfil || (aBordo ? 'cabina' : 'atras');
+    let vol = aBordo ? 0.62 : 0.6, tono = 1, brillo = aBordo ? 0.25 : 1, dist = 0;
+    if (perfil === 'lejos') {
+      const dx = car.x - cam.position.x, dz = car.z - cam.position.z;
+      dist = Math.max(1, Math.hypot(dx, dz, car.y - cam.position.y));
+      const vc = this._velCam(cam, dt);
+      const vRad = ((Math.cos(car.psi) * v - vc.x) * dx + (Math.sin(car.psi) * v - vc.z) * dz) / dist;
+      tono = clamp(343 / (343 + clamp(vRad, -150, 150)), 0.6, 1.7);
+      vol = clamp(14 / dist, 0.03, 0.75);
+      brillo = clamp(1.2 - dist / 300, 0.35, 1);
+    }
+    this._aplicarPerfil(perfil, dist, t);
+    this.motor.ajustar(car.rpm, carga, vol, t, tono, brillo, corte);
     // turbo: la presión sube con carga y vueltas; al levantar, soplido de la válvula
     const pObj = carga * clamp((car.rpm - 6000) / 6000, 0, 1);
     if (this.presion > 0.5 && pObj < 0.2 && !this.muestras) {
@@ -538,9 +587,21 @@ export class Sonido {
     // petardeos al levantar el pie a altas vueltas (el worklet ya los hace solo)
     if ((this.muestras || !this.worklet) && this.acelPrevio > 0.6 && acel < 0.15 && car.rpm > 9000) {
       const n = 2 + Math.floor(Math.random() * 4);
-      for (let k = 0; k < n; k++) this._rafaga(0.04 + Math.random() * 0.05, 600 + Math.random() * 900, 'bandpass', 0.25 + Math.random() * 0.3, k * (0.05 + Math.random() * 0.08));
+      // cada petardeo: golpe grave del escape y chasquido seco encima
+      let dl = 0;
+      for (let k = 0; k < n; k++) {
+        dl += 0.04 + Math.random() * 0.09;
+        this._rafaga(0.05 + Math.random() * 0.05, 180 + Math.random() * 160, 'lowpass', 0.5 + Math.random() * 0.3, dl);
+        this._rafaga(0.018 + Math.random() * 0.02, 1400 + Math.random() * 1800, 'bandpass', 0.35 + Math.random() * 0.3, dl);
+      }
+      this.petardeo = performance.now();
     }
     this.acelPrevio = acel;
+    // limitador de boxes: el pitido del volante mientras está puesto
+    if (car.limitadorPit && v > 1) {
+      this._tLim = (this._tLim || 0) + dt;
+      if (this._tLim > 0.55) { this._tLim = 0; this.pitido(2100, 0.05, aBordo ? 0.05 : 0.025); }
+    } else this._tLim = 0.5;
     // neumáticos
     let chir = 0, bloq = 0, tierra = 0, bord = 0;
     for (const w of car.ruedas) {
@@ -570,6 +631,25 @@ export class Sonido {
     });
   }
 
+  /** Lleva la cadena del motor al perfil de la cámara (con transición suave al cambiar). */
+  _aplicarPerfil(nombre, dist, t) {
+    const P = PERFILES_MOTOR[nombre] || PERFILES_MOTOR.atras, m = this.perfilM;
+    if (!m) return;
+    const cambio = nombre !== this.camPerfil;
+    this.camPerfil = nombre;
+    const tc = cambio ? 0.12 : 0.25;
+    // de lejos el aire se come los agudos y los graves se pierden más cuanto más lejos
+    const aire = nombre === 'lejos' ? clamp(P.aire - dist * 18, 2200, P.aire) : P.aire;
+    const pon = (param, v) => param.setTargetAtTime(v, t, tc);
+    pon(m.graves.gain, P.graves - (nombre === 'lejos' ? Math.min(6, dist / 40) : 0));
+    pon(m.medios.gain, P.medios); pon(m.agudos.gain, P.agudos);
+    pon(m.cuerpo.gain, P.cuerpo); pon(m.escape.gain, P.escape);
+    pon(m.aire.frequency, aire); pon(m.corteG.frequency, P.corteG);
+    pon(m.seco.gain, P.seco); pon(m.sucio.gain, P.sucio);
+    pon(m.compM.threshold, P.umbral); pon(m.compM.ratio, P.ratio);
+    pon(this.envioMotor.gain, P.eco * (nombre === 'lejos' ? clamp(dist / 80, 0.6, 2.5) : 1));
+  }
+
   /**
    * Repetición: el coche seguido y los tres más cercanos a la cámara suenan donde están.
    * velocidad = velocidad de reproducción (cámara lenta: el sonido se vuelve más grave).
@@ -592,6 +672,7 @@ export class Sonido {
     const dx = c.x - cam.position.x, dz = c.z - cam.position.z;
     const vRad = ((Math.cos(c.psi) * c.velocidad - vCam.x) * dx + (Math.sin(c.psi) * c.velocidad - vCam.z) * dz) / dist;
     const doppler = aBordo ? 1 : clamp(343 / (343 + clamp(vRad, -150, 150)), 0.6, 1.7);
+    this._aplicarPerfil(aBordo ? 'cabina' : dist > 25 ? 'lejos' : 'atras', dist, t);
     this.motor.ajustar(c.rpm, clamp(c.mandos.acelerador, 0, 1), vol, t, tono * doppler, aBordo ? 0.25 : clamp(1 - dist / 250, 0.3, 1), 0);
     this.viento.g.gain.setTargetAtTime(aBordo ? Math.min(0.3, (c.velocidad / 95) ** 2 * 0.3) : 0, t, 0.1);
     this.raspado.g.gain.setTargetAtTime(clamp(c.fondoToca || 0, 0, 1) * clamp(9 / dist, 0, 1) * 0.2, t, 0.02);

@@ -195,7 +195,10 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
         choque.ang = angPiloto;
       }
       choque.golpePrevio = imp > 2 ? Math.max(choque.golpePrevio, imp) : 0;
-      let angVol = angPiloto;
+      // el volante tiembla en las manos al pisar pianos y baches (el piloto lo sujeta)
+      const vib = (car.enBordillo ? Math.min(1, (car.velocidad || 0) / 35) : 0) + Math.min(0.6, car.vibracion || 0);
+      const tv = performance.now() / 1000;
+      let angVol = angPiloto + (vib > 0.02 ? (Math.sin(tv * 57) * 0.6 + Math.sin(tv * 83 + 1) * 0.4) * 0.045 * vib : 0);
       if (dt > 0) choque.t += dt;
       const enChoque = choque.t < choque.dur;
       // las manos fuera del volante: rápido al soltarlo, más despacio al volver a cogerlo

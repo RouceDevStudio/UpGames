@@ -73,7 +73,9 @@ export class Radio {
     if (!this.cola.length) return;
     const m = this.cola.shift();
     this.hablando = true;
-    if (m.tipo === 'megafonia') this.sonido?.campana(); else this.sonido?.radio(false);
+    // la radio del equipo se abre con su chasquido y pitidos, y la voz entra justo al terminar
+    let abre = 0;
+    if (m.tipo === 'megafonia') this.sonido?.campana(); else abre = this.sonido?.radio(false) || 0;
     this.alSubtitulo?.(m, true);
     let cerrado = false;
     const fin = this._fin = () => {
@@ -84,7 +86,7 @@ export class Radio {
       this.alSubtitulo?.(m, false);
       setTimeout(() => this._siguiente(), 300);
     };
-    const espera = m.tipo === 'megafonia' ? 900 : 180;
+    const espera = m.tipo === 'megafonia' ? 900 : Math.max(180, abre - 40);
     // tiempo máximo por si la voz no avisa del final
     setTimeout(fin, espera + 2500 + m.texto.length * 95);
     if (!this.voz) { setTimeout(fin, 1200 + m.texto.length * 55); return; }

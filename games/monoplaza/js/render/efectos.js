@@ -243,6 +243,17 @@ export class Efectos {
             0.7 + this.agua, 0.22 + this.agua * 0.3, 0.7 + rnd() * 0.6, 3.2, l, l, l * 1.03);
         }
       }
+      // nube del efecto suelo: el difusor y el alerón trasero levantan una cortina de agua alta
+      // y ancha que se queda flotando detrás del coche (ciega al que va detrás)
+      if (this.agua > 0.08 && !lejos && v > 22 && rnd() < Math.min(1, this.agua * 1.8) * (v / 70) * (this.calidad >= 2 ? 1.2 : 0.6)) {
+        const n = this.calidad >= 2 ? 2 : 1;
+        for (let k = 0; k < n; k++) {
+          const lat = (rnd() - 0.5) * 1.6, l = 0.8 + rnd() * 0.12;
+          this.humo.emitir(car.x - cos * (2.6 + rnd() * 1.5) - sin * lat, car.y + 0.4 + rnd() * 0.6, car.z - sin * (2.6 + rnd() * 1.5) + cos * lat,
+            cos * v * (0.35 + rnd() * 0.2) + (rnd() - 0.5) * 2.5, 1.2 + rnd() * 1.8, sin * v * (0.35 + rnd() * 0.2) + (rnd() - 0.5) * 2.5,
+            1.6 + this.agua * 2.2, 0.16 + this.agua * 0.22, 1.4 + rnd() * 1.2, 4.5 + this.agua * 3, l, l, l * 1.04);
+        }
+      }
       // humo del motor roto (sale de la parte trasera)
       if (car.humoMotor > 0 && !lejos && rnd() < 0.8) {
         const k = 0.35 + rnd() * 0.25;
