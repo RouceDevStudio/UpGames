@@ -48,9 +48,28 @@ const CUELLO = [[0, 1.522, -0.01, 0.070, 0.066], [0, 1.578, 0.0, 0.062, 0.060]];
 
 export const ESQUELETO = { PIERNA, PIE, BRAZO_IZQ, MANO_IZQ, BRAZO_DER, MANO_DER, CUELLO, TORSO };
 
+// Pose de la plantilla: mano izquierda en la cadera y el volante en la derecha.
+export const POSE_JARRA = { pierna: PIERNA, pie: PIE, brazos: [[1, BRAZO_IZQ, MANO_IZQ, [0, 0, -1]], [-1, BRAZO_DER, MANO_DER, [0, 0, 1]]], cuello: CUELLO };
+
+// Pose de reposo para los personajes de APEX GP: piernas rectas y brazos colgando, con las
+// articulaciones donde las tiene el esqueleto de los personajes del juego (hombro a 1,48 m, codo a
+// 1,19 m, muñeca a 0,94 m, cadera a 0,93 m, rodilla a 0,49 m), para poder animarlo.
+const brazoReposo = (s) => [
+  [0.238 * s, 1.40, 0.0, 0.060, 0.064], [0.242 * s, 1.30, 0.0, 0.056, 0.058], [0.245 * s, 1.215, 0.003, 0.050, 0.052],
+  [0.246 * s, 1.19, 0.004, 0.047, 0.049], [0.246 * s, 1.07, 0.006, 0.045, 0.046], [0.245 * s, 0.99, 0.008, 0.040, 0.042],
+  [0.244 * s, 0.95, 0.010, 0.034, 0.031],
+];
+const manoReposo = (s) => [[0.243 * s, 0.90, 0.012, 0.022, 0.044], [0.24 * s, 0.855, 0.014, 0.019, 0.041], [0.237 * s, 0.81, 0.016, 0.016, 0.037]];
+const piernaReposo = (s) => [
+  [0.095 * s, 0.80, 0.0, 0.085, 0.090], [0.096 * s, 0.66, 0.004, 0.077, 0.082], [0.097 * s, 0.52, 0.012, 0.060, 0.064],
+  [0.097 * s, 0.46, 0.008, 0.056, 0.060], [0.097 * s, 0.34, -0.006, 0.059, 0.068], [0.097 * s, 0.22, -0.02, 0.049, 0.053],
+  [0.097 * s, 0.12, -0.03, 0.044, 0.047],
+];
+export const POSE_REPOSO = { pierna: piernaReposo, pie: PIE, brazos: [[1, brazoReposo(1), manoReposo(1), [0, 0, 1]], [-1, brazoReposo(-1), manoReposo(-1), [0, 0, 1]]], cuello: CUELLO };
+
 export const COLORES = { traje: 0xd8141f, franja: 0xf2f2f2, guante: 0x17191d, bota: 0x17191d, suela: 0xe8e8e8, cuello: 0x17191d };
 
-export function cuerpoPiloto({ niveles = 2, detalles = true } = {}) {
+export function cuerpoPiloto({ niveles = 2, detalles = true, pose = POSE_JARRA } = {}) {
   // 1) caja 4 × 7 × 2 y anillos
   const caja = new THREE.BoxGeometry(1, 1, 1, 4, TORSO.length - 1, 2);
   let m = MallaHE.desdeTriangulos(caja.attributes.position.array, caja.index.array, { uvs: caja.attributes.uv.array });
@@ -63,15 +82,15 @@ export function cuerpoPiloto({ niveles = 2, detalles = true } = {}) {
   const marcar = (desde, hasta, caps, tipo) => { for (let f = desde; f < hasta; f++) parte.set(f, tipo); for (const f of caps) parte.set(f, tipo); };
   // 2) piernas y botas desde la base
   for (const s of [1, -1]) {
-    const pierna = PIERNA(s);
+    const pierna = pose.pierna(s);
     let r = extruirRecorrido(m, carasDonde(m, (c, n) => n[1] < -0.9 && c[0] * s > 0), pierna);
     const f0 = r.malla.nF - 8; // laterales del último tramo de la pierna: la caña de la bota
-    r = extruirRecorrido(r.malla, r.caras, PIE(s, pierna[pierna.length - 1][0]));
+    r = extruirRecorrido(r.malla, r.caras, pose.pie(s, pierna[pierna.length - 1][0]));
     m = r.malla;
     marcar(f0, m.nF, r.caras, 'bota');
   }
   // brazos desde el costado (dos filas de arriba), manos y pulgares
-  for (const [s, brazo, mano, dedoGordo] of [[1, BRAZO_IZQ, MANO_IZQ, [0, 0, -1]], [-1, BRAZO_DER, MANO_DER, [0, 0, 1]]]) {
+  for (const [s, brazo, mano, dedoGordo] of pose.brazos) {
     let r = extruirRecorrido(m, carasDonde(m, (c, n) => n[0] * s > 0.6 && c[1] > TORSO[5][0] - 0.01), brazo);
     const f0 = r.malla.nF - 8; // laterales del último tramo del brazo: el puño del guante
     r = extruirRecorrido(r.malla, r.caras, mano.slice(0, 1));
@@ -93,7 +112,7 @@ export function cuerpoPiloto({ niveles = 2, detalles = true } = {}) {
   }
   // cuello desde arriba
   const fc = m.nF;
-  const rc = extruirRecorrido(m, carasDonde(m, (c, n) => n[1] > 0.9 && Math.abs(c[0]) < TORSO[7][1] * JAULA * 0.55), CUELLO);
+  const rc = extruirRecorrido(m, carasDonde(m, (c, n) => n[1] > 0.9 && Math.abs(c[0]) < TORSO[7][1] * JAULA * 0.55), pose.cuello);
   m = rc.malla;
   marcar(fc + 4, m.nF, rc.caras, 'cuello'); // el primer anillo del cuello sigue siendo mono
   // pintura de la jaula (por cara) y subdivisión: los colores se interpolan con la malla
@@ -103,7 +122,7 @@ export function cuerpoPiloto({ niveles = 2, detalles = true } = {}) {
   m = moverVertices(m, [...Array(m.nV).keys()].filter((v) => m.pos[v * 3 + 1] < 0.03), ([x, y, z]) => [x, Math.max(0, y - 0.012), z]).malla;
   // 4) franjas y suela, y escultura
   pintarDetalles(m);
-  if (detalles) esculpir(m);
+  if (detalles) esculpir(m, pose);
   return m;
 }
 
@@ -190,7 +209,8 @@ function normalesVertice(m) {
 
 // ---------- escultura con los pinceles de Studio ----------
 
-function esculpir(m) {
+function esculpir(m, pose) {
+  const PIERNA = pose.pierna, brazos = pose.brazos.map((b) => b[1]);
   const pc = new Pincel({ camara: new THREE.PerspectiveCamera(), lienzo: null, historial: null, escena: null });
   pc.modo = 'esculpir';
   pc.prepararMalla(m);
@@ -234,12 +254,12 @@ function esculpir(m) {
     }
     trazo('inflar', [[0.04 * s, 0.86, 0.09], [0.13 * s, 0.82, 0.07]], { r: 0.022, f: 1, restar: true }); // ingle
   }
-  for (const brazo of [BRAZO_IZQ, BRAZO_DER]) { // codo por dentro
+  for (const brazo of brazos) { // codo por dentro
     const [x, y, z] = brazo[3];
     for (let i = 0; i < 2; i++) trazo('inflar', [[x - 0.025, y + 0.02 - i * 0.02, z + 0.04], [x + 0.025, y + 0.01 - i * 0.02, z + 0.04]], { r: 0.018, f: 1, restar: true });
   }
   for (let i = 0; i < 3; i++) trazo('inflar', [[-0.12, 1.06 + i * 0.03, 0.105], [0.12, 1.07 + i * 0.03, 0.11]], { r: 0.018, f: 0.8, restar: true }); // vientre
   // puños del guante y caña de la bota (un poco abultados)
-  for (const brazo of [BRAZO_IZQ, BRAZO_DER]) { const [x, y, z] = brazo[brazo.length - 2]; trazo('inflar', [[x, y, z]], { r: 0.05, f: 0.6 }); }
+  for (const brazo of brazos) { const [x, y, z] = brazo[brazo.length - 2]; trazo('inflar', [[x, y, z]], { r: 0.05, f: 0.6 }); }
   for (const s of [1, -1]) { const [x, , z] = PIERNA(s)[6]; trazo('inflar', [[x, 0.17, z]], { r: 0.05, f: 0.5 }); }
 }
