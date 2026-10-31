@@ -24,10 +24,6 @@ import { Barreras } from './render/barreras.js';
 import { Comisarios, CapaCamara, CocheSeguridad, Fuegos, Gruas } from './render/vida.js';
 import { Persona } from './render/personas.js';
 import { cargarCuerpo } from './render/cuerpoStudio.js';
-import { cargarCocheGuardado, guardarCoche, quitarCoche, cocheGLB, aplicarCoche } from './render/cocheGLB.js';
-// usar el coche propio (GLB): preferencia de este dispositivo (el servidor no la guarda)
-const usarGLB = () => { try { return localStorage.getItem('apexgp.usarGLB') === '1'; } catch { return false; } };
-const ponerUsarGLB = (v) => { try { localStorage.setItem('apexgp.usarGLB', v ? '1' : '0'); } catch { /* sin almacenamiento */ } };
 import { construirEscenario, ponerHora, ponerAgua, tv } from './render/escenario.js';
 import { crearModelo, dibujarPlantilla } from './render/cocheModelo.js';
 import { GestorBoxes, Escombros } from './render/equipo.js';
@@ -166,7 +162,6 @@ async function iniciar() {
   crearRenderer();
   await cargarImagenLibrea();
   await cargarCuerpo(); // cuerpo de los personajes hecho en UpGames Studio (si falla, las piezas de siempre)
-  await cargarCocheGuardado(); // coche propio en GLB (Garaje → Monoplaza)
   await cargarCircuito(circuitoId);
   mostrar('menu');
   requestAnimationFrame(bucle);
@@ -639,7 +634,6 @@ function crearModelos() {
     const eq = equipadoDe(p, k);
     const imagen = p.jugador ? (eq.propia ? imagenLibrea : null) : (p.idRed && imagenesRed.get(p.idRed)) || null;
     const m = crearModelo({ equipo: p.equipo, equipado: eq, imagen, compuesto: p.coche.reglaje.compuesto, calidad, cabina: p.jugador });
-    if (p.jugador && usarGLB()) aplicarCoche(m);
     m.luzTrasera = () => escenario?.hora === 'noche' || (sesion?.clima?.lluvia || 0) > 0.05;
     m.aguaPista = () => sesion?.clima?.agua || 0;
     // piezas que se desprenden en los choques
@@ -2440,19 +2434,6 @@ function pintarGaraje() {
   const eqSel = equipado.equipo || 0;
   $('#tabMonoplaza').innerHTML = '<p class="nota" style="text-align:left">Elige con qué monoplaza corres. Todos rinden igual; cambia la librea, el garaje y tu compañero de equipo. Con <b>UpGames Racing</b> llevas tu propio diseño.</p><div class="rejilla">' +
     EQUIPOS.map((eq, k) => `<div class="ficha coche ${eqSel === k ? 'sel' : ''}" data-equipo="${k}"><i class="muestra" style="background:linear-gradient(135deg, ${eq.base} 0 55%, ${eq.acento} 55% 75%, ${eq.tercero || '#fff'} 75%)"></i>${eq.nombre}<span class="precio libre">${eqSel === k ? 'TU COCHE' : k === 0 ? 'TU DISEÑO' : 'GRATIS'}</span></div>`).join('') + '</div>';
-  const cg = cocheGLB();
-  $('#tabMonoplaza').insertAdjacentHTML('beforeend', `<h3>Coche de UpGames Studio</h3>
-    <p class="nota" style="text-align:left">Modela tu coche en <b>upgames.games/studio</b> (plantilla «Monoplaza F1»), expórtalo en GLB y cárgalo aquí. Las ruedas se reconocen por su nombre (rueda_del_izq…); las físicas no cambian.</p>
-    <div class="fila"><label class="btn mini" style="text-align:center">${cg ? 'Cambiar GLB' : 'Cargar GLB'}<input type="file" accept=".glb,model/gltf-binary" id="gGLB" hidden></label>
-    ${cg ? `<button class="btn mini ${usarGLB() ? 'primario' : ''}" id="gUsarGLB">${usarGLB() ? 'Usando «' + cg.nombre + '»' : 'Usar «' + cg.nombre + '»'}</button><button class="btn mini" id="gQuitarGLB">Quitar</button>` : ''}</div>
-    ${cg ? `<p class="nota" style="text-align:left">${cg.ruedas === 4 ? 'Ruedas reconocidas: 4.' : `Ruedas reconocidas: ${cg.ruedas} de 4 (las que faltan son las del juego).`}</p>` : ''}`);
-  $('#gGLB').onchange = async (e) => {
-    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-    try { const r = await guardarCoche(f); ponerUsarGLB(true); aplicarEquipado(); avisoG(`Coche «${r.nombre}» cargado (${r.ruedas} de 4 ruedas reconocidas). Se verá en la próxima carrera.`); }
-    catch (err) { console.error(err); avisoG('No se pudo cargar el GLB: ' + err.message); }
-  };
-  if ($('#gUsarGLB')) $('#gUsarGLB').onclick = () => { ponerUsarGLB(!usarGLB()); aplicarEquipado(); };
-  if ($('#gQuitarGLB')) $('#gQuitarGLB').onclick = async () => { await quitarCoche(); ponerUsarGLB(false); aplicarEquipado(); avisoG('Coche propio quitado.'); };
   document.querySelectorAll('#garaje [data-equipo]').forEach(b => b.onclick = () => { equipado.equipo = +b.dataset.equipo; aplicarEquipado(); });
   $('#saldoUC').textContent = cuenta.conectado() ? `${perfilApex.upcoins ?? '…'} UpCoins` : 'Sin sesión';
   // mejoras de rendimiento
