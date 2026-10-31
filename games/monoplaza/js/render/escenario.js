@@ -214,8 +214,8 @@ export function construirEscenario(scene, renderer, c, calidad) {
   const matHierba = new THREE.MeshStandardMaterial({ map: texH, roughness: 0.95, color: 0xdde8d0 });
   const texT = TX.texturaTerreno(256); texT.anisotropy = anis;
   const matTerreno = new THREE.MeshStandardMaterial({ map: texT, roughness: 1, color: 0xd8e0cc });
-  const texG = TX.texturaGrava(); texG.anisotropy = anis;
-  const matGrava = new THREE.MeshStandardMaterial({ map: texG, roughness: 1 });
+  const texG = TX.texturaGrava(calidad >= 2 ? 512 : 256); texG.anisotropy = anis;
+  const matGrava = new THREE.MeshStandardMaterial({ map: texG, normalMap: calidad >= 1 ? texG.userData.normal : null, normalScale: new THREE.Vector2(1.2, 1.2), roughness: 0.95 });
   const matBordillo = new THREE.MeshStandardMaterial({ map: TX.texturaBordillo(), roughness: 0.55 });
   const matLinea = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   const texGoma = TX.texturaGoma();
@@ -318,6 +318,7 @@ export function construirEscenario(scene, renderer, c, calidad) {
   }
 
   // --- Escapatorias: franja asfaltada, hierba y grava hasta el muro ----------
+  const mechones = [];
   for (const sg of [-1, 1]) {
     const lado = sg > 0 ? 1 : 0;
     const ini = (i) => sg * (hw(i) + (c.bordillo[i] ? 1.3 : 0));
@@ -335,6 +336,8 @@ export function construirEscenario(scene, renderer, c, calidad) {
     hierba.receiveShadow = true; scene.add(hierba);
     const grava = new THREE.Mesh(cinta(c, perfilExt, { filtro: (i) => c.grava[lado][i] && noPit(i), uDe: (j, d) => d / 5, escalaV: 5, yBase: 0.03 }), matGrava);
     grava.receiveShadow = true; scene.add(grava);
+    // matojos de hierba 3D en la escapatoria: rompen el plano liso del césped de cerca
+    if (calidad >= 1 && !urbano) mechones.push({ sg, lado, noPit });
     // franja de hierba más allá del muro (une con el terreno)
     const fuera = new THREE.Mesh(cinta(c, (i) => {
       const w = c.muro[lado][i];
@@ -376,6 +379,39 @@ export function construirEscenario(scene, renderer, c, calidad) {
       scene.add(new THREE.Mesh(g, matV));
       registrarDeformable(res, g, lado, 1.3);
     }
+  }
+
+  // matojos: dos planos cruzados con recorte alfa, todos en una sola malla instanciada
+  if (mechones.length) {
+    const tope = calidad >= 2 ? 16000 : 6000;
+    const g1 = new THREE.PlaneGeometry(0.55, 0.32); g1.translate(0, 0.16, 0);
+    const g2 = g1.clone().rotateY(Math.PI / 2);
+    const geo = mergeGeometries([g1, g2]);
+    const mat = new THREE.MeshStandardMaterial({ map: TX.texturaMechon(), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.9, color: 0xc8d8b8 });
+    const malla = new THREE.InstancedMesh(geo, mat, tope);
+    const rnd = TX.aleatorio(77), M = new THREE.Matrix4(), Q = new THREE.Quaternion(), P = new THREE.Vector3(), S = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
+    const porMuestra = tope / (c.n * mechones.length);
+    let k = 0;
+    for (const { sg, lado, noPit } of mechones) for (let i = 0; i < c.n && k < tope; i++) {
+      if (c.grava[lado][i] || !noPit(i)) continue;
+      const w = c.muro[lado][i], d0 = hw(i) + 2.9, d1 = Math.min(w - 0.4, hw(i) + 13);
+      if (d1 <= d0) continue;
+      let cuantos = Math.floor(porMuestra + rnd());
+      while (cuantos-- > 0 && k < tope) {
+        const d = d0 + (d1 - d0) * rnd() ** 1.6, a = rnd() * c.paso;         // más cerca del borde
+        const nx = -c.tz[i], nz = c.tx[i];
+        P.set(c.x[i] + c.tx[i] * a + nx * sg * d, c.y[i] + c.caida(i, sg * d) - 0.02, c.z[i] + c.tz[i] * a + nz * sg * d);
+        Q.setFromAxisAngle(Y, rnd() * Math.PI);
+        const e = 0.6 + rnd() * 0.9; S.set(e, e * (0.7 + rnd() * 0.6), e);
+        malla.setMatrixAt(k, M.compose(P, Q, S));
+        malla.setColorAt(k, col.setRGB(0.8 + rnd() * 0.3, 0.85 + rnd() * 0.25, 0.7 + rnd() * 0.2));
+        k++;
+      }
+    }
+    malla.count = k; malla.receiveShadow = true;
+    malla.instanceMatrix.needsUpdate = true; if (malla.instanceColor) malla.instanceColor.needsUpdate = true;
+    malla.computeBoundingSphere();
+    scene.add(malla);
   }
 
   // --- Línea de salida, parrilla y pórtico -------------------------------

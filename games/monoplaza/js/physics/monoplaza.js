@@ -204,8 +204,12 @@ export class Monoplaza {
   }
 
   // En boxes: neumáticos nuevos, alerones nuevos (la suspensión doblada no se arregla en una parada)
-  repararEnBoxes(compuesto) {
+  repararEnBoxes(compuesto, { susp = false, alaDel = 0 } = {}) {
     this.danoAleron = 0;
+    // suspensión nueva en las esquinas que aún tienen rueda (brazos, bieletas y convergencia)
+    if (susp) this.dano.susp = this.dano.susp.map((d, k) => this.dano.suelta[k] ? d : 0);
+    // ajuste del flap del alerón delantero con la llave, como en las paradas reales
+    if (alaDel) this.reglaje.aleronDel = Math.max(1, Math.min(11, this.reglaje.aleronDel + alaDel));
     // morro nuevo: desaparecen sus golpes (los del resto de la carrocería siguen ahí)
     if (this.dano.zona) this.dano.zona.del = 0;
     if (this.dano.abolladuras) this.dano.abolladuras = this.dano.abolladuras.filter(a => a.x < 1.2);

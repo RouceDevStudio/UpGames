@@ -153,9 +153,32 @@ class Parada {
   }
 
   /** El coche ha llegado: empieza el trabajo (duración en s, morro: cambiar el alerón). */
-  empezar(car, modelo, duracion, morro) {
+  empezar(car, modelo, duracion, morro, trabajo = {}) {
     this.car = car; this.modelo = modelo; this.D = duracion; this.morro = morro;
+    this.trabajo = trabajo || {}; this.extra = this.trabajo.extra || 0;
     this.estado = 'trabajo'; this.t = 0;
+    // morro: copia del alerón dañado (sale en brazos) y otra intacta (entra), con el del coche oculto
+    if (morro && modelo?.alaDel) {
+      const a = modelo.alaDel;
+      modelo.raiz.updateMatrixWorld(true); this.grupo.updateMatrixWorld(true);
+      const pos = a.getWorldPosition(new THREE.Vector3()); this.grupo.worldToLocal(pos);
+      this.alaVieja = a.clone(); this.alaVieja.position.copy(pos); this.hayVieja = a.visible; this.alaVieja.visible = a.visible;   // si se desprendió, no hay nada que quitar
+      this.alaNueva = a.clone(); this.alaNueva.rotation.set(0, 0, 0); this.alaNueva.visible = true;
+      this.alaMontada = pos.clone(); this.alaMontada.y += (0.2 - a.position.y);      // altura sin daño
+      this.alaNueva.position.set(A + 1.6, 0.85, 3.2);
+      this.grupo.add(this.alaVieja, this.alaNueva);
+      this._alaCoche = a;
+    }
+    // suspensión: una pieza de recambio (brazo de carbono) por cada esquina rota
+    if (this.trabajo.susp) {
+      const e = equipamiento();
+      this.brazos = this.trabajo.susp.map((rota, k) => {
+        if (!rota) return null;
+        const b = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.035, 0.05), e.negro);
+        const r = this.ruedas[k]; b.position.set(r.x + 0.4, 0.62, r.lado * (r.via + 0.62)); b.visible = false;
+        this.grupo.add(b); return b;
+      });
+    }
     this._llegar(0, true);
     this.ponerEn({ x: car.x, y: car.y, z: car.z, psi: car.psi });
     this.jefe.poner('espera', 0.3);
@@ -182,7 +205,7 @@ class Parada {
     // terminado: el equipo recoge y vuelve al garaje andando
     this.tFin += dt;
     // reacción a la parada: rápida (< 2,6 s) se celebra con saltos; lenta (> 4 s), manos a la cabeza
-    const rapida = this.D < 2.6, lenta = this.D > 4 && !this.morro;
+    const Dn = this.D - (this.extra || 0), rapida = Dn < 2.6, lenta = Dn > 4;
     const tReac = rapida || lenta ? 1.6 : 0;
     for (const p of e) {
       if ((rapida || lenta) && this.tFin < tReac && !p.reacciona) {
@@ -195,7 +218,10 @@ class Parada {
       if (this.tFin > tReac + 0.25 + (p.base.x + 4) * 0.04 && !p.vuelve) { p.vuelve = true; p.poner(p.rolParada === 'pone' || p.rolParada === 'quita' ? 'ruedaAlta' : 'de_pie', 0.3); p.andar = 1.6; p.raiz.rotation.y = 0; }
       if (p.vuelve) { p.raiz.position.z += dt * 1.6; p.raiz.rotation.y = -Math.PI / 2; }
     }
-    if (this.tFin > 5 + (this.D < 2.6 || this.D > 4 ? 1.6 : 0)) { this.scene.remove(this.grupo); return false; }
+    // al bajar de los gatos el coche rebota sobre los neumáticos
+    if (this.modelo && this.tFin < 0.6) this.modelo.elevar = -0.018 * Math.exp(-this.tFin * 7) * Math.sin(this.tFin * 32);
+    else if (this.modelo && this.modelo.elevar && this.tFin < 0.7) this.modelo.elevar = 0;
+    if (this.tFin > 5 + (rapida || lenta ? 1.6 : 0)) { this.scene.remove(this.grupo); return false; }
     return true;
   }
 
@@ -216,10 +242,12 @@ class Parada {
   }
 
   _trabajo(dt) {
-    const t = this.t, D = this.D, md = this.modelo;
-    // tiempos de una parada de ~2,2 s; si la parada es más lenta (o hay morro) se estiran
-    const k = Math.max(1, (D - 0.35) / 1.85);
+    const t = this.t, D = this.D, md = this.modelo, tr = this.trabajo || {};
+    // tiempos de una parada de ~2,2 s; las ruedas van a su ritmo aunque haya morro o suspensión
+    // (el trabajo extra se hace con el coche en los gatos y las ruedas se montan al final)
+    const k = Math.max(1, (D - this.extra - 0.35) / 1.85);
     const T = (x) => x * k;
+    const tm = tr.susp ? D - 0.9 * k - 0.15 : T(0.62);       // empiezan a montar las nuevas
     // gatos: suben al principio y bajan al final
     const sube = suave(entre(t, 0, 0.28)), baja = 1 - suave(entre(t, D - 0.32, D - 0.08));
     const elev = 0.07 * sube * baja;
@@ -227,37 +255,82 @@ class Parada {
     this.gD.poner(t < D - 0.3 ? 'gato' : 'preparado', 0.1); this.gT.poner(t < D - 0.3 ? 'gato' : 'preparado', 0.1);
     this.gatoD.rotation.z = -0.12 * sube * baja; this.gatoT.rotation.z = 0.12 * sube * baja;
     if (t < 0.05 && !this._sonoGato) { this._sonoGato = true; this.alEvento?.('gato', this.grupo.position); }
-    for (const r of this.ruedas) {
+    this.ruedas.forEach((r, i) => {
       // pistola: afloja, se aparta mientras cambian la rueda, aprieta y levanta el brazo
-      const afloja = t > T(0.1) && t < T(0.42), aprieta = t > T(1.05) && t < T(1.45);
+      const afloja = t > T(0.1) && t < T(0.42), aprieta = t > tm + 0.43 * k && t < tm + 0.83 * k;
       r.pis.extra.hD = (afloja || aprieta) ? [0, 0, Math.sin(t * 90) * 0.04] : [0, 0, 0];
+      r.pis.extra.tronco = (afloja || aprieta) ? [0, 0, Math.sin(t * 70) * 0.02] : [0, 0, 0];
       if ((afloja && !r.s1) || (aprieta && !r.s2)) { if (afloja) r.s1 = true; else r.s2 = true; this.alEvento?.('pistola', this.grupo.position); }
-      if (t > T(1.48)) r.pis.extra.hI = [0, 0, 1.9];      // ¡rueda lista! (brazo arriba)
-      // la vieja sale con el que la quita
+      r.pis.extra.hI = t > tm + 0.86 * k ? [0, 0, 1.9] : [0, 0, 0];      // ¡rueda lista! (brazo arriba)
+      // la vieja sale en arco con el que la quita y se deja en el suelo, tumbada
       const fuera = entre(t, T(0.42), T(0.78));
       r.vieja.visible = fuera > 0;
       if (fuera > 0) {
-        r.quita.poner('rueda', 0.08);
-        const ini = new THREE.Vector3(r.x, 0.36 + elev, r.lado * (r.via + 0.12)), fin = new THREE.Vector3(r.x - 0.75, 0.6, r.lado * (r.via + 1.25));
-        r.vieja.position.lerpVectors(ini, fin, suave(fuera));
+        r.quita.poner(fuera < 1 ? 'rueda' : 'preparado', 0.08);
+        const ini = new THREE.Vector3(r.x, 0.36 + elev, r.lado * (r.via + 0.12)), fin = new THREE.Vector3(r.x - 0.75, 0.36, r.lado * (r.via + 1.35));
+        const u = suave(fuera);
+        r.vieja.position.lerpVectors(ini, fin, u); r.vieja.position.y += Math.sin(Math.PI * u) * 0.28;
+        r.vieja.rotation.set(0, r.lado * 0.5 * u, r.lado * 0.15 * Math.sin(Math.PI * u));
+        if (fuera >= 1) { r.vieja.position.y = 0.17; r.vieja.rotation.set(Math.PI / 2, 0, 0); }   // en el suelo
         r.quita.raiz.position.copy(r.quita.base).add(new THREE.Vector3(-0.2 * fuera, 0, r.lado * 0.25 * fuera));
       }
-      if (md) md.ruedaOculta[RUEDAS.indexOf(RUEDAS.find(q => q[0] === r.x && q[1] === r.lado))] = t > T(0.42) && t < T(1.02);
-      // la nueva entra
-      const dentro = entre(t, T(0.62), T(1.02));
+      if (md) md.ruedaOculta[i] = t > T(0.42) && t < tm + 0.4 * k;
+      // suspensión: el que quitó la rueda trae el brazo nuevo, se arrodilla en el buje y lo atornilla
+      const brazo = this.brazos?.[i];
+      if (brazo) {
+        const llega = entre(t, T(0.8), T(0.8) + 0.9), monta = entre(t, T(0.8) + 0.9, tm - 0.3);
+        brazo.visible = llega > 0 && monta < 1;
+        if (llega > 0 && llega < 1) { r.quita.poner('rueda', 0.15); brazo.position.set(r.x - 0.5 + 0.5 * llega, 0.62, r.lado * (r.via + 1.1 - 0.5 * llega)); }
+        if (monta > 0 && monta < 1) {
+          r.quita.poner('pistola', 0.2);
+          r.quita.raiz.position.set(r.x - 0.1, 0, r.lado * (r.via + 0.55)); r.quita.raiz.rotation.y = r.lado > 0 ? Math.PI / 2 : -Math.PI / 2;
+          r.quita.extra.hD = [0, 0, Math.sin(t * 9) * 0.25];           // llave dinamométrica
+          r.quita.extra.hI = [0, 0, Math.sin(t * 7 + 1) * 0.12];
+          brazo.position.set(r.x, 0.3 + elev, r.lado * (r.via * 0.62)); brazo.rotation.set(0, Math.PI / 2, r.lado * 0.12);
+        }
+        if (monta >= 1 && !r.finSusp) { r.finSusp = true; r.quita.extra.hD = [0, 0, 0]; r.quita.extra.hI = [0, 0, 0]; r.quita.poner('preparado', 0.2); }
+      }
+      // la nueva entra (también en un pequeño arco, el mecánico la empuja hasta el buje)
+      const dentro = entre(t, tm, tm + 0.4 * k);
       if (dentro > 0) { r.pone.poner('preparado', 0.12); this._colocarUna(r, dentro, elev); }
-      r.prog = t > T(1.45) ? 1 : dentro * 0.8;
+      r.prog = t > tm + 0.83 * k ? 1 : dentro * 0.8;
       if (dentro >= 1) r.nueva.visible = false;          // ya es la rueda del coche
+    });
+    // morro: dos mecánicos lo desatornillan, se lo llevan y traen el nuevo
+    if (this.alaVieja) {
+      const fin = D - 1.4;
+      const suelta = entre(t, 0.4, 1.5), sale = entre(t, 1.5, 2.6), entra = entre(t, 2.8, fin - 1.0), aprieta = t > fin - 1.0 && t < fin;
+      if (this._alaCoche) this._alaCoche.visible = false;
+      if (md) md.ocultarAla = t < fin;
+      const v = this.alaVieja, n = this.alaNueva, m = this.alaMontada;
+      if (sale > 0) { const u = suave(sale); v.position.set(m.x + 0.4 + u * 1.2, m.y + Math.sin(Math.PI * Math.min(1, u * 1.4)) * 0.6 + u * 0.3, m.z + u * 3.2); v.visible = this.hayVieja && sale < 1; }
+      if (entra > 0) { const u = suave(entra); n.position.set(m.x + 1.6 * (1 - u), m.y + 0.65 * (1 - u) + Math.sin(Math.PI * u) * 0.2, m.z + 3.2 * (1 - u)); }
+      if (t >= fin) { n.visible = false; if (this._alaCoche) this._alaCoche.visible = true; if (md) md.ocultarAla = false; }
+      this.alero.forEach((p, j) => {
+        const lado = j ? 1 : -1;
+        const pieza = sale > 0 && sale < 1 ? v : entra > 0 && entra < 1 ? n : null;
+        if (pieza) { p.poner('rueda', 0.15); p.raiz.position.set(pieza.position.x + 0.1, 0, pieza.position.z + lado * 0.85); p.raiz.rotation.y = lado > 0 ? Math.PI / 2 : -Math.PI / 2; }
+        else if ((suelta > 0 && suelta < 1) || aprieta) { p.poner('pistola', 0.2); p.raiz.position.copy(p.base); p.raiz.rotation.y = p.rotBase; p.extra.hD = [0, 0, Math.sin(t * 40 + j) * 0.08]; }
+        else { p.poner('preparado', 0.2); p.extra.hD = [0, 0, 0]; }
+      });
+    } else if (tr.alaDel) {
+      // ajuste del flap: arrodillados en cada extremo del alerón, giran la llave unas vueltas
+      const ajusta = t > 0.35 && t < Math.min(D - 0.4, 0.35 + 1.4 * k);
+      for (const [j, p] of this.alero.entries()) {
+        p.poner(ajusta ? 'pistola' : 'preparado', 0.18);
+        p.extra.hD = ajusta ? [0, 0, Math.sin(t * 14 + j) * 0.3] : [0, 0, 0];
+      }
     }
-    // estabilizadores y alerón: si hay morro, cambian el alerón delantero entero
-    if (this.morro) for (const p of this.alero) p.poner(t > 0.4 && t < D - 1.5 ? 'rueda' : 'preparado', 0.2);
     // semáforo: verde al bajar los gatos
     const verde = t > D - 0.12;
     this.luz.material.emissive.setHex(verde ? 0x20ff40 : 0xff1a1a);
     if (verde && !this._verde) { this._verde = true; for (const p of this.estab) p.poner('de_pie', 0.15); this.jefe.poner('senala', 0.15); }
+    // el jefe mira el trabajo y, al final, da la salida con el brazo
+    this.jefe.extra.hD = verde ? [0, 0, -0.3 + Math.min(1, (t - D + 0.12) * 6) * 0.3] : [0, 0, 0];
     if (t >= D) {
       this.estado = 'fin';
-      if (md) { md.elevar = 0; md.ruedaOculta = [false, false, false, false]; }
+      if (md) { md.elevar = 0; md.ruedaOculta = [false, false, false, false]; md.ocultarAla = false; }
+      if (this._alaCoche) this._alaCoche.visible = true;
       for (const r of this.ruedas) r.nueva.visible = false;
     }
     return true;
@@ -266,7 +339,9 @@ class Parada {
   _colocarUna(r, u, elevar) {
     const brazos = new THREE.Vector3(r.x + 0.5, 0.62, r.lado * (r.via + 0.62));
     const montada = new THREE.Vector3(r.x, 0.36 + elevar, r.lado * (r.via + 0.12));
-    r.nueva.position.lerpVectors(brazos, montada, suave(u));
+    const w = suave(u);
+    r.nueva.position.lerpVectors(brazos, montada, w); r.nueva.position.y += Math.sin(Math.PI * w) * 0.06;
+    r.nueva.rotation.set(0, r.lado * 0.25 * (1 - w), 0);
     r.nueva.traverse(o => { if (o.name === 'manta') o.visible = u < 0.12; });
   }
 
@@ -283,9 +358,9 @@ export class GestorBoxes {
   }
 
   /** El coche está parado: empieza la parada (si nadie lo esperaba, el equipo aparece ya). */
-  empezar(id, car, modelo, { color, texto, compuesto, duracion, morro }) {
+  empezar(id, car, modelo, { color, texto, compuesto, duracion, morro, trabajo }) {
     if (!this.paradas.has(id)) this.preparar(id, { color, texto, compuesto, posicion: { x: car.x, y: car.y, z: car.z, psi: car.psi } });
-    this.paradas.get(id).empezar(car, modelo, duracion, morro);
+    this.paradas.get(id).empezar(car, modelo, duracion, morro, trabajo);
   }
 
   progreso(id) { return this.paradas.get(id)?.progreso() || null; }

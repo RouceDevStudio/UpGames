@@ -220,15 +220,16 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
       // en las curvas, hacia delante al frenar, se pasa un poco al volver y tiembla en los baches
       const hg = this.cabezaG;
       if (dt > 0) {
-        const objLat = Math.max(-0.32, Math.min(0.32, -(car.ayF || 0) * 0.014));
-        const objLon = Math.max(-0.22, Math.min(0.16, (car.axF || 0) * 0.009));
+        // un piloto de F1 tiene el cuello entrenado y el HANS: a 5 g la cabeza cede apenas unos grados
+        const objLat = Math.max(-0.13, Math.min(0.13, -(car.ayF || 0) * 0.0032));
+        const objLon = Math.max(-0.09, Math.min(0.06, (car.axF || 0) * 0.0024));
         const vib = (car.vibracion || 0) + (enChoque ? 0.6 * Math.exp(-choque.t * 3) : 0);
         let resto = Math.min(dt, 0.1);
         while (resto > 0) {
           const h = Math.min(resto, 1 / 120); resto -= h;
-          if (vib > 0.02) { hg.vx += (Math.random() - 0.5) * vib * 9; hg.vz += (Math.random() - 0.5) * vib * 6; }
-          hg.vx += ((objLat - hg.x) * 150 - hg.vx * 12) * h; hg.x += hg.vx * h;
-          hg.vz += ((objLon - hg.z) * 130 - hg.vz * 11) * h; hg.z += hg.vz * h;
+          if (vib > 0.02) { hg.vx += (Math.random() - 0.5) * vib * 4; hg.vz += (Math.random() - 0.5) * vib * 3; }
+          hg.vx += ((objLat - hg.x) * 220 - hg.vx * 20) * h; hg.x += hg.vx * h;
+          hg.vz += ((objLon - hg.z) * 200 - hg.vz * 19) * h; hg.z += hg.vz * h;
         }
       }
       cuello.rotation.x = hg.x;
@@ -243,9 +244,11 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
         const u = p.t < p.dur ? Math.sin(Math.PI * Math.min(1, p.t / p.dur)) ** 0.7 : 0;
         // botón: la mano se desliza hacia el centro y se adelanta (el pulgar a la pantalla);
         // leva: los dedos tiran hacia atrás del volante
-        if (p.tipo === 'leva') despl.set(-0.035 * u, 0, -lado * 0.01 * u);
-        else despl.set(0.03 * u, 0.025 * u, -lado * 0.05 * u);
-        agarre.set(despl.x, despl.y, lado * 0.125 + despl.z).applyAxisAngle(_x, angVol).applyAxisAngle(_z, columna.rotation.z).add(columna.position);
+        // (el eje x de la columna sale del volante hacia delante: lo negativo queda del lado del
+        // piloto, así que la mano que pulsa pasa POR DELANTE de la placa y nunca la atraviesa)
+        if (p.tipo === 'leva') despl.set(0.012 * u, 0.01 * u, -lado * 0.012 * u);
+        else despl.set(-0.04 * u, 0.012 * u, -lado * 0.03 * u);
+        agarre.set(-0.028 + despl.x, despl.y, lado * 0.127 + despl.z).applyAxisAngle(_x, angVol).applyAxisAngle(_z, columna.rotation.z).add(columna.position);
         // cruzados: cada mano al hombro contrario, una algo por encima de la otra
         pecho.set(0.13 + s * 0.02, 0.63 + s * 0.035, -lado * 0.1);
         T.copy(agarre).lerp(pecho, choque.soltar);

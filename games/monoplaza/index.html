@@ -31,43 +31,44 @@
 </div>
 
 <!-- Menú principal -->
-<div id="menu" class="pantalla">
-  <div class="menu-col">
-    <div class="marca">APEX<span>GP</span></div>
-    <div class="sub"><span id="nombrePista">Autódromo Valle del Cóndor</span> · <b id="largoPista"></b></div>
-    <div class="segm circuitos" id="selCircuito"></div>
-    <div class="botones">
-      <div class="fila">
-        <button class="btn grande" data-ir="carrera">🏁 Carrera</button>
-        <button class="btn grande" data-ir="campeonato">🏆 Campeonato</button>
-        <button class="btn grande" data-ir="escuela">🎓 Escuela</button>
-        <button class="btn grande" data-ir="progreso">🏅 Progreso</button>
+<div id="menu" class="pantalla lobby">
+  <header class="lobby-top">
+    <div class="lobby-marca"><svg class="lobby-coche" viewBox="40 70 950 190" aria-hidden="true"><path d="M58 86 L168 80 L176 98 L160 104 L156 176 L100 192 L74 190 Z M150 196 L150 158 C220 134 300 116 380 104 L418 90 C440 84 458 88 466 100 L486 122 C520 126 545 124 560 122 L640 128 C720 140 800 160 872 184 C905 194 930 200 948 208 L946 216 L860 220 L700 222 L600 228 L420 230 L280 228 L190 222 Z M820 230 L972 226 L978 238 L816 242 Z" fill="#e8202a"/><circle cx="548" cy="112" r="17" fill="#ffd23f"/><path d="M492 122 C520 92 590 90 628 126" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round"/><circle cx="232" cy="204" r="54" fill="#0d0f14" stroke="#fff" stroke-width="7"/><circle cx="776" cy="208" r="48" fill="#0d0f14" stroke="#fff" stroke-width="7"/></svg><div class="marca">APEX<span>GP</span></div></div>
+    <div id="cuentaMenu" class="lobby-cuenta"></div>
+  </header>
+  <div class="lobby-cuerpo">
+    <nav class="lobby-modos">
+      <button class="modo destacado" data-ir="carrera"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4"/><path d="M5 4h13l-2.5 4L18 12H5"/><path d="M9 4v8M13 4v8" opacity=".5"/></svg></i><span class="t">Carrera</span><span class="d">Gran Premio con clasificación, boxes y clima</span><em class="ir">A la parrilla ›</em></button>
+      <button class="modo" data-ir="campeonato"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h10v4a5 5 0 0 1-10 0z"/><path d="M7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4"/><path d="M12 13v4M8 21h8M9 17h6"/></svg></i><span class="t">Campeonato</span><span class="d">Temporada completa con puntos</span></button>
+      <button class="modo" data-ir="trayectoria"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 15a9 9 0 0 1 18-2l-1 4H6a3 3 0 0 1-3-2z"/><path d="M11 9h9"/><path d="M6 17v3h9"/></svg></i><span class="t">Modo carrera</span><span class="d">De novato a campeón del mundo</span></button>
+      <button class="modo" data-ir="multi"><i><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg></i><span class="t">Multijugador</span><span class="d">Salas en línea y GP oficial</span></button>
+      <button class="modo" data-ir="contrarreloj"><i><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="14" r="7"/><path d="M12 14V10M10 3h4M18 7l1.5-1.5"/></svg></i><span class="t">Contrarreloj</span><span class="d">Tu mejor vuelta contra el fantasma</span></button>
+      <button class="modo" data-ir="desafio" id="bDesafio"><i><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M8 14h3v3H8z"/></svg></i><span class="t">Desafío semanal</span><span class="d">La misma vuelta para todos</span></button>
+      <button class="modo" data-ir="practica"><i><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M12 3v5M12 16v5M3 12h5M16 12h5"/></svg></i><span class="t">Práctica</span><span class="d">Libre, sin límite de tiempo</span></button>
+      <button class="modo" data-ir="escuela"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/><path d="M22 9v6"/></svg></i><span class="t">Escuela</span><span class="d">Aprende a pilotar paso a paso</span></button>
+      <button class="modo" data-ir="garaje"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-5 9 5v12"/><path d="M7 21v-6h10v6"/><path d="M7 18h10"/></svg></i><span class="t">Garaje</span><span class="d">Mejoras, librea y casco</span></button>
+      <button class="modo" data-ir="progreso"><i><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="15" r="6"/><path d="M8 3l4 6 4-6"/><path d="M12 12.5l1 2 2 .3-1.5 1.4.4 2.1-1.9-1-1.9 1 .4-2.1L9 14.8l2-.3z"/></svg></i><span class="t">Progreso</span><span class="d">Nivel, misiones y logros</span></button>
+      <button class="modo" data-ir="editor"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/><path d="M3 21h18" opacity=".4"/></svg></i><span class="t">Crear circuito</span><span class="d">Diseña y comparte tu pista</span></button>
+    </nav>
+    <aside class="lobby-lateral">
+      <div class="tarjeta-circuito">
+        <div class="tc-cab">Circuito</div>
+        <div class="tc-nombre" id="nombrePista">Autódromo Valle del Cóndor</div>
+        <div class="tc-largo"><b id="largoPista"></b></div>
+        <div class="segm circuitos" id="selCircuito"></div>
       </div>
-      <div class="fila">
-        <button class="btn grande" data-ir="trayectoria">🧑‍✈️ Modo carrera</button>
-        <button class="btn grande" data-ir="editor">✏️ Crear circuito</button>
-      </div>
-      <div class="fila">
-        <button class="btn grande" data-ir="contrarreloj">⏱️ Contrarreloj</button>
-        <button class="btn grande" data-ir="desafio" id="bDesafio">🗓️ Desafío semanal</button>
-        <button class="btn grande" data-ir="practica">🛞 Práctica</button>
-      </div>
-      <div class="fila">
-        <button class="btn grande" data-ir="multi">🌐 Multijugador</button>
-        <button class="btn grande" data-ir="garaje">🏎️ Garaje</button>
-      </div>
-      <div class="fila">
-        <button class="btn" data-ir="rankings">📊 Rankings</button>
-        <button class="btn" data-ir="reglaje">🔧 Reglaje</button>
-        <button class="btn" data-ir="ajustes">⚙️ Ajustes</button>
-        <button class="btn" data-ir="ayuda">❔ Ayuda</button>
-      </div>
-    </div>
-    <div id="recordMenu" class="nota"></div>
-    <div id="cuentaMenu" class="nota"></div>
-    <a class="volver-upgames" id="lnkApk" href="#" download="APEX-GP.apk">📱 Descargar la app para Android (APK)</a>
-    <a class="volver-upgames" href="https://upgames.games/public/biblioteca.html" target="_top">← UpGames</a>
+      <div id="recordMenu" class="nota"></div>
+    </aside>
   </div>
+  <footer class="lobby-pie">
+    <button class="pie-bt" data-ir="rankings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Rankings</span></button>
+    <button class="pie-bt" data-ir="reglaje"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6a4 4 0 1 0 4 4l-9 9-3-3 9-9"/></svg><span>Reglaje</span></button>
+    <button class="pie-bt" data-ir="ajustes"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg><span>Ajustes</span></button>
+    <button class="pie-bt" data-ir="ayuda"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7M12 17h.01"/></svg><span>Ayuda</span></button>
+    <span class="pie-hueco"></span>
+    <a class="volver-upgames" id="lnkApk" href="#" download="APEX-GP.apk">📱 App Android (APK)</a>
+    <a class="volver-upgames" href="https://upgames.games/public/biblioteca.html" target="_top">← UpGames</a>
+  </footer>
 </div>
 
 <!-- Opciones de carrera -->
@@ -403,6 +404,11 @@
     <div class="mini" id="boxInfo" style="color:#ffd23f"></div>
     <div class="fila-box"><button class="btn" data-box="blando">Blando</button><button class="btn" data-box="medio">Medio</button><button class="btn" data-box="duro">Duro</button></div>
     <div class="fila-box"><button class="btn" data-box="inter">Inter</button><button class="btn" data-box="lluvia">Lluvia</button></div>
+    <div class="mini">TRABAJO EXTRA</div>
+    <div class="fila-box trabajo-box">
+      <span class="ala-box">Alerón del. <button class="btn mini" id="boxAlaMenos">−</button><b id="boxAlaVal">0</b><button class="btn mini" id="boxAlaMas">+</button></span>
+      <label class="susp-box" id="opSusp"><input type="checkbox" id="chkSusp"> 🔧 Reparar suspensión <small>(+8 s)</small></label>
+    </div>
     <label class="relevo-op" id="opRelevo"><input type="checkbox" id="chkRelevo"> 🔄 Cambio de piloto en esta parada</label>
     <button class="btn" data-box="cancelar">Cancelar</button>
   </div>

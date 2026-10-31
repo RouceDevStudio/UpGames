@@ -25,7 +25,8 @@ const suelo = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshStan
 suelo.rotation.x = -Math.PI / 2; suelo.receiveShadow = true; scene.add(suelo);
 scene.add(new THREE.GridHelper(40, 40, 0x555555, 0x4a4a4a));
 const ie = +(q.get('equipo') || 0);
-const m = crearModelo({ equipo: EQUIPOS[ie], equipado: { patron: EQUIPOS[ie].patron, numero: 7, casco: 'rayas' }, calidad: +(q.get('calidad') ?? 3), cabina: q.get('vista') === 'cabina' });
+const m = crearModelo({ equipo: EQUIPOS[ie], equipado: { patron: EQUIPOS[ie].patron, numero: 7, casco: 'rayas' }, calidad: +(q.get('calidad') ?? 3), cabina: ['cabina', 'volante'].includes(q.get('vista')) || !!q.get('pantalla') });
+if (q.get('sinPiloto') && m.piloto?.grupo) m.piloto.grupo.visible = false;
 if (q.get('gris')) m.raiz.traverse(o => { if (o.isMesh && !o.material.emissive?.getHex?.()) o.material = new THREE.MeshStandardMaterial({ color: 0xb8b8b8, roughness: 0.55 }); });
 scene.add(m.raiz);
 // ?caras=1: las caras vistas por detrás salen en rojo (normales o sentido de giro al revés)
@@ -50,12 +51,12 @@ const cam = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.02, 200)
 const vistas = {
   '3q': [[4.2, 2.6, 4.6], [0.2, 0.3, 0]], lado: [[0, 0.6, 7.5], [0.2, 0.4, 0]], arriba: [[0.2, 9, 0.01], [0.2, 0, 0]],
   frente: [[7, 1.1, 0], [0, 0.4, 0]], rueda: [[2.6, 0.55, 1.6], [1.7, 0.33, 0.8]], piloto: [[1.2, 1.25, 0.9], [0.05, 0.72, 0]], manos: [[-0.2, 1.25, 0.35], [0.55, 0.62, 0]], trasera: [[-6, 1.6, 2.5], [0, 0.5, 0]], blender: [[3.6, 4.2, -3.2], [0.2, 0.2, 0]],
-  cabina: [[0.16, 0.86, 0], [30, -0.24, 0]], cara: [[0.60, 0.90, 0], [0.0, 0.79, 0]],
+  cabina: [[0.16, 0.86, 0], [30, -0.24, 0]], volante: [[0.18, 0.80, 0.02], [0.47, 0.70, 0]], cara: [[0.60, 0.90, 0], [0.0, 0.79, 0]],
 };
 const [p, t] = vistas[q.get('vista') || '3q'];
-if (q.get('vista') === 'cabina' || q.get('vista') === 'cara') { m.raiz.updateMatrixWorld(true); cam.position.set(...p).applyMatrix4(m.carroceria.matrixWorld); cam.lookAt(new THREE.Vector3(...t).applyMatrix4(m.carroceria.matrixWorld)); cam.fov = q.get('vista') === 'cabina' ? 75 : 55; cam.near = 0.02; }
+if (['cabina', 'cara', 'volante'].includes(q.get('vista'))) { m.raiz.updateMatrixWorld(true); cam.position.set(...p).applyMatrix4(m.carroceria.matrixWorld); cam.lookAt(new THREE.Vector3(...t).applyMatrix4(m.carroceria.matrixWorld)); cam.fov = q.get('vista') === 'cabina' ? 75 : 55; cam.near = 0.02; }
 else { cam.position.set(...p); cam.lookAt(...t); }
 cam.updateProjectionMatrix();
 r.render(scene, cam);
-window.listo = true;
+window.visor = { scene, cam, m, THREE }; window.listo = true;
 </script></body></html>

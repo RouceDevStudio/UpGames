@@ -195,8 +195,9 @@ export class Sesion {
   }
 
   // Boxes: el jugador o la IA piden parar; se entra la próxima vez que se pase por la entrada
-  pedirBox(p, compuesto) { if (!p.coche.abandono) p.solicitudBox = compuesto || p.coche.reglaje.compuesto; }
-  cancelarBox(p) { if (!p.box) p.solicitudBox = null; }
+  // extras: { susp: reparar la suspensión, alaDel: grados de alerón delantero a sumar (±) }
+  pedirBox(p, compuesto, extras = {}) { if (!p.coche.abandono) { p.solicitudBox = compuesto || p.coche.reglaje.compuesto; p.trabajoBox = extras; } }
+  cancelarBox(p) { if (!p.box) { p.solicitudBox = null; p.trabajoBox = null; } }
 
   _garajeDe(p) {
     const g = this.c.pit.garajes;
@@ -228,12 +229,19 @@ export class Sesion {
     const compuesto = p.solicitudBox;
     // trabajo de la parada: neumáticos siempre; morro nuevo si está dañado
     const morro = car.danoAleron > 0.12 || car.dano.aleronTras > 0.2;
-    const duracion = 2.1 + Math.random() * 0.7 + (morro ? 6.5 + Math.random() * 1.5 : 0) + (Math.random() < 0.06 ? 2.5 : 0);
+    // suspensión: la IA la arregla si está muy tocada; el jugador, si lo pide en el panel
+    const ex = p.trabajoBox || {};
+    const esquinas = car.dano.susp.map((d, k) => d > 0.08 && !car.dano.suelta[k]);
+    const susp = esquinas.some(Boolean) && (p.ia ? Math.max(...car.dano.susp) > 0.35 : !!ex.susp);
+    const alaDel = Math.round(ex.alaDel || 0);
+    const extra = (morro ? 6.5 + Math.random() * 1.5 : 0) + (susp ? 7 + Math.random() * 2 : 0) + (alaDel && !morro ? 0.3 : 0);
+    const duracion = 2.1 + Math.random() * 0.7 + extra + (Math.random() < 0.06 ? 2.5 : 0);
+    const trabajo = { morro, susp: susp ? esquinas : null, alaDel, extra };
     p.box = new PilotoBox(car, c, this._garajeDe(p), {
       duracion,
-      alParar: () => { p.paradaInfo = { inicio: this.tiempo, duracion, morro, compuesto }; this.eventos.push({ tipo: 'paradaIni', p, duracion, morro }); },
+      alParar: () => { p.paradaInfo = { inicio: this.tiempo, duracion, morro, susp, alaDel, compuesto }; this.eventos.push({ tipo: 'paradaIni', p, duracion, morro, trabajo }); },
       alTerminar: () => {
-        car.repararEnBoxes(compuesto); p.paradas++;
+        car.repararEnBoxes(compuesto, { susp, alaDel }); p.paradas++; p.trabajoBox = null;
         if (this.depositoMax) car.combustible = this.depositoMax;      // repostaje (resistencia)
         this.eventos.push({ tipo: 'paradaFin', p, duracion });
         p.paradaInfo = null;

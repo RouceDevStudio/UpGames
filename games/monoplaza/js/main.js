@@ -660,7 +660,8 @@ function desafioSemana() {
 }
 function pintarDesafio() {
   const d = desafioSemana(), b = $('#bDesafio');
-  if (b) b.innerHTML = `🗓️ Desafío semanal<small style="display:block;font-size:11px;opacity:.75">${CIRCUITOS[d.id]?.corto} · quedan ${d.dias} día(s)</small>`;
+  const t = b?.querySelector('.d');
+  if (t) t.textContent = `${CIRCUITOS[d.id]?.corto} · quedan ${d.dias} día(s)`;
 }
 async function empezarDesafio() {
   const d = desafioSemana();
@@ -1211,10 +1212,10 @@ function procesarEventos() {
     if (e.tipo === 'entraBoxes' && e.p.jugador) { mensaje('ENTRANDO A BOXES', 'El equipo conduce: limitador a 80 km/h', 2); radio.decir('Box, box. Te llevamos al garaje, limitador puesto.', { prioridad: true, clave: 'boxEnt', cada: 10 }); }
     else if (e.tipo === 'paradaIni') {
       const k = sesion.participantes.indexOf(e.p);
-      gestorBoxes.empezar(k, e.p.coche, modelos[k], { color: e.p.equipo.base, texto: e.p.equipo.corto === 'UPG' ? 'UPGAMES' : e.p.equipo.nombre.split(' ')[0].toUpperCase(), compuesto: e.p.paradaInfo?.compuesto, duracion: e.duracion, morro: e.morro });
+      gestorBoxes.empezar(k, e.p.coche, modelos[k], { color: e.p.equipo.base, texto: e.p.equipo.corto === 'UPG' ? 'UPGAMES' : e.p.equipo.nombre.split(' ')[0].toUpperCase(), compuesto: e.p.paradaInfo?.compuesto, duracion: e.duracion, morro: e.morro, trabajo: e.trabajo });
       if (e.p.jugador) paradaJugador = { t0: performance.now(), duracion: e.duracion, k };
       if (e.p.jugador) radio.decir('Gatos arriba. Ruedas fuera…', { clave: 'gatos', cada: 10 });
-      if (e.p.jugador) { mensaje('PARADA EN BOXES', e.morro ? 'Neumáticos y morro nuevo' : 'Cambio de neumáticos', 2); estadoRadio.avisoDesg = false; }
+      if (e.p.jugador) { mensaje('PARADA EN BOXES', ['Neumáticos', e.morro && 'morro nuevo', e.trabajo?.susp && 'suspensión', e.trabajo?.alaDel && !e.morro && 'flap del alerón'].filter(Boolean).join(', '), 2); estadoRadio.avisoDesg = false; }
     }
     else if (e.tipo === 'paradaFin') {
       if (e.p.jugador) { estr.paradas++; progresar('parada', { seg: e.duracion }); }
@@ -1827,15 +1828,31 @@ function alternarPanelBox() {
   { const car = sesion.jugador.coche, d = Math.max(...car.ruedas.map(w => w.neum.desgaste)), comp = car.reglaje.compuesto;
     const quedan = COMPUESTOS[comp].lluvia ? '' : ` · aguantan ~${Math.max(0, Math.floor((0.45 - d) * 100 / ESTR.desgastePorVuelta(comp, circuito.largo, sesion?.multDesgaste || 1)))} vueltas más`;
     const sig = ESTR.siguienteParada(estr.plan, sesion.jugador.vuelta, estr.paradas);
-    $('#boxInfo').textContent = `Desgaste ${Math.round(d * 100)} %${quedan}${sig ? ` · plan: parar en la vuelta ${sig.vuelta} (${COMPUESTOS[sig.compuesto].nombre})` : ''}`; }
+    $('#boxInfo').textContent = `Desgaste ${Math.round(d * 100)} %${quedan}${sig ? ` · plan: parar en la vuelta ${sig.vuelta} (${COMPUESTOS[sig.compuesto].nombre})` : ''}`;
+    // trabajo extra: el flap del alerón (pasos de reglaje) y la suspensión, solo si está dañada
+    trabajoBox.alaDel = 0; pintarAlaBox();
+    const suspMal = car.dano.susp.some((x, k) => x > 0.08 && !car.dano.suelta[k]);
+    $('#opSusp').classList.toggle('deshabilitado', !suspMal);
+    $('#chkSusp').checked = suspMal && Math.max(...car.dano.susp) > 0.3; }
 }
+const trabajoBox = { alaDel: 0 };
+function pintarAlaBox() {
+  const base = sesion?.jugador.coche.reglaje.aleronDel ?? 6, v = Math.max(1, Math.min(11, base + trabajoBox.alaDel));
+  trabajoBox.alaDel = v - base;
+  $('#boxAlaVal').textContent = (trabajoBox.alaDel > 0 ? '+' : '') + trabajoBox.alaDel;
+  $('#boxAlaVal').title = `Alerón delantero ${v}`;
+}
+$('#boxAlaMas').addEventListener('click', () => { trabajoBox.alaDel = Math.min(3, trabajoBox.alaDel + 1); pintarAlaBox(); });
+$('#boxAlaMenos').addEventListener('click', () => { trabajoBox.alaDel = Math.max(-3, trabajoBox.alaDel - 1); pintarAlaBox(); });
 document.querySelectorAll('#panelBox [data-box]').forEach(b => b.addEventListener('click', () => {
   const v = b.dataset.box;
   $('#panelBox').classList.remove('visible');
   if (v === 'cancelar') { sesion.cancelarBox(sesion.jugador); return; }
-  sesion.pedirBox(sesion.jugador, v);
+  const susp = $('#chkSusp').checked && !$('#opSusp').classList.contains('deshabilitado');
+  sesion.pedirBox(sesion.jugador, v, { susp, alaDel: trabajoBox.alaDel });
   if ($('#chkRelevo').checked) { relevo.pendiente = true; $('#chkRelevo').checked = false; }
-  mensaje('BOX, BOX', `Entra al final de esta vuelta · neumáticos ${COMPUESTOS[v].nombre.toLowerCase()}`, 2.4);
+  const extra = [susp && 'suspensión', trabajoBox.alaDel && `alerón ${trabajoBox.alaDel > 0 ? '+' : ''}${trabajoBox.alaDel}`].filter(Boolean).join(' y ');
+  mensaje('BOX, BOX', `Entra al final de esta vuelta · neumáticos ${COMPUESTOS[v].nombre.toLowerCase()}${extra ? ' · ' + extra : ''}`, 2.4);
   radio.decir(`Recibido. Box esta vuelta, preparamos ${COMPUESTOS[v].nombre.toLowerCase()}s.`, { clave: 'boxSi', cada: 5 });
 }));
 $('#bBox').addEventListener('click', () => entrada.eventos.push('box'));
@@ -1880,7 +1897,7 @@ async function refrescarPerfil() {
 }
 function actualizarCuentaMenu() {
   const u = cuenta.usuario();
-  $('#cuentaMenu').innerHTML = cuenta.conectado() ? `@${u || 'piloto'} · ${perfilApex.upcoins ?? '…'} UpCoins` : '<a href="#" id="lnkEntrar" style="color:#9fd3ff">Inicia sesión con UpGames</a> para usar tus UpCoins';
+  $('#cuentaMenu').innerHTML = cuenta.conectado() ? `👤 <b>@${u || 'piloto'}</b> · <b style="color:#ffd23f">${perfilApex.upcoins ?? '…'}</b> UpCoins` : '<a href="#" id="lnkEntrar" style="color:#9fd3ff">Inicia sesión con UpGames</a>';
   const l = $('#lnkEntrar'); if (l) l.onclick = (e) => { e.preventDefault(); pantallaPrevia = 'menu'; mostrar('cuenta'); };
 }
 

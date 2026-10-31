@@ -187,23 +187,57 @@ export function texturaSalchicha() {
 }
 
 export function texturaHierba(tam = 512) {
+  // césped de circuito: base con manchas (fbm), franjas de corte suaves a lo largo de la pista,
+  // miles de briznas pintadas una a una en varios verdes, trébol y alguna calva de tierra
   const rnd = aleatorio(11);
   const base = fbm(tam, rnd, 6, 4);
   const c = lienzo(tam), ctx = c.getContext('2d');
   const img = ctx.createImageData(tam, tam);
   for (let y = 0; y < tam; y++) for (let x = 0; x < tam; x++) {
     const i = y * tam + x;
-    const brizna = rnd();
     const v = base[i];
-    // franjas de corte de césped
-    const franja = ((Math.floor(x / (tam / 4))) % 2) ? 0.06 : -0.02;
-    let r = 0.20 + v * 0.10 + franja * 0.5, g = 0.36 + v * 0.18 + franja, b = 0.12 + v * 0.06;
-    if (brizna < 0.25) { g += 0.07 * rnd(); r += 0.02; }
-    if (brizna > 0.97) { r += 0.1; g += 0.08; b += 0.02; }
-    img.data[i * 4] = r * 255; img.data[i * 4 + 1] = g * 255; img.data[i * 4 + 2] = b * 255; img.data[i * 4 + 3] = 255;
+    const fr = Math.sin((x / tam) * Math.PI * 8);                      // 4 pasadas de cortacésped
+    const franja = Math.sign(fr) * Math.min(1, Math.abs(fr) * 4) * 0.035;
+    let r = 0.19 + v * 0.10 + franja * 0.4, g = 0.35 + v * 0.17 + franja, b = 0.11 + v * 0.05;
+    const n = (rnd() - 0.5) * 0.05;
+    if (v < 0.22) { r += (0.22 - v) * 0.5; g += (0.22 - v) * 0.12; }      // calvas secas
+    img.data[i * 4] = (r + n) * 255; img.data[i * 4 + 1] = (g + n) * 255; img.data[i * 4 + 2] = (b + n * 0.5) * 255; img.data[i * 4 + 3] = 255;
   }
   ctx.putImageData(img, 0, 0);
+  // briznas: trazos cortos inclinados, claros arriba y oscuros abajo (dan volumen)
+  const nB = tam * tam / 9;
+  ctx.lineCap = 'round';
+  for (let k = 0; k < nB; k++) {
+    const x = rnd() * tam, y = rnd() * tam, L = 2 + rnd() * 5, a = -Math.PI / 2 + (rnd() - 0.5) * 1.2;
+    const l = rnd();
+    ctx.strokeStyle = l < 0.45 ? `rgba(${30 + l * 40},${70 + l * 90},${22 + l * 20},0.55)` : `rgba(${60 + l * 50},${110 + l * 70},${35 + l * 25},0.5)`;
+    ctx.lineWidth = 0.6 + rnd() * 0.8;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(a) * L, y + Math.sin(a) * L); ctx.stroke();
+  }
+  // tréboles y florecillas sueltas
+  for (let k = 0; k < tam / 6; k++) {
+    const x = rnd() * tam, y = rnd() * tam;
+    ctx.fillStyle = rnd() < 0.8 ? 'rgba(70,130,50,0.6)' : 'rgba(235,230,170,0.7)';
+    for (let h = 0; h < 3; h++) { ctx.beginPath(); ctx.arc(x + Math.cos(h * 2.1) * 1.4, y + Math.sin(h * 2.1) * 1.4, 1.2, 0, Math.PI * 2); ctx.fill(); }
+  }
   return aTextura(c);
+}
+
+/** Mechones de hierba (recorte alfa) para los matojos 3D junto a la pista. */
+export function texturaMechon(tam = 128) {
+  const rnd = aleatorio(29);
+  const c = lienzo(tam), ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, tam, tam);
+  ctx.lineCap = 'round';
+  for (let k = 0; k < 70; k++) {
+    const x0 = tam * (0.1 + rnd() * 0.8), alto = tam * (0.35 + rnd() * 0.6), curva = (rnd() - 0.5) * tam * 0.35;
+    const l = rnd();
+    const gr = ctx.createLinearGradient(0, tam, 0, tam - alto);
+    gr.addColorStop(0, `rgb(${25 + l * 20},${55 + l * 30},${18})`); gr.addColorStop(1, `rgb(${90 + l * 60},${140 + l * 60},${50 + l * 30})`);
+    ctx.strokeStyle = gr; ctx.lineWidth = 1.2 + rnd() * 1.8;
+    ctx.beginPath(); ctx.moveTo(x0, tam); ctx.quadraticCurveTo(x0 + curva * 0.3, tam - alto * 0.6, x0 + curva, tam - alto); ctx.stroke();
+  }
+  const t = aTextura(c, false); return t;
 }
 
 export function texturaTerreno(tam = 512) {
@@ -222,17 +256,36 @@ export function texturaTerreno(tam = 512) {
   return aTextura(c);
 }
 
-export function texturaGrava(tam = 256) {
+export function texturaGrava(tam = 512) {
+  // grava de escapatoria: piedras redondeadas de varios tamaños, cada una con luz arriba y
+  // sombra abajo, huecos oscuros entre ellas; y un mapa de relieve con las mismas piedras
   const rnd = aleatorio(19);
   const c = lienzo(tam), ctx = c.getContext('2d');
-  ctx.fillStyle = '#b9a586'; ctx.fillRect(0, 0, tam, tam);
-  for (let k = 0; k < tam * tam / 6; k++) {
-    const x = rnd() * tam, y = rnd() * tam, r = 0.6 + rnd() * 1.8;
-    const l = 120 + rnd() * 110;
-    ctx.fillStyle = `rgb(${l},${l * 0.9},${l * 0.75})`;
-    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  const h = lienzo(tam), hx = h.getContext('2d');
+  ctx.fillStyle = '#8c7b62'; ctx.fillRect(0, 0, tam, tam);
+  hx.fillStyle = '#000'; hx.fillRect(0, 0, tam, tam);
+  const n = tam * tam / 9;
+  for (let k = 0; k < n; k++) {
+    const x = rnd() * tam, y = rnd() * tam, r = 0.9 + rnd() ** 2 * 3.4;
+    const l = 135 + rnd() * 100, tinte = rnd();
+    const [cr, cg, cb] = tinte < 0.15 ? [l * 0.85, l * 0.82, l * 0.8] : tinte < 0.3 ? [l, l * 0.86, l * 0.68] : [l, l * 0.92, l * 0.78];
+    for (const [cx, dx, dy] of [[ctx, 0, 0]]) {
+      const g = cx.createRadialGradient(x - r * 0.35 + dx, y - r * 0.4 + dy, r * 0.1, x, y, r * 1.1);
+      g.addColorStop(0, `rgb(${Math.min(255, cr * 1.18)},${Math.min(255, cg * 1.18)},${Math.min(255, cb * 1.18)})`);
+      g.addColorStop(0.7, `rgb(${cr | 0},${cg | 0},${cb | 0})`);
+      g.addColorStop(1, `rgb(${cr * 0.55 | 0},${cg * 0.55 | 0},${cb * 0.55 | 0})`);
+      cx.fillStyle = g; cx.beginPath(); cx.ellipse(x, y, r, r * (0.7 + rnd() * 0.3), rnd() * 3, 0, Math.PI * 2); cx.fill();
+    }
+    const gh = hx.createRadialGradient(x, y, 0, x, y, r);
+    gh.addColorStop(0, '#fff'); gh.addColorStop(1, '#222');
+    hx.fillStyle = gh; hx.beginPath(); hx.arc(x, y, r, 0, Math.PI * 2); hx.fill();
   }
-  return aTextura(c);
+  // relieve → normales (las piedras sobresalen y hacen sombra con el sol bajo)
+  const dat = hx.getImageData(0, 0, tam, tam).data, alt = new Float32Array(tam * tam);
+  for (let i = 0; i < alt.length; i++) alt[i] = dat[i * 4] / 255;
+  const mapa = aTextura(c);
+  mapa.userData = { normal: normalDesdeAltura(alt, tam, 3) };
+  return mapa;
 }
 
 export function texturaBordillo() {

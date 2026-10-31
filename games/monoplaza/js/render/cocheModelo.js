@@ -30,6 +30,25 @@ function orientarFuera(g) {
   return g;
 }
 
+// Lo mismo para geometrías sin índice (ExtrudeGeometry): si el volumen sale negativo, las caras
+// miran hacia dentro; se invierte el orden de cada triángulo y se dan la vuelta las normales
+function orientarFueraSinIndice(g) {
+  const P = g.attributes.position.array;
+  let vol = 0;
+  for (let a = 0; a < P.length; a += 9) {
+    const b = a + 3, c = a + 6;
+    vol += P[a] * (P[b + 1] * P[c + 2] - P[b + 2] * P[c + 1]) - P[a + 1] * (P[b] * P[c + 2] - P[b + 2] * P[c]) + P[a + 2] * (P[b] * P[c + 1] - P[b + 1] * P[c]);
+  }
+  if (vol >= 0) return g;
+  for (const nombre of Object.keys(g.attributes)) {
+    const at = g.attributes[nombre], n = at.itemSize, A = at.array;
+    for (let t = 0; t < at.count; t += 3) for (let k = 0; k < n; k++) { const i1 = (t + 1) * n + k, i2 = (t + 2) * n + k, x = A[i1]; A[i1] = A[i2]; A[i2] = x; }
+    if (nombre === 'normal') for (let i = 0; i < A.length; i++) A[i] = -A[i];
+    at.needsUpdate = true;
+  }
+  return g;
+}
+
 // Superficie por secciones superelípticas a lo largo de X
 function loft(secciones, segs = 20, zc = 0) {
   const pos = [], idx = [], uv = [];
@@ -358,26 +377,101 @@ function unir(lista, mat, uvLibrea = false) {
   return m;
 }
 
-// Volante de F1: aro con empuñaduras, pantalla, LEDs de cambio, botones y levas
+// Volante de F1 actual: placa de carbono con frontal rotulado, pantalla en su marco, tira de
+// LEDs de cambio y de banderas, botones con capuchón de color, selectores giratorios
+// moleteados, empuñaduras de goma con hueco para los dedos, levas de cambio y de embrague
+// y el buje de suelta rápida detrás.
+const BOTONES_VOL = [   // [y, z, color, rótulo]
+  [0.050, -0.090, 0xe8202a, 'PIT'], [0.024, -0.098, 0xf5c518, 'DRS'], [-0.004, -0.098, 0x2f7bff, 'RADIO'], [-0.034, -0.088, 0xffffff, 'N'],
+  [0.050, 0.090, 0x2fe07a, 'OK'], [0.024, 0.098, 0xff7a00, 'BB+'], [-0.004, 0.098, 0xb84dff, 'BB-'], [-0.034, 0.088, 0x00e5ff, 'MARK'],
+  [-0.074, -0.040, 0x222222, 'PL'], [-0.074, 0.040, 0x222222, 'TOW'],
+];
+const ROTATIVOS_VOL = [[-0.036, -0.048, 'ERS'], [-0.036, 0.048, 'MIX'], [-0.060, -0.016, 'DIFF'], [-0.060, 0.016, 'BAL']];
+let texFrontalVol = null;
+function texturaFrontalVolante() {
+  if (texFrontalVol) return texFrontalVol;
+  const W = 1024, H = 614, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const x = cv.getContext('2d');
+  const px = (z) => (z + 0.15) / 0.30 * W, py = (y) => (1 - (y + 0.09) / 0.18) * H, esc = W / 0.30;
+  // sarga de carbono
+  x.fillStyle = '#16171b'; x.fillRect(0, 0, W, H);
+  for (let i = 0; i < W; i += 8) for (let j = 0; j < H; j += 8) {
+    x.fillStyle = ((i + j) / 8) % 2 ? 'rgba(255,255,255,0.035)' : 'rgba(0,0,0,0.25)';
+    x.fillRect(i, j, 8, 4); x.fillRect(i + 4, j + 4, 4, 4);
+  }
+  // panel central mate alrededor de la pantalla
+  x.fillStyle = '#0c0d10'; x.beginPath(); x.roundRect(px(-0.08), py(0.062), 0.16 * esc, 0.09 * esc, 18); x.fill();
+  x.font = `bold ${Math.round(0.0062 * esc)}px Arial, sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
+  // rótulos de los botones (debajo de cada uno) y aro claro alrededor
+  for (const [y, z, , txt] of BOTONES_VOL) {
+    x.strokeStyle = 'rgba(200,200,205,0.55)'; x.lineWidth = 3;
+    x.beginPath(); x.arc(px(z), py(y), 0.0105 * esc, 0, Math.PI * 2); x.stroke();
+    x.fillStyle = '#e9edf2'; x.fillText(txt, px(z), py(y - 0.0155));
+  }
+  // escala de los selectores: 12 posiciones con sus números
+  x.font = `bold ${Math.round(0.0042 * esc)}px Arial, sans-serif`;
+  for (const [y, z, txt] of ROTATIVOS_VOL) {
+    for (let k = 0; k < 12; k++) {
+      const a = -Math.PI * 0.75 + k * Math.PI * 1.5 / 11, r0 = 0.0145 * esc, r1 = 0.0172 * esc;
+      x.strokeStyle = k === 0 ? '#ffd23f' : '#c9ced6'; x.lineWidth = 2;
+      x.beginPath(); x.moveTo(px(z) + Math.sin(a) * r0, py(y) - Math.cos(a) * r0); x.lineTo(px(z) + Math.sin(a) * r1, py(y) - Math.cos(a) * r1); x.stroke();
+      if (k % 2 === 0) { x.fillStyle = '#9aa1ab'; x.fillText(String(k + 1), px(z) + Math.sin(a) * 0.0205 * esc, py(y) - Math.cos(a) * 0.0205 * esc); }
+    }
+    x.fillStyle = '#ffd23f'; x.font = `bold ${Math.round(0.0052 * esc)}px Arial, sans-serif`;
+    x.fillText(txt, px(z), py(y + 0.0235)); x.font = `bold ${Math.round(0.0042 * esc)}px Arial, sans-serif`;
+  }
+  // logotipo y tornillos de la placa
+  x.fillStyle = '#ffffff'; x.font = `900 ${Math.round(0.0075 * esc)}px Arial, sans-serif`;
+  x.fillText('APEX GP', px(0), py(-0.083));
+  x.fillStyle = '#8d939c';
+  for (const [y, z] of [[0.072, -0.11], [0.072, 0.11], [-0.07, -0.072], [-0.07, 0.072], [0.03, -0.068], [0.03, 0.068]]) { x.beginPath(); x.arc(px(z), py(y), 5, 0, Math.PI * 2); x.fill(); }
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  t.repeat.set(1 / 0.30, 1 / 0.18); t.offset.set(0.5, 0.5);
+  return (texFrontalVol = t);
+}
+const matsBoton = new Map();
+const matBoton = (col) => { if (!matsBoton.has(col)) matsBoton.set(col, new THREE.MeshStandardMaterial({ color: col, roughness: 0.35 })); return matsBoton.get(col); };
+let matFrontalVol = null;
 function crearVolante(conPantalla) {
   const g = new THREE.Group();
   const carbono = matComun('carbono');
   const negro = matComun('negro');
-  const sh = new THREE.Shape();
-  // contorno en el plano (z, y): ancho 0,28 m, alto 0,16 m, con empuñaduras redondeadas
-  sh.moveTo(-0.14, 0.02); sh.quadraticCurveTo(-0.15, 0.08, -0.10, 0.085); sh.lineTo(0.10, 0.085);
-  sh.quadraticCurveTo(0.15, 0.08, 0.14, 0.02); sh.lineTo(0.13, -0.06); sh.quadraticCurveTo(0.12, -0.085, 0.09, -0.08);
-  sh.lineTo(0.06, -0.05); sh.lineTo(-0.06, -0.05); sh.lineTo(-0.09, -0.08); sh.quadraticCurveTo(-0.12, -0.085, -0.13, -0.06); sh.closePath();
-  const cuerpo = new THREE.ExtrudeGeometry(sh, { depth: 0.035, bevelEnabled: true, bevelSize: 0.004, bevelThickness: 0.004, bevelSegments: 2 });
-  cuerpo.rotateY(Math.PI / 2); cuerpo.translate(-0.0175, 0, 0);
-  g.add(new THREE.Mesh(cuerpo, carbono));
-  // empuñaduras de goma
+  const metal = matComun('metal');
   const goma = matComun('goma');
-  for (const s of [-1, 1]) {
-    const e = new THREE.Mesh(new THREE.CapsuleGeometry(0.018, 0.09, 4, 8), goma);
-    e.position.set(-0.005, -0.005, s * 0.125); g.add(e);
+  const contorno = () => {
+    // forma en el plano (z, y): alas arriba, empuñaduras a los lados y la parte de abajo recortada
+    const sh = new THREE.Shape();
+    sh.moveTo(-0.148, 0.03); sh.bezierCurveTo(-0.152, 0.075, -0.13, 0.092, -0.10, 0.09);
+    sh.bezierCurveTo(-0.05, 0.084, 0.05, 0.084, 0.10, 0.09); sh.bezierCurveTo(0.13, 0.092, 0.152, 0.075, 0.148, 0.03);
+    sh.lineTo(0.14, -0.05); sh.bezierCurveTo(0.137, -0.082, 0.112, -0.092, 0.092, -0.084);
+    sh.bezierCurveTo(0.075, -0.078, 0.066, -0.07, 0.055, -0.082); sh.bezierCurveTo(0.03, -0.094, -0.03, -0.094, -0.055, -0.082);
+    sh.bezierCurveTo(-0.066, -0.07, -0.075, -0.078, -0.092, -0.084); sh.bezierCurveTo(-0.112, -0.092, -0.137, -0.082, -0.14, -0.05);
+    sh.closePath();
+    return sh;
+  };
+  // cuerpo de carbono con canto biselado
+  const cuerpo = new THREE.ExtrudeGeometry(contorno(), { depth: 0.03, bevelEnabled: true, bevelSize: 0.005, bevelThickness: 0.005, bevelSegments: 3, curveSegments: 14 });
+  cuerpo.rotateY(Math.PI / 2); cuerpo.translate(-0.015, 0, 0); orientarFueraSinIndice(cuerpo);
+  g.add(new THREE.Mesh(cuerpo, carbono));
+  // frontal rotulado (algo más pequeño que el cuerpo, delante de él)
+  const frontal = new THREE.ShapeGeometry(contorno(), 14);
+  frontal.scale(0.97, 0.95, 1); frontal.rotateY(-Math.PI / 2); frontal.translate(-0.0205, 0, 0);
+  matFrontalVol ??= new THREE.MeshStandardMaterial({ map: texturaFrontalVolante(), roughness: 0.55, metalness: 0.15 });
+  g.add(new THREE.Mesh(frontal, matFrontalVol));
+  // empuñaduras: goma moldeada con hueco para cada dedo, un poco abiertas hacia arriba
+  const perfil = [];
+  for (let k = 0; k <= 24; k++) {
+    const u = k / 24, y = -0.06 + u * 0.12;
+    const dedos = u > 0.15 && u < 0.85 ? 0.0022 * Math.cos((u - 0.15) / 0.7 * Math.PI * 8) : 0;
+    perfil.push(new THREE.Vector2(0.0205 * Math.sin(Math.PI * Math.min(1, 0.12 + u * 0.88)) ** 0.35 + dedos, y));
   }
-  // pantalla
+  const geoEmp = new THREE.LatheGeometry(perfil, 18); geoEmp.scale(1.05, 1, 0.85);
+  for (const s of [-1, 1]) {
+    const e = new THREE.Mesh(geoEmp, goma); e.position.set(-0.002, -0.006, s * 0.127); e.rotation.x = s * 0.1; g.add(e);
+    // costura y remate de aluminio arriba y abajo
+    for (const y of [-0.064, 0.058]) { const r = new THREE.Mesh(new THREE.TorusGeometry(0.016, 0.0025, 6, 16), metal); r.rotation.x = Math.PI / 2; r.position.set(-0.002, y - 0.006, s * (0.127 + s * y * 0.1)); g.add(r); }
+  }
+  // pantalla en un marco hundido
   let pantalla = null;
   const geoP = new THREE.PlaneGeometry(0.13, 0.068);
   if (conPantalla) {
@@ -385,25 +479,72 @@ function crearVolante(conPantalla) {
     pantalla = { cv, ctx: cv.getContext('2d'), tex: new THREE.CanvasTexture(cv) };
     pantalla.tex.colorSpace = THREE.SRGBColorSpace;
   }
-  const mp = new THREE.Mesh(geoP, conPantalla ? new THREE.MeshBasicMaterial({ map: pantalla.tex, toneMapped: false }) : negro);
-  mp.rotation.y = -Math.PI / 2; mp.position.set(-0.024, 0.018, 0); g.add(mp);
-  // LEDs de cambio sobre la pantalla
+  const marco = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.078, 0.142), negro); marco.position.set(-0.021, 0.018, 0); g.add(marco);
+  const mp = new THREE.Mesh(geoP, conPantalla ? new THREE.MeshBasicMaterial({ map: pantalla.tex, toneMapped: false }) : new THREE.MeshStandardMaterial({ color: 0x05070a, roughness: 0.15, metalness: 0.3 }));
+  mp.rotation.y = -Math.PI / 2; mp.position.set(-0.0245, 0.018, 0); g.add(mp);
+  // tira de LEDs de cambio en su carcasa, y LEDs de banderas a cada lado
   const leds = [];
-  const geoL = new THREE.BoxGeometry(0.006, 0.008, 0.01);
+  const carcasa = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.014, 0.162), negro); carcasa.position.set(-0.02, 0.066, 0); g.add(carcasa);
+  const geoL = new THREE.BoxGeometry(0.004, 0.007, 0.0085);
   for (let k = 0; k < 15; k++) {
     const col = k < 5 ? 0x22e05c : k < 10 ? 0xff2a2a : 0x3a7bff;
     const m = new THREE.MeshStandardMaterial({ color: 0x111111, emissive: col, emissiveIntensity: 0 });
-    const l = new THREE.Mesh(geoL, m); l.position.set(-0.022, 0.066, -0.07 + k * 0.01); g.add(l); leds.push(m);
+    const l = new THREE.Mesh(geoL, m); l.position.set(-0.0245, 0.066, -0.07 + k * 0.01); g.add(l); leds.push(m);
   }
-  // botones de colores y selectores giratorios
-  const colores = [0xe8202a, 0xf5c518, 0x2f7bff, 0x2fe07a, 0xffffff, 0xff7a00, 0xb84dff, 0x00e5ff];
-  const geoB = new THREE.CylinderGeometry(0.008, 0.008, 0.01, 10); geoB.rotateZ(Math.PI / 2);
-  const posB = [[0.045, -0.085], [0.045, 0.085], [0.025, -0.1], [0.025, 0.1], [-0.01, -0.105], [-0.01, 0.105], [-0.035, -0.05], [-0.035, 0.05]];
-  posB.forEach(([y, z], k) => { const b = new THREE.Mesh(geoB, new THREE.MeshStandardMaterial({ color: colores[k], roughness: 0.4 })); b.position.set(-0.024, y, z); g.add(b); });
-  const geoR = new THREE.CylinderGeometry(0.012, 0.012, 0.012, 14); geoR.rotateZ(Math.PI / 2);
-  for (const [y, z] of [[-0.03, -0.015], [-0.03, 0.015], [-0.055, 0]]) { const r = new THREE.Mesh(geoR, matComun('metal')); r.position.set(-0.026, y, z); g.add(r); }
-  // levas de cambio detrás
-  for (const s of [-1, 1]) { const lv = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.07, 0.05), carbono); lv.position.set(0.03, 0.01, s * 0.1); g.add(lv); }
+  const geoF = new THREE.BoxGeometry(0.004, 0.009, 0.006);
+  const matsF = [0xffc400, 0x2a6bff].map(c => matBoton(0x1a1a10 + c));   // banderas amarilla y azul
+  matsF.forEach((m, k) => { m.emissive.setHex(k ? 0x2a6bff : 0xffc400); m.emissiveIntensity = 0.25; });
+  for (const s of [-1, 1]) for (let k = 0; k < 3; k++) {
+    const l = new THREE.Mesh(geoF, matsF[k === 1 ? 1 : 0]);
+    l.position.set(-0.023, 0.046 - k * 0.013, s * 0.075); g.add(l);
+  }
+  // botones: base metálica y capuchón de color
+  const geoBase = new THREE.CylinderGeometry(0.0092, 0.0098, 0.004, 16); geoBase.rotateZ(Math.PI / 2);
+  const geoCap = new THREE.CylinderGeometry(0.0072, 0.0078, 0.006, 16); geoCap.rotateZ(Math.PI / 2);
+  for (const [y, z, col] of BOTONES_VOL) {
+    const b0 = new THREE.Mesh(geoBase, metal); b0.position.set(-0.022, y, z); g.add(b0);
+    const b = new THREE.Mesh(geoCap, matBoton(col)); b.position.set(-0.026, y, z); g.add(b);
+  }
+  // selectores giratorios: corona moleteada (dientes), tapa y una marca blanca
+  const dientes = new THREE.CylinderGeometry(0.0118, 0.0118, 0.011, 28, 1); dientes.rotateZ(Math.PI / 2);
+  { const p = dientes.attributes.position; for (let i = 0; i < p.count; i++) { const yy = p.getY(i), zz = p.getZ(i), r = Math.hypot(yy, zz); if (r > 0.005) { const a = Math.atan2(zz, yy), f = (Math.round(a / (Math.PI / 14)) % 2 ? 0.9 : 1); p.setY(i, yy * f); p.setZ(i, zz * f); } } dientes.computeVertexNormals(); }
+  const tapa = new THREE.CylinderGeometry(0.0085, 0.0085, 0.004, 20); tapa.rotateZ(Math.PI / 2);
+  const geoMarca = new THREE.BoxGeometry(0.002, 0.0075, 0.0016);
+  const matMarca = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  for (const [y, z] of ROTATIVOS_VOL) {
+    const r = new THREE.Mesh(dientes, matComun('negro')); r.position.set(-0.026, y, z); g.add(r);
+    const tp = new THREE.Mesh(tapa, metal); tp.position.set(-0.032, y, z); g.add(tp);
+    const mk = new THREE.Mesh(geoMarca, matMarca); mk.position.set(-0.0345, y + 0.0045, z); mk.rotation.x = (z > 0 ? -1 : 1) * 0.6; g.add(mk);
+  }
+  // interruptores de palanca arriba, entre las alas
+  for (const s of [-1, 1]) {
+    const base = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.01, 0.012), metal); base.position.set(-0.021, 0.08, s * 0.045); g.add(base);
+    const pal = new THREE.Mesh(new THREE.CylinderGeometry(0.0018, 0.0022, 0.014, 6), metal); pal.position.set(-0.028, 0.084, s * 0.045); pal.rotation.z = Math.PI / 2 - 0.5; g.add(pal);
+  }
+  // levas detrás: cambio arriba (grandes, con punta de aluminio) y embrague abajo
+  for (const s of [-1, 1]) {
+    const lv = new THREE.Mesh(new THREE.BoxGeometry(0.005, 0.07, 0.055), carbono); lv.position.set(0.026, 0.035, s * 0.098); lv.rotation.x = s * 0.25; g.add(lv);
+    const punta = new THREE.Mesh(new THREE.BoxGeometry(0.0055, 0.018, 0.02), metal); punta.position.set(0.026, 0.068, s * 0.122); punta.rotation.x = s * 0.25; g.add(punta);
+    const emb = new THREE.Mesh(new THREE.BoxGeometry(0.005, 0.05, 0.045), carbono); emb.position.set(0.028, -0.045, s * 0.088); emb.rotation.x = -s * 0.35; g.add(emb);
+  }
+  // buje de suelta rápida y conector de datos
+  const buje = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, 0.03, 20).rotateZ(Math.PI / 2), metal); buje.position.set(0.03, 0, 0); g.add(buje);
+  const anillo = new THREE.Mesh(new THREE.TorusGeometry(0.024, 0.004, 8, 20), matComun('negro')); anillo.rotation.y = Math.PI / 2; anillo.position.set(0.04, 0, 0); g.add(anillo);
+  const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.05, 6), negro); cable.position.set(0.035, -0.04, 0.02); cable.rotation.x = 0.6; g.add(cable);
+  // en los coches de los rivales todo lo fijo va en una malla por material (menos llamadas)
+  if (!conPantalla) {
+    const porMat = new Map(), fijos = g.children.filter(m => m.isMesh && !leds.includes(m.material));
+    for (const m of fijos) {
+      m.updateMatrix();
+      const gg = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+      gg.applyMatrix4(m.matrix);
+      for (const k of Object.keys(gg.attributes)) if (!['position', 'normal', 'uv'].includes(k)) gg.deleteAttribute(k);
+      if (!gg.attributes.uv) gg.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(gg.attributes.position.count * 2), 2));
+      if (!porMat.has(m.material)) porMat.set(m.material, []);
+      porMat.get(m.material).push(gg); g.remove(m);
+    }
+    for (const [mat, l] of porMat) g.add(new THREE.Mesh(mergeGeometries(l, false), mat));
+  }
   g.traverse(o => { if (o.isMesh) o.castShadow = true; });
   return { g, pantalla, leds };
 }
@@ -517,7 +658,7 @@ export function crearModelo(opc) {
     // tapa del hueco de las piernas (por delante del pecho, sin cortar el cuerpo del piloto)
     const sh = new THREE.Shape();
     sh.moveTo(0.66, -0.20); sh.quadraticCurveTo(0.72, 0, 0.66, 0.20); sh.lineTo(0.15, 0.25); sh.quadraticCurveTo(0.10, 0, 0.15, -0.25); sh.closePath();
-    const g = new THREE.ShapeGeometry(sh, 12); g.rotateX(Math.PI / 2); g.scale(1, 1, -1); g.translate(0, 0.609, 0);
+    const g = new THREE.ShapeGeometry(sh, 12); g.rotateX(-Math.PI / 2); g.translate(0, 0.609, 0);   // mirando hacia arriba (se ve desde la cabina y la cámara de la cara)
     geo.carbono.push(g);
     geo.negro.push(caja(0.04, 0.10, 0.44, 0.64, 0.64, 0, 0, 0, -0.3));      // salpicadero
   }
@@ -939,7 +1080,7 @@ export function crearModelo(opc) {
       alaDel.position.y = 0.2 - da * 0.06;
       if (da >= 1 && !estadoDanos.alaDel) { estadoDanos.alaDel = true; this.alDesprender?.('alaDel', alaDel); }
       if (da < 0.05 && estadoDanos.alaDel) estadoDanos.alaDel = false;   // morro nuevo en boxes
-      alaDel.visible = !estadoDanos.alaDel;
+      alaDel.visible = !estadoDanos.alaDel && !this.ocultarAla;
       const dt2 = d?.aleronTras || 0;
       alaTras.rotation.set(dt2 * 0.15, 0, dt2 * 0.35);
       if (dt2 >= 0.95 && !estadoDanos.alaTras) { estadoDanos.alaTras = true; this.alDesprender?.('alaTras', alaTras); }

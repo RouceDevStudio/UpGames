@@ -119,7 +119,7 @@ export class Camara {
       const up = new THREE.Vector3(0, 1, 0).transformDirection(m);
       cam.up.copy(up);
       cam.lookAt(mirar.applyMatrix4(m));
-      if (hg) cam.rotateZ(-hg.x * 0.22);        // el horizonte se inclina con la cabeza
+      if (hg) cam.rotateZ(-hg.x * 0.15);        // el horizonte se inclina con la cabeza
       if (tr > 0.001) { cam.rotateZ(Math.sin(t * 29) * tr * 0.08); cam.rotateX(Math.sin(t * 23 + 2) * tr * 0.05); }
       cam.near = 0.05;
       this.iniciada = false;
