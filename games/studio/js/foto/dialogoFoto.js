@@ -1,26 +1,32 @@
-// Hoja «Desde foto»: elegir 1 o 2 fotos, ver el recorte y crear el modelo.
+// Hoja «Desde foto»: 1 foto, 2 fotos o planos (3–4 vistas ortográficas); ver el recorte y crear el modelo.
 import * as THREE from 'three';
-import { mascaraDesdeImagen, limpiarMascara, relieveDesdeMascara, cascoVisual, sangrar } from './fotoA3D.js';
+import { mascaraDesdeImagen, mascaraDePlano, limpiarMascara, relieveDesdeMascara, cascoVisual, cascoPlanos, sangrar } from './fotoA3D.js';
 import * as ia from './ia.js';
 
 const LADO_MAX = 480; // las fotos se analizan reducidas a este lado máximo
+const LADO_MAX_PLANOS = 1024; // los planos necesitan más resolución
 const ALTO_MODELO = 2; // unidades de la escena
+const valida = (f) => !!(f && f.mk && f.mk.area > 50);
 
 export function instalarDialogoFoto({ alCrear, aviso }) {
   const hoja = document.getElementById('hojaFoto');
   const ranuras = [...hoja.querySelectorAll('.ranura')];
   // { img: ImageData, mk, color, puntos: [{x, y, dentro}], recortar: fn | null, prof }
-  const fotos = [null, null];
+  const fotos = [null, null, null, null];
   let n = 1, quitar = false;
   const $ = (id) => document.getElementById(id);
   const tol = $('fTol'), grosor = $('fGrosor'), detalle = $('fDetalle'), invertir = $('fInvertir'), bCrear = $('bCrearFoto');
-  const usaIA = () => $('fIA').checked;
+  const usaIA = () => $('fIA').checked && n !== 3; // los planos (fondo liso de render) van por color
   const estado = (t) => { $('fotoEstado').textContent = t || ''; };
 
-  const actualizarBoton = () => { bCrear.disabled = !fotos.slice(0, n).every((f) => f && f.mk && f.mk.area > 50); };
+  // ranuras que hacen falta en cada modo (en planos, «atrás» es opcional)
+  const necesarias = () => (n === 3 ? [0, 1, 2] : n === 2 ? [0, 1] : [0]);
+  const actualizarBoton = () => { bCrear.disabled = !necesarias().every((i) => valida(fotos[i])); };
   const ayuda = () => {
     const ia = usaIA();
-    $('fotoAyuda').textContent = n === 1
+    $('fotoAyuda').textContent = n === 3
+      ? 'Vistas sin perspectiva del mismo objeto, como los planos de Blender (vista ortográfica): lado con el frente a la izquierda, frente, arriba con el largo en horizontal y, si la tienes, atrás. Se talla el volumen que encaja con todas y se pinta con cada vista. Es el modo para coches y objetos con planos.'
+      : n === 1
       ? (ia ? 'Toca el objeto en la foto: la IA lo separa del fondo (aunque no sea liso) y calcula su profundidad para darle relieve real. La foto queda como textura.'
             : 'Foto del objeto sobre un fondo liso (pared, mesa, papel). La silueta se recorta por color y se infla en 3D con la foto como textura.')
       : 'Dos fotos del mismo objeto: una de frente y otra de lado (girando el objeto 90°), a la misma distancia. Toca el objeto en cada una. Se talla el volumen que encaja con las dos siluetas y se colorea con las fotos.';
@@ -31,10 +37,14 @@ export function instalarDialogoFoto({ alCrear, aviso }) {
   hoja.querySelectorAll('#fotoModo button').forEach((b) => b.addEventListener('click', () => {
     n = +b.dataset.n;
     hoja.querySelectorAll('#fotoModo button').forEach((q) => q.classList.toggle('activo', q === b));
-    ranuras[1].hidden = n === 1;
-    $('filaGrosor').hidden = n === 2;
-    $('filaInvertir').hidden = n === 1;
-    ranuras[0].querySelector('.etq').textContent = n === 1 ? 'Foto' : 'Frente';
+    const etiquetas = n === 3 ? ['Lado (frente a la izquierda)', 'Frente', 'Arriba', 'Atrás (opcional)'] : n === 2 ? ['Frente', 'Lado (desde la derecha)'] : ['Foto'];
+    ranuras.forEach((r, i) => { r.hidden = i >= etiquetas.length; if (etiquetas[i]) r.querySelector('.etq').textContent = etiquetas[i]; });
+    $('filaGrosor').hidden = n !== 1;
+    $('filaInvertir').hidden = n !== 2;
+    $('filaIA').hidden = n === 3;
+    $('filaRuedas').hidden = n !== 3;
+    $('filaPintar').hidden = n !== 3;
+    fotos.forEach((f, i) => f && analizar(i));
     ayuda();
     actualizarBoton();
   }));
@@ -52,7 +62,7 @@ export function instalarDialogoFoto({ alCrear, aviso }) {
       inp.value = '';
       if (!archivo) return;
       try {
-        fotos[i] = await cargar(archivo);
+        fotos[i] = await cargar(archivo, n === 3 ? LADO_MAX_PLANOS : LADO_MAX);
         analizar(i);
       } catch (e) {
         aviso('No se pudo abrir la foto');
@@ -109,7 +119,7 @@ export function instalarDialogoFoto({ alCrear, aviso }) {
         return analizar(i);
       }
     } else {
-      f.mk = mascaraDesdeImagen(f.img, { tolerancia: tol.value / 100 });
+      f.mk = n === 3 ? mascaraDePlano(f.img, { contraste: +tol.value }) : mascaraDesdeImagen(f.img, { tolerancia: tol.value / 100 });
     }
     vistaPrevia(lienzo, f, usaIA() ? f.puntos : null);
     actualizarBoton();
@@ -127,8 +137,9 @@ export function instalarDialogoFoto({ alCrear, aviso }) {
         estado('');
       }
       await new Promise((r) => setTimeout(r, 30)); // deja pintar el «Creando…»
-      const malla = n === 1 ? desdeUnaFoto(fotos[0], +grosor.value / 100, +detalle.value, prof)
-                            : desdeDosFotos(fotos[0], fotos[1], +detalle.value, invertir.checked);
+      const malla = n === 3 ? desdePlanos(fotos, +detalle.value, $('fRuedas').checked, $('fPintar').checked)
+        : n === 1 ? desdeUnaFoto(fotos[0], +grosor.value / 100, +detalle.value, prof)
+        : desdeDosFotos(fotos[0], fotos[1], +detalle.value, invertir.checked);
       if (!malla) aviso('No se encontró el objeto en la foto. Tócalo en la foto o cambia el recorte.');
       else { hoja.hidden = true; alCrear(malla); }
     } catch (e) {
@@ -142,9 +153,9 @@ export function instalarDialogoFoto({ alCrear, aviso }) {
   return { abrir() { hoja.hidden = false; } };
 }
 
-async function cargar(archivo) {
+async function cargar(archivo, ladoMax = LADO_MAX) {
   const bmp = await createImageBitmap(archivo, { imageOrientation: 'from-image' }).catch(() => createImageBitmap(archivo));
-  const k = Math.min(1, LADO_MAX / Math.max(bmp.width, bmp.height));
+  const k = Math.min(1, ladoMax / Math.max(bmp.width, bmp.height));
   const lienzo = document.createElement('canvas');
   lienzo.width = Math.max(1, Math.round(bmp.width * k));
   lienzo.height = Math.max(1, Math.round(bmp.height * k));
@@ -234,6 +245,47 @@ function lienzoDe({ data, width, height }) {
   c.width = width; c.height = height;
   c.getContext('2d').putImageData(new ImageData(data, width, height), 0, 0);
   return c;
+}
+
+// Planos: volumen tallado con todas las vistas y pintado proyectando cada una según hacia dónde
+// mira la superficie (de lado → vista de lado, hacia delante → frente, hacia arriba → arriba…).
+function desdePlanos(fotos, detalle, ruedas, pintar) {
+  const [lado, frente, arriba, atras] = fotos;
+  const r = cascoPlanos({ lado: lado.mk, frente: frente.mk, arriba: valida(arriba) ? arriba.mk : null, atras: valida(atras) ? atras.mk : null },
+    { res: Math.round(detalle * 4), suavizado: 8, ruedas });
+  if (r && ruedas) console.info('ruedas', JSON.stringify(r.ruedas));
+  if (!r) return null;
+  const nv = r.posiciones.length / 3, col = new Float32Array(nv * 3), nr = r.normales;
+  const c = [0, 0, 0], lin = new THREE.Color();
+  const vistas = [
+    [lado, r.uv.lado, (v) => Math.abs(nr[v * 3])],
+    [frente, r.uv.frente, (v) => Math.max(0, nr[v * 3 + 2]) + (valida(atras) ? 0 : Math.max(0, -nr[v * 3 + 2]) * 0.5)],
+    [valida(arriba) ? arriba : null, r.uv.arriba, (v) => Math.max(0, nr[v * 3 + 1])],
+    [valida(atras) ? atras : null, r.uv.atras, (v) => Math.max(0, -nr[v * 3 + 2])],
+  ].filter(([f]) => f);
+  for (let v = 0; v < nv; v++) {
+    let s = 0, rr = 0, gg = 0, bb = 0;
+    for (const [f, uv, peso] of vistas) {
+      const w = peso(v) ** 3 + 1e-4; // la vista más de frente manda
+      const { width: W, height: H, data } = colorDe(f);
+      const x = Math.min(W - 1, Math.max(0, Math.floor(uv[v * 2] * W))), y = Math.min(H - 1, Math.max(0, Math.floor((1 - uv[v * 2 + 1]) * H)));
+      const i = (y * W + x) * 4;
+      rr += w * data[i]; gg += w * data[i + 1]; bb += w * data[i + 2]; s += w;
+    }
+    lin.setRGB(rr / s / 255, gg / s / 255, bb / s / 255, THREE.SRGBColorSpace);
+    col[v * 3] = lin.r; col[v * 3 + 1] = lin.g; col[v * 3 + 2] = lin.b;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(r.posiciones, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(r.normales, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setIndex(new THREE.BufferAttribute(r.indices, 1));
+  // tamaño real: el largo del objeto a 2 unidades por cada «alto» (como el resto de modelos)
+  geo.scale(ALTO_MODELO, ALTO_MODELO, ALTO_MODELO);
+  if (!pintar) geo.deleteAttribute('color');
+  const mat = pintar ? new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.1 })
+                     : new THREE.MeshStandardMaterial({ color: 0xc4c8cf, roughness: 0.45, metalness: 0.05 });
+  return mallaFinal(geo, mat, 'Planos');
 }
 
 function mallaFinal(geo, mat, nombre) {

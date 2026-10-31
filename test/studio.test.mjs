@@ -4,7 +4,7 @@
  */
 import assert from 'assert';
 import { Historial } from '../games/studio/js/deshacer.js';
-import { mascaraDesdeImagen, cajaDeMascara, relieveDesdeMascara, cascoVisual, volumen } from '../games/studio/js/foto/fotoA3D.js';
+import { mascaraDesdeImagen, mascaraDePlano, cajaDeMascara, relieveDesdeMascara, cascoVisual, cascoPlanos, volumen } from '../games/studio/js/foto/fotoA3D.js';
 
 let passed = 0;
 function test(name, fn) {
@@ -129,6 +129,47 @@ test('una foto con profundidad (IA): lo cercano sobresale más y la malla sigue 
     if (x < -0.2) zi = Math.max(zi, z); else if (x > 0.2) zd = Math.max(zd, z);
   }
   assert.ok(zi > zd * 3, `izquierda ${zi} derecha ${zd}`);
+});
+
+test('planos: lado + frente + arriba (arriba al revés) → caja cerrada con el morro detectado', () => {
+  // objeto de 3 de largo, 1 de ancho y 1 de alto, con un «morro» bajo y estrecho en el primer tercio
+  // lado: frente a la izquierda; morro (x < 50) solo la mitad de baja
+  const lado = mascaraDesdeImagen(imagen(170, 70, (x, y) => x >= 10 && x < 160 && y >= 10 && y < 60 && (x >= 60 || y >= 35)));
+  const frente = mascaraDesdeImagen(imagen(70, 70, (x, y) => x >= 10 && x < 60 && y >= 10 && y < 60));
+  // arriba: largo en horizontal, frente a la DERECHA (al revés que el lado); morro estrecho
+  const arriba = mascaraDesdeImagen(imagen(170, 70, (x, y) => x >= 10 && x < 160 && y >= 10 && y < 60 && (x < 110 || (y >= 25 && y < 45))));
+  const m = cascoPlanos({ lado, frente, arriba }, { res: 90, suavizado: 0 });
+  assert.strictEqual(m.arribaInvertido, false, 'frente a la derecha = sin invertir');
+  const arribaAlReves = { ...arriba, mascara: arriba.mascara.slice() };
+  for (let y = 0; y < 70; y++) for (let x = 0; x < 170; x++) arribaAlReves.mascara[y * 170 + x] = arriba.mascara[y * 170 + 169 - x];
+  const m2 = cascoPlanos({ lado, frente, arriba: arribaAlReves }, { res: 90, suavizado: 0 });
+  assert.strictEqual(m2.arribaInvertido, true, 'frente a la izquierda = invertido');
+  assert.ok(Math.abs(volumen(m2.posiciones, m2.indices) - volumen(m.posiciones, m.indices)) < 0.02);
+  assert.ok(esCerrada(m.indices));
+  // volumen esperado: 2/3 del largo lleno (2·1·1) + morro de 1 × 0,5 alto × 0,4 ancho
+  const v = volumen(m.posiciones, m.indices), esperado = 2 + 0.5 * 0.4;
+  assert.ok(Math.abs(v - esperado) < 0.15, `volumen ${v} (esperado ≈ ${esperado})`);
+  assert.ok(Math.abs(m.medidas.largo - 3) < 0.1 && Math.abs(m.medidas.ancho - 1) < 0.05);
+  // el morro (z > 0,5) es bajo: ningún vértice por encima de 0,55 de alto
+  let alto = 0;
+  for (let i = 0; i < m.posiciones.length; i += 3) if (m.posiciones[i + 2] > 0.6) alto = Math.max(alto, m.posiciones[i + 1]);
+  assert.ok(alto < 0.56, `alto del morro ${alto}`);
+});
+
+test('planos de un coche: las ruedas tapadas por la carrocería salen redondas', () => {
+  // lado: carrocería alta en el centro que tapa las esquinas de dos ruedas que tocan el suelo
+  const rueda = (x, y, cx) => Math.hypot(x - cx, y - 60) < 20;
+  const lado = mascaraDePlano(imagen(240, 100, (x, y) => rueda(x, y, 50) || rueda(x, y, 190) || (x >= 20 && x < 220 && y >= 30 && y < 70 && (x > 75 && x < 165 || y < 45))));
+  const frente = mascaraDePlano(imagen(120, 100, (x, y) => y >= 30 && y < 80 && x >= 10 && x < 110));
+  // arriba: ruedas a los lados (separadas) y carrocería estrecha en el centro
+  const arriba = mascaraDePlano(imagen(240, 120, (x, y) => (y >= 10 && y < 110 && x >= 20 && x < 220 && (y >= 40 && y < 80)) || ((y >= 10 && y < 30 || y >= 90 && y < 110) && (Math.abs(x - 50) < 20 || Math.abs(x - 190) < 20))));
+  const sin = cascoPlanos({ lado, frente, arriba }, { res: 120, suavizado: 0 });
+  const con = cascoPlanos({ lado, frente, arriba }, { res: 120, suavizado: 0, ruedas: true });
+  assert.strictEqual(con.ruedas.length, 2, JSON.stringify(con.ruedas));
+  for (const r of con.ruedas) assert.ok(r.bandas[0] && r.bandas[1]);
+  // de caja (lado 2r) a cilindro (π r²): se quita ≈ 21 % del volumen de cada neumático
+  assert.ok(volumen(con.posiciones, con.indices) < volumen(sin.posiciones, sin.indices) * 0.99);
+  assert.ok(esCerrada(con.indices));
 });
 
 console.log(`\n${passed} pruebas correctas`);

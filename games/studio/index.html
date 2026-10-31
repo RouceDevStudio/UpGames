@@ -89,8 +89,9 @@
   <div class="segm" id="fotoModo">
     <button data-n="1" class="activo">1 foto · relieve</button>
     <button data-n="2">2 fotos · frente + lado</button>
+    <button data-n="3">Planos · 3–4 vistas</button>
   </div>
-  <label class="fila marca-lado"><input id="fIA" type="checkbox" checked> Recorte y profundidad con IA (recomendado; la primera vez descarga ≈ 35 MB)</label>
+  <label class="fila marca-lado" id="filaIA"><input id="fIA" type="checkbox" checked> Recorte y profundidad con IA (recomendado; la primera vez descarga ≈ 35 MB)</label>
   <p class="nota" id="fotoAyuda"></p>
   <div class="segm" id="filaZona">
     <button data-zona="anadir" class="activo">Tocar = objeto</button>
@@ -115,10 +116,28 @@
         <label class="btn">Cámara<input type="file" accept="image/*" capture="environment" hidden></label>
       </div>
     </div>
+    <div class="ranura" data-ranura="2" hidden>
+      <canvas width="240" height="180"></canvas>
+      <div class="etq">Arriba</div>
+      <div class="fila botones">
+        <label class="btn">Galería<input type="file" accept="image/*" hidden></label>
+        <label class="btn">Cámara<input type="file" accept="image/*" capture="environment" hidden></label>
+      </div>
+    </div>
+    <div class="ranura" data-ranura="3" hidden>
+      <canvas width="240" height="180"></canvas>
+      <div class="etq">Atrás (opcional)</div>
+      <div class="fila botones">
+        <label class="btn">Galería<input type="file" accept="image/*" hidden></label>
+        <label class="btn">Cámara<input type="file" accept="image/*" capture="environment" hidden></label>
+      </div>
+    </div>
   </div>
   <label class="deslizador" id="filaTol">Recorte del fondo <input id="fTol" type="range" min="4" max="45" value="18"><output id="oTol">18</output></label>
   <label class="deslizador" id="filaGrosor">Grosor <input id="fGrosor" type="range" min="5" max="100" value="35"><output id="oGrosor">35</output></label>
   <label class="deslizador">Detalle <input id="fDetalle" type="range" min="24" max="96" value="64"><output id="oDetalle">64</output></label>
+  <label class="fila marca-lado" id="filaPintar" hidden><input id="fPintar" type="checkbox"> Pintar el modelo con las imágenes (si no, gris liso)</label>
+<label class="fila marca-lado" id="filaRuedas" hidden><input id="fRuedas" type="checkbox" checked> Es un vehículo: redondear las ruedas (las busca donde toca el suelo)</label>
   <label class="fila marca-lado" id="filaInvertir" hidden><input id="fInvertir" type="checkbox"> La foto de lado está tomada desde la izquierda</label>
   <div class="fila botones fin">
     <button id="bCrearFoto" class="primario" disabled>Crear modelo</button>
