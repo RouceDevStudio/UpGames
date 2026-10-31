@@ -12,12 +12,17 @@ import { subdividir } from '../games/studio/js/malla/subdividir.js';
 import { evaluar, nuevoModificador, espejo, matriz, solidificar } from '../games/studio/js/malla/modificadores.js';
 import { poligonosDeMalla, mallaDePoligonos, union, resta, interseccion } from '../games/studio/js/malla/csg.js';
 import { uvAutomatico } from '../games/studio/js/malla/uv.js';
+import { mallaADatos, datosAMalla, comprimir, descomprimir } from '../games/studio/js/archivo/ups.js';
 import * as THREE from '../games/studio/lib/three.module.min.js';
 
 let passed = 0;
+const pendientes = [];
 function test(name, fn) {
-  try { fn(); passed++; console.log(`  ✓ ${name}`); }
-  catch (e) { console.error(`  ✗ ${name}\n    ${e.stack}`); process.exitCode = 1; }
+  const correr = async () => {
+    try { await fn(); passed++; console.log(`  ✓ ${name}`); }
+    catch (e) { console.error(`  ✗ ${name}\n    ${e.stack}`); process.exitCode = 1; }
+  };
+  pendientes.push(pendientes.length ? pendientes[pendientes.length - 1].then(correr) : correr());
 }
 
 // Imagen sintética: fondo blanco y una figura de color donde dentro(x, y) es verdadero.
@@ -408,4 +413,18 @@ test('UV automático: todas las UV dentro de 0..1 y las 6 caras del cubo sin sol
   }
 });
 
+// ---------- Archivos (sprint 6) ----------
+test('formato .ups: malla → datos → gzip → malla, igual que la original', async () => {
+  const m = subdividir(uvAutomatico(cubo()).malla, 1).malla;
+  m.heCol = Array.from({ length: m.nHE * 3 }, (_, i) => (i % 7) / 7);
+  const bytes = await comprimir(JSON.stringify(mallaADatos(m)));
+  const m2 = datosAMalla(JSON.parse(await descomprimir(bytes)));
+  assert.deepStrictEqual([m2.nV, m2.nE, m2.nF], [m.nV, m.nE, m.nF]);
+  for (let i = 0; i < m.pos.length; i++) assert.ok(Math.abs(m.pos[i] - m2.pos[i]) < 1e-4);
+  assert.ok(Math.abs(vol(m) - vol(m2)) < 1e-4);
+  assert.ok(m2.heCol && m2.heCol.length === m.heCol.length);
+  assert.ok(bytes.length < JSON.stringify(mallaADatos(m)).length / 2, 'comprimido');
+});
+
+await Promise.all(pendientes);
 console.log(`\n${passed} pruebas correctas`);

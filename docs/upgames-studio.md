@@ -163,8 +163,8 @@ modulos/studio.js + rutas/studio.js   en el servidor: proyectos en la nube y pub
 3. ✅ **Operaciones:** extruir, inset, loop cut, borrar, fusionar, suavizar, simetría X; subdividir (Catmull-Clark). Pendiente: biselar.
 4. ✅ **Modificadores:** espejo, subdivisión, matriz, solidificar y booleanas (unión, resta, intersección con BSP) en una pila no destructiva; se ocultan, se quitan o se aplican.
 5. ✅ **Materiales y texturas:** PBR (color, metal, rugosidad, emisión, opacidad, barniz), biblioteca de 8 materiales, entorno de luz para reflejos, UV automático por direcciones con vista UV, textura desde la galería o la cámara.
-6. **Archivos:** guardado automático; exportar GLB/OBJ/STL; importar GLB/OBJ.
-7. **Esculpir y pintar:** versión básica.
+6. ✅ **Archivos:** guardado automático (IndexedDB, cada 10 s y al salir, se recupera al abrir); formato .ups comprimido; exportar GLB/OBJ/STL; abrir e importar GLB/OBJ/.ups.
+7. ✅ **Esculpir y pintar:** inflar, alisar, pellizcar, arrastrar, aplanar y máscara, con simetría y «más detalle»; pintura por vértice sobre el modelo.
 8. **APK:** proyecto Capacitor, flujo de GitHub Actions, enlace de descarga en el servidor.
 9. **Prueba real:** modelar el monoplaza y cargarlo en APEX GP.
 

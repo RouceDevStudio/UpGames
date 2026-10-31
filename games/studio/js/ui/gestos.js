@@ -9,7 +9,9 @@ const MOVER = 9;          // píxeles antes de que un toque cuente como arrastre
 const LARGA = 520;        // ms para la pulsación larga
 const DOBLE = 320;        // ms entre toques del doble toque
 
-export function instalarGestos(el, camOrb, { ocupado, alTocar, alDobleToque, alPulsacionLarga }) {
+// pincel (opcional): { empezar(x, y) → true si el dedo toca el modelo, mover(x, y), terminar() }
+export function instalarGestos(el, camOrb, { ocupado, alTocar, alDobleToque, alPulsacionLarga, pincel }) {
+  let trazo = null; // dedo que esculpe o pinta
   const ptrs = new Map(); // id → { x, y }
   let inicio = null;      // primer dedo: { id, x, y, t, movido }
   let temporizador = 0;
@@ -31,6 +33,11 @@ export function instalarGestos(el, camOrb, { ocupado, alTocar, alDobleToque, alP
     // El gizmo registra su pointerdown antes: si ya está arrastrando, ese dedo es suyo.
     if (ocupado()) { ignorar.add(e.pointerId); return; }
     el.setPointerCapture?.(e.pointerId);
+    if (trazo !== null) { pincel.terminar(); trazo = null; } // segundo dedo: se acaba el trazo
+    else if (ptrs.size === 0 && pincel && (e.pointerType !== 'mouse' || e.button === 0) && !e.shiftKey && pincel.empezar(e.clientX, e.clientY)) {
+      trazo = e.pointerId;
+      return;
+    }
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, boton: e.button, mayus: e.shiftKey });
     if (ptrs.size === 1) {
       inicio = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), movido: false };
@@ -51,6 +58,7 @@ export function instalarGestos(el, camOrb, { ocupado, alTocar, alDobleToque, alP
   });
 
   el.addEventListener('pointermove', (e) => {
+    if (e.pointerId === trazo) { pincel.mover(e.clientX, e.clientY); return; }
     const p = ptrs.get(e.pointerId);
     if (!p || ignorar.has(e.pointerId)) return;
     const dx = e.clientX - p.x, dy = e.clientY - p.y;
@@ -79,6 +87,7 @@ export function instalarGestos(el, camOrb, { ocupado, alTocar, alDobleToque, alP
   });
 
   const soltar = (e) => {
+    if (e.pointerId === trazo) { pincel.terminar(); trazo = null; return; }
     if (ignorar.delete(e.pointerId)) return;
     if (!ptrs.has(e.pointerId)) return;
     ptrs.delete(e.pointerId);

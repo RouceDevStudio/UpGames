@@ -8,12 +8,13 @@ import { Escena } from './escena.js';
 import { PRIMITIVAS, crearPrimitiva } from './primitivas.js';
 import { crearGizmo } from './herramientas/gizmo.js';
 import { instalarDialogoFoto } from './foto/dialogoFoto.js';
-import { exportarGLB } from './archivo/glb.js';
+import { instalarGuardado, importar, exportar } from './archivo/proyecto.js';
 import { ModoEdicion, mallaDe, contextoModificadores } from './edicion.js';
 import { evaluar } from './malla/modificadores.js';
 import { poligonosDeMalla } from './malla/csg.js';
 import { instalarModificadores } from './ui/modificadores.js';
 import { instalarMateriales } from './ui/materiales.js';
+import { Pincel } from './herramientas/pincel.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { construirMonoplaza } from './plantillas/monoplaza.js';
 import { construirPiloto } from './plantillas/piloto.js';
@@ -66,7 +67,7 @@ const caja = new THREE.BoxHelper(undefined, 0x00d2ff);
 caja.material.depthTest = false; caja.material.transparent = true; caja.material.opacity = 0.6;
 caja.renderOrder = 2; caja.visible = false;
 scene.add(caja);
-escena.alCambiar(() => { caja.visible = !!escena.seleccion && !edicion.activo; if (caja.visible) caja.setFromObject(escena.seleccion); });
+escena.alCambiar(() => { caja.visible = !!escena.seleccion && !edicion.activo && !(typeof pincel !== 'undefined' && pincel.activo); if (caja.visible) caja.setFromObject(escena.seleccion); });
 
 function anadirPrimitiva(id) {
   const m = crearPrimitiva(id);
@@ -94,22 +95,54 @@ const ctxMods = {
   },
 };
 contextoModificadores(ctxMods);
+let modoActual = 'objeto';
 function ponerModo(modo) {
-  if (modo === 'editar') {
-    const o = escena.seleccion;
-    if (!o) { aviso('Toca primero el objeto que quieres editar'); return; }
+  const o = escena.seleccion;
+  if (modo !== 'objeto' && modo !== modoActual) {
+    if (!o) { aviso('Toca primero el objeto'); return; }
     if (o.userData.bloqueado) { aviso('El objeto está bloqueado'); return; }
+  }
+  // salir del modo anterior
+  if (edicion.activo && modo !== 'editar') { edicion.salir(); escena.avisar(); }
+  if (pincel.activo && (modo !== modoActual || modo === 'objeto')) { pincel.salir(); gizmo.tc.enabled = true; escena.avisar(); }
+  if (modo === 'editar') {
     abrirHoja(null);
     edicion.entrar(o);
-    caja.visible = false;
-  } else if (edicion.activo) {
-    edicion.salir();
-    escena.avisar();
+  } else if (modo === 'esculpir' || modo === 'pintar') {
+    abrirHoja(null);
+    pincel.entrar(o, modo);
+    gizmo.tc.detach(); gizmo.tc.enabled = false;
+    pintarPincel();
   }
+  modoActual = edicion.activo ? 'editar' : pincel.activo ? pincel.modo : 'objeto';
+  caja.visible = modoActual === 'objeto' && !!escena.seleccion;
+  if (modoActual === 'objeto') gizmo.sincronizar();
   document.body.classList.toggle('editando', edicion.activo);
+  document.body.classList.toggle('pincelando', pincel.activo);
   $('barraEdicion').hidden = !edicion.activo;
-  document.querySelectorAll('[data-modo]').forEach((q) => q.classList.toggle('activo', q.dataset.modo === (edicion.activo ? 'editar' : 'objeto')));
+  $('barraPincel').hidden = !pincel.activo;
+  document.querySelectorAll('[data-modo]').forEach((q) => q.classList.toggle('activo', q.dataset.modo === modoActual));
 }
+
+// ---------- Esculpir y pintar ----------
+const pincel = new Pincel({ camara, lienzo, historial, escena });
+function pintarPincel() {
+  const esc = pincel.modo === 'esculpir';
+  document.querySelectorAll('[data-pincel]').forEach((b) => { b.hidden = !esc; b.classList.toggle('activo', b.dataset.pincel === pincel.tipo); });
+  $('filaColorPincel').hidden = esc; $('bLimpiarMascara').hidden = !esc; $('bRestar').hidden = !esc;
+  $('bRestar').classList.toggle('activo', pincel.restar);
+  $('bSimetriaPincel').classList.toggle('activo', pincel.simetria);
+  $('pRadio').value = pincel.radio; $('pFuerza').value = pincel.fuerza;
+  $('infoPincel').textContent = pincel.malla ? `${pincel.malla.nV} vértices${pincel.malla.nV < 2000 && esc ? ' · pulsa «Más detalle» para esculpir con precisión' : ''}` : '';
+}
+document.querySelectorAll('[data-pincel]').forEach((b) => b.addEventListener('click', () => { pincel.tipo = b.dataset.pincel; pintarPincel(); }));
+$('bRestar').onclick = () => { pincel.restar = !pincel.restar; pintarPincel(); };
+$('bSimetriaPincel').onclick = () => { pincel.simetria = !pincel.simetria; pintarPincel(); };
+$('pRadio').oninput = () => { pincel.radio = +$('pRadio').value; };
+$('pFuerza').oninput = () => { pincel.fuerza = +$('pFuerza').value; };
+$('pColor').oninput = () => { pincel.color.set($('pColor').value); };
+$('bMasDetalle').onclick = () => { if (!pincel.masDetalle()) aviso('La malla ya tiene mucho detalle'); pintarPincel(); };
+$('bLimpiarMascara').onclick = () => pincel.limpiarMascara();
 function pintarEdicion() {
   if (!edicion.activo) return;
   document.querySelectorAll('[data-tipo]').forEach((q) => q.classList.toggle('activo', q.dataset.tipo === edicion.tipo));
@@ -132,7 +165,7 @@ $('bTodo').onclick = () => edicion.seleccionarTodo();
 $('bBucle').onclick = () => { if (!edicion.seleccionarBucle()) aviso('Toca primero una arista'); };
 $('bRayos').onclick = () => { edicion.rayosX = !edicion.rayosX; edicion.aplicarRayosX(); pintarEdicion(); };
 // si el objeto que se edita desaparece (borrado o deshecho), volver al modo objeto
-escena.alCambiar(() => { if (edicion.activo && edicion.obj.parent !== escena.raiz) ponerModo('objeto'); });
+escena.alCambiar(() => { if ((edicion.activo && edicion.obj.parent !== escena.raiz) || (pincel.activo && pincel.obj.parent !== escena.raiz)) ponerModo('objeto'); });
 
 // ---------- Selección con el dedo ----------
 const ray = new THREE.Raycaster();
@@ -146,6 +179,7 @@ function objetoEn(x, y) {
 
 instalarGestos(lienzo, camOrb, {
   ocupado: () => gizmo.arrastrando,
+  pincel: { empezar: (x, y) => pincel.activo && pincel.empezar(x, y), mover: (x, y) => pincel.mover(x, y), terminar: () => pincel.terminar() },
   alTocar: (x, y, sumar) => { if (edicion.activo) edicion.tocar(x, y, sumar); else escena.seleccionar(objetoEn(x, y)); },
   alDobleToque: (x, y) => { if (!edicion.activo) { const o = objetoEn(x, y); if (o) escena.seleccionar(o); } enfocar(); },
   alPulsacionLarga: (x, y, id) => {
@@ -213,19 +247,42 @@ const ponerModoGizmo = (m) => {
 document.querySelectorAll('[data-gizmo]').forEach((b) => b.addEventListener('click', () => ponerModoGizmo(b.dataset.gizmo)));
 
 document.querySelectorAll('[data-modo]').forEach((b) => b.addEventListener('click', () => {
-  if (b.dataset.modo === 'objeto' || b.dataset.modo === 'editar') ponerModo(b.dataset.modo);
+  if (['objeto', 'editar', 'esculpir', 'pintar'].includes(b.dataset.modo)) ponerModo(b.dataset.modo);
   else if (b.dataset.modo === 'material') { abrirHoja(null); materiales.abrir(); }
   else if (b.dataset.sprint) aviso(`«${b.textContent}» llega en el sprint ${b.dataset.sprint} de la etapa 1`);
   else if (b.dataset.etapa) aviso(`«${b.textContent}» llega en la etapa ${b.dataset.etapa}`);
 }));
 
-$('bExportar').onclick = async () => {
-  const capas = [];
-  escena.raiz.traverse((o) => { if (o.userData.capa && o.visible) { capas.push(o); o.visible = false; } });
-  try { await exportarGLB(escena.raiz, 'upgames-studio'); aviso('GLB exportado'); }
-  catch (e) { aviso(e.message === 'vacío' ? 'No hay nada visible para exportar' : 'No se pudo exportar'); console.error(e); }
-  finally { for (const o of capas) o.visible = true; }
-};
+// ---------- Archivo: guardar, abrir, importar, exportar ----------
+const guardado = instalarGuardado({ escena, historial, aviso });
+$('bArchivo').onclick = () => abrirHoja($('hojaArchivo').hidden ? 'hojaArchivo' : null);
+document.querySelectorAll('[data-arch]').forEach((b) => b.addEventListener('click', async () => {
+  const acc = b.dataset.arch;
+  if (acc === 'nuevo') {
+    if (edicion.activo) ponerModo('objeto');
+    const c = crearPrimitiva('cubo'); c.material.color.setHex(0xc9d1dc); c.name = 'Cubo';
+    escena.reemplazarTodo([c], 'Nuevo proyecto');
+    abrirHoja(null); aviso('Proyecto nuevo (puedes deshacerlo)');
+    return;
+  }
+  if (edicion.activo) ponerModo('objeto');
+  try { await exportar(acc, escena); aviso(`${acc.toUpperCase()} listo`); }
+  catch (e) { console.error(e); aviso(e.message === 'vacío' ? 'No hay nada visible para exportar' : 'No se pudo exportar'); }
+}));
+for (const [id, reemplazar] of [['fAbrir', true], ['fImportar', false]]) {
+  $(id).addEventListener('change', async (e) => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    if (edicion.activo) ponerModo('objeto');
+    try {
+      const objs = await importar(f);
+      if (reemplazar) escena.reemplazarTodo(objs, `Abrir ${f.name}`);
+      else escena.anadirVarios(objs, `Importar ${f.name}`);
+      abrirHoja(null); enfocar();
+      aviso(`${f.name}: ${objs.length} objeto${objs.length === 1 ? '' : 's'}`);
+    } catch (err) { console.error(err); aviso(err.message || 'No se pudo abrir'); }
+  });
+}
 
 // Hojas emergentes
 function abrirHoja(id) { document.querySelectorAll('.hoja').forEach((h) => { h.hidden = h.id !== id; }); }
@@ -324,7 +381,7 @@ addEventListener('keydown', (e) => {
   else if (k === '3') camOrb.vista('lado');
   else if (k === '7') camOrb.vista('arriba');
   else if (k === '5') camOrb.vista('persp');
-  else if (k === 'escape') { if (edicion.activo) ponerModo('objeto'); else escena.seleccionar(null); abrirHoja(null); }
+  else if (k === 'escape') { if (edicion.activo || pincel.activo) ponerModo('objeto'); else escena.seleccionar(null); abrirHoja(null); }
 });
 
 // ---------- Avisos ----------
@@ -363,7 +420,18 @@ escena.raiz.add(cubo);
 escena.avisar();
 pintarPanel();
 
+// recuperar el último trabajo guardado en este dispositivo
+guardado.recuperar().then((r) => {
+  if (!r || !r.objetos.length) return;
+  escena.raiz.remove(cubo);
+  for (const o of r.objetos) escena.raiz.add(o);
+  escena.avisar();
+  guardado.marcarLimpio();
+  const s = escena.esferaDe(null); camOrb.enfocar(s.center, s.radius);
+  aviso(`Proyecto recuperado (${new Date(r.fecha).toLocaleString('es')})`);
+});
+
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 
 // Para las pruebas en el navegador
-window.studio = { escena, historial, camOrb, gizmo, anadirPrimitiva, edicion, ponerModo, materiales, modificadores };
+window.studio = { escena, historial, camOrb, gizmo, anadirPrimitiva, edicion, ponerModo, materiales, modificadores, guardado };

@@ -57,6 +57,16 @@ export class Escena {
     return objs;
   }
 
+  // Cambia todos los objetos por otros (Nuevo / Abrir): un paso de deshacer.
+  reemplazarTodo(nuevos, nombre = 'Abrir') {
+    const viejos = [...this.objetos];
+    this.historial.hacer({
+      nombre,
+      hacer: () => { this.seleccionar(null); for (const o of viejos) this.raiz.remove(o); for (const o of nuevos) this.raiz.add(o); this.avisar(); },
+      deshacer: () => { this.seleccionar(null); for (const o of nuevos) this.raiz.remove(o); for (const o of viejos) this.raiz.add(o); this.avisar(); },
+    });
+  }
+
   borrar(obj = this.seleccion) {
     if (!obj) return;
     const pos = this.objetos.indexOf(obj);

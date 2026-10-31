@@ -226,3 +226,20 @@ body.editando .herramientas-ed { display: flex; }
 #vistaUV { width: 160px; height: 160px; border-radius: 10px; border: 1px solid var(--borde); }
 .mat-tex-bot { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 8px; }
 .mat-tex-bot .deslizador { grid-template-columns: 70px 1fr 34px; }
+
+/* Archivo */
+.rejilla.archivo { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+.rejilla.archivo button, .rejilla.archivo .btn { height: 64px; flex-direction: column; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 2px; border-radius: 16px; }
+.rejilla.archivo small { font-size: 10px; font-weight: 500; color: var(--tenue); }
+
+/* Esculpir / pintar */
+#barraPincel { position: fixed; z-index: 5; top: calc(60px + var(--sa-t)); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: calc(100vw - 170px); }
+#barraPincel .grupo { flex-wrap: wrap; justify-content: center; }
+#barraPincel .grupo button { font-size: 13px; }
+#barraPincel .grupo button.activo { background: #ff8a1f; color: #fff; }
+.ajustes-pincel label, .color-pincel { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--tenue); padding: 0 6px; }
+.ajustes-pincel input[type=range] { width: 90px; accent-color: #ff8a1f; }
+.color-pincel input { width: 40px; height: 32px; border: 0; background: none; }
+#infoPincel { font-size: 12px; color: var(--tenue); text-shadow: 0 1px 2px #000; }
+body.pincelando .acciones, body.pincelando #gizmos { display: none; }
+@media (max-height: 520px) { #barraPincel { top: calc(54px + var(--sa-t)); } #barraPincel .grupo button { height: 34px; padding: 0 8px; } #infoPincel { display: none; } }
