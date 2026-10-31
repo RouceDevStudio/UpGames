@@ -342,9 +342,10 @@ function registrar(app, deps) {
         } catch (e) { logger.error(`[apexgp] reto: ${e.message}`); err(res, 500, 'No se pudo crear el reto'); }
     });
 
-    app.get('/apexgp/reto/:id', async (req, res) => {
+    // (el parámetro no se llama :id: index.js exige que todo :id sea un ObjectId de MongoDB)
+    app.get('/apexgp/reto/:codigo', async (req, res) => {
         try {
-            const r = await Reto.findOne({ id: String(req.params.id).slice(0, 20) }).select('usuario circuito tiempo fantasma').lean();
+            const r = await Reto.findOne({ id: String(req.params.codigo).slice(0, 20) }).select('usuario circuito tiempo fantasma').lean();
             if (!r) return err(res, 404, 'Ese reto no existe o ha caducado');
             res.set('Cache-Control', 'public, max-age=300');
             ok(res, { usuario: r.usuario, circuito: r.circuito, tiempo: r.tiempo, fantasma: r.fantasma, hz: A.FANTASMA_HZ });
