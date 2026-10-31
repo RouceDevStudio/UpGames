@@ -9,6 +9,7 @@ import { mallaDe, ponerMalla } from '../edicion.js';
 import { mallas } from '../escena.js';
 import { VERSION_UPS, mallaADatos, datosAMalla, comprimir, descomprimir } from './ups.js';
 import { exportarGLB } from './glb.js';
+import { descargar } from './descargar.js';
 
 // ---------- escena ↔ datos ----------
 
@@ -181,12 +182,6 @@ export async function importar(archivo) {
 
 // ---------- exportar ----------
 
-function descargar(datos, nombre, tipo) {
-  const url = URL.createObjectURL(new Blob([datos], { type: tipo }));
-  const a = Object.assign(document.createElement('a'), { href: url, download: nombre });
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 5000);
-}
 
 // Oculta un momento lo que no es parte del modelo (capas del modo Editar, imágenes de referencia).
 function visiblesSinCapas(raiz) {
@@ -214,8 +209,8 @@ export async function exportar(formato, escena, nombre = 'upgames-studio') {
     for (const o of escena.objetos) if (o.visible) { const c = o.clone(false); c.userData = {}; grupo.add(c); }
     if (!grupo.children.length) throw new Error('vacío');
     grupo.updateMatrixWorld(true);
-    if (formato === 'obj') descargar(new OBJExporter().parse(grupo), `${nombre}.obj`, 'text/plain');
-    else if (formato === 'stl') descargar(new STLExporter().parse(grupo, { binary: true }), `${nombre}.stl`, 'model/stl');
-    else if (formato === 'ups') descargar(await guardarBytes(escena), `${nombre}.ups`, 'application/octet-stream');
+    if (formato === 'obj') await descargar(new OBJExporter().parse(grupo), `${nombre}.obj`, 'text/plain');
+    else if (formato === 'stl') await descargar(new STLExporter().parse(grupo, { binary: true }), `${nombre}.stl`, 'model/stl');
+    else if (formato === 'ups') await descargar(await guardarBytes(escena), `${nombre}.ups`, 'application/octet-stream');
   } finally { volver(); }
 }

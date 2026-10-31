@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">UpGames Studio</string>
+    <string name="title_activity_main">UpGames Studio</string>
+    <string name="package_name">games.upgames.studio</string>
+    <string name="custom_url_scheme">games.upgames.studio</string>
+</resources>

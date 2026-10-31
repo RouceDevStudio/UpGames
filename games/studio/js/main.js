@@ -323,6 +323,7 @@ document.querySelectorAll('[data-modo]').forEach((b) => b.addEventListener('clic
 }));
 
 // ---------- Archivo: guardar, abrir, importar, exportar ----------
+if (window.Capacitor || window.StudioArchivo) document.querySelector('.app-android')?.remove(); // ya estamos en la app
 const guardado = instalarGuardado({ escena, historial, aviso });
 let proyecto = { id: null, nombre: 'Sin nombre' };
 try { proyecto = JSON.parse(localStorage.getItem('studio-proyecto')) || proyecto; } catch { /* sin almacenamiento */ }

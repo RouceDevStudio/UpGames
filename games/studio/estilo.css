@@ -322,3 +322,5 @@ body.presentando #arriba, body.presentando #gizmos, body.presentando #abajo, bod
 body.presentando #estado, body.presentando #barraEdicion, body.presentando #barraPincel, body.presentando .hoja { display: none !important; }
 #barraPresentacion { position: fixed; z-index: 8; left: 50%; bottom: calc(16px + var(--sa-b)); transform: translateX(-50%); }
 #barraPresentacion button { padding: 0 14px; }
+
+.app-android a { color: var(--acento2); font-weight: 700; }

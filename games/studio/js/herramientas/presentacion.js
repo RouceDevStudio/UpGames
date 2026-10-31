@@ -6,6 +6,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { descargar } from '../archivo/descargar.js';
 
 export class Presentacion {
   constructor({ renderer, scene, camara, ocultar, sol }) {
@@ -91,10 +92,7 @@ export class Presentacion {
     const url64 = el.toDataURL('image/png');
     const blob = await (await fetch(url64)).blob();
     this.renderer.setPixelRatio(pr); this.composer.setPixelRatio?.(pr); this.composer.setSize(w, h);
-    const url = URL.createObjectURL(blob);
-    const a = Object.assign(document.createElement('a'), { href: url, download: `${nombre}.png` });
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    await descargar(blob, `${nombre}.png`, 'image/png');
     return blob.size;
   }
 }

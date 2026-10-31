@@ -169,8 +169,8 @@ modulos/studio.js + rutas/studio.js   en el servidor: proyectos en la nube y pub
      zona, capas de escultura; pintura en textura con capas y calcomanías; grupos; rellenar, puente,
      cuchillo, imán a vértices y medidas; modo Presentación (GTAO, captura PNG); biblioteca de piezas;
      IA en la nube (TRELLIS vía rutas/studio.js, necesita HF_TOKEN en Railway).
-8. **APK:** proyecto Capacitor, flujo de GitHub Actions, enlace de descarga en el servidor.
-9. **Prueba real:** modelar el monoplaza y cargarlo en APEX GP.
+8. ✅ **APK:** proyecto Capacitor, flujo de GitHub Actions, enlace de descarga en el servidor.
+9. ✅ **Prueba real:** modelar el monoplaza y cargarlo en APEX GP.
 
 En cada sprint: pruebas automáticas de las operaciones de malla (sin navegador, con Node), prueba
 en el móvil (gestos y FPS) y publicación en upgames.games/studio.

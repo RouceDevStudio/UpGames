@@ -1098,7 +1098,7 @@ export function crearModelo(opc) {
         m.neum.scale.set(1, pin ? 0.9 : 1, pin ? 1.08 : 1);
         const om = Math.abs(car.velocidad || 0) / m.radio;
         m.borroso.material.opacity = Math.min(0.9, Math.max(0, (om - 25) / 50));
-        m.borroso.visible = m.borroso.material.opacity > 0.02 && !m.suelta && !this.ruedaOculta[k];
+        m.borroso.visible = m.borroso.material.opacity > 0.02 && !m.suelta && !this.ruedaOculta[k] && !this.cocheGLB;
         const sd = d?.susp[k] || 0;
         m.giro.rotation.x = sd * 0.16 * (w.izquierda ? -1 : 1);
         m.giro.position.y = m.base.y - (pin ? m.radio * 0.1 : 0) - sd * 0.04 + this.elevar;
@@ -1124,12 +1124,12 @@ export function crearModelo(opc) {
       alaDel.position.y = 0.2 - da * 0.06;
       if (da >= 1 && !estadoDanos.alaDel) { estadoDanos.alaDel = true; this.alDesprender?.('alaDel', alaDel); }
       if (da < 0.05 && estadoDanos.alaDel) estadoDanos.alaDel = false;   // morro nuevo en boxes
-      alaDel.visible = !estadoDanos.alaDel && !this.ocultarAla;
+      alaDel.visible = !estadoDanos.alaDel && !this.ocultarAla && !this.cocheGLB;
       const dt2 = d?.aleronTras || 0;
       alaTras.rotation.set(dt2 * 0.15, 0, dt2 * 0.35);
       if (dt2 >= 0.95 && !estadoDanos.alaTras) { estadoDanos.alaTras = true; this.alDesprender?.('alaTras', alaTras); }
       if (dt2 < 0.05 && estadoDanos.alaTras) estadoDanos.alaTras = false;
-      alaTras.visible = !estadoDanos.alaTras;
+      alaTras.visible = !estadoDanos.alaTras && !this.cocheGLB; // con coche propio (GLB) los alerones son los suyos
       // espejos y deflectores se rompen según el daño acumulado en SU lado: el primer golpe
       // en la izquierda puede llevarse el espejo izquierdo; el segundo, los deflectores
       const zn = d?.zona;
