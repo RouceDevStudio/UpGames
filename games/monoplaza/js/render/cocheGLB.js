@@ -34,7 +34,7 @@ function preparar(gltf) {
     let g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
     // la UV del escaneo pasa al canal 1 (normales y sombreado); la 0 es la de la librea
     if (g.attributes.uv) { g.setAttribute('uv1', g.attributes.uv); g.deleteAttribute('uv'); }
-    proyectarUV(g);
+    if (!o.name.startsWith('rueda')) proyectarUV(g);      // las ruedas no llevan librea
     g.computeBoundingSphere();
     g.userData.compartida = true;
     partes[o.name] = g;
@@ -43,7 +43,38 @@ function preparar(gltf) {
   const detalle = mat?.map || null, normal = mat?.normalMap || null;
   for (const t of [detalle, normal]) if (t) { t.channel = 1; t.anisotropy = 4; }
   if (detalle) detalle.colorSpace = THREE.NoColorSpace;     // se usa como dato (gris), no como color
+  // ruedas: goma y llanta del escaneo, oscuras (el gris del escaneo da el relieve)
   return { partes, detalle, normal };
+}
+
+/**
+ * Material de las ruedas escaneadas de un coche: goma mate, llanta metálica y la franja del
+ * compuesto en el flanco (como las de verdad). `color` es el del compuesto; se cambia con
+ * `mat.userData.compuesto.value.set(...)` al montar otro juego.
+ */
+export function materialRuedaGLB(dat, color) {
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, map: dat.detalle, normalMap: dat.normal, roughness: 0.85, metalness: 0 });
+  const comp = { value: new THREE.Color(color) };
+  m.userData.compuesto = comp;
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.cComp = comp;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vPR;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvPR = position;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 cComp; varying vec3 vPR;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        {
+          float r = length(vPR.xy), g = diffuseColor.r;
+          float llanta = 1.0 - smoothstep(0.225, 0.24, r);
+          float flanco = smoothstep(0.1, 0.13, abs(vPR.z));
+          float franja = flanco * smoothstep(0.272, 0.278, r) * (1.0 - smoothstep(0.296, 0.302, r));
+          vec3 goma = vec3(0.045, 0.046, 0.05) * (0.6 + g * 0.8);
+          vec3 metal = vec3(0.16, 0.165, 0.175) * (0.5 + g);
+          diffuseColor.rgb = mix(mix(goma, metal, llanta), cComp * 0.85, franja);
+        }`)
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.35, 1.0 - smoothstep(0.225, 0.24, length(vPR.xy)));')
+      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor = mix(metalnessFactor, 0.75, 1.0 - smoothstep(0.225, 0.24, length(vPR.xy)));');
+  };
+  m.customProgramCacheKey = () => 'ruedaGLB';
+  return m;
 }
 
 const cacheMat = new WeakMap();

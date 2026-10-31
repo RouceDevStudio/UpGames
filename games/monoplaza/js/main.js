@@ -3017,6 +3017,7 @@ function actualizarRepe(dt) {
   escombros?.verHasta?.(tRepe);
   const c = r.proxies[r.coche], m = modelos[r.coche];
   const planoAntes = camRepe.planoActual;
+  m?.piloto?.glb?.verCabeza(r.cam !== 'cabina');      // en la cámara de cabina de la repe tampoco se ve el casco por dentro
   camRepe.actualizar(camara.cam, c, m, r.cam, dt);
   tv.foco = c ? { x: c.x, y: c.y, z: c.z, psi: c.psi } : null;
   if (r.ruta) camaraRuta(r.u);

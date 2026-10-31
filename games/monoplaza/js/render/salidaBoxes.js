@@ -35,7 +35,7 @@ export class SalidaBoxes {
     // mecánico de los cinturones y el volante (lleva el volante en la mano derecha)
     this.mec = persona('mecanico', 21);
     this.mec.raiz.position.set(0.72, 0, -0.98); this.mec.raiz.rotation.y = -Math.PI / 2 + 0.5;
-    this.volanteMano = modelo.volanteG ? modelo.volanteG.clone() : null;
+    this.volanteMano = modelo.volanteG && !modelo.volanteEscaneado ? modelo.volanteG.clone() : null;   // el escaneado ya va en las manos del piloto
     if (this.volanteMano) { this.volanteMano.rotation.set(0, 0, 0); this.volanteMano.position.set(0.05, -0.1, 0.12); this.mec.manoDerecha().add(this.volanteMano); }
     // el del cartel, delante del morro, mirando al coche
     this.paleta = persona('mecanico', 1);

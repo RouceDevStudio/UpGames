@@ -9,7 +9,7 @@ import { proyectarUV, dibujarLibrea, materialLibrea } from './librea.js';
 import { normalPliegues } from './personas.js';
 import { crearPiloto } from './piloto.js';
 import { PilotoGLB, cargarPilotoGLB, pilotoGLBListo, VOLANTE_GLB } from './pilotoGLB.js';
-import { cargarCocheGLB, cocheGLBListo, materialCocheGLB, RUEDAS_GLB } from './cocheGLB.js';
+import { cargarCocheGLB, cocheGLBListo, materialCocheGLB, materialRuedaGLB, RUEDAS_GLB } from './cocheGLB.js';
 
 const A = COCHE.wheelbase * (1 - COCHE.repartoDel); // eje delantero
 const B = COCHE.wheelbase * COCHE.repartoDel;       // eje trasero
@@ -483,7 +483,7 @@ function crearVolante(conPantalla) {
   }
   const marco = new THREE.Mesh(new THREE.BoxGeometry(0.006, 0.078, 0.142), negro); marco.position.set(-0.021, 0.018, 0); g.add(marco);
   const mp = new THREE.Mesh(geoP, conPantalla ? new THREE.MeshBasicMaterial({ map: pantalla.tex, toneMapped: false }) : new THREE.MeshStandardMaterial({ color: 0x05070a, roughness: 0.15, metalness: 0.3 }));
-  mp.rotation.y = -Math.PI / 2; mp.position.set(-0.0245, 0.018, 0); g.add(mp);
+  mp.rotation.y = -Math.PI / 2; mp.position.set(-0.0245, 0.018, 0); g.add(mp); mp.name = 'pantalla';
   // tira de LEDs de cambio en su carcasa, y LEDs de banderas a cada lado
   const leds = [];
   const carcasa = new THREE.Mesh(new THREE.BoxGeometry(0.008, 0.014, 0.162), negro); carcasa.position.set(-0.02, 0.066, 0); g.add(carcasa);
@@ -1091,7 +1091,7 @@ export function crearModelo(opc) {
   // el escaneo), los alerones van dentro de sus grupos (se rompen y salen volando como antes) y
   // las ruedas del juego se colocan donde estaban las del escaneo. Las piezas procedurales que
   // ya trae el escaneo (suspensión, halo, retrovisores, flap del DRS) se ocultan.
-  let cuerpoLejos = null;
+  let cuerpoLejos = null, matRuedaGLB = null;
   const propia = (m) => { if (m.geometry.userData.compartida) { m.geometry = m.geometry.clone(); m.geometry.userData.compartida = false; } };
   function ponerCocheGLB(dat, datLejos) {
     if (!dat || cuerpo.userData.glb) return;
@@ -1111,6 +1111,14 @@ export function crearModelo(opc) {
     ruedas.forEach((r, k) => {
       const x = k < 2 ? RUEDAS_GLB.del : RUEDAS_GLB.tras, z = Math.sign(r.base.z) * RUEDAS_GLB.z;
       r.base.x = x; r.base.z = z; r.giro.position.x = x; r.giro.position.z = z;
+      // las ruedas del escaneo (llanta, tuercas y goma) en lugar de las procedurales: giran con
+      // el eje y doblan con la dirección igual que antes
+      const g = dat.partes['rueda' + ((k < 2 ? 0 : 2) + (r.base.z > 0 ? 1 : 0))];
+      if (!g) return;
+      for (const h of [...r.rot.children, ...r.giro.children]) if (h !== r.rot) ocultar(h);
+      matRuedaGLB = matRuedaGLB || materialRuedaGLB(dat, (COMPUESTOS[modelo.compuesto] || COMPUESTOS.medio).color);
+      const m = new THREE.Mesh(g, matRuedaGLB); m.castShadow = true; m.receiveShadow = true;
+      r.rot.add(m); r.mallaGLB = m;
     });
     // de lejos, la versión baja (la cambia el nivel de detalle de main.js)
     if (datLejos) {
@@ -1141,7 +1149,7 @@ export function crearModelo(opc) {
         m.neum.scale.set(1, pin ? 0.9 : 1, pin ? 1.08 : 1);
         const om = Math.abs(car.velocidad || 0) / m.radio;
         m.borroso.material.opacity = Math.min(0.9, Math.max(0, (om - 25) / 50));
-        m.borroso.visible = m.borroso.material.opacity > 0.02 && !m.suelta && !this.ruedaOculta[k];
+        m.borroso.visible = m.borroso.material.opacity > 0.02 && !m.suelta && !this.ruedaOculta[k] && !m.mallaGLB;
         const sd = d?.susp[k] || 0;
         m.giro.rotation.x = sd * 0.16 * (w.izquierda ? -1 : 1);
         m.giro.position.y = m.base.y - (pin ? m.radio * 0.1 : 0) - sd * 0.04 + this.elevar;
@@ -1229,6 +1237,7 @@ export function crearModelo(opc) {
       const c = COMPUESTOS[nombre] || COMPUESTOS.medio;
       const tx = texturaTapacubos(c.color);
       for (const mt of [matTapaDel, matTapaTras]) { mt.map = tx; mt.needsUpdate = true; }
+      matRuedaGLB?.userData.compuesto.value.set(c.color);
       this.compuesto = nombre;
     },
     reponerPiezas() {
@@ -1248,6 +1257,13 @@ export function crearModelo(opc) {
       if (p && !piloto.glb) {
         piloto.usarGLB(new PilotoGLB(p, { traje: colores.base, casco: colores.acento }));
         columna.position.set(VOLANTE_GLB.x, VOLANTE_GLB.y, 0); columna.rotation.z = VOLANTE_GLB.caida;
+        // el volante es el que sostiene el piloto escaneado; del procedural solo queda la
+        // pantalla (marchas, deltas, ERS), encajada en el hueco de la pantalla del escaneo
+        for (const h of volante.g.children) {
+          if (h.name === 'pantalla') { h.position.set(-0.031, 0.06, 0); h.scale.setScalar(0.72); }
+          else { h.visible = false; h.userData.oculto = true; }
+        }
+        modelo.volanteEscaneado = true;
       }
     };
     const ya = [cocheGLBListo(nivel), cocheGLBListo('bajo'), pilotoGLBListo(!cabina)];

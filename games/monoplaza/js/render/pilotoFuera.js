@@ -4,6 +4,8 @@
 
 import * as THREE from 'three';
 import { Persona } from './personas.js';
+import { PilotoDePie, pilotoDePieListo, cargarPilotoDePie } from './pilotoGLB.js';
+cargarPilotoDePie();
 
 const MAX = 4;                 // pilotos a pie a la vez (rendimiento)
 const _v = new THREE.Vector3();
@@ -33,7 +35,7 @@ export class PilotosFuera {
     // sale por el lado del muro más cercano
     const lado = (p.d ?? 0) >= 0 ? 1 : -1;
     const f = { per, coche, modelo, participante, lado, estado: 'sale', t: 0, herido, salud: herido ? 0.55 : 1,
-      pos: new THREE.Vector3(coche.x, coche.y + 0.45, coche.z), vel: new THREE.Vector3(), rumbo: coche.psi, tumbado: 0, giro: 0 };
+      pos: new THREE.Vector3(coche.x, coche.y + 0.45, coche.z), vel: new THREE.Vector3(), rumbo: coche.psi, tumbado: 0, giro: 0, colores: { traje: equipo?.base || '#0d47ff', casco: equipo?.acento || '#ffffff' } };
     per.raiz.position.copy(f.pos);
     per.raiz.rotation.y = -coche.psi;
     per.poner('sentado', 0.01);
@@ -91,7 +93,16 @@ export class PilotosFuera {
         f.pos.y = (t < 3.4 ? base : suelo(pr.d)) + alto;
         // mira hacia delante en el coche, luego hacia el coche (de lado) antes de marcharse
         f.rumbo = t < 3.4 ? f.coche.psi : Math.atan2(-nz, -nx);
-        if (t > 5.2) { f.estado = 'camina'; f.t = 0; per.poner('de_pie', 0.4); }
+        if (t > 5.2) {
+          f.estado = 'camina'; f.t = 0; per.poner('de_pie', 0.4);
+          // ya en el suelo: el modelo escaneado de pie (mismo casco y mono) sigue andando
+          const dp = this.calidad >= 1 && pilotoDePieListo();
+          if (dp) {
+            const nuevo = new PilotoDePie(dp, { traje: f.colores?.traje, casco: f.colores?.casco });
+            nuevo.raiz.position.copy(per.raiz.position); nuevo.raiz.rotation.copy(per.raiz.rotation);
+            this.scene.remove(per.raiz); this.scene.add(nuevo.raiz); f.per = nuevo;
+          }
+        }
       } else if (f.estado === 'camina') {
         // hacia el muro y, al llegar, por encima de él hasta quedar detrás
         const objD = f.lado * (muro + 2.6);
