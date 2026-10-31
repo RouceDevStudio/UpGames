@@ -2095,10 +2095,14 @@ function actualizarFinal(dt) {
         sonido.ovacion(3);
         const g = top[0], nom = g.nombre.replace('@', '');
         const frase = FRASES_GANADOR[Math.floor(Math.random() * FRASES_GANADOR.length)](nom, g.equipo.nombre);
-        setTimeout(() => { if (finCarrera?.fase === 'podio') { $('#entTit').textContent = `🎙️ ${nom} · ${g.equipo.nombre}`; $('#entTxt').textContent = `«${frase}»`; $('#entrevista').classList.add('visible'); radio.decir(frase, { tipo: 'megafonia' }); } }, 4500);
+        f.entrevista = () => { $('#entTit').textContent = `🎙️ ${nom} · ${g.equipo.nombre}`; $('#entTxt').textContent = `«${frase}»`; $('#entrevista').classList.add('visible'); radio.decir(frase, { tipo: 'megafonia' }); };
       } else terminarFinal();
     }
   } else if (f.fase === 'podio') {
+    // el himno con la bandera del ganador; la ovación al acabar y la entrevista con el champán
+    if (!f.himno && f.t > 2) { f.himno = true; $('#cineEtiqueta').textContent = '🎺 HIMNO'; sonido.himno?.(); }
+    if (!f.ovacion2 && f.t > 10) { f.ovacion2 = true; $('#cineEtiqueta').textContent = '🏆 PODIO'; sonido.ovacion(3); }
+    if (!f.entrevistado && f.t > 13) { f.entrevistado = true; f.entrevista?.(); }
     if (!f.podio.actualizar(dt, efectos, camara.cam)) terminarFinal();
   }
 }
@@ -2889,7 +2893,8 @@ function nivelDetalle() {
   const cp = camara.cam.position;
   const dSombra = calidad >= 2 ? 55 : calidad >= 1 ? 45 : 32;
   for (const m of modelos) {
-    if (!m._mallas) prepararLod(m);
+    // (se rehace cuando llega el piloto 3D, que se carga aparte)
+    if (!m._mallas || m._conGLB !== !!m.piloto?.glb) { prepararLod(m); m._conGLB = !!m.piloto?.glb; }
     const d = vLod.copy(m.raiz.position).sub(cp).length();
     const nivel = d > 130 ? 2 : d > 85 ? 1 : 0, sombra = d < dSombra;
     if (nivel !== m._nivel) {

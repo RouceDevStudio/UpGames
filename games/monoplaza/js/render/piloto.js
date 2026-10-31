@@ -179,7 +179,17 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
     grupo, cuello, casco: cabeza,
     cabezaG: { x: 0, vx: 0, z: 0, vz: 0 },   // inclinación de la cabeza (la usa la cámara de cabina)
     mirada: 0,
-    saludo: 0, _saludar: false,
+    saludo: 0, _saludar: false, glb: null,
+    /** Cambia el piloto procedural por el modelo 3D aparejado (se siguen usando sus cálculos). */
+    usarGLB(p) {
+      if (this.glb) return;
+      this.glb = p;
+      // el modelo viene en coordenadas de la carrocería (el grupo va 4 cm más abajo); del
+      // procedural no queda nada a la vista (marcado como oculto para el nivel de detalle)
+      for (const o of grupo.children) { o.visible = false; o.traverse(q => { q.userData.oculto = true; }); }
+      p.raiz.position.y = -grupo.position.y;
+      grupo.add(p.raiz);
+    },
     /** Saluda al público con la mano izquierda fuera de la cabina (vuelta de enfriamiento). */
     saludar(si) { this._saludar = !!si; },
     /** La mano de ese lado (-1 izq., 1 dcha.) pulsa un botón del volante o tira de la leva. */
@@ -265,6 +275,9 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
         ik(brazos[s], S, T, lado);
         hombros[s].position.copy(S);
       }
+      // el modelo 3D: la cabeza como el cuello procedural y las manos con el volante (en un golpe
+      // fuerte las sueltan y vuelven al centro)
+      if (this.glb && this.glb.malla.visible && grupo.visible) this.glb.posar(cuello.rotation, angVol * (1 - choque.soltar));
       return angVol;
     },
   };

@@ -1,6 +1,10 @@
 // Podio tras la carrera: tres escalones con su fondo de patrocinadores, los tres primeros sin
-// casco y con gorra, el himno (ovación), el champán que se rocían y confeti. Se monta fuera de
-// la pista, junto a la recta de meta, y tiene su propia cámara que da vueltas lentamente.
+// casco y con gorra, el himno mientras sube la bandera del equipo ganador, el trofeo, el
+// champán que se rocían y confeti; abajo, el equipo del ganador salta y canta. Se monta fuera
+// de la pista, junto a la recta de meta, y tiene su propia cámara.
+//
+// Tiempos: 0-2 s saludan · 2-10 s himno (quietos, la bandera sube) · 10-12 s trofeo ·
+// 12-19 s champán · hasta 21 s celebran.
 
 import * as THREE from 'three';
 import { Persona } from './personas.js';
@@ -17,6 +21,18 @@ function texturaNumero(n, color) {
   x.fillText(String(n), 128, 70);
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
+function texturaBandera(equipo) {
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 160;
+  const x = cv.getContext('2d');
+  x.fillStyle = equipo.base || '#0d47ff'; x.fillRect(0, 0, 256, 160);
+  x.fillStyle = equipo.acento || '#ffffff'; x.fillRect(0, 62, 256, 36);
+  x.fillStyle = '#ffffff'; x.strokeStyle = 'rgba(0,0,0,0.5)'; x.lineWidth = 6;
+  x.font = '900 italic 40px Arial'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  const txt = (equipo.corto === 'UPG' ? 'UPGAMES' : (equipo.nombre || '').split(' ')[0].toUpperCase()).slice(0, 10);
+  x.strokeText(txt, 128, 80); x.fillText(txt, 128, 80);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+export const DURACION_PODIO = 21;
 function texturaFondo() {
   const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 384;
   const x = cv.getContext('2d');
@@ -65,6 +81,24 @@ export class Podio {
       this.grupo.add(per.raiz);
       return per;
     });
+    // bandera del equipo ganador: sube por el mástil durante el himno y ondea
+    const ganador = top[0].equipo;
+    const mastil = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 4.6, 8), new THREE.MeshStandardMaterial({ color: 0xc9ced6, metalness: 0.85, roughness: 0.3 }));
+    mastil.position.set(0, 2.3, -1.9); this.grupo.add(mastil);
+    this.geoBandera = new THREE.PlaneGeometry(1.3, 0.8, 12, 4); this.geoBandera.translate(0.65, 0, 0);
+    this.bandera = new THREE.Mesh(this.geoBandera, new THREE.MeshStandardMaterial({ map: texturaBandera(ganador), side: THREE.DoubleSide, roughness: 0.8 }));
+    this.bandera.position.set(0.03, 1.0, -1.88); this.grupo.add(this.bandera);
+    this._bx = Float32Array.from(this.geoBandera.attributes.position.array);
+    // el equipo del ganador, abajo frente al podio, mirando a sus pilotos
+    this.equipo = [];
+    const n = calidad >= 2 ? 10 : 6, texto = ganador.corto === 'UPG' ? 'UPGAMES' : (ganador.nombre || '').split(' ')[0].toUpperCase();
+    for (let k = 0; k < n; k++) {
+      const per = new Persona({ color: ganador.base, texto, numero: 40 + k, rol: k % 4 === 3 ? 'ingeniero' : 'mecanico', calidad });
+      const fila = k % 2, x = (k - (n - 1) / 2) * 0.62 + (fila ? 0.3 : 0);
+      per.raiz.position.set(x, 0, 2.3 + fila * 0.7 + Math.random() * 0.15); per.raiz.rotation.y = Math.PI / 2 + (Math.random() - 0.5) * 0.4;
+      per.poner('de_pie', 0.01); per._fase = Math.random() * 6;
+      this.grupo.add(per.raiz); this.equipo.push(per);
+    }
     // trofeo del ganador
     const trofeo = new THREE.Group();
     const copa = new THREE.Mesh(new THREE.LatheGeometry([0.02, 0.08, 0.1, 0.11, 0.1, 0.06, 0.03, 0.03, 0.07].map((r, i) => new THREE.Vector2(r, i * 0.05)), 16), matOro);
@@ -75,15 +109,15 @@ export class Podio {
     this._p = new THREE.Vector3();
   }
 
-  /** Avanza la ceremonia: devuelve false al terminar (unos 13 s). */
+  /** Avanza la ceremonia: devuelve false al terminar (DURACION_PODIO). */
   actualizar(dt, efectos, cam) {
     this.t += dt;
     const t = this.t;
     this.pilotos.forEach((per, k) => {
-      // 0-2 s: saludan; 2-4 s: el ganador levanta el trofeo; 4-11 s: champán para todos
       if (t < 2) per.poner(k === 0 ? 'celebra' : 'senala', 0.3);
-      else if (t < 4) per.poner(k === 0 ? 'celebra' : 'de_pie', 0.3);
-      else if (t < 11) {
+      else if (t < 10) { per.poner('de_pie', 0.3); per.extra.hD = [0, 0, 0]; }    // himno: quietos, mirando la bandera
+      else if (t < 12) { per.poner(k === 0 ? 'celebra' : 'de_pie', 0.3); per.extra.hD = [0, 0, 0]; }
+      else if (t < 19) {
         per.poner('senala', 0.25);
         // rocía: la botella apunta a los otros y sacude
         per.extra.hD = [0, Math.sin(t * 9 + k) * 0.25, Math.sin(t * 13 + k * 2) * 0.15];
@@ -97,22 +131,37 @@ export class Podio {
           }
         }
       } else { per.poner('celebra', 0.4); per.extra.hD = [0, 0, 0]; }
-      per.salto = t > 0.5 && t < 2.5 && k === 0 ? 0.5 : 0;
+      per.salto = (t > 0.5 && t < 2.5 && k === 0) || (t > 10 && t < 11.5 && k === 0) ? 0.5 : 0;
       per.actualizar(dt);
     });
+    // el equipo: aplaude y salta, quieto durante el himno y loco con el champán
+    for (const per of this.equipo) {
+      const himno = t > 2 && t < 10;
+      per.poner(himno ? 'de_pie' : 'celebra', 0.3);
+      per.salto = himno ? 0 : 0.6 + 0.4 * Math.sin(per._fase);
+      per.extra.hD = himno ? [0, 0, 0] : [0, Math.sin(t * 8 + per._fase) * 0.3, 0];
+      per.actualizar(dt);
+    }
+    // la bandera sube con el himno y ondea con el viento
+    this.bandera.position.y = 1.0 + 3.0 * Math.min(1, Math.max(0, (t - 2) / 7.5));
+    const pa = this.geoBandera.attributes.position, b = this._bx;
+    for (let i = 0; i < pa.count; i++) { const x = b[i * 3]; pa.setZ(i, Math.sin(x * 5 - t * 6) * 0.09 * x); }
+    pa.needsUpdate = true;
     // confeti al principio, de los colores del ganador
-    if (efectos && t < 6 && Math.random() < 0.7) {
+    if (efectos && ((t < 2.5) || (t > 10 && t < 16)) && Math.random() < 0.7) {
       this._p.set((Math.random() - 0.5) * 5, 4.5, (Math.random() - 0.3) * 2).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.grupo.rotation.y).add(this.grupo.position);
       const c = new THREE.Color().setHSL(Math.random(), 0.8, 0.6);
       for (let i = 0; i < 4; i++) efectos.piedras.emitir(this._p.x, this._p.y, this._p.z, (Math.random() - 0.5) * 2, -0.5, (Math.random() - 0.5) * 2, 0.05, 1, 2.5, 0, c.r, c.g, c.b);
     }
-    // cámara: de frente, dando la vuelta despacio y acercándose
+    // cámara: de frente con el equipo abajo; en el himno sube hacia la bandera; luego se acerca
     if (cam) {
-      const a = this.grupo.rotation.y + Math.sin(t * 0.22) * 0.5, r = 6.2 - Math.min(2.2, t * 0.22);
-      cam.position.set(this.grupo.position.x + Math.sin(a) * r, this.grupo.position.y + 2.0, this.grupo.position.z + Math.cos(a) * r);
-      cam.lookAt(this.grupo.position.x, this.grupo.position.y + 1.75, this.grupo.position.z);
+      const a = this.grupo.rotation.y + Math.sin(t * 0.18) * 0.45;
+      const r = t < 2 ? 7.5 : t < 10 ? 7.5 - (t - 2) * 0.15 : Math.max(4.2, 6.3 - (t - 10) * 0.3);
+      const mira = t > 2 && t < 10 ? 1.9 + 0.9 * Math.min(1, (t - 2) / 7.5) : 1.6;
+      cam.position.set(this.grupo.position.x + Math.sin(a) * r, this.grupo.position.y + 2.1, this.grupo.position.z + Math.cos(a) * r);
+      cam.lookAt(this.grupo.position.x, this.grupo.position.y + mira, this.grupo.position.z);
     }
-    return t < 13;
+    return t < DURACION_PODIO;
   }
 
   quitar() { this.scene.remove(this.grupo); }

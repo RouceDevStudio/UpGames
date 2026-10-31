@@ -8,6 +8,8 @@ import { texturaCarbono } from './texturas.js';
 import { proyectarUV, dibujarLibrea, materialLibrea } from './librea.js';
 import { normalPliegues } from './personas.js';
 import { crearPiloto } from './piloto.js';
+import { PilotoGLB, cargarPilotoGLB, pilotoGLBListo, VOLANTE_GLB } from './pilotoGLB.js';
+import { cargarCocheGLB, cocheGLBListo, materialCocheGLB, RUEDAS_GLB } from './cocheGLB.js';
 
 const A = COCHE.wheelbase * (1 - COCHE.repartoDel); // eje delantero
 const B = COCHE.wheelbase * COCHE.repartoDel;       // eje trasero
@@ -806,6 +808,7 @@ export function crearModelo(opc) {
   const carroceria = new THREE.Group();
   if (forroCabina) carroceria.add(forroCabina);
   const cuerpo = unir(geo.librea, pintura, true);
+  cuerpo.name = 'cuerpo';
   carroceria.add(cuerpo);
   const mCarbono = unir(geo.carbono, carbono), mNegro = unir(geo.negro, negro);
   carroceria.add(mCarbono); carroceria.add(mNegro);
@@ -988,6 +991,7 @@ export function crearModelo(opc) {
   let nAbol = 0, posOrig = null, nrmOrig = null;
   function abollar(lista) {
     if (lista.length === nAbol) return;
+    propia(cuerpo);
     const g = cuerpo.geometry, p = g.attributes.position, nr = g.attributes.normal, P = p.array, N = nr.array;
     if (!posOrig) { posOrig = P.slice(); nrmOrig = N.slice(); }
     if (lista.length < nAbol) { P.set(posOrig); N.set(nrmOrig); nAbol = 0; }
@@ -1030,7 +1034,9 @@ export function crearModelo(opc) {
   let desintegrado = false;
   function partir(modelo3d) {
     const mallas = [cuerpo, mCarbono, mNegro, mMetal].filter(Boolean);
+    if (cuerpoLejos) { cuerpoLejos.visible = false; cuerpoLejos.userData.oculto = true; }
     for (const malla of mallas) {
+      propia(malla);
       const g = malla.geometry, p = g.attributes.position, P = p.array;
       if (!malla.userData.orig) malla.userData.orig = (malla === cuerpo && posOrig) ? posOrig.slice() : P.slice();
       const trozos = [[], [], []];          // pontones/cubierta, caja de cambios, difusor y escape
@@ -1069,6 +1075,7 @@ export function crearModelo(opc) {
     calor.visible = false; pivDrs.visible = false; luzLluvia.visible = false;
   }
   function recomponer() {
+    if (cuerpoLejos) cuerpoLejos.userData.oculto = false;
     for (const malla of [cuerpo, mCarbono, mNegro, mMetal].filter(Boolean)) {
       if (!malla.userData.orig) continue;
       malla.geometry.attributes.position.array.set(malla.userData.orig); malla.geometry.attributes.position.needsUpdate = true;
@@ -1077,6 +1084,42 @@ export function crearModelo(opc) {
     if (posOrig) cuerpo.geometry.attributes.normal.array.set(nrmOrig);
     cuerpo.geometry.attributes.normal.needsUpdate = true;
     posOrig = null; nrmOrig = null; nAbol = 0;          // las abolladuras se vuelven a tomar desde el coche entero
+  }
+
+  // ── Coche escaneado (modelo 3D) en lugar de la carrocería procedural ──
+  // Se cambia la geometría de `cuerpo` (así abolladuras y desintegración funcionan igual sobre
+  // el escaneo), los alerones van dentro de sus grupos (se rompen y salen volando como antes) y
+  // las ruedas del juego se colocan donde estaban las del escaneo. Las piezas procedurales que
+  // ya trae el escaneo (suspensión, halo, retrovisores, flap del DRS) se ocultan.
+  let cuerpoLejos = null;
+  const propia = (m) => { if (m.geometry.userData.compartida) { m.geometry = m.geometry.clone(); m.geometry.userData.compartida = false; } };
+  function ponerCocheGLB(dat, datLejos) {
+    if (!dat || cuerpo.userData.glb) return;
+    cuerpo.userData.glb = true;
+    const matG = materialCocheGLB(pintura, dat);
+    cuerpo.geometry = dat.partes.cuerpo; cuerpo.material = matG;
+    posOrig = null; nrmOrig = null; nAbol = 0;
+    const ocultar = (o) => { o.visible = false; o.traverse(q => { q.userData.oculto = true; }); };
+    for (const m of [mCarbono, mNegro, mMetal, forroCabina]) if (m) ocultar(m);
+    for (const gp of gruposPieza) ocultar(gp.g);
+    for (const [grupo, nombre] of [[alaDel, 'alaDel'], [alaTras, 'alaTras']]) {
+      for (const h of grupo.children) ocultar(h);
+      if (!dat.partes[nombre]) continue;
+      const m = new THREE.Mesh(dat.partes[nombre], matG); m.position.copy(grupo.position).negate(); m.castShadow = true; m.receiveShadow = true;
+      grupo.add(m);
+    }
+    ruedas.forEach((r, k) => {
+      const x = k < 2 ? RUEDAS_GLB.del : RUEDAS_GLB.tras, z = Math.sign(r.base.z) * RUEDAS_GLB.z;
+      r.base.x = x; r.base.z = z; r.giro.position.x = x; r.giro.position.z = z;
+    });
+    // de lejos, la versión baja (la cambia el nivel de detalle de main.js)
+    if (datLejos) {
+      cuerpoLejos = new THREE.Mesh(datLejos.partes.cuerpo, materialCocheGLB(pintura, datLejos));
+      cuerpoLejos.castShadow = true; cuerpoLejos.visible = false; cuerpoLejos.userData.lejos = true;
+      carroceria.add(cuerpoLejos);
+      modelo.cuerpoLejos = cuerpoLejos;
+    }
+    modelo.conGLB = true;
   }
 
   let tPantalla = 0;
@@ -1194,6 +1237,23 @@ export function crearModelo(opc) {
       for (const g of gruposPieza) g.rota = false;
     },
   };
+  // el coche y el piloto escaneados (detallados en tu coche, más ligeros en los demás) en cuanto
+  // estén cargados; el piloto escaneado va sentado en la cabina del coche escaneado y la columna
+  // de dirección se pone donde él tiene las manos
+  if (calidad >= 1 && opc.glb !== false) {
+    const nivel = cabina ? 'alto' : 'medio';
+    const poner = ([a, b, p]) => {
+      if (!a) return;
+      ponerCocheGLB(a, b);
+      if (p && !piloto.glb) {
+        piloto.usarGLB(new PilotoGLB(p, { traje: colores.base, casco: colores.acento }));
+        columna.position.set(VOLANTE_GLB.x, VOLANTE_GLB.y, 0); columna.rotation.z = VOLANTE_GLB.caida;
+      }
+    };
+    const ya = [cocheGLBListo(nivel), cocheGLBListo('bajo'), pilotoGLBListo(!cabina)];
+    if (ya.every(Boolean)) poner(ya);
+    else Promise.all([cargarCocheGLB(nivel), cargarCocheGLB('bajo'), cargarPilotoGLB(!cabina)]).then(poner);
+  }
   return modelo;
 }
 

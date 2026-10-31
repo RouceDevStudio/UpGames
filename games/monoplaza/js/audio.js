@@ -426,6 +426,43 @@ export class Sonido {
     });
   }
 
+  /**
+   * Himno del podio: una fanfarria propia (no es el himno de ningún país) con metales
+   * sintetizados a tres voces, bajo, timbales y un platillo al empezar. Dura ~8 s.
+   */
+  himno() {
+    if (!this.listo) return 0;
+    const ctx = this.ctx, t0 = ctx.currentTime + 0.05, negra = 0.66;
+    const hz = (n) => 233.08 * Math.pow(2, n / 12);    // semitonos desde si bemol 3
+    const sal = ctx.createGain(); sal.gain.value = 0.5; sal.connect(this.maestro); sal.connect(this.envioEco);
+    const metal = (n, ini, dur, vol, tipo = 'sawtooth') => {
+      const t = t0 + ini * negra, d = dur * negra;
+      const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 1.2;
+      f.frequency.setValueAtTime(700, t); f.frequency.linearRampToValueAtTime(2600, t + 0.08); f.frequency.setTargetAtTime(1500, t + 0.1, 0.3);
+      const g = ctx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.05); g.gain.setTargetAtTime(vol * 0.75, t + 0.06, 0.2);
+      g.gain.setValueAtTime(vol * 0.75, t + d - 0.08); g.gain.linearRampToValueAtTime(0, t + d + 0.05);
+      for (const det of [-6, 5]) { const o = ctx.createOscillator(); o.type = tipo; o.frequency.value = hz(n); o.detune.value = det; o.connect(f); o.start(t); o.stop(t + d + 0.1); }
+      f.connect(g); g.connect(sal);
+    };
+    const timbal = (n, ini, vol = 0.5) => {
+      const t = t0 + ini * negra;
+      const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(hz(n - 24) * 1.02, t); o.frequency.exponentialRampToValueAtTime(hz(n - 24), t + 0.15);
+      const g = ctx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.005); g.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+      o.connect(g); g.connect(sal); o.start(t); o.stop(t + 1.3);
+      this._rafaga(0.12, 180, 'lowpass', vol * 0.25, t - ctx.currentTime);
+    };
+    // melodía [nota, inicio, duración] en negras; acordes [notas, inicio, duración]
+    const mel = [[7, 0, 0.75], [12, 0.75, 0.25], [12, 1, 1.5], [14, 2.5, 0.5], [16, 3, 1], [12, 4, 1], [17, 5, 1.5], [16, 6.5, 0.5], [14, 7, 1], [12, 8, 1], [9, 9, 1], [14, 10, 0.75], [12, 10.75, 0.25], [12, 11, 1]];
+    const aco = [[[0, 4, 7], 0, 2.5], [[0, 4, 7], 2.5, 1.5], [[5, 9, 12], 4, 2], [[5, 9, 12], 6, 1], [[2, 7, 11], 7, 2], [[5, 9, 14], 9, 1], [[7, 11, 14], 10, 1], [[0, 4, 7], 11, 1.2]];
+    for (const [n, ini, dur] of mel) { metal(n + 12, ini, dur, 0.13); metal(n, ini, dur, 0.06, 'square'); }
+    for (const [ns, ini, dur] of aco) { for (const n of ns) metal(n, ini, dur, 0.045); metal(ns[0] - 12, ini, dur, 0.08); }
+    for (const b of [0, 2.5, 4, 7, 9, 10, 11]) timbal(b % 2 ? 7 : 0, b, b === 11 ? 0.7 : 0.45);
+    for (let k = 0; k < 10; k++) timbal(7, 10.5 + k * 0.05, 0.12 + k * 0.02);    // redoble final
+    this._rafaga(2.2, 6500, 'highpass', 0.12, 0.05);                                // platillo al empezar
+    this._rafaga(2.6, 6500, 'highpass', 0.14, 0.05 + 11 * negra);                   // y al terminar
+    return 12.2 * negra;
+  }
+
   // chasquido y estática de la radio del equipo
   /** Chasquido de la radio del equipo (grabación real): apertura antes de la voz y cierre al
    *  terminar. Devuelve cuánto dura (ms) para que la voz empiece justo después. */

@@ -7,6 +7,9 @@
 // Visor del monoplaza para revisar el modelado: ?gris=1 (como en un editor 3D), ?vista=3q|lado|arriba|frente|cabina|cara
 import * as THREE from 'three';
 import { crearModelo } from '../js/render/cocheModelo.js';
+import { cargarPilotoGLB } from '../js/render/pilotoGLB.js';
+import { cargarCocheGLB } from '../js/render/cocheGLB.js';
+await Promise.all([cargarPilotoGLB(false), cargarPilotoGLB(true), cargarCocheGLB('alto'), cargarCocheGLB('medio'), cargarCocheGLB('bajo')]);
 import { EQUIPOS } from '../js/config.js';
 const q = new URLSearchParams(location.search);
 const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -25,7 +28,7 @@ const suelo = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshStan
 suelo.rotation.x = -Math.PI / 2; suelo.receiveShadow = true; scene.add(suelo);
 scene.add(new THREE.GridHelper(40, 40, 0x555555, 0x4a4a4a));
 const ie = +(q.get('equipo') || 0);
-const m = crearModelo({ equipo: EQUIPOS[ie], equipado: { patron: EQUIPOS[ie].patron, numero: 7, casco: 'rayas' }, calidad: +(q.get('calidad') ?? 3), cabina: ['cabina', 'volante'].includes(q.get('vista')) || !!q.get('pantalla') });
+const m = crearModelo({ equipo: EQUIPOS[ie], equipado: { patron: EQUIPOS[ie].patron, numero: 7, casco: 'rayas' }, calidad: +(q.get('calidad') ?? 3), cabina: ['cabina', 'volante'].includes(q.get('vista')) || !!q.get('pantalla') || !!q.get('alto'), glb: !q.get('procedural') });
 if (q.get('sinPiloto') && m.piloto?.grupo) m.piloto.grupo.visible = false;
 if (q.get('gris')) m.raiz.traverse(o => { if (o.isMesh && !o.material.emissive?.getHex?.()) o.material = new THREE.MeshStandardMaterial({ color: 0xb8b8b8, roughness: 0.55 }); });
 scene.add(m.raiz);
@@ -58,5 +61,5 @@ if (['cabina', 'cara', 'volante'].includes(q.get('vista'))) { m.raiz.updateMatri
 else { cam.position.set(...p); cam.lookAt(...t); }
 cam.updateProjectionMatrix();
 r.render(scene, cam);
-window.visor = { scene, cam, m, THREE }; window.listo = true;
+window.visor = { scene, cam, m, THREE, r }; window.listo = true;
 </script></body></html>

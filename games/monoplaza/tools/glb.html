@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;background:#333}</style>
+<script type="importmap">{ "imports": { "three": "../lib/three.module.min.js", "three/addons/": "../lib/addons/" } }</script></head><body>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const q = new URLSearchParams(location.search);
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(innerWidth, innerHeight); document.body.appendChild(r.domElement);
+r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping;
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x3a3d44);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.2)); const d = new THREE.DirectionalLight(0xffffff, 2.5); d.position.set(2, 3, 2); scene.add(d);
+const g = await new GLTFLoader().loadAsync(q.get('f') || '../modelos/piloto_traje.glb');
+scene.add(g.scene);
+const box = new THREE.Box3().setFromObject(g.scene), c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
+window.info = { min: box.min.toArray(), max: box.max.toArray() };
+const cam = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.01, 100);
+const a = +(q.get('a') || 0), dist = Math.max(s.x, s.y, s.z) * 2.6 * +(q.get('z') || 1), el = +(q.get('el') || 0.1);
+cam.position.set(c.x + Math.sin(a) * dist, c.y + el * dist, c.z + Math.cos(a) * dist); cam.lookAt(c);
+r.render(scene, cam); window.listo = true;
+</script></body></html>

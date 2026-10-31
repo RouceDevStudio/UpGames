@@ -24,7 +24,7 @@ export class PilotosFuera {
     const per = new Persona({ color: equipo?.base || '#0d47ff', texto: equipo?.corto === 'UPG' ? 'UPGAMES' : (equipo?.nombre || 'UPGAMES').split(' ')[0].toUpperCase(), numero, rol: 'piloto', calidad: this.calidad });
     // el mismo casco que lleva dentro del coche
     if (modelo?.piloto?.casco) {
-      const casco = modelo.piloto.casco.clone();
+      const casco = modelo.piloto.casco.clone(); casco.visible = true; casco.traverse(q => { delete q.userData.oculto; });   // (con el piloto 3D el original está oculto)
       casco.position.set(0.035, 0.06, 0); casco.scale.setScalar(1.08);
       per.cabeza.add(casco);
     }
