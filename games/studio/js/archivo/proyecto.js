@@ -60,6 +60,10 @@ export function datosAObjetos(d) {
     m.name = x.nombre; m.visible = x.visible; m.uuid = x.uuid || m.uuid;
     m.userData.tipo = x.tipo; m.userData.bloqueado = x.bloqueado; m.userData.modificadores = x.modificadores || [];
     m.position.fromArray(x.p); m.quaternion.fromArray(x.q); m.scale.fromArray(x.s);
+    if (x.tipo === 'referencia') { // calco: sin luz, semitransparente
+      m.material = new THREE.MeshBasicMaterial({ map: m.material.map, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, toneMapped: false });
+      m.userData.referencia = true; m.renderOrder = -1;
+    }
     m.castShadow = m.receiveShadow = true;
     ponerMalla(m, datosAMalla(x.malla));
     return m;
@@ -108,6 +112,33 @@ export function instalarGuardado({ escena, historial, aviso }) {
   };
 }
 
+// ---------- mis proyectos (varios, con nombre y miniatura) ----------
+
+async function bdTodos() {
+  const db = await bd();
+  return new Promise((ok, mal) => {
+    const out = [], r = db.transaction('proyectos').objectStore('proyectos').openCursor();
+    r.onsuccess = () => { const c = r.result; if (!c) return ok(out); if (String(c.key).startsWith('p:')) out.push(c.value); c.continue(); };
+    r.onerror = () => mal(r.error);
+  });
+}
+async function bdBorrar(clave) { const db = await bd(); return new Promise((ok, mal) => { const t = db.transaction('proyectos', 'readwrite'); t.objectStore('proyectos').delete(clave); t.oncomplete = ok; t.onerror = () => mal(t.error); }); }
+
+export async function listarProyectos() {
+  return (await bdTodos()).map(({ id, nombre, fecha, miniatura, objetos }) => ({ id, nombre, fecha, miniatura, objetos })).sort((a, b) => b.fecha - a.fecha);
+}
+export async function guardarProyecto(escena, { id = null, nombre, miniatura = null }) {
+  id = id || `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  await bdPoner(`p:${id}`, { id, nombre, fecha: Date.now(), miniatura, objetos: escena.objetos.length, bytes: await guardarBytes(escena) });
+  return id;
+}
+export async function abrirProyecto(id) {
+  const r = await bdLeer(`p:${id}`);
+  if (!r) throw new Error('No se encontró el proyecto');
+  return { objetos: await abrirBytes(r.bytes), nombre: r.nombre, id };
+}
+export const borrarProyecto = (id) => bdBorrar(`p:${id}`);
+
 // ---------- importar ----------
 
 // GLB/GLTF u OBJ → objetos de Studio (cada malla con su transformación de mundo).
@@ -153,9 +184,10 @@ function descargar(datos, nombre, tipo) {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
+// Oculta un momento lo que no es parte del modelo (capas del modo Editar, imágenes de referencia).
 function visiblesSinCapas(raiz) {
   const capas = [];
-  raiz.traverse((o) => { if (o.userData.capa && o.visible) { capas.push(o); o.visible = false; } });
+  raiz.traverse((o) => { if ((o.userData.capa || o.userData.referencia) && o.visible) { capas.push(o); o.visible = false; } });
   return () => { for (const o of capas) o.visible = true; };
 }
 

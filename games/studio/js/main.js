@@ -8,7 +8,7 @@ import { Escena } from './escena.js';
 import { PRIMITIVAS, crearPrimitiva } from './primitivas.js';
 import { crearGizmo } from './herramientas/gizmo.js';
 import { instalarDialogoFoto } from './foto/dialogoFoto.js';
-import { instalarGuardado, importar, exportar } from './archivo/proyecto.js';
+import { instalarGuardado, importar, exportar, listarProyectos, guardarProyecto, abrirProyecto, borrarProyecto } from './archivo/proyecto.js';
 import { ModoEdicion, mallaDe, contextoModificadores } from './edicion.js';
 import { evaluar } from './malla/modificadores.js';
 import { poligonosDeMalla } from './malla/csg.js';
@@ -122,6 +122,7 @@ function ponerModo(modo) {
   $('barraEdicion').hidden = !edicion.activo;
   $('barraPincel').hidden = !pincel.activo;
   document.querySelectorAll('[data-modo]').forEach((q) => q.classList.toggle('activo', q.dataset.modo === modoActual));
+  actualizarEstado();
 }
 
 // ---------- Esculpir y pintar ----------
@@ -140,7 +141,7 @@ $('bRestar').onclick = () => { pincel.restar = !pincel.restar; pintarPincel(); }
 $('bSimetriaPincel').onclick = () => { pincel.simetria = !pincel.simetria; pintarPincel(); };
 $('pRadio').oninput = () => { pincel.radio = +$('pRadio').value; };
 $('pFuerza').oninput = () => { pincel.fuerza = +$('pFuerza').value; };
-$('pColor').oninput = () => { pincel.color.set($('pColor').value); };
+$('pColorPincel').oninput = () => { pincel.color.set($('pColorPincel').value); };
 $('bMasDetalle').onclick = () => { if (!pincel.masDetalle()) aviso('La malla ya tiene mucho detalle'); pintarPincel(); };
 $('bLimpiarMascara').onclick = () => pincel.limpiarMascara();
 function pintarEdicion() {
@@ -193,7 +194,7 @@ instalarGestos(lienzo, camOrb, {
       { nombre: 'Foto', icono: '<svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="4"/></svg>', hacer: () => dialogoFoto.abrir() },
       { nombre: 'Enfocar', icono: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5"/></svg>', hacer: enfocar },
       { nombre: 'Duplicar', desactivado: !hay, icono: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V4h12"/></svg>', hacer: () => escena.duplicar() },
-      { nombre: 'Borrar', desactivado: !hay, icono: '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>', hacer: () => escena.borrar() },
+      { nombre: 'Borrar', desactivado: !hay, icono: '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>', hacer: () => borrarSeleccion() },
       { nombre: 'Editar', desactivado: !hay, icono: ICONO_EDITAR, hacer: () => ponerModo('editar') },
       { nombre: 'Deshacer', desactivado: !historial.puedeDeshacer, icono: ICONO_DESHACER, hacer: () => historial.deshacer() },
     ], id);
@@ -255,14 +256,66 @@ document.querySelectorAll('[data-modo]').forEach((b) => b.addEventListener('clic
 
 // ---------- Archivo: guardar, abrir, importar, exportar ----------
 const guardado = instalarGuardado({ escena, historial, aviso });
-$('bArchivo').onclick = () => abrirHoja($('hojaArchivo').hidden ? 'hojaArchivo' : null);
+let proyecto = { id: null, nombre: 'Sin nombre' };
+try { proyecto = JSON.parse(localStorage.getItem('studio-proyecto')) || proyecto; } catch { /* sin almacenamiento */ }
+const recordarProyecto = () => { try { localStorage.setItem('studio-proyecto', JSON.stringify(proyecto)); } catch { /* */ } $('nombreProyecto').textContent = proyecto.nombre; };
+recordarProyecto();
+// miniatura de la vista actual (para la lista de proyectos)
+function miniatura() {
+  renderer.render(scene, camara);
+  const c = document.createElement('canvas'); c.width = 320; c.height = 200;
+  const g = c.getContext('2d'), w = lienzo.width, h = lienzo.height, k = Math.max(320 / w, 200 / h);
+  g.drawImage(lienzo, (320 - w * k) / 2, (200 - h * k) / 2, w * k, h * k);
+  return c.toDataURL('image/jpeg', 0.7);
+}
+async function pintarProyectos() {
+  const lista = await listarProyectos().catch(() => []);
+  $('listaProyectos').innerHTML = lista.length ? lista.map((p) => `
+    <div class="tarjeta-proyecto" data-id="${p.id}">
+      ${p.miniatura ? `<img src="${p.miniatura}" alt="">` : '<div class="sin-imagen"></div>'}
+      <div class="pie"><b>${esc(p.nombre)}</b><small>${new Date(p.fecha).toLocaleString('es')} · ${p.objetos} objeto${p.objetos === 1 ? '' : 's'}</small></div>
+      <div class="botones"><button data-proy="abrir">Abrir</button><button data-proy="borrar" class="peligro" title="Borrar">✕</button></div>
+    </div>`).join('') : '<p class="vacio">Aún no has guardado ningún proyecto. Pulsa «Guardar como…».</p>';
+}
+$('listaProyectos').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-proy]'); if (!b) return;
+  const id = b.closest('[data-id]').dataset.id;
+  if (b.dataset.proy === 'borrar') {
+    if (!confirm('¿Borrar este proyecto del dispositivo? No se puede deshacer.')) return;
+    await borrarProyecto(id); if (proyecto.id === id) { proyecto = { id: null, nombre: 'Sin nombre' }; recordarProyecto(); }
+    pintarProyectos(); return;
+  }
+  if (edicion.activo || pincel.activo) ponerModo('objeto');
+  try {
+    const r = await abrirProyecto(id);
+    escena.reemplazarTodo(r.objetos, `Abrir ${r.nombre}`);
+    proyecto = { id: r.id, nombre: r.nombre }; recordarProyecto();
+    abrirHoja(null); enfocar(); aviso(`«${r.nombre}» abierto`, conDeshacer);
+  } catch (err) { console.error(err); aviso(err.message); }
+});
+async function guardarComo(pedirNombre) {
+  if (edicion.activo || pincel.activo) ponerModo('objeto');
+  let nombre = proyecto.nombre;
+  if (pedirNombre || !proyecto.id) {
+    nombre = prompt('Nombre del proyecto', proyecto.id ? `${proyecto.nombre} (copia)` : 'Mi modelo');
+    if (!nombre) return;
+  }
+  try {
+    const id = await guardarProyecto(escena, { id: pedirNombre ? null : proyecto.id, nombre: nombre.trim().slice(0, 60), miniatura: miniatura() });
+    proyecto = { id, nombre: nombre.trim().slice(0, 60) }; recordarProyecto();
+    pintarProyectos(); aviso(`Guardado: «${proyecto.nombre}»`);
+  } catch (err) { console.error(err); aviso('No se pudo guardar'); }
+}
+$('bArchivo').onclick = () => { abrirHoja($('hojaArchivo').hidden ? 'hojaArchivo' : null); if (!$('hojaArchivo').hidden) pintarProyectos(); };
 document.querySelectorAll('[data-arch]').forEach((b) => b.addEventListener('click', async () => {
   const acc = b.dataset.arch;
+  if (acc === 'guardar' || acc === 'guardarComo') return guardarComo(acc === 'guardarComo');
   if (acc === 'nuevo') {
+    proyecto = { id: null, nombre: 'Sin nombre' }; recordarProyecto();
     if (edicion.activo) ponerModo('objeto');
     const c = crearPrimitiva('cubo'); c.material.color.setHex(0xc9d1dc); c.name = 'Cubo';
     escena.reemplazarTodo([c], 'Nuevo proyecto');
-    abrirHoja(null); aviso('Proyecto nuevo (puedes deshacerlo)');
+    abrirHoja(null); aviso('Proyecto nuevo', conDeshacer);
     return;
   }
   if (edicion.activo) ponerModo('objeto');
@@ -301,6 +354,30 @@ function crearPlantilla(construir, nombre, texto) {
 }
 $('bPlantillaF1').onclick = () => crearPlantilla(construirMonoplaza, 'monoplaza', 'Monoplaza F1 creado');
 $('bPlantillaPiloto').onclick = () => crearPlantilla(construirPiloto, 'piloto', 'Piloto creado');
+// imagen de referencia (calco): un plano con la imagen, semitransparente, mirando a la vista actual
+$('fReferencia').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  try {
+    const bmp = await createImageBitmap(f, { imageOrientation: 'from-image' }).catch(() => createImageBitmap(f));
+    const k = Math.min(1, 2048 / Math.max(bmp.width, bmp.height)), c = document.createElement('canvas');
+    c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+    const alto = 3, ancho = alto * c.width / c.height;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(ancho, alto), new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, toneMapped: false }));
+    m.name = 'Referencia'; m.userData.tipo = 'referencia'; m.userData.referencia = true; m.renderOrder = -1;
+    // de cara a la vista más cercana (frente, lado o arriba), detrás del centro de la escena
+    const v = new THREE.Vector3().subVectors(camara.position, camOrb.centro).normalize();
+    const eje = ['x', 'y', 'z'].reduce((a, b) => (Math.abs(v[b]) > Math.abs(v[a]) ? b : a));
+    if (eje === 'x') { m.rotation.y = Math.sign(v.x) * Math.PI / 2; m.position.set(-Math.sign(v.x) * 1.5, alto / 2, 0); }
+    else if (eje === 'y') { m.rotation.x = -Math.PI / 2; m.position.set(0, 0.002, 0); }
+    else { m.rotation.y = v.z < 0 ? Math.PI : 0; m.position.set(0, alto / 2, -Math.sign(v.z) * 1.5); }
+    escena.anadir(m, 'Imagen de referencia');
+    $('hojaAnadir').hidden = true;
+    aviso('Referencia añadida: muévela, escálala o bloquéala desde Propiedades');
+  } catch (err) { console.error(err); aviso('No se pudo abrir la imagen'); }
+});
 $('rejillaPrimitivas').addEventListener('click', (e) => {
   const b = e.target.closest('[data-prim]');
   if (!b) return;
@@ -311,6 +388,8 @@ $('rejillaPrimitivas').addEventListener('click', (e) => {
 // Panel de escena
 const panel = $('panel');
 $('bPanel').onclick = () => panel.classList.toggle('abierto');
+$('bAyuda').onclick = () => abrirHoja($('hojaAyuda').hidden ? 'hojaAyuda' : null);
+try { if (!localStorage.getItem('studio-ayuda-vista')) { localStorage.setItem('studio-ayuda-vista', '1'); setTimeout(() => abrirHoja('hojaAyuda'), 600); } } catch { /* sin almacenamiento */ }
 $('bCerrarPanel').onclick = () => panel.classList.remove('abierto');
 const OJO = '<svg viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
 const CANDADO = '<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
@@ -326,11 +405,56 @@ function pintarPanel() {
       <button data-acc="bloq" class="${o.userData.bloqueado ? 'on' : ''}" title="Bloquear">${CANDADO}</button>
     </li>`).join('') : '<li class="vacio">Vacía. Toca «Añadir» o «Desde foto».</li>';
   const s = escena.seleccion;
-  $('props').hidden = !s;
+  $('props').hidden = !s; $('propsVacio').hidden = !!s; $('modsVacio').hidden = !!s;
+  $('selMod').hidden = !s;
   if (s) {
     if (document.activeElement !== $('pNombre')) $('pNombre').value = s.name;
     $('pColor').value = `#${s.material.color.getHexString()}`;
+    // transformación numérica (giro en grados)
+    const val = { p: s.position.toArray(), r: [s.rotation.x, s.rotation.y, s.rotation.z].map((a) => a * 180 / Math.PI), s: s.scale.toArray() };
+    document.querySelectorAll('[data-tr]').forEach((inp) => {
+      if (document.activeElement === inp) return;
+      const v = val[inp.dataset.tr[0]][+inp.dataset.tr[1]];
+      inp.value = Math.abs(v) < 1e-9 ? 0 : +v.toFixed(inp.dataset.tr[0] === 'r' ? 1 : 3);
+    });
+    const g = s.geometry, tri = g.index ? g.index.count / 3 : g.attributes.position.count / 3, mods = (s.userData.modificadores || []).length;
+    $('pInfo').textContent = `${Math.round(tri).toLocaleString('es')} triángulos${mods ? ` · ${mods} modificador${mods > 1 ? 'es' : ''}` : ''}${s.userData.bloqueado ? ' · bloqueado' : ''}`;
   }
+  actualizarEstado();
+}
+
+// pestañas del panel de propiedades
+document.querySelectorAll('[data-pest]').forEach((b) => b.tagName === 'BUTTON' && b.addEventListener('click', () => abrirPestana(b.dataset.pest)));
+function abrirPestana(id) {
+  document.querySelectorAll('.pestanas [data-pest]').forEach((q) => q.classList.toggle('activo', q.dataset.pest === id));
+  document.querySelectorAll('.pest').forEach((q) => { q.hidden = q.dataset.pest !== id; });
+}
+// transformación numérica: un paso de deshacer por campo cambiado
+document.querySelectorAll('[data-tr]').forEach((inp) => inp.addEventListener('change', () => {
+  const o = escena.seleccion; if (!o || !Number.isFinite(+inp.value)) return;
+  const antes = { p: o.position.toArray(), q: o.quaternion.toArray(), s: o.scale.toArray() };
+  const k = +inp.dataset.tr[1], v = +inp.value;
+  if (inp.dataset.tr[0] === 'p') o.position.setComponent(k, v);
+  else if (inp.dataset.tr[0] === 's') o.scale.setComponent(k, v || 0.001);
+  else { const e = o.rotation.clone(); e[['x', 'y', 'z'][k]] = v * Math.PI / 180; o.rotation.copy(e); }
+  o.updateMatrixWorld();
+  escena.transformado(o, antes);
+  escena.avisar();
+}));
+document.querySelectorAll('[data-tr]').forEach((inp) => inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') inp.blur(); }));
+
+// barra de estado: modo, selección y qué se puede hacer
+function actualizarEstado() {
+  const el = $('estado'); if (!el) return;
+  const s = escena.seleccion, modo = typeof modoActual === 'undefined' ? 'objeto' : modoActual;
+  const PISTAS = {
+    objeto: s ? 'Arrastra las flechas para mover · doble toque enfoca · mantén pulsado para el menú' : 'Toca un objeto para seleccionarlo · 1 dedo gira la vista · 2 dedos acercan',
+    editar: 'Toca vértices, aristas o caras · «+ Selec.» para varios · herramientas abajo',
+    esculpir: 'Arrastra sobre el modelo para esculpir · fuera de él giras la vista',
+    pintar: 'Arrastra sobre el modelo para pintar · fuera de él giras la vista',
+  };
+  const nombres = { objeto: 'Objeto', editar: 'Editar', esculpir: 'Esculpir', pintar: 'Pintar' };
+  el.innerHTML = `<b>${nombres[modo] || 'Objeto'}</b>${s ? ` · ${esc(s.name)}` : ''}<br>${PISTAS[modo] || ''}`;
 }
 $('lista').addEventListener('click', (e) => {
   const li = e.target.closest('li[data-i]');
@@ -345,7 +469,8 @@ $('pNombre').addEventListener('change', () => escena.seleccion && escena.renombr
 $('pNombre').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') e.target.blur(); });
 $('pColor').addEventListener('change', () => escena.seleccion && escena.colorear(escena.seleccion, parseInt($('pColor').value.slice(1), 16)));
 $('pDuplicar').onclick = () => escena.duplicar();
-$('pBorrar').onclick = () => escena.borrar();
+$('pBorrar').onclick = () => borrarSeleccion();
+$('pMaterial').onclick = () => { panel.classList.remove('abierto'); materiales.abrir(); };
 escena.alCambiar(pintarPanel);
 
 const modificadores = instalarModificadores({ escena, historial, edicion, ponerModo, aviso, ctx: ctxMods });
@@ -355,6 +480,7 @@ const materiales = instalarMateriales({ escena, historial, edicion, ponerModo, a
 addEventListener('keydown', (e) => {
   if (e.target.matches?.('input')) return;
   const k = e.key.toLowerCase(), ctrl = e.ctrlKey || e.metaKey;
+  if (ctrl && k === 's') { e.preventDefault(); guardarComo(false); return; }
   if (edicion.activo && ctrl && k === 'r') { e.preventDefault(); operacion('cortarBucle'); return; }
   if (k === 'tab') { e.preventDefault(); ponerModo(edicion.activo ? 'objeto' : 'editar'); return; }
   if (edicion.activo && !ctrl) {
@@ -372,7 +498,7 @@ addEventListener('keydown', (e) => {
   if (ctrl && k === 'z') { e.preventDefault(); if (e.shiftKey) historial.rehacer(); else historial.deshacer(); }
   else if (ctrl && k === 'y') { e.preventDefault(); historial.rehacer(); }
   else if (ctrl && k === 'd' || (e.shiftKey && k === 'd')) { e.preventDefault(); escena.duplicar(); }
-  else if (k === 'delete' || k === 'backspace' || k === 'x') escena.borrar();
+  else if (k === 'delete' || k === 'backspace' || k === 'x') borrarSeleccion();
   else if (k === 'g' || k === 'w') ponerModoGizmo('translate');
   else if (k === 'r' || k === 'e') ponerModoGizmo('rotate');
   else if (k === 's') ponerModoGizmo('scale');
@@ -386,12 +512,23 @@ addEventListener('keydown', (e) => {
 
 // ---------- Avisos ----------
 let tAviso = 0;
-function aviso(texto) {
+// aviso(texto, { texto, fn }): mensaje breve, con un botón opcional (p. ej. «Deshacer»)
+function aviso(texto, accion = null) {
   const el = $('aviso');
-  el.textContent = texto;
+  $('avisoTexto').textContent = texto;
+  const b = $('avisoAccion');
+  b.hidden = !accion;
+  el.classList.toggle('con-accion', !!accion);
+  if (accion) { b.textContent = accion.texto; b.onclick = () => { el.classList.remove('ver'); accion.fn(); }; }
   el.classList.add('ver');
   clearTimeout(tAviso);
-  tAviso = setTimeout(() => el.classList.remove('ver'), 2200);
+  tAviso = setTimeout(() => el.classList.remove('ver'), accion ? 4500 : 2200);
+}
+const conDeshacer = { texto: 'Deshacer', fn: () => historial.deshacer() };
+function borrarSeleccion() {
+  const o = escena.seleccion; if (!o) return;
+  escena.borrar(o);
+  aviso(`«${o.name}» borrado`, conDeshacer);
 }
 
 // ---------- Bucle ----------

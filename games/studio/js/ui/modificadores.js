@@ -49,6 +49,12 @@ export function instalarModificadores({ escena, historial, edicion, ponerModo, a
     if (b.dataset.acc === 'ver') { mods[i].visible = !mods[i].visible; cambiar(obj, mods, mods[i].visible ? 'Mostrar modificador' : 'Ocultar modificador'); }
     else if (b.dataset.acc === 'quitar') { const [q] = mods.splice(i, 1); cambiar(obj, mods, `Quitar ${TIPOS[q.tipo].nombre}`); }
     else if (b.dataset.acc === 'aplicar') aplicar(obj, i);
+    else if (b.dataset.acc === 'subir' || b.dataset.acc === 'bajar') {
+      const j = b.dataset.acc === 'subir' ? i - 1 : i + 1;
+      if (j < 0 || j >= mods.length) return;
+      [mods[i], mods[j]] = [mods[j], mods[i]];
+      cambiar(obj, mods, 'Reordenar modificadores');
+    }
   });
 
   // Aplicar: la malla base pasa a ser el resultado hasta ese modificador (incluido) y esos salen de la pila.
@@ -68,6 +74,8 @@ export function instalarModificadores({ escena, historial, edicion, ponerModo, a
     lista.innerHTML = mods.map((m, i) => `
       <div class="mod ${m.visible ? '' : 'apagado'}" data-i="${i}">
         <div class="mod-cab"><b>${TIPOS[m.tipo].nombre}</b>
+          <button data-acc="subir" class="mover" title="Subir (se aplica antes)" ${i === 0 ? 'disabled' : ''}>↑</button>
+          <button data-acc="bajar" class="mover" title="Bajar (se aplica después)" ${i === mods.length - 1 ? 'disabled' : ''}>↓</button>
           <button data-acc="ver" title="Mostrar u ocultar">${m.visible ? 'Ver' : 'Oculto'}</button>
           <button data-acc="aplicar" title="Aplicar (hasta aquí)">Aplicar</button>
           <button data-acc="quitar" class="peligro" title="Quitar">✕</button>

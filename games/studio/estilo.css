@@ -243,3 +243,57 @@ body.editando .herramientas-ed { display: flex; }
 #infoPincel { font-size: 12px; color: var(--tenue); text-shadow: 0 1px 2px #000; }
 body.pincelando .acciones, body.pincelando #gizmos { display: none; }
 @media (max-height: 520px) { #barraPincel { top: calc(54px + var(--sa-t)); } #barraPincel .grupo button { height: 34px; padding: 0 8px; } #infoPincel { display: none; } }
+
+/* Panel de propiedades con pestañas */
+.pestanas { display: flex; gap: 2px; margin: 0 8px 6px; background: rgba(255,255,255,.05); border-radius: 12px; padding: 3px; }
+.pestanas button { flex: 1; height: 34px; border-radius: 9px; font-size: 12px; font-weight: 700; color: var(--tenue); }
+.pestanas button.activo { background: rgba(47, 123, 255, .3); color: #fff; }
+.pest { flex: 1; overflow-y: auto; touch-action: pan-y; padding: 0 10px 10px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.pest[hidden] { display: none !important; }
+#panel #props { max-height: none; overflow: visible; border-top: 0; padding: 0; }
+.nota.vacio { padding: 8px 2px; }
+.transformar { display: grid; grid-template-columns: 58px 1fr 1fr 1fr; gap: 4px; align-items: center; font-size: 11px; }
+.transformar input { min-width: 0; background: rgba(255,255,255,.07); border: 1px solid var(--borde); border-radius: 8px; color: var(--texto); padding: 6px 4px; font-size: 12px; user-select: text; -webkit-user-select: text; }
+.transformar input[data-tr$="0"] { border-left: 3px solid #ff4d5e; }
+.transformar input[data-tr$="1"] { border-left: 3px solid #2fe07a; }
+.transformar input[data-tr$="2"] { border-left: 3px solid #2f7bff; }
+#pInfo { font-size: 11px; margin: 0; }
+.mod-cab .mover { width: 26px; padding: 0; }
+
+/* Modos con icono */
+.modos button { display: flex; align-items: center; gap: 6px; }
+.modos button svg { width: 18px; height: 18px; }
+
+/* Avisos con acción */
+#aviso { display: flex; align-items: center; gap: 12px; }
+#aviso.ver.con-accion { pointer-events: auto; }
+#avisoAccion { color: var(--acento2); font-weight: 800; padding: 4px 8px; border-radius: 8px; background: rgba(0, 210, 255, .12); }
+
+/* Barra de estado */
+#estado { position: fixed; z-index: 4; left: calc(84px + var(--sa-l)); top: calc(62px + var(--sa-t)); max-width: min(46vw, 520px); font-size: 12px; color: var(--tenue); background: rgba(11, 15, 23, .55); border: 1px solid var(--borde); border-radius: 10px; padding: 6px 10px; pointer-events: none; line-height: 1.35; backdrop-filter: blur(6px); }
+#estado b { color: var(--texto); }
+body.editando #estado, body.pincelando #estado { top: auto; bottom: calc(132px + var(--sa-b)); }
+@media (max-width: 700px) { #estado { display: none; } }
+
+/* Ayuda */
+.ayuda { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; font-size: 13px; color: var(--tenue); }
+.ayuda h3 { color: var(--texto); font-size: 14px; margin-bottom: 6px; }
+.ayuda ul { list-style: none; display: flex; flex-direction: column; gap: 5px; }
+.ayuda b { color: var(--acento2); }
+.rejilla .btn.ref { height: 84px; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; text-align: center; border-radius: 16px; }
+.rejilla .btn.ref svg { width: 30px; height: 30px; stroke-width: 1.6; }
+
+/* Mis proyectos */
+.proyecto-actual { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--tenue); margin-bottom: 6px; }
+.proyecto-actual span { flex: 1; min-width: 140px; }
+.proyecto-actual b { color: var(--texto); }
+.proyecto-actual button { height: 40px; padding: 0 14px; border-radius: 12px; font-weight: 700; background: rgba(255,255,255,.08); border: 1px solid var(--borde); }
+.lista-proyectos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-bottom: 8px; }
+.lista-proyectos .vacio { color: var(--tenue); font-size: 13px; grid-column: 1 / -1; }
+.tarjeta-proyecto { border: 1px solid var(--borde); border-radius: 14px; overflow: hidden; background: rgba(255,255,255,.04); display: flex; flex-direction: column; }
+.tarjeta-proyecto img, .tarjeta-proyecto .sin-imagen { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; background: #151a24; display: block; }
+.tarjeta-proyecto .pie { padding: 6px 8px; font-size: 12px; display: flex; flex-direction: column; gap: 2px; }
+.tarjeta-proyecto .pie small { color: var(--tenue); font-size: 10px; }
+.tarjeta-proyecto .botones { display: flex; gap: 4px; padding: 0 6px 6px; }
+.tarjeta-proyecto .botones button { flex: 1; height: 32px; border-radius: 8px; font-size: 12px; font-weight: 700; background: rgba(255,255,255,.08); }
+.tarjeta-proyecto .botones .peligro { color: var(--rojo); flex: 0 0 34px; }
