@@ -6,6 +6,24 @@ import { aGeometria, posicionesEsquinas, normalesEsquinas } from './malla/aGeome
 import { mallas } from './escena.js';
 import * as OP from './malla/operaciones.js';
 import { subdividir } from './malla/subdividir.js';
+import { evaluar } from './malla/modificadores.js';
+
+// Contexto de los modificadores (las booleanas piden los polígonos de otros objetos a main.js).
+let ctxMods = {};
+export function contextoModificadores(c) { ctxMods = c; }
+const tieneMods = (obj) => (obj.userData.modificadores || []).some((x) => x.visible);
+// Lo que se dibuja: en modo Editar la malla base; si no, el resultado de la pila de modificadores.
+function mallaVisible(obj, m) {
+  if (obj.userData.editando || !tieneMods(obj)) return m;
+  return evaluar(m, obj.userData.modificadores, { poligonosDe: (id) => ctxMods.poligonosDe?.(id, obj) });
+}
+
+// Vuelve a construir lo que se ve de un objeto (tras cambiar sus modificadores o salir de Editar).
+export function refrescarObjeto(obj) {
+  const m = mallaDe(obj), vieja = obj.geometry;
+  obj.geometry = geometriaDe(mallaVisible(obj, m));
+  vieja.dispose();
+}
 
 const NARANJA = new THREE.Color(0xff8a1f);
 const OSCURO = new THREE.Color(0x14171f);
@@ -42,12 +60,13 @@ function geometriaDe(m) {
 export function ponerMalla(obj, m) {
   mallas.set(obj, m);
   const vieja = obj.geometry;
-  obj.geometry = geometriaDe(m);
+  obj.geometry = geometriaDe(mallaVisible(obj, m));
   vieja.dispose();
 }
 
 // Vuelve a escribir posiciones y normales después de mover vértices.
 export function refrescarGeometria(obj) {
+  if (!obj.userData.editando && tieneMods(obj)) return refrescarObjeto(obj);
   const m = mallas.get(obj), g = obj.geometry;
   posicionesEsquinas(m, g.attributes.position.array);
   normalesEsquinas(m, 30, g.attributes.normal.array);
@@ -118,6 +137,8 @@ export class ModoEdicion {
     this.salir();
     this.obj = obj;
     this.malla = mallaDe(obj);
+    obj.userData.editando = true;
+    if (tieneMods(obj)) refrescarObjeto(obj); // en Editar se ve y se toca la malla base
     this.sel.clear();
     const mat = obj.material;
     this.matAntes = { po: mat.polygonOffset, pf: mat.polygonOffsetFactor, pu: mat.polygonOffsetUnits, tr: mat.transparent, op: mat.opacity };
@@ -133,6 +154,8 @@ export class ModoEdicion {
     Object.assign(mat, { polygonOffset: a.po, polygonOffsetFactor: a.pf, polygonOffsetUnits: a.pu, transparent: a.tr, opacity: a.op, depthWrite: true });
     mat.needsUpdate = true;
     for (const c of [this.puntos, this.lineas, this.caras]) { this.obj.remove(c); c.geometry.dispose(); }
+    delete this.obj.userData.editando;
+    if (tieneMods(this.obj)) refrescarObjeto(this.obj);
     this.obj = null; this.malla = null; this.sel.clear();
     this.gizmo.pivote = null; this.gizmo.sincronizar();
     this.alCambiar();

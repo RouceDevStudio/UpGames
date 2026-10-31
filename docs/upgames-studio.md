@@ -161,8 +161,8 @@ modulos/studio.js + rutas/studio.js   en el servidor: proyectos en la nube y pub
    - deshacer.
 2. ✅ **Half-edge:** construir desde primitivas y dibujar; seleccionar vértices, aristas y caras; mover componentes.
 3. ✅ **Operaciones:** extruir, inset, loop cut, borrar, fusionar, suavizar, simetría X; subdividir (Catmull-Clark). Pendiente: biselar.
-4. **Modificadores:** espejo y subdivisión no destructivos; matriz; booleanas.
-5. **Materiales y texturas:** PBR, biblioteca, UV automático, textura desde la cámara.
+4. ✅ **Modificadores:** espejo, subdivisión, matriz, solidificar y booleanas (unión, resta, intersección con BSP) en una pila no destructiva; se ocultan, se quitan o se aplican.
+5. ✅ **Materiales y texturas:** PBR (color, metal, rugosidad, emisión, opacidad, barniz), biblioteca de 8 materiales, entorno de luz para reflejos, UV automático por direcciones con vista UV, textura desde la galería o la cámara.
 6. **Archivos:** guardado automático; exportar GLB/OBJ/STL; importar GLB/OBJ.
 7. **Esculpir y pintar:** versión básica.
 8. **APK:** proyecto Capacitor, flujo de GitHub Actions, enlace de descarga en el servidor.

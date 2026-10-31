@@ -197,3 +197,32 @@ body.editando .herramientas-ed { display: flex; }
   /* imán, exportar y escena en columna a la derecha */
   #arriba .grupo:last-child { position: fixed; right: calc(8px + var(--sa-r)); top: calc(62px + var(--sa-t)); flex-direction: column; }
 }
+
+/* Modificadores (panel de escena) */
+.cab-sub { font-size: 12px; font-weight: 800; color: var(--tenue); text-transform: uppercase; letter-spacing: .5px; margin-top: 4px; }
+#selMod, .mod select { background: rgba(255,255,255,.07); border: 1px solid var(--borde); border-radius: 10px; color: var(--texto); padding: 8px; font: inherit; }
+.mod { border: 1px solid var(--borde); border-radius: 12px; padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; background: rgba(255,255,255,.03); }
+.mod.apagado { opacity: .55; }
+.mod-cab { display: flex; align-items: center; gap: 4px; }
+.mod-cab b { flex: 1; color: var(--texto); }
+.mod-cab button { height: 30px; padding: 0 8px; border-radius: 8px; background: rgba(255,255,255,.07); font-size: 12px; font-weight: 700; }
+.mod-cab .peligro { color: var(--rojo); }
+.mod-campos { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.mod-campos label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.mod-campos label.fila { flex-direction: row; align-items: center; gap: 6px; grid-column: span 2; }
+.mod-campos input[type=number] { background: rgba(255,255,255,.07); border: 1px solid var(--borde); border-radius: 8px; color: var(--texto); padding: 6px; width: 100%; user-select: text; -webkit-user-select: text; }
+#listaMods { display: flex; flex-direction: column; gap: 6px; }
+#panel #props { overflow-y: auto; max-height: 60%; touch-action: pan-y; }
+
+/* Material */
+.tenue { color: var(--tenue); font-weight: 600; font-size: 13px; margin-left: 6px; flex: 1; }
+.rejilla.mat { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
+.rejilla.mat button { height: 64px; font-size: 12px; }
+.rejilla.mat i { width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(255,255,255,.25); }
+.mat-campos { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; font-size: 13px; color: var(--tenue); }
+.mat-campos label.fila { justify-content: space-between; min-height: 40px; }
+.mat-campos input[type=color] { width: 56px; height: 34px; border: 0; background: none; }
+.mat-tex { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+#vistaUV { width: 160px; height: 160px; border-radius: 10px; border: 1px solid var(--borde); }
+.mat-tex-bot { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 8px; }
+.mat-tex-bot .deslizador { grid-template-columns: 70px 1fr 34px; }

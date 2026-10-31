@@ -9,6 +9,9 @@ import { MallaHE } from '../games/studio/js/malla/mediaArista.js';
 import { aGeometria } from '../games/studio/js/malla/aGeometria.js';
 import { extruirCaras, insetCaras, cortarBucle, borrarCaras, fusionarVertices, simetriaX, suavizarVertices } from '../games/studio/js/malla/operaciones.js';
 import { subdividir } from '../games/studio/js/malla/subdividir.js';
+import { evaluar, nuevoModificador, espejo, matriz, solidificar } from '../games/studio/js/malla/modificadores.js';
+import { poligonosDeMalla, mallaDePoligonos, union, resta, interseccion } from '../games/studio/js/malla/csg.js';
+import { uvAutomatico } from '../games/studio/js/malla/uv.js';
 import * as THREE from '../games/studio/lib/three.module.min.js';
 
 let passed = 0;
@@ -342,6 +345,67 @@ test('borrar, fusionar y suavizar', () => {
   assert.ok(cerrada(f));
   const s = suavizarVertices(subdividir(m, 1).malla, [], 0.5, 3).malla;
   assert.ok(cerrada(s));
+});
+
+// ---------- Modificadores (sprint 4) ----------
+const volP = (pols) => { let v = 0; for (const p of pols) for (let i = 1; i < p.v.length - 1; i++) { const [a, b, c] = [p.v[0], p.v[i], p.v[i + 1]]; v += a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0]); } return v / 6; };
+const cuboEn = (x, y, z, l = 1) => desdeThree(new THREE.BoxGeometry(l, l, l).translate(x, y, z));
+
+test('espejo: media caja abierta en x = 0 → caja cerrada y cosida del doble de volumen', () => {
+  const m = cuboEn(0.5, 0, 0);
+  const izq = [...Array(m.nF).keys()].find((f) => m.vertsDeCara(f).every((v) => Math.abs(m.pos[v * 3]) < 1e-6));
+  const media = borrarCaras(m, [izq]).malla;
+  const r = espejo(media, 'x');
+  assert.ok(cerrada(r));
+  assert.strictEqual(r.nV, 12);
+  assert.ok(Math.abs(vol(r) - 2) < 1e-9);
+});
+
+test('matriz: 3 copias en fila, relativo al tamaño', () => {
+  const r = matriz(cubo(), { cantidad: 3, x: 1.5, y: 0, z: 0, relativo: true });
+  assert.deepStrictEqual([r.nV, r.nF], [24, 18]);
+  let mx = -Infinity; for (let v = 0; v < r.nV; v++) mx = Math.max(mx, r.pos[v * 3]);
+  assert.ok(Math.abs(mx - 3.5) < 1e-9, `x máx ${mx}`);
+});
+
+test('solidificar: un plano de 2 × 2 con grosor 0,1 → caja cerrada de volumen 0,4', () => {
+  const r = solidificar(desdeThree(new THREE.PlaneGeometry(2, 2)), 0.1);
+  assert.ok(cerrada(r));
+  assert.ok(Math.abs(Math.abs(vol(r)) - 0.4) < 1e-6, `${vol(r)}`);
+});
+
+test('booleanas: resta, unión e intersección de dos cubos solapados', () => {
+  const A = poligonosDeMalla(cubo()), B = poligonosDeMalla(cuboEn(0.5, 0.5, 0.5)); // solapan 0,125
+  assert.ok(Math.abs(volP(resta(A, B)) - 0.875) < 1e-6, `resta ${volP(resta(A, B))}`);
+  assert.ok(Math.abs(volP(union(A, B)) - 1.875) < 1e-6);
+  assert.ok(Math.abs(volP(interseccion(A, B)) - 0.125) < 1e-6);
+  const m = mallaDePoligonos(resta(A, B));
+  assert.deepStrictEqual(m.validar(), []);
+});
+
+test('pila de modificadores: espejo + subdivisión, oculto y booleana con el otro objeto', () => {
+  const m = cuboEn(0.5, 0, 0);
+  const mods = [nuevoModificador('espejo'), nuevoModificador('subdivision')];
+  mods[1].niveles = 1;
+  const r = evaluar(m, mods);
+  assert.ok(r.nF > m.nF * 4);
+  mods[1].visible = false;
+  assert.strictEqual(evaluar(m, mods).nF, m.nF * 2, 'oculto no cuenta');
+  const bool = { ...nuevoModificador('booleana'), objeto: 'otro' };
+  const res = evaluar(cubo(), [bool], { poligonosDe: () => poligonosDeMalla(cuboEn(0.5, 0.5, 0.5)) });
+  assert.ok(Math.abs(vol(res) - 0.875) < 1e-6);
+  assert.strictEqual(m.nV, 8, 'la base no cambia');
+});
+
+// ---------- UV automático (sprint 5) ----------
+test('UV automático: todas las UV dentro de 0..1 y las 6 caras del cubo sin solaparse', () => {
+  const r = uvAutomatico(cubo()).malla;
+  for (const u of r.heUV) assert.ok(u >= -1e-9 && u <= 1 + 1e-9);
+  const cajas = [...Array(r.nF).keys()].map((f) => { const hs = r.mediasDeCara(f); const us = hs.map((h) => r.heUV[h * 2]), vs = hs.map((h) => r.heUV[h * 2 + 1]); return [Math.min(...us), Math.min(...vs), Math.max(...us), Math.max(...vs)]; });
+  for (let i = 0; i < 6; i++) for (let j = i + 1; j < 6; j++) {
+    const a = cajas[i], b = cajas[j];
+    assert.ok(a[2] <= b[0] + 1e-9 || b[2] <= a[0] + 1e-9 || a[3] <= b[1] + 1e-9 || b[3] <= a[1] + 1e-9, `caras ${i} y ${j} se solapan`);
+  }
 });
 
 console.log(`\n${passed} pruebas correctas`);

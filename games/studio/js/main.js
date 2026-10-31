@@ -9,7 +9,12 @@ import { PRIMITIVAS, crearPrimitiva } from './primitivas.js';
 import { crearGizmo } from './herramientas/gizmo.js';
 import { instalarDialogoFoto } from './foto/dialogoFoto.js';
 import { exportarGLB } from './archivo/glb.js';
-import { ModoEdicion } from './edicion.js';
+import { ModoEdicion, mallaDe, contextoModificadores } from './edicion.js';
+import { evaluar } from './malla/modificadores.js';
+import { poligonosDeMalla } from './malla/csg.js';
+import { instalarModificadores } from './ui/modificadores.js';
+import { instalarMateriales } from './ui/materiales.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { construirMonoplaza } from './plantillas/monoplaza.js';
 import { construirPiloto } from './plantillas/piloto.js';
 
@@ -29,6 +34,9 @@ const camara = new THREE.PerspectiveCamera(45, 1, 0.05, 500);
 const camOrb = new CamaraOrbital(camara);
 
 scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x2a2622, 1.4));
+// entorno de estudio para que los metales, el cromo y el barniz tengan qué reflejar
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.45;
 const sol = new THREE.DirectionalLight(0xffffff, 2.2);
 sol.position.set(5, 9, 6);
 sol.castShadow = true;
@@ -74,6 +82,18 @@ const enfocar = () => {
 
 // ---------- Modo edición ----------
 const edicion = new ModoEdicion({ scene, camara, lienzo, historial, gizmo, alCambiar: () => pintarEdicion() });
+// booleanas: polígonos de otro objeto (con sus modificadores, salvo booleanas) en las coordenadas del destino
+const ctxMods = {
+  poligonosDe(id, destino) {
+    const o = escena.objetos.find((q) => q.uuid === id);
+    if (!o || o === destino) return null;
+    const m = evaluar(mallaDe(o), (o.userData.modificadores || []).filter((x) => x.tipo !== 'booleana'));
+    o.updateMatrixWorld(); destino.updateMatrixWorld();
+    const M = destino.matrixWorld.clone().invert().multiply(o.matrixWorld), v = new THREE.Vector3();
+    return poligonosDeMalla(m, (p) => v.set(p[0], p[1], p[2]).applyMatrix4(M).toArray());
+  },
+};
+contextoModificadores(ctxMods);
 function ponerModo(modo) {
   if (modo === 'editar') {
     const o = escena.seleccion;
@@ -194,6 +214,7 @@ document.querySelectorAll('[data-gizmo]').forEach((b) => b.addEventListener('cli
 
 document.querySelectorAll('[data-modo]').forEach((b) => b.addEventListener('click', () => {
   if (b.dataset.modo === 'objeto' || b.dataset.modo === 'editar') ponerModo(b.dataset.modo);
+  else if (b.dataset.modo === 'material') { abrirHoja(null); materiales.abrir(); }
   else if (b.dataset.sprint) aviso(`«${b.textContent}» llega en el sprint ${b.dataset.sprint} de la etapa 1`);
   else if (b.dataset.etapa) aviso(`«${b.textContent}» llega en la etapa ${b.dataset.etapa}`);
 }));
@@ -270,6 +291,9 @@ $('pDuplicar').onclick = () => escena.duplicar();
 $('pBorrar').onclick = () => escena.borrar();
 escena.alCambiar(pintarPanel);
 
+const modificadores = instalarModificadores({ escena, historial, edicion, ponerModo, aviso, ctx: ctxMods });
+const materiales = instalarMateriales({ escena, historial, edicion, ponerModo, aviso });
+
 // Atajos de teclado en el PC
 addEventListener('keydown', (e) => {
   if (e.target.matches?.('input')) return;
@@ -342,4 +366,4 @@ pintarPanel();
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 
 // Para las pruebas en el navegador
-window.studio = { escena, historial, camOrb, gizmo, anadirPrimitiva, edicion, ponerModo };
+window.studio = { escena, historial, camOrb, gizmo, anadirPrimitiva, edicion, ponerModo, materiales, modificadores };

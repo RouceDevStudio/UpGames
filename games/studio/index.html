@@ -74,6 +74,9 @@
       <button id="pDuplicar">Duplicar</button>
       <button id="pBorrar" class="peligro">Borrar</button>
     </div>
+    <div class="cab-sub">Modificadores</div>
+    <div id="listaMods"></div>
+    <select id="selMod"></select>
   </div>
 </aside>
 
@@ -84,7 +87,7 @@
     <button data-modo="editar">Editar</button>
     <button data-modo="esculpir" data-sprint="7">Esculpir</button>
     <button data-modo="pintar" data-sprint="7">Pintar</button>
-    <button data-modo="material" data-sprint="5">Material</button>
+    <button data-modo="material">Material</button>
     <button data-modo="animar" data-etapa="2">Animar</button>
   </div>
   <div class="herramientas-ed" id="herramientasEd">
@@ -172,6 +175,38 @@
   <label class="fila marca-lado" id="filaInvertir" hidden><input id="fInvertir" type="checkbox"> La foto de lado está tomada desde la izquierda</label>
   <div class="fila botones fin">
     <button id="bCrearFoto" class="primario" disabled>Crear modelo</button>
+  </div>
+</div>
+
+<!-- Material -->
+<div id="hojaMaterial" class="hoja ancha" hidden>
+  <div class="hoja-cab">Material <span id="matNombre" class="tenue"></span> <button class="ic chico" data-cerrar>✕</button></div>
+  <p class="nota" id="matVacio">Toca primero un objeto.</p>
+  <div id="matCuerpo">
+    <div class="rejilla mat" id="bibliotecaMat"></div>
+    <div class="mat-campos">
+      <label class="fila">Color <input id="mColor" type="color"></label>
+      <label class="deslizador">Metal <input id="mMetal" type="range" min="0" max="1" step="0.01"><output id="oMetal"></output></label>
+      <label class="deslizador">Rugosidad <input id="mRugosidad" type="range" min="0" max="1" step="0.01"><output id="oRugosidad"></output></label>
+      <label class="fila">Emisión (luz propia) <input id="mEmision" type="color"></label>
+      <label class="deslizador">Intensidad <input id="mEmisionInt" type="range" min="0" max="5" step="0.05"><output id="oEmisionInt"></output></label>
+      <label class="deslizador">Opacidad <input id="mOpacidad" type="range" min="0.05" max="1" step="0.01"><output id="oOpacidad"></output></label>
+    </div>
+    <div class="cab-sub">Textura y UV</div>
+    <div class="mat-tex">
+      <canvas id="vistaUV" width="256" height="256" title="Vista UV"></canvas>
+      <div class="mat-tex-bot">
+        <div class="fila botones">
+          <label class="btn">Galería<input type="file" accept="image/*" hidden></label>
+          <label class="btn">Cámara<input type="file" accept="image/*" capture="environment" hidden></label>
+        </div>
+        <label class="deslizador">Repetir <input id="mRepetir" type="range" min="1" max="12" step="1"><output id="oRepetir"></output></label>
+        <div class="fila botones">
+          <button id="bUVAuto">UV automático</button>
+          <button id="bQuitarTextura" class="peligro">Quitar textura</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
