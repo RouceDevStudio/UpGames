@@ -40,6 +40,7 @@ import * as ED from './editorCircuito.js';
 import { iniciarIdioma } from './idioma.js';
 import { PIVOTE_VUELO, MEZCLA_NOMBRES } from './physics/monoplaza.js';
 import { Podio } from './render/podio.js';
+import { SalidaBoxes } from './render/salidaBoxes.js';
 
 const $ = (s) => document.querySelector(s);
 const esTactil = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -50,7 +51,7 @@ const CLAVE = 'apexgp.v1';
 const AJ_DEF = {
   control: esTactil ? 'inclinacion' : 'tactil', sensibilidad: 1, anguloInclinacion: 24, invertir: false, vibracion: true,
   tc: 2, abs: true, cambioAuto: true, direccion: true, estabilidad: false, trazada: true,
-  calidad: 'auto', fps: false, volumen: 0.8, unidades: 'kmh', camara: 'persecucion', radio: true, ambiente: true, averias: true, repeAuto: true, motorSonido: 'ferrari',
+  calidad: 'auto', fps: false, volumen: 0.8, unidades: 'kmh', camara: 'persecucion', radio: true, ambiente: true, averias: true, repeAuto: true, motorSonido: 'v10',
 };
 const OPC_CARRERA_DEF = { vueltas: 5, rivales: 7, dificultad: 'normal', posSalida: 0, compuesto: 'medio', clima: 'seco', hora: 'dia', formacion: 0, duracion: 0 };
 function cargar() {
@@ -129,7 +130,7 @@ let calidad = calidadInicial();
 // --- Estado global ----------------------------------------------------------
 let renderer, scene, composer, camara, efectos, escenario, circuito;
 const sonido = new Sonido();
-sonido.motorElegido = ajustes.motorSonido || "ferrari";
+sonido.motorElegido = ajustes.motorSonido || 'v10';
 const entrada = new Entrada(ajustes);
 let sesion = null, modelos = [], modeloFantasma = null, lineaIdeal = null;
 // para pruebas automáticas (?depurar): acceso a la sesión desde la consola
@@ -403,11 +404,11 @@ const DISTORSION_CALOR = {
   uniforms: {
     tDiffuse: { value: null }, tiempo: { value: 0 }, n: { value: 0 },
     puntos: { value: Array.from({ length: MAX_CALOR }, () => new THREE.Vector4()) },   // x, y (uv), radio, intensidad
-    aspecto: { value: 1 }, calima: { value: 0 }, horizonte: { value: 0.55 },
+    aspecto: { value: 1 }, calima: { value: 0 }, horizonte: { value: 0.55 }, suelo: { value: 0 },
   },
   vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: `uniform sampler2D tDiffuse; uniform float tiempo; uniform int n; uniform vec4 puntos[${MAX_CALOR}];
-    uniform float aspecto; uniform float calima; uniform float horizonte; varying vec2 vUv;
+    uniform float aspecto; uniform float calima; uniform float horizonte; uniform float suelo; varying vec2 vUv;
     void main() {
       vec2 off = vec2(0.0);
       for (int k = 0; k < ${MAX_CALOR}; k++) {
@@ -424,6 +425,13 @@ const DISTORSION_CALOR = {
       // calima: banda alrededor del horizonte, ondas finas que suben
       float banda = exp(-pow((vUv.y - horizonte) / 0.07, 2.0));
       off.x += calima * banda * 0.0016 * sin(vUv.y * 420.0 - tiempo * 9.0 + sin(vUv.x * 30.0 + tiempo));
+      // calor que sube del asfalto: ondas que ascienden sobre el suelo, más fuertes en la pista
+      // lejana (justo bajo el horizonte) y suaves cerca de la cámara
+      if (suelo > 0.001) {
+        float bajo = smoothstep(horizonte + 0.01, horizonte - 0.03, vUv.y) * (0.35 + 0.65 * smoothstep(horizonte - 0.5, horizonte - 0.06, vUv.y));
+        float fase = vUv.y * 230.0 - tiempo * 6.5 + sin(vUv.x * 22.0 + tiempo * 1.1) * 2.2;
+        off += suelo * bajo * vec2(0.0021 * sin(fase), 0.0014 * sin(fase * 0.7 + vUv.x * 70.0));
+      }
       gl_FragColor = texture2D(tDiffuse, vUv + off);
     }`,
 };
@@ -468,7 +476,8 @@ function actualizarCalor(dt, coches, jugadorCoche) {
   // el horizonte en pantalla: proyección de un punto lejano a la altura de la cámara
   _pc.copy(cam.position).addScaledVector(cam.getWorldDirection(_fw).setY(0).normalize(), 500).project(cam);
   u.horizonte.value = Math.min(0.95, Math.max(0.05, _pc.y * 0.5 + 0.5));
-  pasoCalor.enabled = k > 0 || u.calima.value > 0.02;
+  u.suelo.value += (fuerza * (escenario?.hora === 'dia' ? 1 : 0.35) - u.suelo.value) * Math.min(1, dt * 1.5);
+  pasoCalor.enabled = k > 0 || u.calima.value > 0.02 || u.suelo.value > 0.02;
 }
 
 // Desenfoque por velocidad: zoom radial suave hacia los bordes (el centro queda nítido)
@@ -639,7 +648,7 @@ function empezar(modo, extra = {}) {
     fichaCrono = null;
     if (cuenta.conectado() && !circuito.def.comunidad) cuenta.fichaCrono(circuito.id).then(d => { fichaCrono = d.ficha; }).catch(() => {});
   }
-  if (modo === 'practica') opc.clima = extra.clima || opcCarrera.clima;
+  if (modo === 'practica') { opc.clima = extra.clima || opcCarrera.clima; opc.salidaBoxes = !extra.lanzada; }
   sesion = new Sesion(circuito, opc);
   sesion.hora = extra.hora || opcCarrera.hora || 'dia';
   arrancarSesion(modo);
@@ -677,6 +686,8 @@ function arrancarSesion(modo) {
   grabadora = new Grabadora(sesion.participantes.length);
   posPrev = new Map();
   telemetria = new Telemetria(circuito.largo);
+  salidaB?.quitar(); salidaB = null;
+  if (sesion.jugador?.salidaBoxes) iniciarSalidaBoxes();
   if (sesion.estado === 'formacion') { mensaje('VUELTA DE FORMACIÓN', 'Sigue al de delante y vuelve a tu casilla', 3); radio.decir('Vuelta de formación. Calienta neumáticos y frenos, y vuelve a tu casilla.', { clave: 'form', cada: 5 }); }
   estadoRadio = { clima: sesion.clima.agua > 0.13 ? 'mojado' : 'seco', lluvia: sesion.clima.lluvia > 0.05, lider: null, avisoDesg: false, vsc: false, ultimaPos: null };
   radio.voz = !!ajustes.radio;
@@ -1238,7 +1249,7 @@ function procesarEventos() {
   for (const e of sesion.eventos) {
     marcarMomento(e);
     if (e === 'luz') { sonido.evento('luz'); }
-    else if (e === 'salida') { sonido.evento('salida'); sonido.ovacion(1.6); mensaje('¡LUCES FUERA!', '', 1.2); entrada.vibrar(80); }
+    else if (e === 'salida') { sonido.evento('salida'); sonido.salidaParrilla?.(); sonido.ovacion(1.6); mensaje('¡LUCES FUERA!', '', 1.2); entrada.vibrar(80); }
     else if (e.tipo === 'averia') {
       if (e.p.jugador) {
         if (e.averia === 'motor') { mensaje('¡MOTOR ROTO!', 'Humo y pérdida de potencia', 3); radio.decir('¡Perdemos el motor! Lleva el coche a un lugar seguro.', { prioridad: true }); entrada.vibrar(300, 1); }
@@ -1690,6 +1701,7 @@ function bucle(ahora) {
   const mJ = modelos[sesion.participantes.indexOf(sesion.jugador)];
   camara.actualizar(dt, j, mJ);
   if (finCarrera) actualizarFinal(dt);
+  if (salidaB && !salidaB.actualizar(dt, camara.cam)) terminarSalidaBoxes();
   if (cineSalida && jugando) actualizarCineSalida(dt);
   if (finPendiente && !cineSalida && !repe && !salidasPendientes.some(x => x.p.jugador)) { const fn = finPendiente; finPendiente = null; fn(); }
   if (jugando && espectando && camEsp) actualizarEspectador(dt, j, mJ);
@@ -1788,6 +1800,26 @@ function bucle(ahora) {
     }
     fpsAcum = 0; fpsN = 0;
   }
+}
+
+// --- Salida desde el garaje (práctica y clasificación) -----------------------------------
+let salidaB = null;
+function iniciarSalidaBoxes() {
+  const k = sesion.participantes.indexOf(sesion.jugador);
+  if (!modelos[k]) { terminarSalidaBoxes(); return; }
+  salidaB = new SalidaBoxes(scene, modelos[k], sesion.jugador.equipo, calidad);
+  document.body.classList.add('cine-salida'); $('#cineEtiqueta').textContent = '🔧 GARAJE';
+  radio.decir('Coche listo. Cinturones, volante… cuando baje el cartel, primera y sal con el limitador.', { clave: 'garaje', cada: 5 });
+  setTimeout(() => { addEventListener('pointerdown', saltarSalidaBoxes, { once: true }); addEventListener('keydown', saltarSalidaBoxes, { once: true }); }, 600);
+}
+function saltarSalidaBoxes() { if (salidaB) terminarSalidaBoxes(); }
+function terminarSalidaBoxes() {
+  removeEventListener('pointerdown', saltarSalidaBoxes); removeEventListener('keydown', saltarSalidaBoxes);
+  salidaB?.quitar(); salidaB = null;
+  if (sesion?.jugador) sesion.jugador.coche.retenido = false;
+  document.body.classList.remove('cine-salida'); $('#cineEtiqueta').textContent = '';
+  camara.iniciada = false;
+  mensaje('SALIDA DE BOXES', 'Limitador puesto hasta el final de la calle de boxes', 2.5);
 }
 
 // --- Después de la bandera: vuelta de enfriamiento, podio y resultados ---------------------
@@ -2044,7 +2076,7 @@ function avisoDano(e) {
   else if (det === 'aleronTras') { mensaje('ALERÓN TRASERO DAÑADO', 'El coche pierde estabilidad', 2.2); radio.decir('Alerón trasero dañado. Cuidado en las frenadas, la trasera estará nerviosa.', { clave: 'alaT', cada: 40 }); }
   else if (det === 'fondo') { mensaje('FONDO DAÑADO', 'Menos carga aerodinámica', 2.2); radio.decir('Has roto el fondo. El coche tiene menos carga, frena antes.', { clave: 'fondo', cada: 60 }); }
   else if (det === 'motor') { mensaje('MOTOR TOCADO', 'Pierdes potencia', 2.2); radio.decir('El golpe ha tocado la caja de cambios y el motor. Perdemos potencia.', { clave: 'motorD', cada: 60 }); }
-  else if (det.startsWith('pinchazo')) { mensaje('¡PINCHAZO!', `Rueda ${NOMBRE_RUEDA[+det.slice(8)]} · entra a boxes`, 2.8); radio.decir(`¡Pinchazo en la ${NOMBRE_RUEDA[+det.slice(8)]}! Box, box. Tráelo despacio.`, { prioridad: true, clave: 'pinch', cada: 15 }); }
+  else if (det.startsWith('pinchazo')) { sonido.revienta?.(); mensaje('¡PINCHAZO!', `Rueda ${NOMBRE_RUEDA[+det.slice(8)]} · entra a boxes`, 2.8); radio.decir(`¡Pinchazo en la ${NOMBRE_RUEDA[+det.slice(8)]}! Box, box. Tráelo despacio.`, { prioridad: true, clave: 'pinch', cada: 15 }); }
   else if (det.startsWith('susp')) { mensaje('SUSPENSIÓN DAÑADA', `Rueda ${NOMBRE_RUEDA[+det.slice(4)]} · el coche tira hacia un lado`, 2.4); radio.decir('La suspensión está tocada, el coche tirará hacia un lado. Compensa con el volante.', { clave: 'susp', cada: 40 }); }
 }
 
@@ -3150,6 +3182,7 @@ function salirAPistaQ() {
   const opc = opcBase('contrarreloj');
   opc.clima = q.cfg.climaQ;
   opc.reglaje.compuesto = q.cfg.climaQ === 'lluvia' ? 'lluvia' : 'blando';
+  opc.salidaBoxes = true;
   sesion = new Sesion(circuito, opc);
   sesion.hora = q.cfg.hora || opcCarrera.hora || 'dia';
   arrancarSesion('contrarreloj');
@@ -3637,7 +3670,7 @@ async function empezarLeccion(k) {
   leccionK = k;
   $('#escRes').classList.remove('visible');
   if (circuito.id !== 'valle') await cargarCircuito('valle');
-  empezar('practica', { clima: 'seco', hora: 'dia' });
+  empezar('practica', { clima: 'seco', hora: 'dia', lanzada: true });
   const car = sesion.jugador.coche;
   car.colocar(def.inicio.s, def.inicio.d);
   leccion = new ESC.Leccion(def, circuito); leccionVuelta = null;

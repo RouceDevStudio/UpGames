@@ -646,6 +646,7 @@ export function crearModelo(opc) {
   const goma = matComun('goma');
 
   const geo = { librea: [], carbono: [], negro: [], metal: [] };
+  let forroCabina = null;
   const piezas = [];
 
   // ── Carrocería de un monoplaza de efecto suelo (secciones medidas sobre un coche real) ──
@@ -676,7 +677,18 @@ export function crearModelo(opc) {
     const sh = new THREE.Shape();
     sh.moveTo(0.66, -0.20); sh.quadraticCurveTo(0.72, 0, 0.66, 0.20); sh.lineTo(0.15, 0.25); sh.quadraticCurveTo(0.10, 0, 0.15, -0.25); sh.closePath();
     const g = new THREE.ShapeGeometry(sh, 12); g.rotateX(-Math.PI / 2); g.translate(0, 0.609, 0);   // mirando hacia arriba (se ve desde la cabina y la cámara de la cara)
-    geo.carbono.push(g);
+    // es la parte de arriba del monocasco sobre las piernas: va pintada como el resto del coche
+    geo.librea.push(g);
+    // bañera: forro acolchado oscuro por dentro del habitáculo (paredes y suelo), para que por
+    // ningún hueco entre el piloto y los bordes se vea la pista
+    const forro = [];
+    const pared = (x0, x1, y0, y1, z) => { const p = new THREE.PlaneGeometry(x1 - x0, y1 - y0); p.translate((x0 + x1) / 2, (y0 + y1) / 2, z); return p; };
+    for (const sg of [-1, 1]) { const p = pared(-0.08, 0.74, 0.46, 0.70, sg * 0.262); p.rotateY(0); forro.push(p); }
+    { const p = new THREE.PlaneGeometry(0.82, 0.524); p.rotateX(-Math.PI / 2); p.translate(0.33, 0.47, 0); forro.push(p); }          // suelo
+    { const p = new THREE.PlaneGeometry(0.524, 0.24); p.rotateY(Math.PI / 2); p.translate(0.735, 0.58, 0); forro.push(p); }        // frente
+    { const p = new THREE.PlaneGeometry(0.524, 0.28); p.rotateY(Math.PI / 2); p.translate(-0.08, 0.6, 0); forro.push(p); }          // respaldo
+    const matForro = matComun('forroCabina', () => new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.92, side: THREE.DoubleSide }));
+    forroCabina = unir(forro, matForro); forroCabina.receiveShadow = true;
     geo.negro.push(caja(0.04, 0.10, 0.44, 0.64, 0.64, 0, 0, 0, -0.3));      // salpicadero
   }
   // toma de aire sobre la cabeza, arco de seguridad y aleta de tiburón
@@ -743,11 +755,14 @@ export function crearModelo(opc) {
       const pie = Math.max(0, 1 - Math.min(t, 1 - t) / 0.12);          // ensanche en las patas
       return [0.030 + pie * 0.035, 0.021 + pie * 0.022];
     }));
-    const pilar = new THREE.CatmullRomCurve3([[0.82, 0.635, 0], [0.70, 0.77, 0], [0.57, 0.905, 0], [0.47, 0.94, 0]].map(p => new THREE.Vector3(...p)));
+    // el pilar entra dentro del aro (antes acababa justo en su borde y se veía el corte en V)
+    const pilar = new THREE.CatmullRomCurve3([[0.82, 0.635, 0], [0.70, 0.77, 0], [0.57, 0.905, 0], [0.48, 0.938, 0], [0.43, 0.945, 0]].map(p => new THREE.Vector3(...p)));
     geo.librea.push(barridoOval(pilar, fisico ? 24 : 14, fisico ? 14 : 8, (t) => {
       const base = Math.max(0, 1 - t / 0.25);
       return [0.016 + base * 0.02, 0.03 + base * 0.035];               // pala: estrecha de lado, larga de frente
     }));
+    // unión soldada del pilar con el aro: una pieza que tapa el encuentro por arriba y por abajo
+    { const u = new THREE.SphereGeometry(0.036, 16, 10); u.scale(1.25, 0.72, 1.35); u.translate(0.462, 0.939, 0); geo.librea.push(u); }
     // pies de las patas: carenado que funde el halo con la carrocería
     for (const sg of [-1, 1]) {
       const pie = new THREE.SphereGeometry(0.06, 16, 10); pie.scale(1.6, 0.55, 1.0); pie.translate(-0.265, 0.655, sg * 0.245); geo.librea.push(pie);
@@ -783,6 +798,7 @@ export function crearModelo(opc) {
   geo.carbono.push(loftS([S(-1.6, 0.11, 0.36, 0.14, 3, 3), S(-2.0, 0.08, 0.34, 0.16, 3, 3), S(-2.30, 0.05, 0.32, 0.20, 2.6, 2.6)], 14));
   geo.metal.push(loftS([S(-2.25, 0.035, 0.42, 0.37, 2, 2), S(-2.36, 0.04, 0.425, 0.365, 2, 2)], 12));
   const carroceria = new THREE.Group();
+  if (forroCabina) carroceria.add(forroCabina);
   const cuerpo = unir(geo.librea, pintura, true);
   carroceria.add(cuerpo);
   const mCarbono = unir(geo.carbono, carbono), mNegro = unir(geo.negro, negro);
@@ -1057,7 +1073,7 @@ export function crearModelo(opc) {
   let tPantalla = 0;
   const estadoDanos = { alaDel: false, alaTras: false };
   const modelo = {
-    raiz, carroceria, ruedas, pivDrs, luzLluvia, pintura, alaDel, alaTras, casco, cuello, piloto, compuesto, espejos,
+    raiz, carroceria, ruedas, pivDrs, luzLluvia, pintura, alaDel, alaTras, casco, cuello, piloto, compuesto, espejos, volanteG: giroVolante, columna,
     mirada: 0,                     // giro de la cabeza (rad) para la cámara de cabina
     alDesprender: null,            // (tipo, objeto3D) → efectos de escombros
     elevar: 0,                     // gatos de boxes

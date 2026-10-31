@@ -183,6 +183,14 @@ export class Sesion {
     }
     // espectador: no hay coche propio; se sigue a uno cualquiera (el 'foco' de la cámara)
     this.jugador = this.participantes.find(p => p.jugador) || this.participantes[0];
+    // práctica y clasificación: el jugador sale desde su garaje (parado, en los gatos)
+    if (opc.salidaBoxes && this.modo !== 'carrera' && circuito.pit?.garajes?.length) {
+      const p = this.jugador, car = p.coche, sB = this._garajeDe(p);
+      car.colocar(sB, circuito.dCarrilPit(sB) + 2.2);
+      car.vx = 0; car.vy = 0; car.marcha = 1; car.rpm = 4000;
+      for (const w of car.ruedas) w.omega = 0;
+      car.retenido = true; p.salidaBoxes = true;
+    }
     this.espectador = !!mp?.espectador;
     this.mejorVueltaSesion = Infinity;
     this.mejoresSectoresSesion = [Infinity, Infinity, Infinity];
@@ -216,7 +224,9 @@ export class Sesion {
     // si el jugador mete el coche en el carril sin pedir parada, el equipo le espera igual
     const u = c.uPit(car.proj.s);
     const enCarril = u >= 0 && u < 140 && car.proj.d > c.semiAncho[car.proj.i] + 1.2;
-    if (!p.solicitudBox && enCarril && !car.abandono && !p.remoto && this.modo !== 'contrarreloj') p.solicitudBox = car.reglaje.compuesto;
+    // saliendo del garaje no cuenta como entrar a boxes (hasta que deja la calle de boxes)
+    if (p.salidaBoxes && !car.retenido && c.uPit(car.proj.s) < 0) p.salidaBoxes = false;
+    if (!p.solicitudBox && enCarril && !p.salidaBoxes && !car.abandono && !p.remoto && this.modo !== 'contrarreloj') p.solicitudBox = car.reglaje.compuesto;
     if (!p.solicitudBox || car.abandono) return;
     // el ingeniero toma el coche con margen para frenar en recta (desde 300 km/h hacen falta ~300 m)
     const antes = c.envolver(c.pit.entrada - car.proj.s);

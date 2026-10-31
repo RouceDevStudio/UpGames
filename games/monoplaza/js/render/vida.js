@@ -155,22 +155,26 @@ export class CapaCamara {
       algo = true;
       const agua = lluvia * (1 + spray * 2.5);
       const esc = Math.min(w, h) / 400;
-      if (this.gotas.length < 90 && Math.random() < agua * dt * 80) this.gotas.push({ x: Math.random() * w, y: Math.random() * h * (casco ? 1 : 0.8), r: (5 + Math.random() * 11) * esc, vida: 0.8 + Math.random() * 2.2, pegada: Math.random() * 0.4 });
+      // las gotas se quedan pegadas a la lente: casi todas quietas un buen rato y solo las grandes
+      // resbalan, despacio (como en una cámara real bajo la lluvia)
+      if (this.gotas.length < 140 && Math.random() < agua * dt * 60) this.gotas.push({ x: Math.random() * w, y: Math.random() * h * (casco ? 1 : 0.85), r: (4 + Math.random() ** 1.6 * 13) * esc, vida: 2.5 + Math.random() * 4, pegada: 0.6 + Math.random() * 2.2 });
       const cx = w / 2, cy = h * 0.55;
       for (const g of this.gotas) {
         g.vida -= dt;
         // pegada: las gotas tardan un instante en empezar a moverse
         if ((g.pegada -= dt) > 0) continue;
+        const peso = Math.max(0, g.r / esc - 7) / 10;          // las pequeñas no se mueven
         if (casco && v > 12) {
-          // en la visera el aire empuja hacia arriba y hacia los lados; más rápido, más estela
-          g.vx = (g.x - cx) * 0.9 * (v / 60); g.vy = -(40 + v * 4.5) * (g.r / (8 * esc));
+          // en la visera el aire empuja hacia arriba y hacia los lados, a tirones y despacio
+          const tiron = 0.55 + 0.45 * Math.sin((g.x + g.y) * 0.05 + performance.now() * 0.004);
+          g.vx = (g.x - cx) * 0.22 * (v / 60) * peso * tiron; g.vy = -(10 + v * 1.1) * peso * tiron;
         } else {
-          g.vx = (g.x - cx) * dt * v * 0.2; g.vy = (25 + v * 2.5) * (g.r / (8 * esc));
+          g.vx = (g.x - cx) * dt * v * 0.05 * peso; g.vy = (6 + v * 0.55) * peso;
         }
         const ox = g.x, oy = g.y;
         g.x += g.vx * dt; g.y += g.vy * dt;
         // al moverse deja microgotas detrás
-        if (Math.random() < dt * 14 && this.micro.length < 160) this.micro.push({ x: ox, y: oy, r: g.r * (0.18 + Math.random() * 0.2), vida: 1.5 + Math.random() * 3 });
+        if (peso > 0 && Math.random() < dt * 6 && this.micro.length < 160) this.micro.push({ x: ox, y: oy, r: g.r * (0.18 + Math.random() * 0.2), vida: 1.5 + Math.random() * 3 });
       }
       this.gotas = this.gotas.filter(g => g.vida > 0 && g.x > -40 && g.x < w + 40 && g.y > -60 && g.y < h + 60);
       // a mucha velocidad el aire limpia antes las microgotas

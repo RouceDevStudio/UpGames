@@ -116,6 +116,8 @@ export const MOTORES = {
   ferrari: { archivo: 'motor_ferrari', nombre: 'V10 · Escudería roja 2004' },
   alonso: { archivo: 'motor_alonso', nombre: 'V10 · Escudería azul 2004' },
   verstappen: { archivo: 'motor_verstappen', nombre: 'V6 turbo híbrido · 2019' },
+  v10: { archivo: 'motor_v10', nombre: 'V10 · el mejor sonido (solo motor, a fondo)' },
+  v6: { archivo: 'motor_v6', nombre: 'V6 deportivo · más grave' },
 };
 const RPM_LIMITE_JUEGO = 15000;
 
@@ -320,10 +322,10 @@ export class Sonido {
   /** Cambia el sonido del motor (Ajustes). */
   cambiarMotor(id) { if (this.ctx && id !== this.motorElegido) this._cargarGrabaciones(id); else this.motorElegido = id; }
 
-  async _cargarGrabaciones(id = this.motorElegido || 'ferrari') {
+  async _cargarGrabaciones(id = this.motorElegido || 'v10') {
     const ctx = this.ctx;
-    const m = MOTORES[id] || MOTORES.ferrari;
-    this.motorElegido = MOTORES[id] ? id : 'ferrari';
+    const m = MOTORES[id] || MOTORES.v10;
+    this.motorElegido = MOTORES[id] ? id : 'v10';
     try {
       const [buffer, datos] = await Promise.all([this._buffer(m.archivo + '.wav'), fetch(new URL(`../audio/${m.archivo}.json`, import.meta.url)).then(r => r.json())]);
       const banco = { buffer, fLim: datos.fLim, bucles: datos.bucles.sort((a, b) => a.f - b.f) };
@@ -338,6 +340,18 @@ export class Sonido {
     } catch (e) { console.warn('motor grabado no disponible', e); }
     try { this.bufChoque = await this._buffer('choque.mp3'); } catch { /* sintetizado */ }
     try { [this.bufRadioIni, this.bufRadioFin] = await Promise.all([this._buffer('radio_ini.mp3'), this._buffer('radio_fin.mp3')]); } catch { /* sintetizado */ }
+    // chirrido real de neumático (en bucle, sigue al deslizamiento), reventón y la salida de la parrilla
+    try {
+      const [chir, rev, sal] = await Promise.all([this._buffer('chirrido.mp3'), this._buffer('revienta.mp3'), this._buffer('salida_parrilla.mp3')]);
+      this.bufRevienta = rev; this.bufSalida = sal;
+      if (!this.chirReal) {
+        const s = ctx.createBufferSource(); s.buffer = chir; s.loop = true; s.loopStart = 0.15; s.loopEnd = chir.duration - 0.15;
+        const g = ctx.createGain(); g.gain.value = 0;
+        const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 350;
+        s.connect(f); f.connect(g); g.connect(this.maestro); g.connect(this.envioEco); s.start(0, Math.random() * 1.5);
+        this.chirReal = { s, g };
+      }
+    } catch { /* sintetizado */ }
     try {
       const [pub, ova] = await Promise.all([this._buffer('publico.mp3'), this._buffer('ovacion.mp3')]);
       this.bufOvacion = ova;
@@ -376,10 +390,24 @@ export class Sonido {
   }
 
   // ovación del público (salida, adelantamientos, meta)
+  /** Reventón de un neumático (pinchazo o rueda que revienta). */
+  revienta(vol = 1) { if (this.listo) this._muestra(this.bufRevienta, 0.6 * vol, 0.95 + Math.random() * 0.1); }
+
+  /** La parrilla entera arrancando al apagarse los semáforos (de fondo, algo lejana). */
+  salidaParrilla() {
+    if (!this.listo || !this.bufSalida) return;
+    const ctx = this.ctx, s = ctx.createBufferSource(); s.buffer = this.bufSalida;
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 3800;
+    const g = ctx.createGain(); g.gain.value = 0.32;
+    s.connect(f); f.connect(g); g.connect(this.maestro); g.connect(this.envioEco);
+    // empieza 1,3 s antes de la arrancada: se oye el último tramo de vueltas sostenidas
+    s.start(ctx.currentTime, 1.3); s.onended = () => g.disconnect();
+  }
+
   ovacion(fuerza = 1) {
     if (!this.listo) return;
     const t = this.ctx.currentTime;
-    if (this._muestra(this.bufOvacion, 0.5 * Math.min(1.4, fuerza), 0.97 + Math.random() * 0.06)) return;
+    if (this._muestra(this.bufOvacion, 0.28 * Math.min(1.4, fuerza), 0.97 + Math.random() * 0.06)) return;
     for (const l of [this.publico, this.publico2]) {
       l.g.gain.cancelScheduledValues(t);
       l.g.gain.setTargetAtTime(0.16 * fuerza, t, 0.25);
@@ -431,7 +459,7 @@ export class Sonido {
   modoRepe(on) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    for (const g of [this.chirrido.g, this.bloqueo.g, this.grava.g, this.gBord, this.raspado.g, this.gTurbo, this.gCaja, this.viento.g, this.rodadura.g])
+    for (const g of [this.chirrido.g, this.bloqueo.g, this.grava.g, this.gBord, this.raspado.g, this.gTurbo, this.gCaja, this.viento.g, this.rodadura.g, this.chirReal?.g].filter(Boolean))
       g.gain.setTargetAtTime(0, t, 0.05);
     this.motor.salida.gain.setTargetAtTime(0, t, 0.05);
     for (const r of this.rivales) r.voz.salida.gain.setTargetAtTime(0, t, 0.05);
@@ -544,7 +572,7 @@ export class Sonido {
     const base = 0.012 + 0.03 * (entorno.grada || 0);
     if (this.gPublicoReal) {
       // público grabado: más fuerte junto a las gradas
-      this.gPublicoReal.gain.setTargetAtTime(0.05 + 0.5 * (entorno.grada || 0), t, 0.6);
+      this.gPublicoReal.gain.setTargetAtTime(0.02 + 0.18 * (entorno.grada || 0), t, 0.6);
       this.publico.g.gain.setTargetAtTime(0, t, 0.5); this.publico2.g.gain.setTargetAtTime(0, t, 0.5);
     } else if (this.publico.g.gain.value < base + 0.01) { this.publico.g.gain.setTargetAtTime(base, t, 0.6); this.publico2.g.gain.setTargetAtTime(base * 0.5, t, 0.6); }
     this.lluvia.g.gain.setTargetAtTime(lluvia * 0.09, t, 0.5);
@@ -611,6 +639,13 @@ export class Sonido {
         else chir = Math.max(chir, exceso);
       } else tierra = Math.max(tierra, clamp(v / 40, 0, 1));
       if (w.sup === 1) bord = Math.max(bord, clamp(v / 30, 0, 1));
+    }
+    if (this.chirReal) {
+      // grabación: más fuerte y aguda cuanto más desliza; el bloqueo suena más grave y seco
+      const q = Math.max(chir, bloq * 0.9);
+      this.chirReal.g.gain.setTargetAtTime(q * 0.32 * (1 - agua * 0.75) * (aBordo ? 0.8 : 1), t, 0.04);
+      this.chirReal.s.playbackRate.setTargetAtTime(bloq > chir ? 0.82 + bloq * 0.12 : 0.9 + chir * 0.25 + v * 0.0012, t, 0.08);
+      chir *= 0.25; bloq *= 0.35;                 // el sintetizado queda solo de relleno
     }
     this.chirrido.g.gain.setTargetAtTime(chir * 0.16 * (1 - agua * 0.7), t, 0.05);
     this.chirrido.f.frequency.setTargetAtTime(900 + chir * 500 + v * 2, t, 0.1);
