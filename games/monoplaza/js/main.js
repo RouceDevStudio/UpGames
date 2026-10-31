@@ -415,22 +415,22 @@ const DISTORSION_CALOR = {
         if (k >= n) break;
         vec4 p = puntos[k];
         vec2 d = (vUv - p.xy) * vec2(aspecto, 1.0);
-        // columna: más ancha y débil según sube (y > 0), casi nada por debajo del escape
-        float sube = clamp(d.y / (p.z * 3.0), -0.3, 1.0);
-        float ancho = p.z * (0.8 + sube * 1.2);
-        float w = exp(-(d.x * d.x) / (ancho * ancho)) * smoothstep(-0.3, 0.05, sube) * (1.0 - smoothstep(0.4, 1.0, sube));
-        float onda = sin(vUv.y * 160.0 - tiempo * 14.0 + d.x * 40.0) + 0.6 * sin(vUv.y * 310.0 - tiempo * 23.0);
-        off += vec2(onda, 0.6 * cos(vUv.x * 140.0 + tiempo * 11.0)) * w * p.w * 0.0038;
+        // columna fina que sale del escape hacia arriba (nada por debajo ni a los lados)
+        float sube = d.y / (p.z * 4.0);
+        if (sube < 0.0 || sube > 1.0) continue;
+        float ancho = p.z * (0.45 + sube * 0.6);
+        float w = exp(-(d.x * d.x) / (ancho * ancho)) * smoothstep(0.0, 0.15, sube) * (1.0 - smoothstep(0.5, 1.0, sube));
+        float onda = sin(vUv.y * 260.0 - tiempo * 15.0 + d.x * 60.0) + 0.5 * sin(vUv.y * 470.0 - tiempo * 22.0);
+        off += vec2(onda, 0.4 * cos(vUv.x * 200.0 + tiempo * 12.0)) * w * p.w * 0.0011;
       }
-      // calima: banda alrededor del horizonte, ondas finas que suben
-      float banda = exp(-pow((vUv.y - horizonte) / 0.07, 2.0));
-      off.x += calima * banda * 0.0016 * sin(vUv.y * 420.0 - tiempo * 9.0 + sin(vUv.x * 30.0 + tiempo));
-      // calor que sube del asfalto: ondas que ascienden sobre el suelo, más fuertes en la pista
-      // lejana (justo bajo el horizonte) y suaves cerca de la cámara
+      // calima: una banda estrecha justo en el horizonte, muy sutil
+      float banda = exp(-pow((vUv.y - horizonte) / 0.025, 2.0));
+      off.x += calima * banda * 0.0006 * sin(vUv.y * 520.0 - tiempo * 9.0 + sin(vUv.x * 30.0 + tiempo));
+      // asfalto lejano: solo una franja fina bajo el horizonte (el «espejismo» del fondo de la recta)
       if (suelo > 0.001) {
-        float bajo = smoothstep(horizonte + 0.01, horizonte - 0.03, vUv.y) * (0.35 + 0.65 * smoothstep(horizonte - 0.5, horizonte - 0.06, vUv.y));
-        float fase = vUv.y * 230.0 - tiempo * 6.5 + sin(vUv.x * 22.0 + tiempo * 1.1) * 2.2;
-        off += suelo * bajo * vec2(0.0021 * sin(fase), 0.0014 * sin(fase * 0.7 + vUv.x * 70.0));
+        float bajo = smoothstep(horizonte + 0.004, horizonte - 0.008, vUv.y) * smoothstep(horizonte - 0.07, horizonte - 0.02, vUv.y);
+        float fase = vUv.y * 600.0 - tiempo * 7.0 + sin(vUv.x * 40.0 + tiempo * 1.1) * 1.5;
+        off += suelo * bajo * vec2(0.0007 * sin(fase), 0.0004 * sin(fase * 0.7 + vUv.x * 90.0));
       }
       gl_FragColor = texture2D(tDiffuse, vUv + off);
     }`,
@@ -454,7 +454,7 @@ function actualizarCalor(dt, coches, jugadorCoche) {
       _pc.set(c.x - cs * 2.35, c.y + 0.5, c.z - sn * 2.35);
       const dx = _pc.x - cam.position.x, dy = _pc.y - cam.position.y, dz = _pc.z - cam.position.z;
       const dist = Math.hypot(dx, dy, dz);
-      if (dist < 0.8 || dist > 70 || dx * _fw.x + dy * _fw.y + dz * _fw.z < 0) continue;
+      if (dist < 3.5 || dist > 60 || dx * _fw.x + dy * _fw.y + dz * _fw.z < 0) continue;
       lista.push({ c, dist, p: _pc.clone() });
     }
     lista.sort((a, b) => a.dist - b.dist);
@@ -464,7 +464,8 @@ function actualizarCalor(dt, coches, jugadorCoche) {
       if (Math.abs(p.x) > 1.2 || Math.abs(p.y) > 1.2) continue;
       const carga = 0.45 + 0.55 * Math.min(1, c.mandos?.acelerador ?? 0.5);
       const parado = c.velocidad < 25 ? 1 : 0.55;           // parado o lento el chorro sube recto y se ve más
-      u.puntos.value[k].set(p.x * 0.5 + 0.5, p.y * 0.5 + 0.5, Math.max(0.006, 0.35 * f / dist), fuerza * carga * parado * Math.min(1, 25 / dist + 0.25));
+      // radio: unos 12 cm de chorro en pantalla (pequeño), con un tope para cuando está cerca
+      u.puntos.value[k].set(p.x * 0.5 + 0.5, p.y * 0.5 + 0.5, Math.min(0.025, Math.max(0.003, 0.12 * f / dist)), fuerza * carga * parado);
       k++;
     }
   }
