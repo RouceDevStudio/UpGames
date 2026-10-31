@@ -421,16 +421,7 @@ const DISTORSION_CALOR = {
         float ancho = p.z * (0.45 + sube * 0.6);
         float w = exp(-(d.x * d.x) / (ancho * ancho)) * smoothstep(0.0, 0.15, sube) * (1.0 - smoothstep(0.5, 1.0, sube));
         float onda = sin(vUv.y * 260.0 - tiempo * 15.0 + d.x * 60.0) + 0.5 * sin(vUv.y * 470.0 - tiempo * 22.0);
-        off += vec2(onda, 0.4 * cos(vUv.x * 200.0 + tiempo * 12.0)) * w * p.w * 0.0011;
-      }
-      // calima: una banda estrecha justo en el horizonte, muy sutil
-      float banda = exp(-pow((vUv.y - horizonte) / 0.025, 2.0));
-      off.x += calima * banda * 0.0006 * sin(vUv.y * 520.0 - tiempo * 9.0 + sin(vUv.x * 30.0 + tiempo));
-      // asfalto lejano: solo una franja fina bajo el horizonte (el «espejismo» del fondo de la recta)
-      if (suelo > 0.001) {
-        float bajo = smoothstep(horizonte + 0.004, horizonte - 0.008, vUv.y) * smoothstep(horizonte - 0.07, horizonte - 0.02, vUv.y);
-        float fase = vUv.y * 600.0 - tiempo * 7.0 + sin(vUv.x * 40.0 + tiempo * 1.1) * 1.5;
-        off += suelo * bajo * vec2(0.0007 * sin(fase), 0.0004 * sin(fase * 0.7 + vUv.x * 90.0));
+        off += vec2(onda, 0.4 * cos(vUv.x * 200.0 + tiempo * 12.0)) * w * p.w * 0.0019;
       }
       gl_FragColor = texture2D(tDiffuse, vUv + off);
     }`,
@@ -464,8 +455,8 @@ function actualizarCalor(dt, coches, jugadorCoche) {
       if (Math.abs(p.x) > 1.2 || Math.abs(p.y) > 1.2) continue;
       const carga = 0.45 + 0.55 * Math.min(1, c.mandos?.acelerador ?? 0.5);
       const parado = c.velocidad < 25 ? 1 : 0.55;           // parado o lento el chorro sube recto y se ve más
-      // radio: unos 12 cm de chorro en pantalla (pequeño), con un tope para cuando está cerca
-      u.puntos.value[k].set(p.x * 0.5 + 0.5, p.y * 0.5 + 0.5, Math.min(0.025, Math.max(0.003, 0.12 * f / dist)), fuerza * carga * parado);
+      // radio: unos 20 cm de chorro en pantalla, con un tope para cuando está cerca
+      u.puntos.value[k].set(p.x * 0.5 + 0.5, p.y * 0.5 + 0.5, Math.min(0.04, Math.max(0.005, 0.2 * f / dist)), fuerza * carga * parado);
       k++;
     }
   }
@@ -478,7 +469,7 @@ function actualizarCalor(dt, coches, jugadorCoche) {
   _pc.copy(cam.position).addScaledVector(cam.getWorldDirection(_fw).setY(0).normalize(), 500).project(cam);
   u.horizonte.value = Math.min(0.95, Math.max(0.05, _pc.y * 0.5 + 0.5));
   u.suelo.value += (fuerza * (escenario?.hora === 'dia' ? 1 : 0.35) - u.suelo.value) * Math.min(1, dt * 1.5);
-  pasoCalor.enabled = k > 0 || u.calima.value > 0.02 || u.suelo.value > 0.02;
+  pasoCalor.enabled = k > 0;
 }
 
 // Desenfoque por velocidad: zoom radial suave hacia los bordes (el centro queda nítido)
