@@ -9,6 +9,7 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { cuerpoListo, geometriasCuerpo } from './cuerpoStudio.js';
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const suave = (t) => t * t * (3 - 2 * t);
@@ -298,18 +299,21 @@ export class Persona {
       piezas.push({ geo, mat, m, hueso: padre });
       return m;
     };
-    const hueso = (padre, x, y, z) => { const h = new THREE.Bone(); h.position.set(x, y, z); (padre || BASE).add(h); huesos.push(h); return h; };
+    const hueso = (padre, x, y, z, nombre = '') => { const h = new THREE.Bone(); h.name = nombre; h.position.set(x, y, z); (padre || BASE).add(h); huesos.push(h); return h; };
+    // cuerpo de UpGames Studio (una malla suave con mono, guantes y botas) si está cargado;
+    // si no, las piezas de siempre
+    const nuevo = cuerpoListo();
 
     // cadera (raíz animada) y pelvis
-    const cadera = this.cadera = hueso(null, 0, 0.95, 0);
-    malla(g.pelvis, matTorso, cadera).scale.set(1, 1, 1.15);
+    const cadera = this.cadera = hueso(null, 0, 0.95, 0, 'cadera');
+    if (!nuevo) malla(g.pelvis, matTorso, cadera).scale.set(1, 1, 1.15);
     // tronco
-    const tronco = this.tronco = hueso(cadera, 0, 0.1, 0);
-    const mt = malla(g.torso, matTorso, tronco); mt.scale.set(piloto ? 0.9 : 0.8, 1, piloto ? 1.18 : 1.1);
+    const tronco = this.tronco = hueso(cadera, 0, 0.1, 0, 'tronco');
+    if (!nuevo) { const mt = malla(g.torso, matTorso, tronco); mt.scale.set(piloto ? 0.9 : 0.8, 1, piloto ? 1.18 : 1.1); }
     const matCuello = new THREE.MeshStandardMaterial({ color: piel, roughness: 0.6 });
-    const cuello = hueso(tronco, 0.01, 0.49, 0);
-    malla(g.cuello, rol === 'mecanico' ? matNegro : matCuello, cuello).scale.set(1, 0.75, 1);   // verdugo ignífugo
-    const cabeza = this.cabeza = hueso(cuello, 0.01, 0.06, 0);
+    const cuello = hueso(tronco, 0.01, 0.49, 0, 'cuello');
+    if (!nuevo) malla(g.cuello, rol === 'mecanico' ? matNegro : matCuello, cuello).scale.set(1, 0.75, 1);   // verdugo ignífugo
+    const cabeza = this.cabeza = hueso(cuello, 0.01, 0.06, 0, 'cabeza');
     if (rol === 'mecanico') {
       const matCasco = new THREE.MeshStandardMaterial({ map: texturaCasco(color), roughness: 0.25, metalness: 0.1 });
       malla(g.craneo, matNegro, cabeza, 0, 0.09, 0);
@@ -338,26 +342,30 @@ export class Persona {
     if (piloto) {
       const matCinta = new THREE.MeshStandardMaterial({ color: 0x2a2a2e, roughness: 0.7 });
       const matMetal = new THREE.MeshStandardMaterial({ color: 0xb8bcc4, metalness: 1, roughness: 0.3 });
+      // con el cuerpo de Studio el pecho y la cintura son más finos: el arnés se ajusta a ellos
+      const f = nuevo ? 0.86 : 1, yc = nuevo ? -0.05 : 0.03;
       for (const l of [-1, 1]) {
-        malla(G.cintaHombro, matCinta, tronco, 0.135, 0.25, l * 0.07).rotation.x = -l * 0.12;     // tirantes
-        malla(G.ajuste, matMetal, tronco, 0.15, 0.38, l * 0.075);                                 // hebillas de ajuste
+        malla(G.cintaHombro, matCinta, tronco, 0.135 * f, 0.25, l * 0.07).rotation.x = -l * 0.12;     // tirantes
+        malla(G.ajuste, matMetal, tronco, 0.15 * f, 0.38, l * 0.075);                                 // hebillas de ajuste
       }
-      malla(G.cinturon, matCinta, tronco, 0, 0.03, 0).scale.set(0.82, 1, 1.12);                  // cinturón abdominal
-      malla(G.hebilla, matMetal, tronco, 0.165, 0.04, 0).rotation.z = Math.PI / 2;              // cierre rotatorio
-      malla(G.cintaPierna, matCinta, tronco, 0.16, -0.06, 0);                                    // la de la entrepierna
-      malla(G.cuelloMono, matManga, cuello, 0, 0.0, 0);                                          // cuello del mono
+      malla(G.cinturon, matCinta, tronco, 0, yc, 0).scale.set(nuevo ? 0.68 : 0.82, 1, nuevo ? 0.98 : 1.12); // cinturón abdominal
+      malla(G.hebilla, matMetal, tronco, nuevo ? 0.118 : 0.165, yc + 0.01, 0).rotation.z = Math.PI / 2;     // cierre rotatorio
+      malla(G.cintaPierna, matCinta, tronco, nuevo ? 0.112 : 0.16, yc - 0.09, 0);                       // la de la entrepierna
+      if (!nuevo) malla(G.cuelloMono, matManga, cuello, 0, 0.0, 0);                                     // cuello del mono
     }
     // brazos: hombro → codo → muñeca
     const brazo = (lado) => {
       const z = lado * 0.21;
-      const h = hueso(tronco, 0, 0.43, z);
+      const l = lado < 0 ? 'I' : 'D';
+      const h = hueso(tronco, 0, 0.43, z, 'h' + l);
+      const c = hueso(h, 0, -0.29, 0, 'c' + l);
+      const m = hueso(c, 0, -0.25, 0, 'm' + l);
+      if (nuevo) return { h, c, m };
       const gr = piloto ? 1.28 : 1;            // el mono ignífugo es holgado
       malla(g.hombro, matManga, h).scale.setScalar(gr);
       malla(g.brazo, matManga, h).scale.set(gr, 1, gr);
-      const c = hueso(h, 0, -0.29, 0);
       malla(g.codo, matManga, c).scale.setScalar(gr);
       malla(g.antebrazo, matManga, c).scale.set(gr, 1, gr);
-      const m = hueso(c, 0, -0.25, 0);
       if (piloto) {
         // guante de piloto: puño largo, palma, dedos juntos y pulgar; hombrera del mono
         const matGuante = matNegro;
@@ -374,13 +382,15 @@ export class Persona {
     this.hD = bD.h; this.cD = bD.c; this.mD = bD.m;
     // piernas: cadera → rodilla → tobillo
     const pierna = (lado) => {
-      const k = hueso(cadera, 0, -0.02, lado * 0.095);
+      const l = lado < 0 ? 'I' : 'D';
+      const k = hueso(cadera, 0, -0.02, lado * 0.095, 'k' + l);
+      const r = hueso(k, 0, -0.44, 0, 'r' + l);
+      const t = hueso(r, 0, -0.43, 0, 't' + l);
+      if (nuevo) return { k, r, t };
       const gp = piloto ? 1.22 : 1;
       malla(g.muslo, matManga, k).scale.set(gp, 1, gp);
-      const r = hueso(k, 0, -0.44, 0);
       malla(g.rodilla, matManga, r).scale.setScalar(gp);
       malla(g.pierna, matManga, r).scale.set(gp, 1, gp);
-      const t = hueso(r, 0, -0.43, 0);
       if (piloto) {
         // botas altas de piloto con cordones y rodillera acolchada
         const matB = new THREE.MeshStandardMaterial({ map: texturaBota(), roughness: 0.45 });
@@ -409,6 +419,19 @@ export class Persona {
       if (!porMat.has(p.mat)) porMat.set(p.mat, []);
       porMat.get(p.mat).push(geo);
       p.m.removeFromParent();
+    }
+    if (nuevo) {
+      // el cuerpo de Studio: cada parte con su material (el mono, del color del equipo)
+      const partes = geometriasCuerpo(piloto && calidad >= 1 ? 2 : 1, huesos.map((h) => h.name));
+      const matMono = new THREE.MeshStandardMaterial({ color, roughness: 0.82 });
+      const matFranja = new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.8 });
+      const matSuela = new THREE.MeshStandardMaterial({ color: 0xd8d8d8, roughness: 0.6 });
+      const matDe = { traje: matMono, franja: matFranja, guante: matNegro, bota: matBota, suela: matSuela, cuello: matNegro };
+      for (const [p, geo] of Object.entries(partes)) {
+        const mat = matDe[p] || matMono;
+        if (!porMat.has(mat)) porMat.set(mat, []);
+        porMat.get(mat).push(geo);
+      }
     }
     const mats = [...porMat.keys()];
     const fusion = mergeGeometries(mats.map(m => mergeGeometries(porMat.get(m), false)), true);

@@ -34,8 +34,10 @@
   </div>
   <div class="grupo">
     <button id="bIman" class="ic" title="Ajuste magnético a la cuadrícula"><svg viewBox="0 0 24 24"><path d="M6 3v8a6 6 0 0 0 12 0V3"/><path d="M6 7h4M14 7h4"/><path d="M10 3v8a2 2 0 0 0 4 0V3"/></svg></button>
-    <button id="bExportar" class="ic" title="Exportar GLB"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 19h16"/></svg></button>
-    <button id="bPanel" class="ic" title="Escena"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button>
+    <button id="bArchivo" class="ic" title="Archivo: guardar, abrir, exportar"><svg viewBox="0 0 24 24"><path d="M4 4h10l6 6v10H4z"/><path d="M14 4v6h6"/><path d="M12 12v6M9 15l3 3 3-3"/></svg></button>
+    <button id="bPanel" class="ic" title="Propiedades"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button>
+    <button id="bPresentar" class="ic" title="Presentación: render de calidad y captura (P)"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/><circle cx="12" cy="11" r="2.5"/></svg></button>
+    <button id="bAyuda" class="ic" title="Ayuda: gestos y atajos"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 0c0 1.7-2.5 2-2.5 4M12 17h.01"/></svg></button>
   </div>
 </header>
 
@@ -47,29 +49,132 @@
   <button id="bEspacio" title="Ejes del objeto o del mundo"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg><span id="tEspacio">Mundo</span></button>
 </nav>
 
-<!-- Panel de escena -->
+<!-- Barra del modo edición -->
+<div id="barraEdicion" hidden>
+  <div class="grupo segm-ed">
+    <button data-tipo="v" class="activo" title="Vértices"><svg viewBox="0 0 24 24"><path d="M5 19L12 5l7 14z" opacity=".45"/><circle cx="12" cy="5" r="2.6" fill="currentColor"/><circle cx="5" cy="19" r="2.6" fill="currentColor"/><circle cx="19" cy="19" r="2.6" fill="currentColor"/></svg><span>Vértice</span></button>
+    <button data-tipo="e" title="Aristas"><svg viewBox="0 0 24 24"><path d="M5 19L12 5" opacity=".45"/><path d="M12 5l7 14" opacity=".45"/><path d="M5 19h14" stroke-width="3.4"/></svg><span>Arista</span></button>
+    <button data-tipo="f" title="Caras"><svg viewBox="0 0 24 24"><path d="M5 19L12 5l7 14z" fill="currentColor" fill-opacity=".45"/></svg><span>Cara</span></button>
+  </div>
+  <div class="grupo">
+    <button id="bSumar" title="Tocar suma o quita de la selección (o Mayús)"><span>+ Selec.</span></button>
+    <button id="bTodo" title="Seleccionar todo o nada (A)"><span>Todo</span></button>
+    <button id="bBucle" title="Bucle de aristas desde la última arista tocada (L)" hidden><span>Bucle</span></button>
+    <button id="bRayos" title="Ver y tocar a través de la malla (Alt+Z)"><span>Rayos X</span></button>
+    <button id="bImanVert" title="Al mover, la selección se pega al vértice más cercano"><span>Imán vért.</span></button>
+  </div>
+  <div id="infoMalla"></div>
+</div>
+
+<!-- Barra de esculpir / pintar -->
+<div id="barraPincel" hidden>
+  <div class="grupo pinceles">
+    <button data-pincel="inflar">Inflar</button>
+    <button data-pincel="alisar">Alisar</button>
+    <button data-pincel="pellizcar">Pellizcar</button>
+    <button data-pincel="arrastrar">Arrastrar</button>
+    <button data-pincel="aplanar">Aplanar</button>
+    <button data-pincel="surco" title="Hunde una línea fina: costuras y ranuras">Surco</button>
+    <button data-pincel="capa" title="Sube hasta una altura fija (no se acumula)">Capa</button>
+    <button data-pincel="arrugar" title="Pliegues de tela a lo largo del trazo">Arrugar</button>
+    <button data-pincel="alfa" title="Sello con patrón: costura, puntos, rejilla…">Alfa</button>
+    <button data-pincel="detalle" title="Añade vértices solo donde pasas el pincel">Detalle</button>
+    <button data-pincel="mascara">Máscara</button>
+    <select id="selAlfa" title="Patrón del pincel Alfa"></select>
+    <label id="filaColorPincel" class="color-pincel">Color <input id="pColorPincel" type="color" value="#d8141f"></label>
+    <span id="opcionesTextura" class="opciones-textura">
+      <button id="bEnTextura" title="Pinta píxeles de una textura (más nítido) en vez de vértices">Textura</button>
+      <button data-herr="pincel" title="Pincel">Pincel</button>
+      <button data-herr="calco" title="Calcomanía: toca el modelo para estamparla">Calcomanía</button>
+      <label class="btn chico" title="Imagen para la calcomanía (logo, patrocinador)">Imagen<input id="fCalco" type="file" accept="image/*" hidden></label>
+      <button id="bCalcoTexto" title="Calcomanía con un texto o número">Texto</button>
+      <select id="selCapaPintura" title="Capa en la que se pinta"></select>
+      <button id="bCapaPintura" title="Nueva capa">+ Capa</button>
+      <button id="bVerCapa" title="Mostrar u ocultar la capa">👁</button>
+    </span>
+  </div>
+  <div class="grupo ajustes-pincel">
+    <label>Radio <input id="pRadio" type="range" min="0.01" max="0.6" step="0.005"></label>
+    <label>Fuerza <input id="pFuerza" type="range" min="0.05" max="1" step="0.01"></label>
+    <button id="bRestar" title="Invierte el pincel (hundir en vez de inflar…)">Restar</button>
+    <button id="bSimetriaPincel" title="Simetría en X">Simetría</button>
+    <button id="bMasDetalle" title="Subdivide para tener más vértices">Más detalle</button>
+    <button id="bLimpiarMascara">Quitar máscara</button>
+    <button id="bNuevaCapa" title="Lo que esculpas después queda en una capa con intensidad ajustable">Nueva capa</button>
+    <label id="filaCapa" hidden>Capa <input id="pCapa" type="range" min="0" max="2" step="0.01" value="1"></label>
+  </div>
+  <div id="infoPincel"></div>
+</div>
+
+<!-- Panel de propiedades -->
 <aside id="panel">
-  <div class="cab">Escena <button id="bCerrarPanel" class="ic chico" title="Cerrar">✕</button></div>
-  <ul id="lista"></ul>
-  <div id="props" hidden>
-    <label>Nombre <input id="pNombre" maxlength="40"></label>
-    <label class="fila">Color <input id="pColor" type="color"></label>
-    <div class="fila botones">
-      <button id="pDuplicar">Duplicar</button>
-      <button id="pBorrar" class="peligro">Borrar</button>
+  <div class="cab">Propiedades <button id="bCerrarPanel" class="ic chico" title="Cerrar">✕</button></div>
+  <div class="pestanas">
+    <button data-pest="escena" class="activo">Escena</button>
+    <button data-pest="objeto">Objeto</button>
+    <button data-pest="mods">Modificadores</button>
+  </div>
+  <div class="pest" data-pest="escena">
+    <div class="fila botones barra-escena">
+      <button id="bVarios" title="Tocar en la lista (o Mayús + toque en la vista) marca varios objetos">Seleccionar varios</button>
+      <button id="bAgrupar" title="Agrupa los objetos marcados">Agrupar</button>
     </div>
+    <ul id="lista"></ul>
+  </div>
+  <div class="pest" data-pest="objeto" hidden>
+    <p class="nota vacio" id="propsVacio">Toca un objeto en la vista o en la pestaña Escena.</p>
+    <div id="props" hidden>
+      <label>Nombre <input id="pNombre" maxlength="40"></label>
+      <label class="fila">Color <input id="pColor" type="color"></label>
+      <div class="transformar">
+        <span>Posición</span><input data-tr="p0" type="number" step="0.05"><input data-tr="p1" type="number" step="0.05"><input data-tr="p2" type="number" step="0.05">
+        <span>Giro °</span><input data-tr="r0" type="number" step="5"><input data-tr="r1" type="number" step="5"><input data-tr="r2" type="number" step="5">
+        <span>Escala</span><input data-tr="s0" type="number" step="0.05"><input data-tr="s1" type="number" step="0.05"><input data-tr="s2" type="number" step="0.05">
+      </div>
+      <div class="fila botones">
+        <button id="pDuplicar">Duplicar</button>
+        <button id="pMaterial">Material…</button>
+        <button id="pBorrar" class="peligro">Borrar</button>
+      </div>
+      <div class="fila botones" id="filaGrupo" hidden>
+        <span class="grupo-nombre">Grupo: <b id="nombreGrupo"></b></span>
+        <button id="bSoloPieza" title="Mover solo la pieza tocada, no todo el grupo">Solo esta pieza</button>
+        <button id="bDesagrupar">Desagrupar</button>
+      </div>
+      <p class="nota" id="pInfo"></p>
+    </div>
+  </div>
+  <div class="pest" data-pest="mods" hidden>
+    <p class="nota vacio" id="modsVacio">Toca un objeto para añadirle modificadores (espejo, subdivisión, matriz, solidificar, booleana). No cambian la malla hasta que los apliques.</p>
+    <div id="listaMods"></div>
+    <select id="selMod"></select>
   </div>
 </aside>
 
 <!-- Barra inferior para el pulgar -->
 <footer id="abajo">
   <div class="modos">
-    <button data-modo="objeto" class="activo">Objeto</button>
-    <button data-modo="editar" data-sprint="2">Editar</button>
-    <button data-modo="esculpir" data-sprint="7">Esculpir</button>
-    <button data-modo="pintar" data-sprint="7">Pintar</button>
-    <button data-modo="material" data-sprint="5">Material</button>
-    <button data-modo="animar" data-etapa="2">Animar</button>
+    <button data-modo="objeto" class="activo"><svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg>Objeto</button>
+    <button data-modo="editar"><svg viewBox="0 0 24 24"><path d="M5 19L12 5l7 14z"/><circle cx="12" cy="5" r="1.8" fill="currentColor"/><circle cx="5" cy="19" r="1.8" fill="currentColor"/><circle cx="19" cy="19" r="1.8" fill="currentColor"/></svg>Editar</button>
+    <button data-modo="esculpir"><svg viewBox="0 0 24 24"><path d="M4 20c4-1 6-4 7-8l5-5 3 3-5 5c-4 1-7 3-8 7"/><path d="M14 6l4 4"/></svg>Esculpir</button>
+    <button data-modo="pintar"><svg viewBox="0 0 24 24"><path d="M18 3l3 3-9 9-4 1 1-4z"/><path d="M7 16c-2 0-3 2-3 5 3 0 5-1 5-3"/></svg>Pintar</button>
+    <button data-modo="material"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 8a5 5 0 0 1 6-1"/></svg>Material</button>
+    <button data-modo="animar" data-etapa="2"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 8l6 4-6 4z"/></svg>Animar</button>
+  </div>
+  <div class="herramientas-ed" id="herramientasEd">
+    <button data-op="extruir" data-tipos="f" title="Extruir caras (E)">Extruir</button>
+    <button data-op="inset" data-tipos="f" title="Inset: cara hacia dentro (I)">Inset</button>
+    <button data-op="cortarBucle" data-tipos="e" title="Corte en bucle por la arista (Ctrl+R)">Cortar bucle</button>
+    <button data-op="biselar" data-tipos="e" title="Biselar: redondea las aristas seleccionadas (Ctrl+B)">Biselar</button>
+    <button data-op="pliegue" data-tipos="e" title="Fijar borde: la subdivisión no redondea estas aristas (Mayús+E)">Fijar borde</button>
+    <button data-op="fusionar" data-tipos="v" title="Fusionar vértices en el centro (M)">Fusionar</button>
+    <button data-op="subdividir" title="Subdividir y suavizar (Catmull-Clark)">Subdividir</button>
+    <button data-op="suavizar" title="Suavizar vértices">Suavizar</button>
+    <button data-op="simetria" title="Simetría: refleja el lado derecho (x ≥ 0)">Simetría X</button>
+    <button data-op="rellenar" title="Rellenar agujeros (los que tocan la selección, o todos) (Alt+F)">Rellenar</button>
+    <button data-op="puente" data-tipos="f" title="Puente: une dos zonas de caras enfrentadas con un tubo">Puente</button>
+    <button data-op="empezarCuchillo" title="Cuchillo: toca dos puntos en la pantalla para cortar en línea recta (K)">Cuchillo</button>
+    <button data-op="borrar" class="peligro" title="Borrar (X)">Borrar</button>
   </div>
   <div class="acciones">
     <button id="bAnadir" class="primario"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Añadir</button>
@@ -81,6 +186,14 @@
 <div id="hojaAnadir" class="hoja" hidden>
   <div class="hoja-cab">Añadir <button class="ic chico" data-cerrar>✕</button></div>
   <div class="rejilla" id="rejillaPrimitivas"></div>
+  <div class="hoja-cab sub">Piezas</div>
+  <div class="rejilla" id="rejillaPiezas"></div>
+  <div class="hoja-cab sub">Plantillas</div>
+  <div class="rejilla">
+    <button id="bPlantillaF1"><svg viewBox="0 0 32 32"><path d="M2 20h5l3-5h8l4 3h6l2 2"/><circle cx="8" cy="21" r="3"/><circle cx="24" cy="21" r="3"/><path d="M27 13v6M2 22h3"/></svg>Monoplaza F1</button>
+    <label class="btn ref" title="Imagen de fondo para calcar (planos, fotos)"><svg viewBox="0 0 32 32"><rect x="4" y="6" width="24" height="20" rx="2"/><path d="M4 22l7-7 6 6 4-4 7 7"/><circle cx="21" cy="12" r="2.5"/></svg>Imagen de referencia<input id="fReferencia" type="file" accept="image/*" hidden></label>
+    <button id="bPlantillaPiloto"><svg viewBox="0 0 32 32"><circle cx="16" cy="7" r="4.5"/><path d="M11 14h10l1 8h-3l-1 7h-4l-1-7h-3z"/><path d="M21 15l3 4-2 2"/></svg>Piloto</button>
+  </div>
 </div>
 
 <!-- Desde foto -->
@@ -89,8 +202,10 @@
   <div class="segm" id="fotoModo">
     <button data-n="1" class="activo">1 foto · relieve</button>
     <button data-n="2">2 fotos · frente + lado</button>
+    <button data-n="3">Planos · 3–4 vistas</button>
+    <button data-n="4">IA nube · 360°</button>
   </div>
-  <label class="fila marca-lado"><input id="fIA" type="checkbox" checked> Recorte y profundidad con IA (recomendado; la primera vez descarga ≈ 35 MB)</label>
+  <label class="fila marca-lado" id="filaIA"><input id="fIA" type="checkbox" checked> Recorte y profundidad con IA (recomendado; la primera vez descarga ≈ 35 MB)</label>
   <p class="nota" id="fotoAyuda"></p>
   <div class="segm" id="filaZona">
     <button data-zona="anadir" class="activo">Tocar = objeto</button>
@@ -115,20 +230,133 @@
         <label class="btn">Cámara<input type="file" accept="image/*" capture="environment" hidden></label>
       </div>
     </div>
+    <div class="ranura" data-ranura="2" hidden>
+      <canvas width="240" height="180"></canvas>
+      <div class="etq">Arriba</div>
+      <div class="fila botones">
+        <label class="btn">Galería<input type="file" accept="image/*" hidden></label>
+        <label class="btn">Cámara<input type="file" accept="image/*" capture="environment" hidden></label>
+      </div>
+    </div>
+    <div class="ranura" data-ranura="3" hidden>
+      <canvas width="240" height="180"></canvas>
+      <div class="etq">Atrás (opcional)</div>
+      <div class="fila botones">
+        <label class="btn">Galería<input type="file" accept="image/*" hidden></label>
+        <label class="btn">Cámara<input type="file" accept="image/*" capture="environment" hidden></label>
+      </div>
+    </div>
   </div>
   <label class="deslizador" id="filaTol">Recorte del fondo <input id="fTol" type="range" min="4" max="45" value="18"><output id="oTol">18</output></label>
   <label class="deslizador" id="filaGrosor">Grosor <input id="fGrosor" type="range" min="5" max="100" value="35"><output id="oGrosor">35</output></label>
-  <label class="deslizador">Detalle <input id="fDetalle" type="range" min="24" max="96" value="64"><output id="oDetalle">64</output></label>
+  <label class="deslizador" id="filaDetalle">Detalle <input id="fDetalle" type="range" min="24" max="96" value="64"><output id="oDetalle">64</output></label>
+  <label class="fila marca-lado" id="filaPintar" hidden><input id="fPintar" type="checkbox"> Pintar el modelo con las imágenes (si no, gris liso)</label>
+<label class="fila marca-lado" id="filaMonoplaza" hidden><input id="fMonoplaza" type="checkbox" checked> Es un monoplaza (ruedas descubiertas, como un F1): ruedas como piezas reales y carrocería sin cajas</label>
   <label class="fila marca-lado" id="filaInvertir" hidden><input id="fInvertir" type="checkbox"> La foto de lado está tomada desde la izquierda</label>
   <div class="fila botones fin">
     <button id="bCrearFoto" class="primario" disabled>Crear modelo</button>
   </div>
 </div>
 
+<!-- Archivo -->
+<div id="hojaArchivo" class="hoja" hidden>
+  <div class="hoja-cab">Archivo <button class="ic chico" data-cerrar>✕</button></div>
+  <p class="nota" id="estadoGuardado">Tu trabajo se guarda solo en este dispositivo cada 10 segundos.</p>
+  <div class="proyecto-actual"><span>Proyecto: <b id="nombreProyecto">Sin nombre</b></span>
+    <button data-arch="guardar" class="primario">Guardar</button><button data-arch="guardarComo">Guardar como…</button></div>
+  <div class="hoja-cab sub">Mis proyectos</div>
+  <div id="listaProyectos" class="lista-proyectos"></div>
+  <div class="rejilla archivo">
+    <button data-arch="nuevo">Nuevo</button>
+    <label class="btn">Abrir…<input type="file" accept=".ups,.glb,.gltf,.obj" hidden id="fAbrir"></label>
+    <label class="btn">Importar…<input type="file" accept=".ups,.glb,.gltf,.obj" hidden id="fImportar"></label>
+    <button data-arch="ups">Guardar .ups</button>
+  </div>
+    <div class="hoja-cab sub">Exportar</div>
+  <div class="rejilla archivo">
+    <button data-arch="glb">GLB<small>Blender, Unity, Godot, APEX GP</small></button>
+    <button data-arch="obj">OBJ<small>cualquier programa 3D</small></button>
+    <button data-arch="stl">STL<small>impresión 3D</small></button>
+  </div>
+  <p class="nota app-android"><a id="lnkApk" href="https://upgames-production.up.railway.app/studio/apk" download="UpGames-Studio.apk">📱 Descargar la app de Android (APK)</a> · funciona sin conexión y guarda en Descargas.</p>
+</div>
+
+<!-- Material -->
+<div id="hojaMaterial" class="hoja ancha" hidden>
+  <div class="hoja-cab">Material <span id="matNombre" class="tenue"></span> <button class="ic chico" data-cerrar>✕</button></div>
+  <p class="nota" id="matVacio">Toca primero un objeto.</p>
+  <div id="matCuerpo">
+    <div class="rejilla mat" id="bibliotecaMat"></div>
+    <div class="mat-campos">
+      <label class="fila">Color <input id="mColor" type="color"></label>
+      <label class="deslizador">Metal <input id="mMetal" type="range" min="0" max="1" step="0.01"><output id="oMetal"></output></label>
+      <label class="deslizador">Rugosidad <input id="mRugosidad" type="range" min="0" max="1" step="0.01"><output id="oRugosidad"></output></label>
+      <label class="fila">Emisión (luz propia) <input id="mEmision" type="color"></label>
+      <label class="deslizador">Intensidad <input id="mEmisionInt" type="range" min="0" max="5" step="0.05"><output id="oEmisionInt"></output></label>
+      <label class="deslizador">Opacidad <input id="mOpacidad" type="range" min="0.05" max="1" step="0.01"><output id="oOpacidad"></output></label>
+    </div>
+    <div class="cab-sub">Textura y UV</div>
+    <div class="mat-tex">
+      <canvas id="vistaUV" width="256" height="256" title="Vista UV"></canvas>
+      <div class="mat-tex-bot">
+        <div class="fila botones">
+          <label class="btn">Galería<input type="file" accept="image/*" hidden></label>
+          <label class="btn">Cámara<input type="file" accept="image/*" capture="environment" hidden></label>
+        </div>
+        <label class="deslizador">Repetir <input id="mRepetir" type="range" min="1" max="12" step="1"><output id="oRepetir"></output></label>
+        <div class="fila botones">
+          <button id="bUVAuto">UV automático</button>
+          <button id="bQuitarTextura" class="peligro">Quitar textura</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Menú radial (pulsación larga) -->
 <div id="radial" hidden></div>
 
-<div id="aviso"></div>
+<div id="aviso"><span id="avisoTexto"></span><button id="avisoAccion" hidden></button></div>
+<div id="estado"></div>
+<div id="barraPresentacion" class="grupo" hidden>
+  <button id="bGirar" class="activo" title="Girar el modelo">Girar</button>
+  <button id="bAO" class="activo" title="Oclusión ambiental (sombras de contacto)">Sombras suaves</button>
+  <button id="bCaptura" title="Guardar imagen PNG en alta resolución">Captura PNG</button>
+  <button id="bSalirPresentacion" title="Volver a modelar (Esc)">Salir</button>
+</div>
+
+<!-- Ayuda -->
+<div id="hojaAyuda" class="hoja ancha" hidden>
+  <div class="hoja-cab">Cómo se usa UpGames Studio <button class="ic chico" data-cerrar>✕</button></div>
+  <div class="ayuda">
+    <section><h3>Gestos</h3><ul>
+      <li><b>1 dedo</b>: tocar selecciona · arrastrar en vacío gira la vista</li>
+      <li><b>2 dedos</b>: girar y pellizcar para acercar</li>
+      <li><b>3 dedos</b>: desplazar la vista</li>
+      <li><b>Doble toque</b>: enfocar lo seleccionado</li>
+      <li><b>Mantener pulsado</b>: menú rápido</li>
+    </ul></section>
+    <section><h3>Modos (abajo)</h3><ul>
+      <li><b>Objeto</b>: añadir, mover, girar, escalar y modificadores</li>
+      <li><b>Editar</b>: vértices, aristas y caras · extruir, inset, cortar bucle, subdividir…</li>
+      <li><b>Esculpir</b> y <b>Pintar</b>: arrastra sobre el modelo · «Más detalle» para precisión</li>
+      <li><b>Material</b>: color, metal, rugosidad, texturas y UV</li>
+      <li><b>Editar</b> también: biselar, fijar borde (no se redondea al subdividir), rellenar, puente, cuchillo e imán a vértices</li>
+      <li><b>Esculpir</b>: surco, capa, arrugar, alfa (costura, puntos…), detalle en zona y capas con intensidad</li>
+      <li><b>Pintar</b> en textura: capas y calcomanías de imagen o texto</li>
+      <li><b>Agrupar</b> en Propiedades → Escena · <b>Presentación</b> (botón de pantalla) para render y captura</li>
+    </ul></section>
+    <section><h3>En el PC</h3><ul>
+      <li><b>G / R / S</b> mover, girar, escalar · <b>F</b> enfocar · <b>1 3 7 5</b> vistas</li>
+      <li><b>Tab</b> modo Editar · <b>E</b> extruir · <b>I</b> inset · <b>Ctrl+R</b> cortar bucle · <b>M</b> fusionar · <b>X</b> borrar</li>
+      <li><b>Ctrl+Z / Ctrl+Y</b> deshacer y rehacer · <b>Mayús+D</b> duplicar</li>
+    </ul></section>
+    <section><h3>Tu trabajo</h3><ul>
+      <li>Se guarda solo en este dispositivo · <b>Archivo</b> para tus proyectos, exportar e importar</li>
+      <li>Para APEX GP exporta en <b>GLB</b></li>
+    </ul></section>
+  </div>
+</div>
 
 <script type="module" src="js/main.js"></script>
 </body>

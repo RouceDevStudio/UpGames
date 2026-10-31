@@ -4,12 +4,25 @@
  */
 import assert from 'assert';
 import { Historial } from '../games/studio/js/deshacer.js';
-import { mascaraDesdeImagen, cajaDeMascara, relieveDesdeMascara, cascoVisual, volumen } from '../games/studio/js/foto/fotoA3D.js';
+import { mascaraDesdeImagen, mascaraDePlano, cajaDeMascara, relieveDesdeMascara, cascoVisual, cascoPlanos, volumen } from '../games/studio/js/foto/fotoA3D.js';
+import { MallaHE } from '../games/studio/js/malla/mediaArista.js';
+import { aGeometria } from '../games/studio/js/malla/aGeometria.js';
+import { extruirCaras, insetCaras, cortarBucle, borrarCaras, fusionarVertices, simetriaX, suavizarVertices, biselarAristas, alternarPliegues, refinarZona, rellenarAgujeros, puenteCaras, cortarPlano } from '../games/studio/js/malla/operaciones.js';
+import { subdividir } from '../games/studio/js/malla/subdividir.js';
+import { evaluar, nuevoModificador, espejo, matriz, solidificar } from '../games/studio/js/malla/modificadores.js';
+import { poligonosDeMalla, mallaDePoligonos, union, resta, interseccion } from '../games/studio/js/malla/csg.js';
+import { uvAutomatico } from '../games/studio/js/malla/uv.js';
+import { mallaADatos, datosAMalla, comprimir, descomprimir } from '../games/studio/js/archivo/ups.js';
+import * as THREE from '../games/studio/lib/three.module.min.js';
 
 let passed = 0;
+const pendientes = [];
 function test(name, fn) {
-  try { fn(); passed++; console.log(`  ✓ ${name}`); }
-  catch (e) { console.error(`  ✗ ${name}\n    ${e.stack}`); process.exitCode = 1; }
+  const correr = async () => {
+    try { await fn(); passed++; console.log(`  ✓ ${name}`); }
+    catch (e) { console.error(`  ✗ ${name}\n    ${e.stack}`); process.exitCode = 1; }
+  };
+  pendientes.push(pendientes.length ? pendientes[pendientes.length - 1].then(correr) : correr());
 }
 
 // Imagen sintética: fondo blanco y una figura de color donde dentro(x, y) es verdadero.
@@ -131,4 +144,365 @@ test('una foto con profundidad (IA): lo cercano sobresale más y la malla sigue 
   assert.ok(zi > zd * 3, `izquierda ${zi} derecha ${zd}`);
 });
 
+test('planos: lado + frente + arriba (arriba al revés) → caja cerrada con el morro detectado', () => {
+  // objeto de 3 de largo, 1 de ancho y 1 de alto, con un «morro» bajo y estrecho en el primer tercio
+  // lado: frente a la izquierda; morro (x < 50) solo la mitad de baja
+  const lado = mascaraDesdeImagen(imagen(170, 70, (x, y) => x >= 10 && x < 160 && y >= 10 && y < 60 && (x >= 60 || y >= 35)));
+  const frente = mascaraDesdeImagen(imagen(70, 70, (x, y) => x >= 10 && x < 60 && y >= 10 && y < 60));
+  // arriba: largo en horizontal, frente a la DERECHA (al revés que el lado); morro estrecho
+  const arriba = mascaraDesdeImagen(imagen(170, 70, (x, y) => x >= 10 && x < 160 && y >= 10 && y < 60 && (x < 110 || (y >= 25 && y < 45))));
+  const m = cascoPlanos({ lado, frente, arriba }, { res: 90, suavizado: 0 });
+  assert.strictEqual(m.arribaInvertido, false, 'frente a la derecha = sin invertir');
+  const arribaAlReves = { ...arriba, mascara: arriba.mascara.slice() };
+  for (let y = 0; y < 70; y++) for (let x = 0; x < 170; x++) arribaAlReves.mascara[y * 170 + x] = arriba.mascara[y * 170 + 169 - x];
+  const m2 = cascoPlanos({ lado, frente, arriba: arribaAlReves }, { res: 90, suavizado: 0 });
+  assert.strictEqual(m2.arribaInvertido, true, 'frente a la izquierda = invertido');
+  assert.ok(Math.abs(volumen(m2.posiciones, m2.indices) - volumen(m.posiciones, m.indices)) < 0.02);
+  assert.ok(esCerrada(m.indices));
+  // volumen esperado: 2/3 del largo lleno (2·1·1) + morro de 1 × 0,5 alto × 0,4 ancho
+  const v = volumen(m.posiciones, m.indices), esperado = 2 + 0.5 * 0.4;
+  assert.ok(Math.abs(v - esperado) < 0.15, `volumen ${v} (esperado ≈ ${esperado})`);
+  assert.ok(Math.abs(m.medidas.largo - 3) < 0.1 && Math.abs(m.medidas.ancho - 1) < 0.05);
+  // el morro (z > 0,5) es bajo: ningún vértice por encima de 0,55 de alto
+  let alto = 0;
+  for (let i = 0; i < m.posiciones.length; i += 3) if (m.posiciones[i + 2] > 0.6) alto = Math.max(alto, m.posiciones[i + 1]);
+  assert.ok(alto < 0.56, `alto del morro ${alto}`);
+});
+
+test('planos de un monoplaza: ruedas medidas como piezas y carrocería sin la franja de los neumáticos', () => {
+  // lado: carrocería alta en el centro que tapa las esquinas de dos ruedas que tocan el suelo
+  const rueda = (x, y, cx) => Math.hypot(x - cx, y - 60) < 20;
+  const lado = mascaraDePlano(imagen(240, 100, (x, y) => rueda(x, y, 50) || rueda(x, y, 190) || (x >= 20 && x < 220 && y >= 30 && y < 70 && (x > 75 && x < 165 || y < 45))));
+  const frente = mascaraDePlano(imagen(120, 100, (x, y) => y >= 30 && y < 80 && x >= 10 && x < 110));
+  // arriba: ruedas a los lados (separadas) y carrocería estrecha en el centro
+  const arriba = mascaraDePlano(imagen(240, 120, (x, y) => (y >= 10 && y < 110 && x >= 20 && x < 220 && (y >= 40 && y < 80)) || ((y >= 10 && y < 30 || y >= 90 && y < 110) && (Math.abs(x - 50) < 20 || Math.abs(x - 190) < 20))));
+  const sin = cascoPlanos({ lado, frente, arriba }, { res: 120, suavizado: 0 });
+  const con = cascoPlanos({ lado, frente, arriba }, { res: 120, suavizado: 0, monoplaza: true });
+  assert.strictEqual(con.ruedas.length, 4, 'cuatro ruedas (dos por eje): ' + JSON.stringify(con.ruedas));
+  assert.deepStrictEqual(con.ruedas.map((r) => r.nombre).sort(), ['rueda_del_der', 'rueda_del_izq', 'rueda_tra_der', 'rueda_tra_izq']);
+  for (const r of con.ruedas) assert.ok(Math.abs(r.y - r.radio) < 0.05, 'la rueda apoya en el suelo');
+  // la carrocería ya no lleva los neumáticos ni sus cajas
+  assert.ok(volumen(con.posiciones, con.indices) < volumen(sin.posiciones, sin.indices) * 0.9);
+  assert.ok(esCerrada(con.indices));
+});
+
+// ---------- Malla de media arista ----------
+const desdeThree = (g, op) => MallaHE.desdeTriangulos(g.attributes.position.array, g.index ? g.index.array : null, { uvs: g.attributes.uv?.array, ...op });
+const contar = (m) => { const c = {}; for (let f = 0; f < m.nF; f++) { const n = m.vertsDeCara(f).length; c[n] = (c[n] || 0) + 1; } return c; };
+const bordes = (m) => m.heTwin.filter((t) => t < 0).length;
+
+test('cubo de Three → 8 vértices, 12 aristas, 6 cuadriláteros, cerrado (V − E + F = 2)', () => {
+  const m = desdeThree(new THREE.BoxGeometry(1, 1, 1));
+  assert.deepStrictEqual([m.nV, m.nE, m.nF], [8, 12, 6]);
+  assert.deepStrictEqual(contar(m), { 4: 6 });
+  assert.strictEqual(bordes(m), 0);
+  assert.deepStrictEqual(m.validar(), []);
+});
+
+test('esfera, cilindro, toro, cápsula y cono: cerrados, válidos y con cuadriláteros', () => {
+  const casos = {
+    esfera: [new THREE.SphereGeometry(0.5, 16, 8), 2],
+    cilindro: [new THREE.CylinderGeometry(0.5, 0.5, 1, 12), 2],
+    toro: [new THREE.TorusGeometry(0.4, 0.15, 8, 16), 0],
+    capsula: [new THREE.CapsuleGeometry(0.3, 0.6, 4, 12), 2],
+    cono: [new THREE.ConeGeometry(0.5, 1, 12), 2],
+  };
+  for (const [nombre, [g, euler]] of Object.entries(casos)) {
+    const m = desdeThree(g);
+    assert.deepStrictEqual(m.validar(), [], nombre);
+    assert.strictEqual(bordes(m), 0, `${nombre}: sin bordes`);
+    assert.strictEqual(m.nV - m.nE + m.nF, euler, `${nombre}: Euler`);
+  }
+  assert.deepStrictEqual(contar(desdeThree(new THREE.CylinderGeometry(0.5, 0.5, 1, 12))), { 3: 24, 4: 12 });
+  assert.strictEqual(contar(desdeThree(new THREE.TorusGeometry(0.4, 0.15, 8, 16)))[4], 128);
+});
+
+test('icoesfera sin unir cuadriláteros y plano con borde', () => {
+  const ico = desdeThree(new THREE.IcosahedronGeometry(0.5, 2), { cuads: false });
+  assert.deepStrictEqual(contar(ico), { 3: 180 }); // detalle 2 → 20·3²
+  assert.strictEqual(ico.nV - ico.nE + ico.nF, 2);
+  const plano = desdeThree(new THREE.PlaneGeometry(2, 2, 2, 2));
+  assert.deepStrictEqual([plano.nV, plano.nF, bordes(plano)], [9, 4, 8]);
+});
+
+test('bucle de aristas: el anillo de un cilindro y el de un toro', () => {
+  const cil = desdeThree(new THREE.CylinderGeometry(0.5, 0.5, 1, 12, 3, true)); // abierto, 3 anillos de cuadriláteros
+  // una arista vertical de la pared → su bucle da la vuelta horizontal? No: el bucle sigue la dirección de la arista
+  const e = [...Array(cil.nE).keys()].find((k) => { const [a, b] = cil.vertsDeArista(k); return Math.abs(cil.pos[a * 3 + 1] - cil.pos[b * 3 + 1]) < 1e-6 && Math.abs(cil.pos[a * 3 + 1]) < 0.3; });
+  assert.strictEqual(cil.bucle(e).length, 12, 'anillo horizontal interior de 12 aristas');
+  const toro = desdeThree(new THREE.TorusGeometry(0.4, 0.15, 8, 16));
+  for (let k = 0; k < 10; k++) { const n = toro.bucle(k).length; assert.ok(n === 8 || n === 16, `bucle ${n}`); }
+});
+
+test('a geometría: una esquina por media arista, triángulos en abanico y normales vivas en el cubo', () => {
+  const m = desdeThree(new THREE.BoxGeometry(1, 1, 1));
+  const g = aGeometria(m);
+  assert.strictEqual(g.posiciones.length, m.nHE * 3);
+  assert.strictEqual(g.indices.length, 12 * 3);
+  assert.strictEqual(g.triCara.length, 12);
+  // en un cubo (90° > 30°) cada esquina lleva la normal de su cara
+  for (let h = 0; h < m.nHE; h++) {
+    const n = m.normalCara(m.heFace[h]); const l = Math.hypot(...n);
+    assert.ok(Math.abs(g.normales[h * 3] - n[0] / l) + Math.abs(g.normales[h * 3 + 1] - n[1] / l) + Math.abs(g.normales[h * 3 + 2] - n[2] / l) < 1e-5);
+  }
+  // mover un vértice cambia todas sus esquinas
+  m.pos[0] += 1;
+  const g2 = aGeometria(m);
+  let cambiadas = 0;
+  for (let h = 0; h < m.nHE; h++) if (g2.posiciones[h * 3] !== g.posiciones[h * 3]) cambiadas++;
+  assert.strictEqual(cambiadas, 3);
+});
+
+test('las UV de cada esquina se conservan al soldar (costuras)', () => {
+  const g = new THREE.BoxGeometry(1, 1, 1);
+  const m = desdeThree(g);
+  const usadas = new Set();
+  for (let h = 0; h < m.nHE; h++) usadas.add(`${m.heUV[h * 2]},${m.heUV[h * 2 + 1]}`);
+  assert.deepStrictEqual([...usadas].sort(), ['0,0', '0,1', '1,0', '1,1']);
+});
+
+test('modelo desde foto → malla de media arista válida', () => {
+  const img = imagen(120, 90, (x, y) => Math.hypot((x - 60) / 40, (y - 45) / 30) < 1);
+  const r = relieveDesdeMascara(mascaraDesdeImagen(img), { res: 32 });
+  const m = MallaHE.desdeTriangulos(r.posiciones, r.indices, { uvs: r.uvs });
+  assert.deepStrictEqual(m.validar(), []);
+  assert.strictEqual(bordes(m), 0);
+});
+
+// ---------- Operaciones de modelado (sprint 3) ----------
+const cubo = () => desdeThree(new THREE.BoxGeometry(1, 1, 1));
+const cerrada = (m) => m.validar().length === 0 && bordes(m) === 0;
+const vol = (m) => { const g = aGeometria(m); return volumen(g.posiciones, g.indices); };
+const caraArriba = (m) => [...Array(m.nF).keys()].find((f) => m.vertsDeCara(f).every((v) => Math.abs(m.pos[v * 3 + 1] - 0.5) < 1e-6));
+
+test('extruir la cara de arriba de un cubo: 12 vértices, 10 caras, cerrada y con más volumen', () => {
+  const m = cubo();
+  const r = extruirCaras(m, [caraArriba(m)], 0.5);
+  assert.deepStrictEqual([r.malla.nV, r.malla.nF], [12, 10]);
+  assert.ok(cerrada(r.malla));
+  assert.ok(Math.abs(vol(r.malla) - 1.5) < 1e-6, `volumen ${vol(r.malla)}`);
+  assert.ok(r.malla.vertsDeCara(r.caras[0]).every((v) => Math.abs(r.malla.pos[v * 3 + 1] - 1) < 1e-6), 'la cara sale a y = 1');
+  assert.strictEqual(m.nV, 8, 'la malla original no cambia (para deshacer)');
+});
+
+test('extruir dos caras vecinas como región: sin caras internas', () => {
+  const m = cubo();
+  const arriba = caraArriba(m);
+  const lado = [...Array(m.nF).keys()].find((f) => m.vertsDeCara(f).every((v) => Math.abs(m.pos[v * 3] - 0.5) < 1e-6));
+  const r = extruirCaras(m, [arriba, lado], 0.2);
+  assert.ok(cerrada(r.malla));
+  assert.strictEqual(r.malla.nF, 6 + 6, 'cada arista del borde de la región da una cara lateral (6)');
+});
+
+test('inset: la cara se reduce hacia dentro con un anillo de cuadriláteros', () => {
+  const m = cubo();
+  const r = insetCaras(m, [caraArriba(m)], 0.3);
+  assert.deepStrictEqual([r.malla.nV, r.malla.nF], [12, 10]);
+  assert.ok(cerrada(r.malla));
+  assert.ok(Math.abs(vol(r.malla) - 1) < 1e-9);
+});
+
+test('corte en bucle por el centro del cubo: anillo de 4 caras partido', () => {
+  const m = cubo();
+  const e = [...Array(m.nE).keys()].find((x) => { const [a, b] = m.vertsDeArista(x); return Math.abs(m.pos[a * 3 + 1] - m.pos[b * 3 + 1]) > 0.9; }); // arista vertical
+  const r = cortarBucle(m, e, 0.5);
+  assert.deepStrictEqual([r.malla.nV, r.malla.nF], [12, 10]);
+  assert.strictEqual(r.aristas.length, 4);
+  assert.ok(cerrada(r.malla));
+  for (const x of r.aristas) for (const v of r.malla.vertsDeArista(x)) assert.ok(Math.abs(r.malla.pos[v * 3 + 1]) < 1e-9, 'el corte cae en y = 0');
+});
+
+test('Catmull-Clark: cubo → 24 cuadriláteros, 26 vértices, cerrado y más redondo', () => {
+  const r = subdividir(cubo(), 1).malla;
+  assert.deepStrictEqual([r.nV, r.nF], [26, 24]);
+  assert.ok(cerrada(r));
+  assert.strictEqual(r.nV - r.nE + r.nF, 2);
+  const r2 = subdividir(cubo(), 3).malla;
+  // tiende a una esfera: los radios se igualan
+  let mn = Infinity, mx = 0;
+  for (let v = 0; v < r2.nV; v++) { const d = Math.hypot(r2.pos[v * 3], r2.pos[v * 3 + 1], r2.pos[v * 3 + 2]); mn = Math.min(mn, d); mx = Math.max(mx, d); }
+  assert.ok(mx / mn < 1.25, `radios ${mn} … ${mx}`);
+});
+
+test('Catmull-Clark respeta los bordes abiertos (plano)', () => {
+  const r = subdividir(desdeThree(new THREE.PlaneGeometry(2, 2, 1, 1)), 1).malla;
+  assert.deepStrictEqual([r.nV, r.nF], [9, 4]);
+  assert.deepStrictEqual(r.validar(), []);
+});
+
+test('simetría en X: se refleja el lado derecho y se cose el centro', () => {
+  const m = cubo();
+  const e = [...Array(m.nE).keys()].find((x) => { const [a, b] = m.vertsDeArista(x); return Math.abs(m.pos[a * 3] - m.pos[b * 3]) > 0.9; }); // arista en x
+  let r = cortarBucle(m, e, 0.5).malla;                       // corte en x = 0
+  r = simetriaX(r).malla;
+  assert.ok(cerrada(r));
+  assert.deepStrictEqual([r.nV, r.nF], [12, 10]);
+  assert.ok(Math.abs(vol(r) - 1) < 1e-9);
+});
+
+test('borrar, fusionar y suavizar', () => {
+  const m = cubo();
+  const b = borrarCaras(m, [caraArriba(m)]).malla;
+  assert.deepStrictEqual([b.nF, bordes(b)], [5, 4]);
+  const arriba = m.vertsDeCara(caraArriba(m));
+  const f = fusionarVertices(m, arriba).malla;                // pirámide
+  assert.deepStrictEqual([f.nV, f.nF], [5, 5]);
+  assert.ok(cerrada(f));
+  const s = suavizarVertices(subdividir(m, 1).malla, [], 0.5, 3).malla;
+  assert.ok(cerrada(s));
+});
+
+// ---------- Modificadores (sprint 4) ----------
+const volP = (pols) => { let v = 0; for (const p of pols) for (let i = 1; i < p.v.length - 1; i++) { const [a, b, c] = [p.v[0], p.v[i], p.v[i + 1]]; v += a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0]); } return v / 6; };
+const cuboEn = (x, y, z, l = 1) => desdeThree(new THREE.BoxGeometry(l, l, l).translate(x, y, z));
+
+test('espejo: media caja abierta en x = 0 → caja cerrada y cosida del doble de volumen', () => {
+  const m = cuboEn(0.5, 0, 0);
+  const izq = [...Array(m.nF).keys()].find((f) => m.vertsDeCara(f).every((v) => Math.abs(m.pos[v * 3]) < 1e-6));
+  const media = borrarCaras(m, [izq]).malla;
+  const r = espejo(media, 'x');
+  assert.ok(cerrada(r));
+  assert.strictEqual(r.nV, 12);
+  assert.ok(Math.abs(vol(r) - 2) < 1e-9);
+});
+
+test('matriz: 3 copias en fila, relativo al tamaño', () => {
+  const r = matriz(cubo(), { cantidad: 3, x: 1.5, y: 0, z: 0, relativo: true });
+  assert.deepStrictEqual([r.nV, r.nF], [24, 18]);
+  let mx = -Infinity; for (let v = 0; v < r.nV; v++) mx = Math.max(mx, r.pos[v * 3]);
+  assert.ok(Math.abs(mx - 3.5) < 1e-9, `x máx ${mx}`);
+});
+
+test('solidificar: un plano de 2 × 2 con grosor 0,1 → caja cerrada de volumen 0,4', () => {
+  const r = solidificar(desdeThree(new THREE.PlaneGeometry(2, 2)), 0.1);
+  assert.ok(cerrada(r));
+  assert.ok(Math.abs(Math.abs(vol(r)) - 0.4) < 1e-6, `${vol(r)}`);
+});
+
+test('booleanas: resta, unión e intersección de dos cubos solapados', () => {
+  const A = poligonosDeMalla(cubo()), B = poligonosDeMalla(cuboEn(0.5, 0.5, 0.5)); // solapan 0,125
+  assert.ok(Math.abs(volP(resta(A, B)) - 0.875) < 1e-6, `resta ${volP(resta(A, B))}`);
+  assert.ok(Math.abs(volP(union(A, B)) - 1.875) < 1e-6);
+  assert.ok(Math.abs(volP(interseccion(A, B)) - 0.125) < 1e-6);
+  const m = mallaDePoligonos(resta(A, B));
+  assert.deepStrictEqual(m.validar(), []);
+});
+
+test('pila de modificadores: espejo + subdivisión, oculto y booleana con el otro objeto', () => {
+  const m = cuboEn(0.5, 0, 0);
+  const mods = [nuevoModificador('espejo'), nuevoModificador('subdivision')];
+  mods[1].niveles = 1;
+  const r = evaluar(m, mods);
+  assert.ok(r.nF > m.nF * 4);
+  mods[1].visible = false;
+  assert.strictEqual(evaluar(m, mods).nF, m.nF * 2, 'oculto no cuenta');
+  const bool = { ...nuevoModificador('booleana'), objeto: 'otro' };
+  const res = evaluar(cubo(), [bool], { poligonosDe: () => poligonosDeMalla(cuboEn(0.5, 0.5, 0.5)) });
+  assert.ok(Math.abs(vol(res) - 0.875) < 1e-6);
+  assert.strictEqual(m.nV, 8, 'la base no cambia');
+});
+
+// ---------- UV automático (sprint 5) ----------
+test('UV automático: todas las UV dentro de 0..1 y las 6 caras del cubo sin solaparse', () => {
+  const r = uvAutomatico(cubo()).malla;
+  for (const u of r.heUV) assert.ok(u >= -1e-9 && u <= 1 + 1e-9);
+  const cajas = [...Array(r.nF).keys()].map((f) => { const hs = r.mediasDeCara(f); const us = hs.map((h) => r.heUV[h * 2]), vs = hs.map((h) => r.heUV[h * 2 + 1]); return [Math.min(...us), Math.min(...vs), Math.max(...us), Math.max(...vs)]; });
+  for (let i = 0; i < 6; i++) for (let j = i + 1; j < 6; j++) {
+    const a = cajas[i], b = cajas[j];
+    assert.ok(a[2] <= b[0] + 1e-9 || b[2] <= a[0] + 1e-9 || a[3] <= b[1] + 1e-9 || b[3] <= a[1] + 1e-9, `caras ${i} y ${j} se solapan`);
+  }
+});
+
+// ---------- Archivos (sprint 6) ----------
+test('formato .ups: malla → datos → gzip → malla, igual que la original', async () => {
+  const m = subdividir(uvAutomatico(cubo()).malla, 1).malla;
+  m.heCol = Array.from({ length: m.nHE * 3 }, (_, i) => (i % 7) / 7);
+  const bytes = await comprimir(JSON.stringify(mallaADatos(m)));
+  const m2 = datosAMalla(JSON.parse(await descomprimir(bytes)));
+  assert.deepStrictEqual([m2.nV, m2.nE, m2.nF], [m.nV, m.nE, m.nF]);
+  for (let i = 0; i < m.pos.length; i++) assert.ok(Math.abs(m.pos[i] - m2.pos[i]) < 1e-4);
+  assert.ok(Math.abs(vol(m) - vol(m2)) < 1e-4);
+  assert.ok(m2.heCol && m2.heCol.length === m.heCol.length);
+  assert.ok(bytes.length < JSON.stringify(mallaADatos(m)).length / 2, 'comprimido');
+});
+
+// ---------- Bisel y pliegues ----------
+const aristasCubo = (m, cond) => [...Array(m.nE).keys()].filter((e) => { const [a, b] = m.vertsDeArista(e); return cond([m.pos[a * 3], m.pos[a * 3 + 1], m.pos[a * 3 + 2]], [m.pos[b * 3], m.pos[b * 3 + 1], m.pos[b * 3 + 2]]); });
+test('biselar una arista del cubo: cerrada, 10 vértices, una cara más y algo menos de volumen', () => {
+  const m = cubo();
+  const e = aristasCubo(m, (a, b) => a[1] > 0.4 && b[1] > 0.4 && a[2] > 0.4 && b[2] > 0.4); // arista de arriba delante
+  const r = biselarAristas(m, e, 0.1).malla;
+  assert.ok(cerrada(r), JSON.stringify(r.validar().slice(0, 3)));
+  assert.strictEqual(r.nF, 6 + 1); // en vértices de 3 aristas no hace falta triángulo de cierre
+  const v = vol(r);
+  assert.ok(v < 1 && v > 0.99, `volumen ${v}`); // quita un prisma de 0,1 × 0,1 / 2 × 1 = 0,005
+});
+test('biselar las 4 aristas de arriba (bucle) y las 12 del cubo: cerrado', () => {
+  const m = cubo();
+  const arriba = aristasCubo(m, (a, b) => a[1] > 0.4 && b[1] > 0.4);
+  const r = biselarAristas(m, arriba, 0.1).malla;
+  assert.ok(cerrada(r));
+  const t = biselarAristas(m, [...Array(m.nE).keys()], 0.1).malla;
+  assert.ok(cerrada(t));
+  assert.strictEqual(t.nF, 6 + 12 + 8, 'caras + biseles + esquinas');
+  assert.ok(vol(t) < 1 && vol(t) > 0.9);
+});
+test('biselar una arista en una malla de vértices de 4 aristas (con triángulos de cierre)', () => {
+  const m = desdeThree(new THREE.PlaneGeometry(3, 3, 3, 3)); // plano 3 × 3: la arista central tiene vértices interiores
+  const sol = solidificar(m, 0.2); // cerrado
+  const e = [...Array(sol.nE).keys()].find((x) => { const [a, b] = sol.vertsDeArista(x); const p = (v) => [sol.pos[v * 3], sol.pos[v * 3 + 1], sol.pos[v * 3 + 2]]; return Math.abs(p(a)[2]) < 1e-6 && Math.abs(p(b)[2]) < 1e-6 && Math.abs(p(a)[0] - p(b)[0]) < 1e-6 && Math.abs(p(a)[1] + p(b)[1]) < 1e-6 && Math.abs(Math.abs(p(a)[1] - p(b)[1]) - 1) < 1e-6 && Math.abs(p(a)[0] - 0.5) < 1e-6; });
+  const r = biselarAristas(sol, [e], 0.1).malla;
+  assert.ok(cerrada(r), JSON.stringify(r.validar().slice(0, 3)));
+  assert.strictEqual(r.nF, sol.nF + 1 + 2, 'cara del bisel + dos triángulos');
+});
+
+test('pliegues: las aristas fijadas se conservan al subdividir (cubo con aristas vivas)', () => {
+  const m = cubo();
+  const todas = [...Array(m.nE).keys()];
+  const duro = alternarPliegues(m, todas).malla;
+  const r = subdividir(duro, 2).malla;
+  assert.ok(Math.abs(vol(r) - 1) < 1e-6, `con pliegues sigue siendo un cubo (${vol(r)})`);
+  assert.strictEqual(r.pliegues.size, 12 * 4);
+  const blando = subdividir(m, 2).malla;
+  assert.ok(vol(blando) < 0.8);
+  assert.strictEqual(alternarPliegues(duro, todas).malla.pliegues.size, 0, 'alternar otra vez los quita');
+});
+
+test('detalle local: solo se parten las caras cerca del pincel y la malla sigue cerrada', () => {
+  const m = subdividir(cubo(), 2).malla; // 96 caras
+  const r = refinarZona(m, [[0, 0.5, 0]], 0.2, 0.05, 2).malla;
+  assert.deepStrictEqual(r.validar(), []);
+  assert.strictEqual(bordes(r), 0);
+  assert.ok(r.nF > m.nF && r.nF < m.nF * 2, `${m.nF} → ${r.nF} caras (local, no toda la malla)`);
+  assert.ok(Math.abs(vol(r) - vol(m)) < vol(m) * 0.01, 'casi no cambia la forma');
+});
+
+// ---------- Precisión ----------
+test('rellenar agujero: cubo sin la tapa vuelve a estar cerrado', () => {
+  const m = cubo();
+  const abierta = borrarCaras(m, [caraArriba(m)]).malla;
+  const r = rellenarAgujeros(abierta).malla;
+  assert.ok(cerrada(r));
+  assert.ok(Math.abs(vol(r) - 1) < 1e-9);
+});
+test('puente: dos cubos separados unidos por sus caras enfrentadas → una pieza cerrada', () => {
+  const a = desdeThree(new THREE.BoxGeometry(1, 1, 1).translate(-1, 0, 0)), b = desdeThree(new THREE.BoxGeometry(1, 1, 1).translate(1, 0, 0));
+  const P = [...a.pos, ...b.pos], C = [];
+  for (let f = 0; f < a.nF; f++) C.push(a.vertsDeCara(f));
+  for (let f = 0; f < b.nF; f++) C.push(b.vertsDeCara(f).map((v) => v + a.nV));
+  const dos = MallaHE.desdePoligonos(P, C);
+  const enfrentadas = [...Array(dos.nF).keys()].filter((f) => dos.vertsDeCara(f).every((v) => Math.abs(Math.abs(dos.pos[v * 3]) - 0.5) < 1e-6));
+  const r = puenteCaras(dos, enfrentadas).malla;
+  assert.ok(cerrada(r));
+  assert.ok(Math.abs(vol(r) - 3) < 1e-6, `volumen ${vol(r)}`); // 1 + 1 + el tubo de 1 × 1 × 1
+});
+test('cuchillo: cortar el cubo por y = 0,1 → 4 aristas nuevas, cerrado y mismo volumen', () => {
+  const r = cortarPlano(cubo(), [0, 0.1, 0], [0, 1, 0]);
+  assert.strictEqual(r.aristas.length, 4);
+  assert.ok(cerrada(r.malla));
+  assert.ok(Math.abs(vol(r.malla) - 1) < 1e-9);
+  assert.strictEqual(r.malla.nF, 10);
+});
+
+await Promise.all(pendientes);
 console.log(`\n${passed} pruebas correctas`);

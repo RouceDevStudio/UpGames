@@ -1,6 +1,9 @@
 // Objetos de la escena, selección y los comandos que los cambian (todos con deshacer).
 import * as THREE from 'three';
 
+// Malla de media arista de cada objeto que ya se editó (ver edicion.js).
+export const mallas = new WeakMap();
+
 export class Escena {
   constructor(scene, historial) {
     this.scene = scene;
@@ -10,6 +13,8 @@ export class Escena {
     scene.add(this.raiz);
     this.seleccion = null;
     this.oyentes = new Set();
+    this.marcados = new Set();  // selección múltiple (para agrupar)
+    this.soloPieza = false;     // con un grupo seleccionado: mover solo la pieza tocada
   }
 
   get objetos() { return this.raiz.children; }
@@ -42,8 +47,51 @@ export class Escena {
     return obj;
   }
 
+  duplicarGrupo(obj) {
+    const id = `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+    const copias = this.miembros(obj).map((o) => {
+      const c = o.clone(); c.geometry = o.geometry.clone(); c.material = o.material.clone();
+      if (mallas.has(o)) mallas.set(c, mallas.get(o).clone());
+      for (const h of c.children.filter((x) => x.userData.capa)) c.remove(h);
+      c.userData.grupo = id; c.position.x += 0.5; c.position.z += 0.5;
+      return c;
+    });
+    return this.anadirVarios(copias, 'Duplicar grupo')[0];
+  }
+
+  // Varias piezas de una vez (p. ej. una plantilla): un solo paso de deshacer.
+  anadirVarios(objs, nombre = 'Añadir') {
+    for (const o of objs) o.name = this.nombreLibre(o.name || 'Objeto');
+    const antes = this.seleccion;
+    this.historial.hacer({
+      nombre,
+      hacer: () => { for (const o of objs) this.raiz.add(o); this.seleccionar(objs[0]); this.avisar(); },
+      deshacer: () => { for (const o of objs) this.raiz.remove(o); this.seleccionar(objs.includes(antes) ? null : antes); this.avisar(); },
+    });
+    return objs;
+  }
+
+  borrarVarios(objs) {
+    this.historial.hacer({
+      nombre: 'Borrar grupo',
+      hacer: () => { this.seleccionar(null); for (const o of objs) this.raiz.remove(o); this.avisar(); },
+      deshacer: () => { for (const o of objs) this.raiz.add(o); this.seleccionar(objs[0]); this.avisar(); },
+    });
+  }
+
+  // Cambia todos los objetos por otros (Nuevo / Abrir): un paso de deshacer.
+  reemplazarTodo(nuevos, nombre = 'Abrir') {
+    const viejos = [...this.objetos];
+    this.historial.hacer({
+      nombre,
+      hacer: () => { this.seleccionar(null); for (const o of viejos) this.raiz.remove(o); for (const o of nuevos) this.raiz.add(o); this.avisar(); },
+      deshacer: () => { this.seleccionar(null); for (const o of nuevos) this.raiz.remove(o); for (const o of viejos) this.raiz.add(o); this.avisar(); },
+    });
+  }
+
   borrar(obj = this.seleccion) {
     if (!obj) return;
+    if (this.enGrupo(obj)) return this.borrarVarios(this.miembros(obj));
     const pos = this.objetos.indexOf(obj);
     this.historial.hacer({
       nombre: 'Borrar',
@@ -60,8 +108,11 @@ export class Escena {
 
   duplicar(obj = this.seleccion) {
     if (!obj) return null;
+    if (this.enGrupo(obj)) return this.duplicarGrupo(obj);
     const copia = obj.clone();
     copia.geometry = obj.geometry.clone();
+    if (mallas.has(obj)) mallas.set(copia, mallas.get(obj).clone());
+    for (const c of copia.children.filter((h) => h.userData.capa)) copia.remove(c); // capas del modo edición
     copia.material = obj.material.clone();
     copia.userData.bloqueado = false;
     copia.position.x += 0.3; copia.position.z += 0.3;
@@ -70,6 +121,50 @@ export class Escena {
   }
 
   // Registra un cambio de transformación que ya ocurrió (gizmo).
+  // ---------- grupos ----------
+  // Un grupo es una etiqueta común (userData.grupo) en varias piezas: se seleccionan y se mueven
+  // juntas; «solo esta pieza» permite tocar una por separado. En el GLB salen dentro de un nodo.
+  miembros(obj) {
+    const g = obj?.userData.grupo;
+    return g ? this.objetos.filter((o) => o.userData.grupo === g) : obj ? [obj] : [];
+  }
+  enGrupo(obj) { return !!obj?.userData.grupo && !this.soloPieza; }
+
+  agrupar(objs, nombre = 'Grupo') {
+    objs = objs.filter((o) => o.parent === this.raiz);
+    if (objs.length < 2) return null;
+    const id = `g${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+    const antes = objs.map((o) => [o.userData.grupo, o.userData.nombreGrupo]);
+    this.historial.hacer({
+      nombre: 'Agrupar',
+      hacer: () => { for (const o of objs) { o.userData.grupo = id; o.userData.nombreGrupo = nombre; } this.marcados.clear(); this.avisar(); },
+      deshacer: () => { objs.forEach((o, i) => { o.userData.grupo = antes[i][0]; o.userData.nombreGrupo = antes[i][1]; }); this.avisar(); },
+    });
+    return id;
+  }
+
+  desagrupar(obj) {
+    const objs = this.miembros(obj);
+    if (!obj?.userData.grupo) return;
+    const id = obj.userData.grupo, nombre = obj.userData.nombreGrupo;
+    this.historial.hacer({
+      nombre: 'Desagrupar',
+      hacer: () => { for (const o of objs) { delete o.userData.grupo; delete o.userData.nombreGrupo; } this.avisar(); },
+      deshacer: () => { for (const o of objs) { o.userData.grupo = id; o.userData.nombreGrupo = nombre; } this.avisar(); },
+    });
+  }
+
+  // varias piezas transformadas a la vez (gizmo de grupo)
+  transformadoVarios(objs, antes) {
+    const despues = objs.map(estado);
+    if (objs.every((o, i) => igual(antes[i], despues[i]))) return;
+    this.historial.hacer({
+      nombre: 'Transformar grupo',
+      hacer: () => { objs.forEach((o, i) => poner(o, despues[i])); this.avisar(); },
+      deshacer: () => { objs.forEach((o, i) => poner(o, antes[i])); this.avisar(); },
+    }, { yaHecho: true });
+  }
+
   transformado(obj, antes) {
     const despues = estado(obj);
     if (igual(antes, despues)) return;
@@ -114,7 +209,7 @@ export class Escena {
   // Esfera que envuelve lo seleccionado (o toda la escena) para enfocar la cámara.
   esferaDe(obj) {
     const caja = new THREE.Box3();
-    if (obj) caja.setFromObject(obj);
+    if (obj) for (const o of this.enGrupo(obj) ? this.miembros(obj) : [obj]) caja.expandByObject(o);
     else for (const o of this.objetos) if (o.visible) caja.expandByObject(o);
     if (caja.isEmpty()) return new THREE.Sphere(new THREE.Vector3(0, 0.5, 0), 2);
     return caja.getBoundingSphere(new THREE.Sphere());

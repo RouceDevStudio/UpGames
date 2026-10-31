@@ -23,6 +23,7 @@ import { Lluvia } from './render/lluvia.js';
 import { Barreras } from './render/barreras.js';
 import { Comisarios, CapaCamara, CocheSeguridad, Fuegos, Gruas } from './render/vida.js';
 import { Persona } from './render/personas.js';
+import { cargarCuerpo } from './render/cuerpoStudio.js';
 import { construirEscenario, ponerHora, ponerAgua, tv } from './render/escenario.js';
 import { crearModelo, dibujarPlantilla } from './render/cocheModelo.js';
 import { GestorBoxes, Escombros } from './render/equipo.js';
@@ -160,6 +161,7 @@ async function iniciar() {
   ajustes.idioma = await iniciarIdioma(ajustes.idioma);
   crearRenderer();
   await cargarImagenLibrea();
+  await cargarCuerpo(); // cuerpo de los personajes hecho en UpGames Studio (si falla, las piezas de siempre)
   await cargarCircuito(circuitoId);
   mostrar('menu');
   requestAnimationFrame(bucle);

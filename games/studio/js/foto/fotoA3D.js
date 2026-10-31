@@ -50,6 +50,110 @@ export function mascaraDesdeImagen(img, { tolerancia = 0.18 } = {}) {
   return manchaMayor(m, w, h);
 }
 
+// Máscara para planos/renders (fondo liso oscuro o claro y, a veces, una cuadrícula de suelo):
+// 1) lo que se separa del fondo en brillo, 2) fuera las líneas de la cuadrícula (filas o columnas
+// casi enteras y finas), 3) se rellenan los huecos de sombra del objeto, pero no los que tienen el
+// color del fondo (p. ej. el hueco entre el alerón y la carrocería), 4) la mancha más grande.
+export function mascaraDePlano(img, { contraste = 18, grosorLinea = 4 } = {}) {
+  const { data, width: w, height: h } = img;
+  const lum = new Float32Array(w * h);
+  for (let p = 0, i = 0; p < w * h; p++, i += 4) lum[p] = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+  const fondoRGB = colorDeFondo(img), fondo = 0.299 * fondoRGB[0] + 0.587 * fondoRGB[1] + 0.114 * fondoRGB[2];
+  const m = new Uint8Array(w * h);
+  for (let p = 0; p < w * h; p++) m[p] = Math.abs(lum[p] - fondo) > contraste ? 1 : 0;
+  // líneas de cuadrícula
+  const filaLinea = new Uint8Array(h), colLinea = new Uint8Array(w);
+  for (let y = 0; y < h; y++) { let c = 0; for (let x = 0; x < w; x++) c += m[y * w + x]; filaLinea[y] = c > w * 0.5 ? 1 : 0; }
+  for (let x = 0; x < w; x++) { let c = 0; for (let y = 0; y < h; y++) c += m[y * w + x]; colLinea[x] = c > h * 0.5 ? 1 : 0; }
+  const quitar = [];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const p = y * w + x;
+    if (!m[p]) continue;
+    if (filaLinea[y]) { // ¿fino en vertical?
+      let a = y, b = y;
+      while (a > 0 && m[(a - 1) * w + x] && y - a <= grosorLinea) a--;
+      while (b < h - 1 && m[(b + 1) * w + x] && b - y <= grosorLinea) b++;
+      if (b - a + 1 <= grosorLinea) { quitar.push(p); continue; }
+    }
+    if (colLinea[x]) { // ¿fino en horizontal?
+      let a = x, b = x;
+      while (a > 0 && m[p - (x - a) - 1] && x - a <= grosorLinea) a--;
+      while (b < w - 1 && m[p + (b - x) + 1] && b - x <= grosorLinea) b++;
+      if (b - a + 1 <= grosorLinea) quitar.push(p);
+    }
+  }
+  for (const p of quitar) m[p] = 0;
+  // huecos: manchas sin objeto que no tocan el borde; se rellenan salvo que sean color de fondo
+  const etiqueta = new Int32Array(w * h).fill(-1), pila = [];
+  for (let s = 0; s < w * h; s++) {
+    if (m[s] || etiqueta[s] >= 0) continue;
+    const comp = [], id = s;
+    let toca = false, suma = 0;
+    etiqueta[s] = id; pila.push(s);
+    while (pila.length) {
+      const p = pila.pop(), x = p % w, y = (p / w) | 0;
+      comp.push(p); suma += lum[p];
+      if (x === 0 || y === 0 || x === w - 1 || y === h - 1) toca = true;
+      for (const q of [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, y > 0 ? p - w : -1, y < h - 1 ? p + w : -1]) {
+        if (q >= 0 && !m[q] && etiqueta[q] < 0) { etiqueta[q] = id; pila.push(q); }
+      }
+    }
+    if (!toca && Math.abs(suma / comp.length - fondo) > 5) for (const p of comp) m[p] = 1;
+  }
+  // cierra grietas finas (líneas oscuras de despiece) y se queda con las piezas grandes
+  // (las ruedas pueden quedar sueltas de la carrocería)
+  return manchasGrandes(abrir(cerrar(m, w, h, 2), w, h, 1), w, h, 0.01);
+}
+
+// Cierre (dilatar y erosionar) y apertura (erosionar y dilatar) con un cuadrado de lado 2r+1.
+function cerrar(m, w, h, r) { return morfologia(m, w, h, r, [1, 0]); }
+function abrir(m, w, h, r) { return morfologia(m, w, h, r, [0, 1]); }
+function morfologia(m, w, h, r, pasos) {
+  const dilatar = (src, valor) => { // valor 1: dilata; valor 0: erosiona (dilata el fondo)
+    const tmp = new Uint8Array(w * h), out = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) { // horizontal
+      let c = 0;
+      for (let x = -r; x < w; x++) {
+        const xe = x + r; if (xe < w && src[y * w + xe] === valor) c++;
+        const xs = x - r - 1; if (xs >= 0 && src[y * w + xs] === valor) c--;
+        if (x >= 0) tmp[y * w + x] = c > 0 ? valor : 1 - valor;
+      }
+    }
+    for (let x = 0; x < w; x++) { // vertical
+      let c = 0;
+      for (let y = -r; y < h; y++) {
+        const ye = y + r; if (ye < h && tmp[ye * w + x] === valor) c++;
+        const ys = y - r - 1; if (ys >= 0 && tmp[ys * w + x] === valor) c--;
+        if (y >= 0) out[y * w + x] = c > 0 ? valor : 1 - valor;
+      }
+    }
+    return out;
+  };
+  return dilatar(dilatar(m, pasos[0]), pasos[1]);
+}
+
+// Todas las manchas con al menos `fraccion` del área de la mayor.
+function manchasGrandes(m, w, h, fraccion) {
+  const etiqueta = new Int32Array(w * h), tam = [0], pila = [];
+  let n = 0;
+  for (let s = 0; s < w * h; s++) {
+    if (!m[s] || etiqueta[s]) continue;
+    n++; let t = 0;
+    etiqueta[s] = n; pila.push(s);
+    while (pila.length) {
+      const p = pila.pop(), x = p % w, y = (p / w) | 0; t++;
+      for (const q of [x > 0 ? p - 1 : -1, x < w - 1 ? p + 1 : -1, y > 0 ? p - w : -1, y < h - 1 ? p + w : -1]) {
+        if (q >= 0 && m[q] && !etiqueta[q]) { etiqueta[q] = n; pila.push(q); }
+      }
+    }
+    tam.push(t);
+  }
+  const mayor = Math.max(...tam), r = new Uint8Array(w * h);
+  let area = 0;
+  for (let p = 0; p < w * h; p++) if (etiqueta[p] && tam[etiqueta[p]] >= mayor * fraccion) { r[p] = 1; area++; }
+  return { mascara: r, width: w, height: h, area };
+}
+
 // Máscara de la IA: se queda con la mancha más grande y le rellena los agujeros.
 export function limpiarMascara({ mascara, width: w, height: h }) {
   const fuera = new Uint8Array(w * h), pila = [];
@@ -111,14 +215,20 @@ export function sangrar(img, { mascara }, pasos = 6) {
   return { data: out, width: w, height: h };
 }
 
-export function cajaDeMascara({ mascara, width: w, height: h }) {
-  let x0 = w, y0 = h, x1 = -1, y1 = -1;
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    if (!mascara[y * w + x]) continue;
-    if (x < x0) x0 = x; if (x > x1) x1 = x;
-    if (y < y0) y0 = y; if (y > y1) y1 = y;
-  }
-  return x1 < 0 ? null : { x0, y0, x1, y1, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+// Caja del objeto. Las filas y columnas con menos de `minimo` píxeles no cuentan (restos finos
+// como una línea suelta no deben estirar la caja, que es la que alinea unas vistas con otras).
+export function cajaDeMascara({ mascara, width: w, height: h }, minimo = 3) {
+  const filas = new Int32Array(h), cols = new Int32Array(w);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (mascara[y * w + x]) { filas[y]++; cols[x]++; }
+  const lim = (v) => Math.min(minimo, Math.max(...v));
+  const lf = lim(filas), lc = lim(cols);
+  let y0 = 0, y1 = h - 1, x0 = 0, x1 = w - 1;
+  while (y0 < h && filas[y0] < lf) y0++;
+  while (y1 >= 0 && filas[y1] < lf) y1--;
+  while (x0 < w && cols[x0] < lc) x0++;
+  while (x1 >= 0 && cols[x1] < lc) x1--;
+  if (x1 < x0 || y1 < y0 || lf === 0) return null;
+  return { x0, y0, x1, y1, w: x1 - x0 + 1, h: y1 - y0 + 1 };
 }
 
 // Distancia de cada píxel del objeto al fondo (chaflán 3-4, en píxeles).
@@ -294,6 +404,242 @@ export function cascoVisual(mkFrente, mkLado, { res = 56, invertirLado = false, 
     uvL[v * 2] = (cl.x0 + zl * cl.w) / mkLado.width; uvL[v * 2 + 1] = 1 - (cl.y0 + y * cl.h) / mkLado.height;
   }
   return { posiciones: p, normales, indices: malla.indices, uvFrente: uvF, uvLado: uvL };
+}
+
+// ---------- Planos: vistas ortográficas (lado, frente, arriba y, si hay, atrás) ----------
+//
+// Como calcar planos en Blender: cada vista es una proyección sin perspectiva. Un vóxel queda si
+// cae dentro de la silueta en todas las vistas. Ejes del resultado: x = ancho, y = alto,
+// z = largo con el frente (morro) hacia +z, base en y = 0 y alto 1.
+// - lado: visto desde +x, con el frente a la IZQUIERDA de la imagen.
+// - frente: visto desde +z.  - atrás (opcional): visto desde −z.
+// - arriba: visto desde +y, con el largo en horizontal y el frente a la derecha o a la izquierda:
+//   se detecta solo comparando su perfil con el de la vista de lado (ruedas, alerones…).
+// monoplaza: coche de ruedas descubiertas (F1, karts…). Las siluetas mezclan piezas: en la vista de
+// frente los neumáticos tapan una franja entera y en el tallado se vuelven cajas a lo largo de todo
+// el coche. Con esta opción se buscan las ruedas (lo único que toca el suelo), se miden (radio,
+// ancho, posición) y se BORRAN de las vistas de frente, atrás y arriba antes de tallar; el resto del
+// coche sale sin cajas fantasma y las ruedas se devuelven aparte para construirlas como piezas
+// reales. Delante del neumático delantero se respeta la parte baja (el alerón llega hasta ahí).
+export function cascoPlanos(vistas, { res = 256, suavizado = 4, monoplaza = false } = {}) {
+  const { lado, frente, arriba, atras } = vistas;
+  const cl = cajaDeMascara(lado), cf = cajaDeMascara(frente), ca = arriba ? cajaDeMascara(arriba) : null, cb = atras ? cajaDeMascara(atras) : null;
+  if (!cl || !cf) return null;
+  const largo = cl.w / cl.h, ancho = cf.w / cf.h; // en unidades de alto
+  const nz = res, ny = Math.max(8, Math.round(res / largo)), nx = Math.max(8, Math.round(ny * ancho));
+  // máscaras remuestreadas a la rejilla: lado[z][y], frente[x][y], arriba[z][x]
+  const muestra = (mk, c, u, v) => {
+    const px = Math.min(mk.width - 1, Math.max(0, Math.floor(c.x0 + u * c.w)));
+    const py = Math.min(mk.height - 1, Math.max(0, Math.floor(c.y0 + v * c.h)));
+    return mk.mascara[py * mk.width + px];
+  };
+  const L = new Uint8Array(nz * ny), F = new Uint8Array(nx * ny), B = new Uint8Array(nx * ny), A = new Uint8Array(nz * nx);
+  for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) L[k * ny + j] = muestra(lado, cl, 1 - (k + 0.5) / nz, 1 - (j + 0.5) / ny);
+  for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
+    F[i * ny + j] = muestra(frente, cf, (i + 0.5) / nx, 1 - (j + 0.5) / ny);
+    B[i * ny + j] = cb ? muestra(atras, cb, 1 - (i + 0.5) / nx, 1 - (j + 0.5) / ny) : 1;
+  }
+  let arribaInvertido = false;
+  if (ca) {
+    // perfil a lo largo: columnas ocupadas en la vista de lado y en la de arriba (normal y al revés)
+    const pl = new Float32Array(nz), pa = new Float32Array(nz), pr = new Float32Array(nz);
+    for (let k = 0; k < nz; k++) {
+      for (let j = 0; j < ny; j++) pl[k] += L[k * ny + j];
+      for (let i = 0; i < nx; i++) {
+        pa[k] += muestra(arriba, ca, (k + 0.5) / nz, (i + 0.5) / nx);
+        pr[k] += muestra(arriba, ca, 1 - (k + 0.5) / nz, (i + 0.5) / nx);
+      }
+    }
+    arribaInvertido = correlacion(pl, pr) > correlacion(pl, pa);
+    for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) {
+      const u = (k + 0.5) / nz;
+      A[k * nx + i] = muestra(arriba, ca, arribaInvertido ? 1 - u : u, (i + 0.5) / nx);
+    }
+  } else A.fill(1);
+  const ruedas = monoplaza ? detectarRuedas(lado, cl, A, nx, ny, nz) : [];
+  // franjas de los neumáticos fuera de las vistas (de frente y atrás: toda su altura; desde arriba:
+  // su rectángulo). Delante de las ruedas delanteras se deja la parte baja de la vista de frente.
+  const Forig = F.slice();
+  // Fuera del largo de las ruedas (p. ej. los pontones entre ellas) la franja del neumático no se deja
+  // vacía: toma la sección de la columna vecina hacia dentro (la carrocería se prolonga hacia
+  // fuera) y la vista de arriba pone el límite del ancho.
+  const Fext = F.slice(), Bext = B.slice();
+  let kAlaDel = nz, jAla = 0;
+  const enRueda = new Uint8Array(nz);
+  for (const r of ruedas) {
+    const jTope = Math.min(ny - 1, Math.ceil(2 * r.ry * 1.05) + 1);
+    for (let k = Math.max(0, Math.floor(r.zc - r.rz * 1.04) - 1); k <= Math.min(nz - 1, Math.ceil(r.zc + r.rz * 1.04) + 1); k++) enRueda[k] = 1;
+    for (const [b0, b1] of r.bandas) {
+      const izq = b0 < nx / 2, vecina = izq ? Math.min(nx - 1, b1 + 1) : Math.max(0, b0 - 2);
+      for (let i = Math.max(0, b0 - 1); i < Math.min(nx, b1 + 1); i++) {
+        for (let j = 0; j <= jTope; j++) {
+          F[i * ny + j] = 0; B[i * ny + j] = 0;
+          Fext[i * ny + j] = Forig[vecina * ny + j]; Bext[i * ny + j] = Bext[vecina * ny + j];
+        }
+        for (let k = Math.max(0, Math.floor(r.zc - r.rz * 1.04) - 1); k <= Math.min(nz - 1, Math.ceil(r.zc + r.rz * 1.04) + 1); k++) A[k * nx + i] = 0;
+      }
+    }
+  }
+  if (ruedas.length) {
+    const del = ruedas.reduce((a, b) => (b.zc > a.zc ? b : a)); // la más adelantada
+    kAlaDel = Math.ceil(del.zc + del.rz * 1.02);
+    jAla = Math.round(del.ry * 0.5);
+  }
+  const X = nx + 2, Y = ny + 2, Z = nz + 2;
+  let campo = new Float32Array(X * Y * Z);
+  for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) {
+    if (!L[k * ny + j]) continue;
+    const ala = k >= kAlaDel && j < jAla;
+    const Fk = ruedas.length && !enRueda[k] && k < kAlaDel ? Fext : F, Bk = Fk === Fext ? Bext : B;
+    for (let i = 0; i < nx; i++) {
+      const f = Fk[i * ny + j] || (ala && Forig[i * ny + j]);
+      if (f && (Bk[i * ny + j] || ala) && A[k * nx + i]) campo[(i + 1) + X * ((j + 1) + Y * (k + 1))] = 1;
+    }
+  }
+  if (ruedas.length >= 2) seccionMonoplaza(campo, X, Y, nx, ny, ruedas);
+  campo = desenfocar(campo, X, Y, Z);
+  const malla = surfaceNets(campo, X, Y, Z, 0.5);
+  if (!malla.indices.length) return null;
+  const p = malla.posiciones, esc = 1 / ny;
+  for (let v = 0; v < p.length; v += 3) {
+    p[v] = (p[v] - 1 - nx / 2) * esc; p[v + 1] = (p[v + 1] - 1) * esc; p[v + 2] = (p[v + 2] - 1 - nz / 2) * esc;
+  }
+  taubin(p, malla.indices, suavizado);
+  let ymin = Infinity;
+  for (let v = 1; v < p.length; v += 3) if (p[v] < ymin) ymin = p[v];
+  for (let v = 1; v < p.length; v += 3) p[v] -= ymin;
+  const normales = normalesDeVertice(p, malla.indices);
+  // ruedas en las mismas coordenadas que la malla (x > 0 es la izquierda mirando hacia delante)
+  const ruedasMundo = [];
+  for (const r of ruedas) for (const [b0, b1] of r.bandas) {
+    const x = ((b0 + b1) / 2 - 0.5 - nx / 2) * esc;
+    ruedasMundo.push({
+      x, y: (r.ry - 0.5) * esc - ymin, z: (r.zc - 0.5 - nz / 2) * esc, radio: r.ry * esc, ancho: (b1 - b0) * esc,
+      nombre: `rueda_${r.zc > nz / 2 ? 'del' : 'tra'}_${x > 0 ? 'izq' : 'der'}`,
+    });
+  }
+  // dónde cae cada vértice en cada imagen (0..1 de la imagen completa, v hacia arriba como las UV)
+  const nv = p.length / 3, uv = { lado: new Float32Array(nv * 2), frente: new Float32Array(nv * 2), arriba: new Float32Array(nv * 2), atras: new Float32Array(nv * 2) };
+  const anchoM = nx * esc, largoM = nz * esc;
+  const poner = (dst, mk, c, v, u, w) => {
+    if (!mk) return;
+    dst[v * 2] = (c.x0 + u * c.w) / mk.width;
+    dst[v * 2 + 1] = 1 - (c.y0 + w * c.h) / mk.height;
+  };
+  for (let v = 0; v < nv; v++) {
+    const x = p[v * 3] / anchoM + 0.5, y = 1 - p[v * 3 + 1], z = p[v * 3 + 2] / largoM + 0.5;
+    poner(uv.lado, lado, cl, v, 1 - z, y);
+    poner(uv.frente, frente, cf, v, x, y);
+    poner(uv.atras, atras, cb, v, 1 - x, y);
+    poner(uv.arriba, arriba, ca, v, arribaInvertido ? 1 - z : z, x);
+  }
+  return { posiciones: p, normales, indices: malla.indices, uv, arribaInvertido, ruedas: ruedasMundo, medidas: { ancho: anchoM, alto: 1, largo: largoM } };
+}
+
+// Busca las ruedas en la vista de lado (lo que toca el suelo; radio por la cuerda del círculo) y su
+// ancho en la vista de arriba. Devuelve [{ zc, rz, ry, bandas: [[i0, i1], [i0, i1]] }] en la rejilla.
+function detectarRuedas(lado, cl, A, nx, ny, nz) {
+  const m = lado.mascara, w = lado.width, y1 = cl.y0 + cl.h - 1;
+  // columnas que tocan el suelo (el último 1,5 % del alto)
+  const toca = new Uint8Array(w);
+  for (let y = Math.floor(y1 - cl.h * 0.015); y <= y1; y++) for (let x = cl.x0; x < cl.x0 + cl.w; x++) if (m[y * w + x]) toca[x] = 1;
+  const contactos = [];
+  for (let x = cl.x0; x < cl.x0 + cl.w; x++) {
+    if (!toca[x]) continue;
+    const a = x;
+    while (x < cl.x0 + cl.w && toca[x]) x++;
+    if (x - a >= cl.w * 0.012) contactos.push((a + x - 1) / 2);
+  }
+  const halladas = [];
+  for (const cx of contactos) {
+    const c = Math.round(cx);
+    let yb = y1;
+    while (yb > cl.y0 && !m[yb * w + c]) yb--;
+    // radio por la cuerda: (cuerda/2)² = 2·r·h − h²  →  r = ((cuerda/2)² + h²) / (2h)
+    const rs = [], centros = [];
+    let antes = 0;
+    for (let hh = 0; hh < cl.h * 0.6; hh++) {
+      const y = yb - hh;
+      if (!m[y * w + c]) break;
+      let a = c, b = c;
+      while (a > 0 && m[y * w + a - 1]) a--;
+      while (b < w - 1 && m[y * w + b + 1]) b++;
+      const medio = (b - a + 1) / 2;
+      if (antes && medio - antes > Math.max(6, cl.h * 0.05)) break; // se juntó con otra pieza
+      antes = medio;
+      const h = hh + 0.5;
+      if (hh >= 4) { rs.push((medio * medio + h * h) / (2 * h)); centros.push((a + b) / 2); }
+    }
+    if (rs.length < 4) continue;
+    const mitad = rs.slice(Math.floor(rs.length / 2)).sort((p, q) => p - q);
+    const rPx = mitad[Math.floor(mitad.length / 2)];
+    if (rPx < cl.h * 0.12 || rPx > cl.h * 0.7) continue; // no parece una rueda
+    const zc = (1 - (centros.reduce((s2, v) => s2 + v, 0) / centros.length - cl.x0) / cl.w) * nz; // frente a la izquierda
+    const rz = (rPx / cl.w) * nz, ry = (rPx / cl.h) * ny;
+    // ancho del neumático: primer tramo lleno desde cada borde en la vista de arriba
+    const anchos = [[], []];
+    for (let k = Math.max(0, Math.floor(zc - rz * 0.8)); k <= Math.min(nz - 1, Math.ceil(zc + rz * 0.8)); k++) {
+      let i = 0; while (i < nx && !A[k * nx + i]) i++;
+      const i0 = i; while (i < nx && A[k * nx + i]) i++;
+      if (i0 < nx) anchos[0].push([i0, i]);
+      i = nx - 1; while (i >= 0 && !A[k * nx + i]) i--;
+      const i1 = i; while (i >= 0 && A[k * nx + i]) i--;
+      if (i1 >= 0) anchos[1].push([i + 1, i1 + 1]);
+    }
+    // solo filas donde el neumático sale separado (si un alerón tapa la fila, el tramo es enorme)
+    const med = (v) => v.slice().sort((p, q) => p - q)[Math.floor(v.length / 2)];
+    const lados = anchos.map((l) => {
+      const ok = l.filter(([p, q]) => q - p < nx * 0.3);
+      return ok.length >= 3 ? { ancho: med(ok.map(([p, q]) => q - p)), borde: med(l.map(([p, q]) => (l === anchos[0] ? p : q))) } : { ancho: 0, borde: med(l.map(([p, q]) => (l === anchos[0] ? p : q))) };
+    });
+    // simétrico: el menor de los dos; sin datos, ≈ 0,9 del radio (proporción típica de un neumático)
+    const validos = lados.map((x) => x.ancho).filter((x) => x > 0);
+    const ancho = validos.length ? Math.min(...validos) : Math.round(ry * 0.9);
+    const banda = [
+      lados[0].borde !== undefined ? [lados[0].borde, lados[0].borde + ancho] : null,
+      lados[1].borde !== undefined ? [lados[1].borde - ancho, lados[1].borde] : null,
+    ];
+    halladas.push({ zc, rz, ry, bandas: banda.filter(Boolean) });
+  }
+  return halladas;
+}
+
+// Entre las ruedas, cada corte transversal de un monoplaza es alto en el centro (cubierta del motor)
+// y más bajo hacia los costados (pontones). Las siluetas no lo ven y dejan una pared vertical:
+// aquí cada corte se limita a una superelipse |x/a|^n + (y/h)^n ≤ 1 con su propio ancho y alto
+// (con borde suave: el campo baja de 1 a 0 alrededor de la curva).
+function seccionMonoplaza(campo, X, Y, nx, ny, ruedas, n = 2.6) {
+  const zs = ruedas.map((r) => r.zc).sort((a, b) => a - b);
+  const tra = ruedas.find((r) => r.zc === zs[0]), del = ruedas.find((r) => r.zc === zs[zs.length - 1]);
+  const k0 = Math.ceil(tra.zc + tra.rz * 1.05), k1 = Math.floor(del.zc - del.rz * 1.05);
+  const cx = nx / 2;
+  for (let k = k0; k <= k1; k++) {
+    let a = 0, h = 0;
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      if (!campo[(i + 1) + X * ((j + 1) + Y * (k + 1))]) continue;
+      a = Math.max(a, Math.abs(i + 0.5 - cx)); h = Math.max(h, j + 1);
+    }
+    if (!a || !h) continue;
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const id = (i + 1) + X * ((j + 1) + Y * (k + 1));
+      if (!campo[id]) continue;
+      const u = Math.abs(i + 0.5 - cx) / a;
+      if (u < 0.2) continue;
+      // valor continuo (no 0/1) para que la superficie pase suave entre vóxeles, sin escalones
+      const e = u ** n + ((j + 0.5) / h) ** n;
+      campo[id] = Math.min(campo[id], Math.max(0, Math.min(1, 0.5 + (1 - e) * Math.min(a, h) * 0.3)));
+    }
+  }
+}
+
+function correlacion(a, b) {
+  const n = a.length;
+  let ma = 0, mb = 0;
+  for (let i = 0; i < n; i++) { ma += a[i]; mb += b[i]; }
+  ma /= n; mb /= n;
+  let s = 0, sa = 0, sb = 0;
+  for (let i = 0; i < n; i++) { const da = a[i] - ma, db = b[i] - mb; s += da * db; sa += da * da; sb += db * db; }
+  return s / Math.sqrt(sa * sb || 1);
 }
 
 function desenfocar(c, X, Y, Z) {

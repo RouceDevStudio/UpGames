@@ -1,0 +1,11 @@
+{
+  "appId": "games.upgames.studio",
+  "appName": "UpGames Studio",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#0b0f17",
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  }
+}

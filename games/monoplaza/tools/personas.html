@@ -7,6 +7,8 @@
 // Visor de mecánicos e ingenieros: ?poses=de_pie,pistola,rueda&vista=lado|frente|3q|cerca
 import * as THREE from 'three';
 import { Persona } from '../js/render/personas.js';
+import { cargarCuerpo } from '../js/render/cuerpoStudio.js';
+if (!new URLSearchParams(location.search).has('viejo')) await cargarCuerpo('../modelos/cuerpo-personaje.json');
 import { casco } from '../js/render/piloto.js';
 const q = new URLSearchParams(location.search);
 const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
