@@ -127,7 +127,11 @@ export class Efectos {
     this.chispas = new Particulas(scene, calidad >= 2 ? 400 : 150, true);
     // piedras de grava y terrones de hierba que salen despedidos (caen con gravedad, no brillan)
     this.piedras = new Particulas(scene, calidad >= 2 ? 300 : 120, false);
-    this.marcas = new Marcas(scene, calidad >= 2 ? 6000 : 2500);
+    this.marcas = new Marcas(scene, calidad >= 2 ? 9000 : 4000);
+    // luz naranja de las chispas de los patines (de noche ilumina el asfalto bajo el coche)
+    this.luzChispas = new THREE.PointLight(0xff9a3a, 0, 7, 2); this.luzChispas.castShadow = false;
+    scene.add(this.luzChispas);
+    this.noche = false; this._chispaFuerte = 0;
     this.acum = 0;
     this.agua = 0;             // agua en la pista: spray detrás de los coches
   }
@@ -259,9 +263,11 @@ export class Efectos {
         const k = 0.35 + rnd() * 0.25;
         this.humo.emitir(car.x - cos * 2.3, car.y + 0.6, car.z - sin * 2.3, -cos * v * 0.1 + (rnd() - 0.5), 1 + rnd() * 1.5, -sin * v * 0.1 + (rnd() - 0.5), 1.0, 0.55, 2.2 + rnd(), 2.8, k, k, k);
       }
-      // chispas de los patines de titanio bajo el fondo
+      // chispas de los patines de titanio bajo el fondo (de noche más y más grandes)
       if (!lejos && car.fondoToca > 0 && v > 35) {
-        const n = 2 + Math.floor(car.fondoToca * 6);
+        const n = (2 + Math.floor(car.fondoToca * 6)) * (this.noche ? 2 : 1);
+        const dCam = (car.x - camPos.x) ** 2 + (car.z - camPos.z) ** 2;
+        if (dCam < 80 * 80 && car.fondoToca > this._chispaFuerte) { this._chispaFuerte = car.fondoToca; this.luzChispas.position.set(car.x - cos * 0.3, car.y + 0.12, car.z - sin * 0.3); }
         for (let k = 0; k < n; k++) {
           const off = -0.5 + rnd() * 1.0;
           const px = car.x + cos * off, pz = car.z + sin * off;
@@ -278,6 +284,10 @@ export class Efectos {
       }
       if (!lejos) this._golpe(car, cos, sin, v, rnd);
     }
+    // la luz de las chispas parpadea y se apaga enseguida
+    const objL = this._chispaFuerte > 0 ? (this.noche ? 9 : 2.5) * (0.6 + Math.random() * 0.8) * Math.min(1, this._chispaFuerte * 2) : 0;
+    this.luzChispas.intensity += (objL - this.luzChispas.intensity) * Math.min(1, dt * 30);
+    this._chispaFuerte = 0;
     this.humo.actualizar(dt, -0.3, 1.2);
     this.chispas.actualizar(dt, 9.8, 0.6);
     this.piedras.actualizar(dt, 9.8, 0.4);

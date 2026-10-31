@@ -31,6 +31,8 @@ export class Entrada {
       if (k === 'm') this.eventos.push('mezcla');
       if (k === 'b') this.eventos.push('bbMas');
       if (k === 'n') this.eventos.push('bbMenos');
+      if (k === 'o') this.eventos.push('overtake');
+      if (k === 'v') this.eventos.push('frenoMotor');
       if (k === 'r') this.eventos.push('recolocar');
       if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) e.preventDefault();
     });
@@ -115,7 +117,7 @@ export class Entrada {
       el.addEventListener('click', () => { if (!mantener) this.eventos.push(ev); });
     };
     boton(elementos.subir, 'subir'); boton(elementos.bajar, 'bajar');
-    boton(elementos.drs, null, '_drsTactil'); boton(elementos.ers, 'ers'); if (elementos.mezcla) boton(elementos.mezcla, 'mezcla'); if (elementos.bb) boton(elementos.bb, 'bbCiclo');
+    boton(elementos.drs, null, '_drsTactil'); boton(elementos.ers, 'ers'); if (elementos.mezcla) boton(elementos.mezcla, 'mezcla'); if (elementos.bb) boton(elementos.bb, 'bbCiclo'); if (elementos.ot) boton(elementos.ot, 'overtake'); if (elementos.eb) boton(elementos.eb, 'frenoMotor');
     boton(elementos.camara, 'camara'); boton(elementos.pausa, 'pausa');
     boton(elementos.atras, null, '_atrasTactil');
     boton(elementos.recolocar, 'recolocar');

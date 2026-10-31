@@ -4,15 +4,15 @@
 
 import * as THREE from 'three';
 
-export const CAMARAS_REPE = ['director', 'tv', 'helicoptero', 'dron', 'lateral', 'suelo', 'persecucion', 'cercana',
+export const CAMARAS_REPE = ['director', 'tv', 'grua', 'cable', 'helicoptero', 'dron', 'lateral', 'suelo', 'persecucion', 'cercana',
   'cabina', 'cara', 'tcam', 'morro', 'rueda', 'ruedaTras', 'trasera', 'orbita', 'libre'];
 export const NOMBRES_REPE = {
-  director: 'Director (automática)', tv: 'Cámaras de TV', helicoptero: 'Helicóptero', dron: 'Dron', lateral: 'Travelling lateral',
+  director: 'Director (automática)', tv: 'Cámaras de TV', grua: 'Grúa de TV', cable: 'Cámara aérea (cable)', helicoptero: 'Helicóptero', dron: 'Dron', lateral: 'Travelling lateral',
   suelo: 'A ras de suelo', persecucion: 'Persecución', cercana: 'Cercana', cabina: 'Cabina', cara: 'Cara del piloto', tcam: 'T-Cam',
   morro: 'Morro', rueda: 'Rueda delantera', ruedaTras: 'Rueda trasera', trasera: 'Alerón trasero', orbita: 'Órbita (arrastra)', libre: 'Cámara libre',
 };
 // planos que el director usa para montar la secuencia, con duración (s)
-const PLANOS_DIRECTOR = [['tv', 6], ['lateral', 5], ['suelo', 4], ['dron', 6], ['rueda', 4], ['ruedaTras', 4], ['helicoptero', 5], ['persecucion', 5], ['morro', 4], ['trasera', 4], ['cara', 3.5]];
+const PLANOS_DIRECTOR = [['tv', 6], ['grua', 5], ['cable', 5], ['lateral', 5], ['suelo', 4], ['dron', 6], ['rueda', 4], ['ruedaTras', 4], ['helicoptero', 5], ['persecucion', 5], ['morro', 4], ['trasera', 4], ['cara', 3.5]];
 // cámaras fijadas a la carrocería: posición y punto al que miran en ejes del coche (x adelante, y arriba, z lateral)
 const MONTADAS = {
   morro: { pos: [2.55, 0.42, 0], mira: [40, 0.2, 0], fov: 70 },
@@ -78,7 +78,12 @@ export class CamaraRepe {
       this.juego.modo = m;
       this.juego.actualizar(dt, this.sacudida ? car : { ...car, vibracion: 0, velocidad: 0 }, modelo);
       fov = cam.fov;
-    } else if (m === 'tv' || m === 'helicoptero') {
+    } else if ((m === 'grua' || m === 'cable') && this._equipoUtil(m, car)) {
+      this._planoEquipo(cam, car, m, dt);
+      fov = m === 'grua' ? 34 : 42;
+    } else if (m === 'tv' || m === 'helicoptero' || m === 'grua' || m === 'cable') {
+      // grúa y cable solo sirven en la recta principal: lejos de ella, cámaras de TV
+      if (m === 'grua' || m === 'cable') m = 'tv';
       this.tv.actualizar(cam, car, m, dt);
       fov = cam.fov;
     } else if (MONTADAS[m]) {
@@ -146,6 +151,42 @@ export class CamaraRepe {
     if (this.alabeo) cam.rotateZ(this.alabeo);
     cam.fov = THREE.MathUtils.clamp(fov + this.fovExtra, 4, 110);
     cam.updateProjectionMatrix();
+  }
+
+  /** ¿Está el coche cerca de la grúa o bajo el cable? */
+  _equipoUtil(m, car) {
+    const e = this.equipoTV;
+    if (!e) return false;
+    if (m === 'grua') return e.grua && Math.hypot(car.x - e.grua.pos.x, car.z - e.grua.pos.z) < 130;
+    const { a, b } = e.cable, ab = _v.subVectors(b, a), L2 = ab.lengthSq();
+    const u = ((car.x - a.x) * ab.x + (car.z - a.z) * ab.z) / L2;
+    return u > -0.1 && u < 1.1;
+  }
+
+  /** Mueve la grúa o el carro del cable hacia el coche y pone la cámara en su cabeza. */
+  _planoEquipo(cam, car, m, dt) {
+    const e = this.equipoTV;
+    if (m === 'grua') {
+      const g = e.grua;
+      g.base.updateMatrixWorld(true);
+      // el brazo gira hacia el coche y se inclina para seguirlo
+      const loc = g.base.worldToLocal(_v.set(car.x, car.y, car.z));
+      const yaw = Math.atan2(-loc.z, loc.x);
+      g.giro.rotation.y += (yaw - g.giro.rotation.y) * Math.min(1, dt * 3);
+      const dist = Math.hypot(loc.x, loc.z);
+      g.brazo.rotation.z += (Math.atan2(1.5 - 4.8, Math.max(4, dist - 8)) * 0.6 - g.brazo.rotation.z) * Math.min(1, dt * 2);
+      g.cabeza.updateMatrixWorld(true);
+      cam.position.setFromMatrixPosition(g.cabeza.matrixWorld); cam.position.y -= 0.35;
+    } else {
+      const { a, b, dolly } = e.cable, ab = _m.subVectors(b, a), L2 = ab.lengthSq();
+      // el carro corre por el cable un poco por detrás del coche
+      const u = THREE.MathUtils.clamp(((car.x - a.x) * ab.x + (car.z - a.z) * ab.z) / L2 - 12 / Math.sqrt(L2), 0, 1);
+      const obj = _v.copy(a).addScaledVector(ab, u);
+      dolly.position.lerp(obj, Math.min(1, dt * 2.5));
+      cam.position.copy(dolly.position); cam.position.y -= 0.5;
+    }
+    cam.lookAt(car.x, car.y + 0.4, car.z);
+    cam.near = 0.1;
   }
 
   // lado de la pista con más sitio para el travelling (el exterior en las curvas)

@@ -578,6 +578,10 @@ function pintarPantalla(p, car, info = {}) {
   x.fillText(`FUEL ${(car.combustible ?? 0).toFixed(1)}kg${info.vueltasFuel != null ? ` · ${info.vueltasFuel.toFixed(1)}v` : ''}`, 170, 220);
   x.fillStyle = ['#2fe07a', '#8a94a6', '#ff9a3c'][car.mandos.mezcla ?? 1]; x.fillText(`MIX ${['AHORRO', 'NORMAL', 'RICA'][car.mandos.mezcla ?? 1]}`, 170, 250);
   x.fillStyle = car.mandos.bb ? '#ffd23f' : '#cfd6e2'; x.fillText(`BB ${((car.reglaje?.repartoFreno ?? 57) + (car.mandos.bb || 0)).toFixed(1)}`, 300, 250);
+  x.fillStyle = (car.mandos.fm ?? 1) !== 1 ? '#ffd23f' : '#cfd6e2'; x.fillText(`EB ${(car.mandos.fm ?? 1) + 1}`, 392, 250);
+  // cupo de Overtake (línea magenta bajo la batería; brilla si está activo)
+  x.fillStyle = '#2a1830'; x.fillRect(14, 204, 150, 5);
+  x.fillStyle = car.mandos.overtake ? '#ff3df5' : '#9a3b93'; x.fillRect(14, 204, 150 * Math.max(0, (car.otEnergia ?? 0) / 1e6), 5);
   // derecha: neumáticos (temperatura y desgaste) y daños
   const opt = car.ruedas[0].neum.c.tOpt;
   const col = (t) => t < opt - 35 ? '#2f7bff' : t < opt - 15 ? '#36c4ff' : t < opt + 15 ? '#2fe07a' : t < opt + 30 ? '#ffd23f' : '#ff3b3b';
@@ -615,7 +619,9 @@ function pintarPantalla(p, car, info = {}) {
   }
   x.fillStyle = '#ff3b3b';
   avisos.slice(0, 1).forEach((t, i) => x.fillText(t, W - 14, 226 + i * 26));
-  x.fillStyle = '#8a94a6'; x.font = '700 16px Arial'; x.fillText(`${car.combustible.toFixed(1)} KG`, W - 14, 252);
+  // temperatura del motor (en el rebufo sube): verde, amarilla desde 112 °C y roja desde 120 °C
+  const tm = car.tMotor ?? 90;
+  x.fillStyle = tm >= 120 ? '#ff3b3b' : tm >= 112 ? '#ffd23f' : '#8a94a6'; x.font = '800 17px Arial'; x.fillText(`MOT ${Math.round(tm)}°`, W - 14, 252);
   p.tex.needsUpdate = true;
 }
 
@@ -883,6 +889,9 @@ export function crearModelo(opc) {
   const luzLluvia = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.05, 0.11), new THREE.MeshStandardMaterial({ color: 0x220000, emissive: 0xff1010, emissiveIntensity: 0 }));
   luzLluvia.position.set(-2.31, 0.27, 0);
   carroceria.add(luzLluvia);
+  // su reflejo en el asfalto mojado: una estela roja alargada hacia la cámara (como en la tele)
+  const reflejoLuz = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.16), new THREE.MeshBasicMaterial({ color: 0xff2a1a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+  reflejoLuz.rotation.x = -Math.PI / 2; reflejoLuz.position.set(-3.4, 0.015, 0); reflejoLuz.visible = false; reflejoLuz.renderOrder = 2;
 
   // Volante en la columna de dirección
   const volante = crearVolante(cabina);
@@ -972,7 +981,7 @@ export function crearModelo(opc) {
   // sombra de contacto: oscurece el asfalto bajo el coche (sin ella parece que flota)
   const sombraC = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 5.8), matSombraContacto(calidad));
   sombraC.rotation.x = -Math.PI / 2; sombraC.position.set(-0.15, 0.015, 0); sombraC.renderOrder = -1;
-  raiz.add(sombraC);
+  raiz.add(sombraC); raiz.add(reflejoLuz);
 
   // Abolladuras: hunde la carrocería donde ha pegado cada golpe (se acumulan). Las caras que se
   // mueven toman la normal de su triángulo: el carbono roto se ve arrugado, con aristas.
@@ -1155,6 +1164,10 @@ export function crearModelo(opc) {
       // luz trasera: parpadea al recuperar energía; fija de noche y con lluvia
       const fija = this.luzTrasera?.() ? 2 : 0;
       luzLluvia.material.emissiveIntensity = car.ersPotenciaActual < -1000 ? (Math.sin(performance.now() / 70) > 0 ? 6 : 0.5) : fija;
+      // reflejo en el agua: solo con la pista mojada; tiembla un poco con las ondas del agua
+      const mojada = Math.min(1, Math.max(0, ((this.aguaPista?.() ?? 0) - 0.08) / 0.3));
+      reflejoLuz.visible = mojada > 0.02 && luzLluvia.material.emissiveIntensity > 0.4 && luzLluvia.visible && !car.vuelo && !car.volcado;
+      if (reflejoLuz.visible) { reflejoLuz.material.opacity = mojada * Math.min(1, luzLluvia.material.emissiveIntensity / 3) * (0.45 + 0.1 * Math.sin(performance.now() / 45)); reflejoLuz.scale.x = 0.85 + 0.2 * mojada; }
       // volante y piloto: el piloto lo lleva (o lo suelta y cruza los brazos en un golpe fuerte)
       const angVol = piloto.actualizar(car, dt);
       giroVolante.rotation.x = angVol;

@@ -20,6 +20,7 @@
 <canvas id="lienzo"></canvas>
 <canvas id="capaCamara"></canvas>
 <div id="cineEtiqueta"></div>
+<div id="presenta" class="presenta"><small>GRAN PREMIO</small><b id="preTit"></b><span id="preSub"></span><em id="preTiempo"></em></div>
 <div id="entrevista" class="entrevista"><b id="entTit"></b><span id="entTxt"></span></div>
 <button id="bCocheNuevo" class="btn primario">🔧 Coche nuevo</button>
 
@@ -49,7 +50,8 @@
       <button class="modo" data-ir="escuela"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5z"/><path d="M6 11v5c3 2 9 2 12 0v-5"/><path d="M22 9v6"/></svg></i><span class="t">Escuela</span><span class="d">Aprende a pilotar paso a paso</span></button>
       <button class="modo" data-ir="garaje"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21V9l9-5 9 5v12"/><path d="M7 21v-6h10v6"/><path d="M7 18h10"/></svg></i><span class="t">Garaje</span><span class="d">Mejoras, librea y casco</span></button>
       <button class="modo" data-ir="progreso"><i><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="15" r="6"/><path d="M8 3l4 6 4-6"/><path d="M12 12.5l1 2 2 .3-1.5 1.4.4 2.1-1.9-1-1.9 1 .4-2.1L9 14.8l2-.3z"/></svg></i><span class="t">Progreso</span><span class="d">Nivel, misiones y logros</span></button>
-      <button class="modo" data-ir="editor"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/><path d="M3 21h18" opacity=".4"/></svg></i><span class="t">Crear circuito</span><span class="d">Diseña y comparte tu pista</span></button>
+      <button class="modo" data-ir="momentos"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v12H4z"/><path d="M4 7l3-4h3l-3 4M10 7l3-4h3l-3 4M16 7l3-4h1"/><path d="M10 11l5 2.5-5 2.5z"/></svg></i><span class="t">Momentos</span><span class="d">Situaciones famosas con objetivo</span></button>
+<button class="modo" data-ir="editor"><i><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/><path d="M3 21h18" opacity=".4"/></svg></i><span class="t">Crear circuito</span><span class="d">Diseña y comparte tu pista</span></button>
     </nav>
     <aside class="lobby-lateral">
       <div class="tarjeta-circuito">
@@ -70,6 +72,16 @@
     <a class="volver-upgames" id="lnkApk" href="#" download="APEX-GP.apk">📱 App Android (APK)</a>
     <a class="volver-upgames" href="https://upgames.games/public/biblioteca.html" target="_top">← UpGames</a>
   </footer>
+</div>
+
+<!-- Momentos: situaciones famosas con un objetivo -->
+<div id="momentos" class="pantalla">
+  <div class="panel ancho">
+    <h2>🎬 Momentos</h2>
+    <p class="nota" style="text-align:left">Situaciones de carrera famosas. Cada una tiene un objetivo: cúmplelo para marcarla como superada.</p>
+    <div id="momLista" class="lista"></div>
+    <div class="acciones"><button class="btn" data-ir="menu">Atrás</button></div>
+  </div>
 </div>
 
 <!-- Opciones de carrera -->
@@ -198,7 +210,7 @@
     </div>
     <div id="rkInfo" class="nota" style="text-align:left"></div>
     <div id="rkLista" class="lista"></div>
-    <div class="acciones"><button class="btn" data-ir="menu">Atrás</button><button class="btn primario" id="bRkFantasma">Correr contra el récord</button></div>
+    <div class="acciones"><button class="btn" data-ir="menu">Atrás</button><button class="btn" id="bRkAmigo">👥 Fantasma de un amigo</button><button class="btn primario" id="bRkFantasma">Correr contra el récord</button></div>
   </div>
 </div>
 
@@ -242,6 +254,7 @@
       <div class="opcion"><label>Radio del ingeniero (voz)<span class="desc" id="estadoVoz"></span></label><input type="checkbox" data-aj="radio"> <button class="btn mini" id="bProbarVoz">🔊 Probar</button></div>
       <div class="opcion"><label>Sonido del motor<span class="desc">Grabaciones reales a bordo · se oye un acelerón al elegir</span></label><div class="segm" data-aj="motorSonido"><b data-v="v10">V10 ★ el mejor</b><b data-v="ferrari">V10 rojo 2004</b><b data-v="alonso">V10 azul 2004</b><b data-v="verstappen">V6 turbo híbrido</b><b data-v="v6">V6 deportivo</b></div></div>
       <div class="opcion"><label>Público y megafonía</label><input type="checkbox" data-aj="ambiente"></div>
+      <div class="opcion"><label>Ayuda de frenada<span class="desc">Franjas en el asfalto: amarilla (prepárate) y roja (frena)</span></label><input type="checkbox" data-aj="ayudaFrenada"></div>
       <div class="opcion"><label>Repetición automática de accidentes<span class="desc">A cámara lenta tras un choque fuerte (sin conexión)</span></label><input type="checkbox" data-aj="repeAuto"></div>
       <div class="opcion"><label>Idioma</label><div class="segm" data-aj="idioma" data-notr><b data-v="es">Español</b><b data-v="en">English</b><b data-v="pt">Português</b></div></div>
       <div class="opcion"><label>Unidades</label><div class="segm" data-aj="unidades"><b data-v="kmh">km/h</b><b data-v="mph">mph</b></div></div>
@@ -451,6 +464,14 @@
       <svg viewBox="0 0 64 40" aria-hidden="true"><path class="pila" d="M18 34 V12 Q18 6 24 6 H36 Q42 6 42 12 V34 Z"/><path class="borne" d="M42 14 L50 18 V30 Q50 33 47 33"/><rect class="carga" x="22" y="12" width="16" height="9" rx="1.5"/></svg>
       <span id="bMezclaTxt">MIX</span>
     </button>
+    <button id="bOT" class="bt energia ot-bt" aria-label="Overtake: toda la batería para adelantar (cupo por vuelta)">
+      <svg viewBox="0 0 64 40" aria-hidden="true"><path class="flecha" d="M8 28 L26 28 L26 34 L40 20 L26 6 L26 12 L8 12 Z"/><path class="flecha2" d="M40 28 L48 28 L48 34 L60 20 L48 6 L48 12 L40 12"/></svg>
+      <span id="bOTTxt">OT</span>
+    </button>
+    <button id="bEB" class="bt energia eb-bt" aria-label="Freno motor: bajo, medio o alto">
+      <svg viewBox="0 0 64 40" aria-hidden="true"><circle class="pila" cx="32" cy="22" r="13"/><path class="aguja" d="M32 22 L41 13"/><path class="borne" d="M22 34 h20"/></svg>
+      <span id="bEBTxt">EB 2</span>
+    </button>
     <button id="bBB" class="bt energia bb-bt" aria-label="Reparto de frenada (delante/detrás)">
       <svg viewBox="0 0 64 40" aria-hidden="true"><circle class="pila" cx="32" cy="20" r="13"/><circle class="carga" cx="32" cy="20" r="6"/><path class="borne" d="M14 20 h-8 M50 20 h8"/></svg>
       <span id="bBBTxt">BB 57</span>
@@ -470,6 +491,7 @@
       <button class="btn" data-ir="reglaje" id="bPausaReglaje">Reglaje</button>
       <button class="btn" id="bPausaRepe">🎬 Repetición</button>
       <button class="btn" id="bPausaTele">📈 Telemetría</button>
+      <button class="btn" id="bRetar" style="display:none">🔗 Retar a un amigo</button>
       <button class="btn" data-ir="ajustes">Ajustes</button>
       <button class="btn" id="bSalir">Salir al menú</button>
     </div>

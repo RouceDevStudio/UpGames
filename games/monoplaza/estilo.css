@@ -583,7 +583,7 @@ body.en-repe #bCocheNuevo { display: none; }
 .modo:active { transform: scale(.98); }
 .modo i { position: absolute; top: 10px; right: 12px; width: 26px; height: 26px; color: rgba(255,255,255,.55); }
 .modo i svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.modo .t { font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: 0; font-size: clamp(11px, 1.35vw, 16px); line-height: 1.05; max-width: 100%; overflow-wrap: anywhere; }
+.modo .t { font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: -0.2px; font-size: clamp(10px, 1.18vw, 16px); line-height: 1.05; max-width: 100%; overflow-wrap: normal; word-break: keep-all; hyphens: none; }
 .modo .d { font-size: 11.5px; color: var(--tenue); line-height: 1.25; font-weight: 500; }
 .modo.destacado { grid-column: span 2; grid-row: span 2; justify-content: flex-end; padding: 18px 20px; background: linear-gradient(135deg, #e8202a 0%, #a50d18 55%, #4a0710 100%); border-color: rgba(255,120,120,.4); }
 .modo.destacado::before { background: #fff; transform: scaleY(1); }
@@ -623,7 +623,7 @@ body.en-repe #bCocheNuevo { display: none; }
   .lobby-modos { grid-template-columns: repeat(5, minmax(0, 1fr)); grid-auto-rows: minmax(58px, auto); gap: 6px; }
   .modo { padding: 7px 9px 7px 11px; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%); }
   .modo i { width: 18px; height: 18px; top: 6px; right: 7px; }
-  .modo .t { font-size: clamp(10px, 1.45vw, 12.5px); }
+  .modo .t { font-size: clamp(9px, 1.25vw, 12.5px); }
   .modo .d { display: none; }
   .modo.destacado { padding: 10px 12px; }
   .modo.destacado i { width: 30px; height: 30px; top: 8px; right: 10px; }
@@ -642,3 +642,29 @@ body.en-repe #bCocheNuevo { display: none; }
 .entrevista.visible { opacity: 1; transform: translate(-50%, 0); }
 .entrevista b { font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; color: #ffd23f; }
 .entrevista span { font-size: 15px; font-style: italic; line-height: 1.35; }
+
+/* botones de energía: rejilla de 2 columnas (DRS/ERS/MIX/OT/EB/BB) */
+#botonesEnergia { display: grid !important; grid-template-columns: repeat(2, auto); grid-auto-flow: row; }
+#tactil.tactil #botonesEnergia { grid-template-columns: repeat(3, auto); }
+.ot-bt .flecha, .ot-bt .flecha2 { fill: rgba(255,255,255,.18); stroke: rgba(255,255,255,.8); stroke-width: 2.2; stroke-linejoin: round; }
+.ot-bt.activo, .ot-bt.on { border-color: #ff3df5; box-shadow: 0 0 14px rgba(255,61,245,.6); }
+.ot-bt.on .flecha, .ot-bt.on .flecha2 { fill: rgba(255,61,245,.55); }
+.ot-bt.vacio { opacity: .4; }
+.eb-bt .pila { fill: none; stroke: rgba(255,255,255,.75); stroke-width: 2.5; }
+.eb-bt .aguja { stroke: #ffd23f; stroke-width: 3; stroke-linecap: round; }
+.eb-bt .borne { stroke: rgba(255,255,255,.75); stroke-width: 2.5; }
+
+/* presentación antes de la carrera */
+.presenta { position: fixed; left: calc(24px + var(--sa-l)); bottom: calc(11vh + 18px); z-index: 35; display: flex; flex-direction: column; gap: 4px; padding: 14px 20px 14px 18px; background: linear-gradient(90deg, rgba(5,7,12,.9), rgba(5,7,12,.55)); border-left: 5px solid var(--rojo); opacity: 0; transform: translateX(-30px); transition: opacity .5s, transform .5s; pointer-events: none; max-width: min(560px, 86vw); }
+.presenta.visible { opacity: 1; transform: none; }
+.presenta small { font-size: 11px; letter-spacing: 4px; color: var(--rojo); font-weight: 800; }
+.presenta b { font-size: clamp(22px, 4vw, 38px); font-weight: 900; font-style: italic; text-transform: uppercase; line-height: 1.05; }
+.presenta span { font-size: 14px; color: #cfd6e2; letter-spacing: .5px; }
+.presenta em { font-style: normal; font-size: 14px; color: #ffd23f; }
+
+/* momentos */
+.mom { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 8px; background: rgba(255,255,255,.04); border-left: 3px solid var(--rojo); }
+.mom b { display: block; font-size: 15px; font-style: italic; text-transform: uppercase; }
+.mom small { display: block; color: var(--tenue); font-size: 12px; margin-top: 2px; }
+.mom .obj { color: #ffd23f; }
+.mom.hecho { border-left-color: #2fe07a; }

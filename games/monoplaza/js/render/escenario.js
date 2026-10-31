@@ -256,6 +256,7 @@ export function construirEscenario(scene, renderer, c, calidad) {
   // goma sobre la trazada
   const t = c.trazada;
   const goma = new THREE.Mesh(cinta(c, (i) => [[t.off[i] - 1.6, 0.006], [t.off[i] + 1.6, 0.006]], { escalaV: 30 }), matGoma);
+  res.matGoma = matGoma;
   goma.receiveShadow = true;
   scene.add(goma);
 
@@ -458,7 +459,8 @@ export function construirEscenario(scene, renderer, c, calidad) {
   const recta = { valle: 'Recta del Río', veloz: 'Recta del Serraglio', puerto: 'Subida del Casino' }[c.id];
   const rr = recta && c._sDeSegmento(recta);
   if (rr) puente(scene, c, (rr.s0 + rr.s1) / 2, matHormigon);
-  carteles(scene, c);
+  res.ayudaFrenada = carteles(scene, c);
+  Object.assign(res, equipoTV(scene, c));
 
   res.actualizables.push(...publicidad(scene, c, terreno, calidad));
 
@@ -788,37 +790,107 @@ function puente(scene, c, s, matBase) {
   scene.add(g);
 }
 
-// Carteles de distancia antes de las frenadas fuertes
+// Equipo de la retransmisión en la recta principal: una grúa de TV (camión, columna, brazo
+// telescópico con la cámara) junto a la pista y una cámara aérea que corre por un cable entre
+// dos torres. La repetición las usa como planos y se mueven siguiendo al coche.
+function equipoTV(scene, c) {
+  const metal = new THREE.MeshStandardMaterial({ color: 0x3a3f47, metalness: 0.7, roughness: 0.4 });
+  const negro = new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.6 });
+  const amarillo = new THREE.MeshStandardMaterial({ color: 0xf5c518, roughness: 0.5 });
+  // largo de la recta de meta (hasta la primera curva marcada)
+  let fin = 60;
+  while (fin < Math.min(900, c.largo * 0.4) && Math.abs(c.curvSuave[Math.floor(fin / c.paso) % c.n]) < 0.004) fin += 10;
+  // grúa: al otro lado de los boxes, a un tercio de la recta
+  const sG = Math.max(60, fin * 0.35), iG = Math.floor(sG / c.paso) % c.n;
+  const dG = -(c.muro[0][iG] + 4);
+  const base = new THREE.Group();
+  const camion = new THREE.Mesh(new THREE.BoxGeometry(5, 1.4, 2.2), amarillo); camion.position.y = 0.9; base.add(camion);
+  const cabina = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.2, 2.2), negro); cabina.position.set(2.6, 1.0, 0); base.add(cabina);
+  const columna = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 3.2, 10), metal); columna.position.y = 3.2; base.add(columna);
+  const giro = new THREE.Group(); giro.position.y = 4.8; base.add(giro);
+  const brazo = new THREE.Group(); giro.add(brazo);
+  const tramo = new THREE.Mesh(new THREE.BoxGeometry(9, 0.3, 0.3), metal); tramo.position.x = 3.5; brazo.add(tramo);
+  const contrapeso = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.7, 0.7), negro); contrapeso.position.x = -1.6; brazo.add(contrapeso);
+  const cabeza = new THREE.Group(); cabeza.position.x = 8; brazo.add(cabeza);
+  const cuerpoCam = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.35, 0.3), negro); cuerpoCam.position.y = -0.35; cabeza.add(cuerpoCam);
+  const lente = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.3, 10).rotateZ(Math.PI / 2), metal); lente.position.set(0.35, -0.35, 0); cabeza.add(lente);
+  colocarEnPista(c, base, sG, dG, 0);
+  base.position.y = c.y[iG] + c.caida(iG, dG);
+  scene.add(base);
+  // cámara aérea: torres al principio y al final de la recta, en el lado contrario a boxes
+  const torres = [];
+  for (const sT of [Math.max(20, fin * 0.08), fin * 0.92]) {
+    const i = Math.floor(sT / c.paso) % c.n, d = -(c.muro[0][i] + 6);
+    const t = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.45, 24, 8), metal);
+    const m = c.muestra(sT);
+    t.position.set(m.x - m.tz * d, c.y[i] + 12, m.z + m.tx * d); scene.add(t);
+    // el cable cuelga sobre el centro de la pista
+    torres.push(new THREE.Vector3(m.x, c.y[i] + 19, m.z));
+    const brazoT = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, Math.abs(d)), metal);
+    brazoT.position.set(m.x - m.tz * d / 2, c.y[i] + 23.5, m.z + m.tx * d / 2); brazoT.rotation.y = -Math.atan2(m.tz, m.tx) + Math.PI / 2; scene.add(brazoT);
+  }
+  const cableG = new THREE.BufferGeometry().setFromPoints([torres[0].clone().setY(torres[0].y + 4.5), torres[1].clone().setY(torres[1].y + 4.5)]);
+  scene.add(new THREE.Line(cableG, new THREE.LineBasicMaterial({ color: 0x222222 })));
+  const dolly = new THREE.Group();
+  const caja = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.5, 0.8), negro); dolly.add(caja);
+  const bola = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 8), metal); bola.position.y = -0.45; dolly.add(bola);
+  for (const sg of [-1, 1]) { const h = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 4.5, 3), negro); h.position.set(sg * 0.3, 2.3, 0); dolly.add(h); }
+  dolly.position.copy(torres[0]); scene.add(dolly);
+  return { gruaTV: { base, giro, brazo, cabeza, pos: base.position.clone() }, cablecam: { a: torres[0], b: torres[1], dolly } };
+}
+
+// Carteles de distancia antes de las frenadas fuertes (300, 200, 100, 50 y 25 m hasta la
+// entrada de la curva) y, como ayuda opcional, franjas en el asfalto: amarilla «prepárate» y
+// roja donde empieza la frenada de la trazada ideal. Devuelve el grupo de la ayuda.
 function carteles(scene, c) {
-  const geo = new THREE.PlaneGeometry(1.2, 0.6);
-  const mats = { 100: null, 200: null, 300: null };
-  for (const k of [100, 200, 300]) mats[k] = new THREE.MeshStandardMaterial({ map: TX.texturaCartel(String(k)), roughness: 0.5, side: THREE.DoubleSide });
+  const geo = new THREE.PlaneGeometry(1.2, 0.6), geoP = new THREE.PlaneGeometry(0.9, 0.45);
+  const DIST = [300, 200, 100, 50, 25];
+  const mats = {};
+  for (const k of DIST) mats[k] = new THREE.MeshStandardMaterial({ map: TX.texturaCartel(String(k)), roughness: 0.5, side: THREE.DoubleSide });
   const poste = new THREE.CylinderGeometry(0.05, 0.05, 1.2, 6);
   const matPoste = new THREE.MeshStandardMaterial({ color: 0x777777, metalness: 0.5, roughness: 0.4 });
+  const ayuda = new THREE.Group(); ayuda.visible = false;
+  const matRoja = new THREE.MeshBasicMaterial({ color: 0xff2020, transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+  const matAmarilla = matRoja.clone(); matAmarilla.color.set(0xffd21f); matAmarilla.opacity = 0.42;
   const perfil = c.perfil;
   for (let i = 0; i < c.n; i++) {
     // inicio de frenada: la velocidad empieza a caer bruscamente
     const a = perfil[(i - 1 + c.n) % c.n], b = perfil[i], fin = perfil[(i + 60) % c.n];
     if (!(a >= b && perfil[(i - 2 + c.n) % c.n] < a + 0.01 && a - fin > 25)) continue;
     if (perfil[(i - 3 + c.n) % c.n] > a + 0.05) continue;
+    // entrada de la curva: donde la velocidad de la trazada llega a su mínimo
+    let iMin = i, vMin = Infinity;
+    for (let j = 0; j < 140; j++) { const v = perfil[(i + j) % c.n]; if (v < vMin) { vMin = v; iMin = i + j; } if (v > vMin + 3) break; }
     // la curva va a la derecha o izquierda: carteles en el exterior
     let curvSum = 0;
     for (let j = 0; j < 80; j++) curvSum += c.curv[(i + j) % c.n];
     const lado = curvSum > 0 ? -1 : 1;
-    const sFrenada = i * c.paso;
-    for (const dist of [300, 200, 100]) {
-      const s = sFrenada + 100 - dist;
+    const sFrenada = i * c.paso, sCurva = iMin * c.paso;
+    for (const dist of DIST) {
+      const s = sCurva - dist;
+      if (dist > 100 && s > sFrenada - 10) continue;          // los lejanos solo si la frenada es larga
       const k = Math.floor(c.envolver(s) / c.paso) % c.n;
       const d = lado * (c.semiAncho[k] + 3.6);
       const g = new THREE.Group();
-      const p = new THREE.Mesh(geo, mats[dist]); p.position.y = 1.3; g.add(p);
+      const chico = dist <= 50;
+      const p = new THREE.Mesh(chico ? geoP : geo, mats[dist]); p.position.y = chico ? 1.1 : 1.3; g.add(p);
       const pp = new THREE.Mesh(poste, matPoste); pp.position.y = 0.6; g.add(pp);
       colocarEnPista(c, g, s, d, Math.PI / 2);
       g.traverse(o => { if (o.isMesh) o.castShadow = true; });
       scene.add(g);
     }
+    // ayuda de frenada en el suelo (franjas de lado a lado de la pista)
+    for (const [ds, mat, largo] of [[-30, matAmarilla, 2.2], [0, matRoja, 3.2]]) {
+      const s = sFrenada + ds, k = Math.floor(c.envolver(s) / c.paso) % c.n, m = c.muestra(s);
+      const f = new THREE.Mesh(new THREE.PlaneGeometry(largo, c.semiAncho[k] * 2), mat);
+      f.rotation.set(-Math.PI / 2, 0, -Math.atan2(m.tz, m.tx));
+      f.position.set(m.x, m.y + 0.03, m.z);
+      ayuda.add(f);
+    }
     i += 60;
   }
+  scene.add(ayuda);
+  return ayuda;
 }
 
 function arboles(scene, c, terreno, calidad, distMin = 48) {

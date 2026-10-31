@@ -9,6 +9,9 @@ import { Neumatico, fuerzasNeumatico, muCarga } from './neumatico.js';
 // altura del centro de giro del coche cuando vuela o vuelca (el modelo gira alrededor de él)
 export const PIVOTE_VUELO = 0.45;
 // mezcla de combustible (desde el volante): potencia, consumo y desgaste del motor
+// freno motor por posición del mando (bajo, medio, alto) y cupo de Overtake por vuelta (J)
+export const FRENO_MOTOR = [0.55, 1, 1.45];
+export const OT_VUELTA = 1.0e6;
 export const MEZCLA_POT = [0.955, 1, 1.025], MEZCLA_GASTO = [0.82, 1, 1.15], MEZCLA_MOTOR = [0.8, 1, 1.35];
 export const MEZCLA_NOMBRES = ['AHORRO', 'NORMAL', 'RICA'];
 
@@ -77,7 +80,7 @@ export class Monoplaza {
     this.combustible = opciones.combustible ?? 40;
     this.tAmb = opciones.tAmbiente ?? 26;
     this.reiniciarEstado();
-    this.mandos = { direccion: 0, acelerador: 0, freno: 0, drs: false, ersModo: 1, mezcla: 1, bb: 0 };   // mezcla: 0 ahorro, 1 normal, 2 rica
+    this.mandos = { direccion: 0, acelerador: 0, freno: 0, drs: false, ersModo: 1, mezcla: 1, bb: 0, fm: 1, overtake: false };   // mezcla: 0 ahorro, 1 normal, 2 rica
     this.rebufo = 0;
     this.aireSucio = 0;
     this.drsPermitido = false;
@@ -243,6 +246,7 @@ export class Monoplaza {
     this.cambioT = 0; this.cambioDestino = 1;
     this.ers = COCHE.ersCapacidad * 0.75;
     this.ersDesplegado = 0; this.ersRecuperado = 0; this.ersPotenciaActual = 0;
+    this.otEnergia = OT_VUELTA; this.turbo = 0; this.tMotor = 85;
     this.drsAbierto = false;
     this.tc = 1;
     this.alturaDel = 0.03; this.alturaTras = 0.07;
@@ -440,9 +444,19 @@ export class Monoplaza {
       if (cambiando && relacion !== 0) this.rpm = Math.max(COCHE.rpmRalenti, rpmRuedas);
     }
     this.limitador = false;
+    // turbo: la presión llega con retraso al pisar (más a pocas vueltas) y se va enseguida al soltar
+    const tauTurbo = acel > this.turbo ? 0.12 + 0.38 * clamp(1 - this.rpm / 11000, 0, 1) : 0.05;
+    this.turbo += (acel - this.turbo) * Math.min(1, dt / tauTurbo);
+    // temperatura del motor: sube con la carga y baja con el aire; en el rebufo y el aire sucio
+    // de otro coche entra aire caliente y poco caudal, y se recalienta
+    const calorM = 4000 * acel * (this.rpm / COCHE.rpmLimite) * (MEZCLA_MOTOR[mand.mezcla ?? 1] ?? 1) + 300;
+    const enfrM = (8 + 0.55 * v) * this.ef.refrigeracion * (1 - 0.45 * this.aireSucio - 0.15 * this.rebufo);
+    this.tMotor += (calorM - enfrM * (this.tMotor - this.tAmb)) / 1500 * dt;
+    const sobrecal = clamp((this.tMotor - 120) / 20, 0, 1);       // por encima de 120 °C pierde potencia
     if (relacion !== 0 && !cambiando && (embragado || acel > 0.02)) {
-      const pT = parMotor(this.rpm) * this.ef.potencia * (1 - 0.35 * (this.dano.motor || 0)) * MEZCLA_POT[mand.mezcla ?? 1];
-      const fm = COCHE.frenoMotor[0] + COCHE.frenoMotor[1] * this.rpm;
+      const pT = parMotor(this.rpm) * this.ef.potencia * (1 - 0.35 * (this.dano.motor || 0)) * MEZCLA_POT[mand.mezcla ?? 1] * (0.8 + 0.2 * Math.min(1, this.turbo / Math.max(0.05, acel))) * (1 - 0.15 * sobrecal);
+      // freno motor ajustable desde el volante (bajo, medio, alto)
+      const fm = (COCHE.frenoMotor[0] + COCHE.frenoMotor[1] * this.rpm) * FRENO_MOTOR[mand.fm ?? 1];
       parCig = pT * acel - fm * (1 - acel) * (embragado ? 1 : 0);
       if (this.rpm > COCHE.rpmLimite) { parCig = Math.min(parCig, -fm); this.limitador = true; }
     }
@@ -454,12 +468,19 @@ export class Monoplaza {
     const reserva = modo === 2 ? 0 : COCHE.ersCapacidad * 0.2;
     // ERS averiado (sobrecalentado): no despliega hasta que se enfría
     if (this.ersAveriado > 0) this.ersAveriado -= dt;
-    if (!(this.ersAveriado > 0) && acel > 0.9 && this.marcha >= 2 && embragado && this.ers > reserva && this.ersDesplegado < COCHE.ersDespliegueVuelta && modo > 0) {
-      const pot = COCHE.ersPotencia * this.ef.ers * (modo === 2 ? 1 : 0.5);
-      const par = Math.min(COCHE.ersParMax, pot / wCig);
+    // Overtake: toda la batería disponible, por encima del límite de la vuelta, con su propio cupo
+    const ot = !!mand.overtake && this.otEnergia > 0 && this.ers > 0;
+    if (mand.overtake && !ot) mand.overtake = false;
+    if (!(this.ersAveriado > 0) && acel > 0.9 && this.marcha >= 2 && embragado && (ot || (this.ers > reserva && this.ersDesplegado < COCHE.ersDespliegueVuelta && modo > 0))) {
+      // despliegue según la recta: a fondo en las rectas rápidas y poco en los tramos lentos
+      // (en el modo normal; en ataque y Overtake se usa todo)
+      const recta = this.c?.perfil ? clamp((this.c.perfil[this.proj.i] - 45) / 30, 0.3, 1) : 1;
+      const pot = COCHE.ersPotencia * this.ef.ers * (ot ? 1.15 : modo === 2 ? 1 : 0.5 * recta);
+      const par = Math.min(COCHE.ersParMax * (ot ? 1.15 : 1), pot / wCig);
       parCig += par;
       const e = par * wCig * dt;
-      this.ers -= e; this.ersDesplegado += e; this.ersPotenciaActual = par * wCig;
+      this.ers -= e; this.ersPotenciaActual = par * wCig;
+      if (ot) this.otEnergia -= e; else this.ersDesplegado += e;
     }
     let parRecuperacion = 0;
     if (freno > 0.05 && this.vx > 8 && this.ers < COCHE.ersCapacidad && this.ersRecuperado < COCHE.ersRecuperacionVuelta * this.ef.recuperacion) {
@@ -944,7 +965,7 @@ export class Monoplaza {
     if (this.impacto > 2) this.eventos.push('golpe:' + this.impacto.toFixed(1));
   }
 
-  nuevaVuelta() { this.ersDesplegado = 0; this.ersRecuperado = 0; }
+  nuevaVuelta() { this.ersDesplegado = 0; this.ersRecuperado = 0; this.otEnergia = OT_VUELTA; }
 
   // Recoloca el coche en la pista (tras un accidente)
   recolocar() {

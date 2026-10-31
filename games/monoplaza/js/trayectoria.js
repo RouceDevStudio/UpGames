@@ -69,8 +69,23 @@ const PREGUNTAS = [
   { q: 'Se rumorea interés de otros equipos, ¿estás contento aquí?', r: [['Mi futuro está aquí', 2, 'El equipo agradece tu compromiso'], ['Escucharé todas las ofertas', 1, 'Los jefes de equipo toman nota'], ['Solo pienso en la próxima carrera', 0, '']] },
 ];
 
+/** Órdenes de equipo: obedecer sube la confianza del equipo; desobedecer la baja (y a la prensa le encanta). */
+export function ordenEquipo(t, obedece, compa) {
+  t.relacion = Math.max(0, Math.min(100, (t.relacion ?? 60) + (obedece ? 4 : -8)));
+  if (!obedece) t.reputacion = Math.min(100, t.reputacion + 1);
+  t.noticias.unshift({ t: obedece ? `🤝 ${t.nombre} cumple la orden de equipo y deja pasar a ${compa}` : `😠 ${t.nombre} ignora la orden de equipo: tensión en el muro con ${compa}`, tipo: 'equipo' });
+}
+
+/** Precontrato con otro equipo durante la temporada: se hace efectivo al terminarla. */
+export function firmarPrecontrato(t) {
+  if (!t.tanteo) return;
+  t.precontrato = t.tanteo; t.tanteo = null;
+  t.relacion = Math.max(0, (t.relacion ?? 60) - 10);
+  t.noticias.unshift({ t: `🖊️ Bombazo: ${t.nombre} firma un precontrato con ${EQUIPOS[t.precontrato.equipo].nombre} para la próxima temporada`, tipo: 'fichaje' });
+}
+
 /** Tras cada GP: reputación, puntos de desarrollo, créditos, titulares y una pregunta de la prensa. */
-export function trasCarrera(t, { pos, abandono, rivalPos, puntos, gp, nPilotos }) {
+export function trasCarrera(t, { pos, abandono, rivalPos, puntos, gp, nPilotos, vecino = null }) {
   const t0 = t.reputacion;
   const rel = abandono ? 0 : Math.max(0, 1 - (pos - 1) / Math.max(1, nPilotos - 1));
   t.reputacion = Math.max(0, Math.min(100, t.reputacion + (abandono ? -2 : Math.round(rel * 6 - 2 + (pos <= 3 ? 3 : 0)))));
@@ -83,6 +98,20 @@ export function trasCarrera(t, { pos, abandono, rivalPos, puntos, gp, nPilotos }
   else if (pos <= 10) tit.push(`${t.nombre} suma puntos en ${gp} (P${pos})`);
   else tit.push(`${t.nombre} se queda sin puntos en ${gp} (P${pos})`);
   if (rivalPos != null && !abandono) tit.push(pos < rivalPos ? `⚔️ ${t.nombre} vuelve a batir a ${t.rival.nombre} en el duelo interno` : `⚔️ ${t.rival.nombre} se impone a ${t.nombre} en el duelo del ${eq}`);
+  // rivalidad con un piloto de otro equipo: el que más veces termina pegado a ti
+  if (vecino && !abandono) {
+    const rv = t.rivalidad;
+    if (rv && rv.id === vecino.id) { rv.duelos++; if (vecino.detras) rv.ganados++; }
+    else if (!rv || (t.historial.length % 3 === 0)) t.rivalidad = { id: vecino.id, nombre: vecino.nombre, duelos: 1, ganados: vecino.detras ? 1 : 0 };
+    const r2 = t.rivalidad;
+    if (r2.duelos >= 3 && r2.duelos % 2 === 1) tit.push(`🔥 La rivalidad del año: ${t.nombre} ${r2.ganados}–${r2.duelos - r2.ganados} ${r2.nombre}`);
+  }
+  // equipos más fuertes tantean al piloto cuando rinde por encima de su coche
+  const rnd = azar(t.historial.length * 131 + t.temporadaNum);
+  if (!t.tanteo && !t.precontrato && !abandono && pos <= 5 && rnd() < 0.4) {
+    const of = generarOfertas(t, t.historial.length * 53).find(o => FUERZA[o.equipo] > FUERZA[t.equipo]);
+    if (of) { t.tanteo = of; tit.push(`🕵️ ${EQUIPOS[of.equipo].nombre} tantea a ${t.nombre} para la próxima temporada`); }
+  }
   for (const x of tit) t.noticias.unshift({ t: x, tipo: 'carrera' });
   t.noticias = t.noticias.slice(0, 30);
   t.historial.push({ temporada: t.temporadaNum, gp, pos: abandono ? null : pos, rivalPos });
@@ -106,6 +135,13 @@ export function finTemporada(t, posMundial) {
   t.noticias.unshift({ t: ok ? `✅ Objetivo cumplido: P${posMundial} en el Mundial` : `❌ Objetivo no cumplido (P${posMundial}): el equipo esperaba más`, tipo: 'temporada' });
   if (t.contrato) t.contrato.anios--;
   t.temporadaNum++;
+  // el precontrato firmado durante la temporada se cumple (rompiendo el contrato si hace falta)
+  if (t.precontrato) {
+    const pc = t.precontrato; t.precontrato = null; t.tanteo = null; t.temp = null;
+    firmar(t, pc); t.relacion = 60;
+    return ok;
+  }
+  t.tanteo = null;
   t.temp = null;
   // ofertas: si el contrato sigue y se cumplió el objetivo, el equipo también renueva
   t.ofertas = generarOfertas(t, t.temporadaNum * 977);

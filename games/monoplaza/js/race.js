@@ -370,6 +370,7 @@ export class Sesion {
         if (car.velocidad < 8) p.ia.conducir(dt, coches);
         else if ((n + car.id) % 3 === 0) p.ia.conducir(dt * 3, coches);
         if (p.terminado) { car.mandos.acelerador *= 0.5; car.mandos.drs = false; }
+        if (p.cedeHasta > this.tiempo) { car.mandos.acelerador *= 0.72; car.mandos.drs = false; }    // orden de equipo
       }
       // coche de seguridad virtual: todos limitados a un ritmo lento (~35 % más lento) sin DRS
       // tras la bandera a cuadros: vuelta de enfriamiento a ritmo de paseo

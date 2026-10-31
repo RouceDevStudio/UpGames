@@ -54,7 +54,10 @@ export const cuenta = {
   fichaCrono: (circuito) => api('/apexgp/contrarreloj/sesion', { method: 'POST', body: { circuito } }),
   enviarTiempo: (d) => api('/apexgp/contrarreloj/tiempo', { method: 'POST', body: d }),
   ranking: (circuito, periodo) => api(`/apexgp/contrarreloj/ranking?circuito=${encodeURIComponent(circuito)}&periodo=${periodo}`),
-  fantasmaRecord: (circuito, periodo) => api(`/apexgp/contrarreloj/fantasma?circuito=${encodeURIComponent(circuito)}&periodo=${periodo}`),
+  fantasmaRecord: (circuito, periodo, usuario = '') => api(`/apexgp/contrarreloj/fantasma?circuito=${encodeURIComponent(circuito)}&periodo=${periodo}${usuario ? `&usuario=${encodeURIComponent(usuario)}` : ''}`),
+  // retos por enlace (tu vuelta con su fantasma)
+  crearReto: (d) => api('/apexgp/reto', { method: 'POST', body: d }),
+  reto: (id) => api(`/apexgp/reto/${encodeURIComponent(id)}`),
   rankingElo: () => api('/apexgp/ranking/elo'),
   rankingMundial: (periodo) => api(`/apexgp/campeonato/ranking?periodo=${periodo}`),
   // partida guardada en la nube (progreso, campeonato, carrera, escuela, circuitos)

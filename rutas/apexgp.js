@@ -18,7 +18,8 @@
  *   POST /apexgp/contrarreloj/sesion   { circuito } → ficha
  *   POST /apexgp/contrarreloj/tiempo   { ficha, tiempo, fantasma }
  *   GET  /apexgp/contrarreloj/ranking  ?circuito=&periodo=semana|global
- *   GET  /apexgp/contrarreloj/fantasma ?circuito=&periodo=semana|global
+ *   GET  /apexgp/contrarreloj/fantasma ?circuito=&periodo=semana|global[&usuario=amigo]
+ *   POST /apexgp/reto { circuito, tiempo, fantasma } → { id }   ·   GET /apexgp/reto/:id
  *
  *   GET  /apexgp/ranking/elo           mejores pilotos online por ELO
  *
@@ -66,6 +67,16 @@ const TiempoSchema = new mongoose.Schema({
 TiempoSchema.index({ usuario: 1, circuito: 1, semana: 1 }, { unique: true });
 TiempoSchema.index({ circuito: 1, semana: 1, tiempo: 1 });
 
+// Reto directo por enlace: la vuelta (con su fantasma) que un piloto comparte con sus amigos
+const RetoSchema = new mongoose.Schema({
+    id:       { type: String, required: true, unique: true },
+    usuario:  { type: String, required: true },
+    circuito: { type: String, required: true },
+    tiempo:   { type: Number, required: true },
+    fantasma: { type: String, default: '' },
+    creado:   { type: Date, default: Date.now, expires: 60 * 60 * 24 * 90 },   // caduca a los 90 días
+}, { collection: 'apexgp_retos' });
+
 // Puntos del campeonato mundial por piloto y semana ('global' = de siempre)
 const MundialSchema = new mongoose.Schema({
     usuario:   { type: String, required: true },
@@ -97,6 +108,7 @@ function registrar(app, deps) {
     const Mundial = mongoose.models.ApexMundial || mongoose.model('ApexMundial', MundialSchema);
     const Resultado = mongoose.models.ApexResultado || mongoose.model('ApexResultado', ResultadoSchema);
     const Guardado = mongoose.models.ApexGuardado || mongoose.model('ApexGuardado', GuardadoSchema);
+    const Reto = mongoose.models.ApexReto || mongoose.model('ApexReto', RetoSchema);
     const SECRETO = `${JWT_SECRET || 'apexgp-dev'}:apexgp-fichas`;
     const firmar = d => jwt.sign({ ...d, jti: crypto.randomBytes(12).toString('hex') }, SECRETO, { expiresIn: '6h' });
     const leerFicha = (f, u, tipo) => { try { const d = jwt.verify(String(f || ''), SECRETO); return d.u === u && d.tipo === tipo ? d : null; } catch (_) { return null; } };
@@ -303,13 +315,40 @@ function registrar(app, deps) {
         } catch (e) { logger.error(`[apexgp] ranking: ${e.message}`); err(res, 500, 'No se pudo cargar el ranking'); }
     });
 
+    // ?usuario= da el fantasma de ese piloto (tus amigos); sin él, el del récord
     app.get('/apexgp/contrarreloj/fantasma', async (req, res) => {
         try {
             const circuito = A.circuitoOk(req.query.circuito), semana = periodo(req.query.periodo);
-            const r = await Tiempo.findOne({ circuito, semana }).sort({ tiempo: 1 }).select('usuario tiempo fantasma').lean();
+            const filtro = { circuito, semana };
+            if (req.query.usuario) filtro.usuario = String(req.query.usuario).replace(/^@/, '').slice(0, 40);
+            const r = await Tiempo.findOne(filtro).sort({ tiempo: 1 }).select('usuario tiempo fantasma').lean();
             if (!r || !r.fantasma) return err(res, 404, 'Aún no hay récord en este circuito');
             ok(res, { usuario: r.usuario, tiempo: r.tiempo, fantasma: r.fantasma, hz: A.FANTASMA_HZ });
         } catch (e) { logger.error(`[apexgp] fantasma: ${e.message}`); err(res, 500, 'No se pudo cargar el fantasma'); }
+    });
+
+    // ─── Retos por enlace: comparte tu vuelta y tus amigos corren contra su fantasma ──
+    app.post('/apexgp/reto', verificarToken, async (req, res) => {
+        const u = req.usuario;
+        try {
+            const circuito = A.circuitoOk(req.body?.circuito);
+            const v = A.validarVuelta(circuito, req.body?.tiempo, req.body?.fantasma);
+            if (!v.ok) return err(res, 400, v.error);
+            const hoy = await Reto.countDocuments({ usuario: u, creado: { $gt: new Date(Date.now() - 864e5) } });
+            if (hoy >= 30) return err(res, 429, 'Demasiados retos hoy; prueba mañana');
+            const id = crypto.randomBytes(6).toString('base64url');
+            await Reto.create({ id, usuario: u, circuito, tiempo: v.tiempo, fantasma: req.body.fantasma });
+            ok(res, { id, circuito, tiempo: v.tiempo });
+        } catch (e) { logger.error(`[apexgp] reto: ${e.message}`); err(res, 500, 'No se pudo crear el reto'); }
+    });
+
+    app.get('/apexgp/reto/:id', async (req, res) => {
+        try {
+            const r = await Reto.findOne({ id: String(req.params.id).slice(0, 20) }).select('usuario circuito tiempo fantasma').lean();
+            if (!r) return err(res, 404, 'Ese reto no existe o ha caducado');
+            res.set('Cache-Control', 'public, max-age=300');
+            ok(res, { usuario: r.usuario, circuito: r.circuito, tiempo: r.tiempo, fantasma: r.fantasma, hz: A.FANTASMA_HZ });
+        } catch (e) { logger.error(`[apexgp] reto: ${e.message}`); err(res, 500, 'No se pudo cargar el reto'); }
     });
 
     /** Premia al top 5 de una semana ya cerrada: campeonato mundial y contrarreloj de cada circuito (idempotente). */
