@@ -160,7 +160,7 @@ function rejillaDeMascara(mk, res) {
 // profundidad (opcional): { data: 0..1 (1 = cerca), width, height } del tamaño de la máscara, p. ej.
 // la de la IA. La cara de delante sigue esa profundidad (mezclada con el inflado según
 // pesoProfundidad) y la de atrás es su reflejo.
-export function relieveDesdeMascara(mk, { res = 96, grosor = 0.35, profundidad = null, pesoProfundidad = 0.75 } = {}) {
+export function relieveDesdeMascara(mk, { res = 96, grosor = 0.35, profundidad = null, pesoProfundidad = 0.75, suavizado = 4 } = {}) {
   const r = rejillaDeMascara(mk, res);
   if (!r) return null;
   const { celdas, cw, ch, caja, paso } = r;
@@ -208,7 +208,10 @@ export function relieveDesdeMascara(mk, { res = 96, grosor = 0.35, profundidad =
     if (!dentro(i, j + 1)) canto4(c, d);
     if (!dentro(i + 1, j)) canto4(d, b);
   }
-  return { posiciones: new Float32Array(pos), uvs: new Float32Array(uv), indices: new Uint32Array(idx) };
+  const posiciones = new Float32Array(pos), indices = new Uint32Array(idx);
+  // quita la escalera del contorno y el ruido de la profundidad sin encoger la figura
+  taubin(posiciones, indices, suavizado);
+  return { posiciones, uvs: new Float32Array(uv), indices };
 }
 
 // Profundidad muestreada en las esquinas de la rejilla, suavizada y normalizada a 0..1 dentro
@@ -351,6 +354,39 @@ export function surfaceNets(campo, X, Y, Z, iso = 0.5) {
     quad(c(i - 1, j - 1, k), c(i, j - 1, k), c(i, j, k), c(i - 1, j, k), a);
   }
   return { posiciones: new Float32Array(pos), indices: new Uint32Array(idx) };
+}
+
+// Suavizado de Taubin: un paso que encoge (λ) y otro que infla (μ), así el volumen se mantiene.
+export function taubin(p, idx, pasadas = 4, lambda = 0.5, mu = -0.53) {
+  const n = p.length / 3, vec = vecinos(idx, n), tmp = new Float32Array(p.length);
+  const paso = (f) => {
+    for (let v = 0; v < n; v++) {
+      const a = vec.inicio[v], b = vec.inicio[v + 1];
+      if (a === b) { tmp[v * 3] = p[v * 3]; tmp[v * 3 + 1] = p[v * 3 + 1]; tmp[v * 3 + 2] = p[v * 3 + 2]; continue; }
+      let x = 0, y = 0, z = 0;
+      for (let k = a; k < b; k++) { const u = vec.lista[k] * 3; x += p[u]; y += p[u + 1]; z += p[u + 2]; }
+      const c = 1 / (b - a);
+      tmp[v * 3] = p[v * 3] + f * (x * c - p[v * 3]);
+      tmp[v * 3 + 1] = p[v * 3 + 1] + f * (y * c - p[v * 3 + 1]);
+      tmp[v * 3 + 2] = p[v * 3 + 2] + f * (z * c - p[v * 3 + 2]);
+    }
+    p.set(tmp);
+  };
+  for (let i = 0; i < pasadas; i++) { paso(lambda); paso(mu); }
+}
+
+// Vecinos de cada vértice (sin repetir), en formato CSR.
+function vecinos(idx, n) {
+  const sets = Array.from({ length: n }, () => new Set());
+  for (let t = 0; t < idx.length; t += 3) for (let e = 0; e < 3; e++) {
+    const a = idx[t + e], b = idx[t + (e + 1) % 3];
+    sets[a].add(b); sets[b].add(a);
+  }
+  const inicio = new Int32Array(n + 1);
+  for (let v = 0; v < n; v++) inicio[v + 1] = inicio[v] + sets[v].size;
+  const lista = new Int32Array(inicio[n]);
+  for (let v = 0; v < n; v++) { let k = inicio[v]; for (const u of sets[v]) lista[k++] = u; }
+  return { inicio, lista };
 }
 
 function laplaciano(p, idx) {

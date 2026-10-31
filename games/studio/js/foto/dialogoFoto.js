@@ -180,7 +180,7 @@ function vistaPrevia(cv, f, puntos) {
 }
 
 function desdeUnaFoto(f, grosor, detalle, profundidad) {
-  const r = relieveDesdeMascara(f.mk, { res: detalle * 1.5, grosor, profundidad });
+  const r = relieveDesdeMascara(f.mk, { res: Math.round(detalle * 3.5), grosor, profundidad });
   if (!r) return null;
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(r.posiciones, 3));

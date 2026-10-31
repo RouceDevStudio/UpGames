@@ -1,5 +1,5 @@
 // Caché para usar Studio sin conexión. Cambia VERSION al publicar archivos nuevos.
-const VERSION = 'studio-v2';
+const VERSION = 'studio-v3';
 const ARCHIVOS = [
   './', './index.html', './estilo.css', './manifest.webmanifest', './icono.svg', './icono-512.png',
   './lib/three.module.min.js', './lib/addons/controls/TransformControls.js', './lib/addons/exporters/GLTFExporter.js',
