@@ -11,6 +11,7 @@ import { instalarDialogoFoto } from './foto/dialogoFoto.js';
 import { exportarGLB } from './archivo/glb.js';
 import { ModoEdicion } from './edicion.js';
 import { construirMonoplaza } from './plantillas/monoplaza.js';
+import { construirPiloto } from './plantillas/piloto.js';
 
 const $ = (id) => document.getElementById(id);
 const lienzo = $('lienzo');
@@ -204,15 +205,17 @@ document.querySelectorAll('[data-cerrar]').forEach((b) => b.addEventListener('cl
 $('bAnadir').onclick = () => abrirHoja($('hojaAnadir').hidden ? 'hojaAnadir' : null);
 $('bFoto').onclick = () => { abrirHoja(null); dialogoFoto.abrir(); };
 $('rejillaPrimitivas').innerHTML = PRIMITIVAS.map((p) => `<button data-prim="${p.id}">${p.icono}${p.nombre}</button>`).join('');
-$('bPlantillaF1').onclick = () => {
+function crearPlantilla(construir, nombre, texto) {
   if (edicion.activo) ponerModo('objeto');
-  const piezas = escena.anadirVarios(construirMonoplaza(), 'Plantilla monoplaza');
+  const piezas = escena.anadirVarios(construir(), `Plantilla ${nombre}`);
   $('hojaAnadir').hidden = true;
   escena.seleccionar(null);
   const s = escena.esferaDe(null);
   camOrb.enfocar(s.center, s.radius);
-  aviso(`Monoplaza F1 creado: ${piezas.length} piezas con nombre (ruedas, alerones, halo…). Exporta a GLB para APEX GP.`);
-};
+  aviso(`${texto}: ${piezas.length} piezas con nombre. Exporta a GLB para APEX GP.`);
+}
+$('bPlantillaF1').onclick = () => crearPlantilla(construirMonoplaza, 'monoplaza', 'Monoplaza F1 creado');
+$('bPlantillaPiloto').onclick = () => crearPlantilla(construirPiloto, 'piloto', 'Piloto creado');
 $('rejillaPrimitivas').addEventListener('click', (e) => {
   const b = e.target.closest('[data-prim]');
   if (!b) return;

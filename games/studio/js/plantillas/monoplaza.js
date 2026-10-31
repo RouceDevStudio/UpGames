@@ -5,11 +5,10 @@
 // 0,72 m. Ejes: x = ancho (x > 0 a la izquierda del piloto), y = alto, z = largo con el morro
 // hacia +z. Las piezas llevan los nombres que entiende APEX GP (rueda_del_izq, aleron_trasero…).
 import * as THREE from 'three';
-import { crearPrimitiva } from '../primitivas.js';
+import { D2R, material, centrar, pieza, caja, esfera, cilindroX, barra, loft } from './forma.js';
 
 const ROJO = 0xd8141f, CARBONO = 0x17191d, BLANCO = 0xf1f2f4, GOMA = 0x101113, LLANTA = 0x2b2e34, ORO = 0xc9a227, CASCO = 0xffd23f;
 
-const D2R = Math.PI / 180;
 const BATALLA = 3.62, EJE_DEL = BATALLA / 2, EJE_TRA = -BATALLA / 2;
 
 export function construirMonoplaza() {
@@ -127,67 +126,6 @@ export function construirMonoplaza() {
   return piezas;
 }
 
-// ---------- herramientas de forma ----------
-
-function material(color, rugosidad = 0.45, metal = 0.1) {
-  return new THREE.MeshStandardMaterial({ color, roughness: rugosidad, metalness: metal });
-}
-
-// Deja el origen del objeto en el centro de su geometría (para girarlo y moverlo desde ahí).
-function centrar(m) {
-  m.geometry.computeBoundingBox();
-  const c = m.geometry.boundingBox.getCenter(new THREE.Vector3());
-  m.geometry.translate(-c.x, -c.y, -c.z);
-  m.position.copy(c);
-  m.geometry.computeBoundingSphere();
-  return m;
-}
-
-function pieza(tipo, nombre, color, opciones) {
-  const m = crearPrimitiva(tipo, opciones);
-  m.name = nombre;
-  m.material = material(color);
-  m.userData.tipo = tipo;
-  m.userData.plantilla = 'monoplaza';
-  return m;
-}
-
-// Caja centrada en pos, de tamaño tam, girada rot (grados) en x, y, z. En x > 0 el borde de
-// delante (+z) baja: los alerones de un F1 llevan el borde de salida más alto.
-function caja(nombre, tam, pos, rot, color) {
-  const m = centrar(pieza('cubo', nombre, color));
-  m.position.set(...pos);
-  m.scale.set(...tam);
-  m.rotation.set(rot[0] * D2R, rot[1] * D2R, rot[2] * D2R);
-  return m;
-}
-
-function esfera(nombre, r, pos, color) {
-  const m = centrar(pieza('esfera', nombre, color));
-  m.position.set(...pos);
-  m.scale.setScalar(r * 2);
-  return m;
-}
-
-// Cilindro con el eje en x (llantas, tuercas).
-function cilindroX(nombre, pos, r, largo, color) {
-  const m = centrar(pieza('cilindro', nombre, color));
-  m.position.set(...pos);
-  m.scale.set(r * 2, largo, r * 2);
-  m.rotation.z = Math.PI / 2;
-  return m;
-}
-
-// Barra (cilindro fino) de p1 a p2: girada para apuntar de un punto al otro.
-function barra(nombre, p1, p2, r, color) {
-  const m = centrar(pieza('cilindro', nombre, color, { radiales: 10 }));
-  const a = new THREE.Vector3(...p1), b = new THREE.Vector3(...p2), d = b.clone().sub(a);
-  m.position.copy(a).add(b).multiplyScalar(0.5);
-  m.scale.set(r * 2, d.length(), r * 2);
-  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize());
-  return m;
-}
-
 // Neumático: cilindro de 40 lados con los cantos redondeados editando sus vértices (los de los
 // bordes se recogen hacia dentro, como el hombro de un neumático de carreras).
 function rueda(nombre, pos, r, ancho) {
@@ -208,39 +146,6 @@ function rueda(nombre, pos, r, ancho) {
   m.scale.set(r * 2, ancho, r * 2);
   m.rotation.z = Math.PI / 2;
   return m;
-}
-
-// Loft: un cilindro con un segmento por sección, deformado para que cada anillo sea la sección
-// dada (superelipse de exponente n: 2 = elipse, más alto = más cuadrada). Entre secciones se
-// interpola con Catmull-Rom para que la superficie quede curva y suave.
-function loft(nombre, color, secciones, n = 2.5, sub = 4) {
-  const S = suavizar(secciones, sub);
-  const m = pieza('cilindro', nombre, color, { radiales: 40, segmentos: S.length - 1 });
-  const p = m.geometry.attributes.position, filas = S.length - 1;
-  for (let i = 0; i < p.count; i++) {
-    const y = p.getY(i), x = p.getX(i) * 2, z = p.getZ(i) * 2; // x, z en el círculo unidad
-    const fila = Math.round(y * filas);
-    const [sz, cx, cy, rx, ry] = S[filas - fila];          // y = 0 es la última sección (la de atrás)
-    const r = Math.hypot(x, z);
-    const ux = r > 1e-6 ? Math.sign(x) * Math.abs(x) ** (2 / n) : 0;
-    const uz = r > 1e-6 ? Math.sign(z) * Math.abs(z) ** (2 / n) : 0;
-    p.setXYZ(i, cx + rx * ux, cy - ry * uz, sz); // (x, y, z) → (x, −z, y): giro, no espejo
-  }
-  m.geometry.computeVertexNormals();
-  return centrar(m);
-}
-
-function suavizar(sec, sub) {
-  const out = [];
-  for (let i = 0; i < sec.length - 1; i++) {
-    const p0 = sec[Math.max(0, i - 1)], p1 = sec[i], p2 = sec[i + 1], p3 = sec[Math.min(sec.length - 1, i + 2)];
-    for (let k = 0; k < sub; k++) {
-      const t = k / sub, t2 = t * t, t3 = t2 * t;
-      out.push(p1.map((_, j) => 0.5 * ((2 * p1[j]) + (-p0[j] + p2[j]) * t + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * t2 + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * t3)));
-    }
-  }
-  out.push(sec[sec.length - 1].slice());
-  return out;
 }
 
 // Halo: toro cuyo tubo se adelgaza editando los vértices (cada uno se acerca al centro de su
