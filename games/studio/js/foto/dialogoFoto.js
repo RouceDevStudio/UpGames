@@ -1,6 +1,7 @@
 // Hoja «Desde foto»: elegir 1 o 2 fotos, ver el recorte y crear el modelo.
 import * as THREE from 'three';
-import { mascaraDesdeImagen, relieveDesdeMascara, cascoVisual, sangrar } from './fotoA3D.js';
+import { mascaraDesdeImagen, limpiarMascara, relieveDesdeMascara, cascoVisual, sangrar } from './fotoA3D.js';
+import * as ia from './ia.js';
 
 const LADO_MAX = 480; // las fotos se analizan reducidas a este lado máximo
 const ALTO_MODELO = 2; // unidades de la escena
@@ -8,12 +9,24 @@ const ALTO_MODELO = 2; // unidades de la escena
 export function instalarDialogoFoto({ alCrear, aviso }) {
   const hoja = document.getElementById('hojaFoto');
   const ranuras = [...hoja.querySelectorAll('.ranura')];
-  const fotos = [null, null]; // { img: ImageData, mk, color }
-  let n = 1;
+  // { img: ImageData, mk, color, puntos: [{x, y, dentro}], recortar: fn | null, prof }
+  const fotos = [null, null];
+  let n = 1, quitar = false;
   const $ = (id) => document.getElementById(id);
   const tol = $('fTol'), grosor = $('fGrosor'), detalle = $('fDetalle'), invertir = $('fInvertir'), bCrear = $('bCrearFoto');
+  const usaIA = () => $('fIA').checked;
+  const estado = (t) => { $('fotoEstado').textContent = t || ''; };
 
   const actualizarBoton = () => { bCrear.disabled = !fotos.slice(0, n).every((f) => f && f.mk && f.mk.area > 50); };
+  const ayuda = () => {
+    const ia = usaIA();
+    $('fotoAyuda').textContent = n === 1
+      ? (ia ? 'Toca el objeto en la foto: la IA lo separa del fondo (aunque no sea liso) y calcula su profundidad para darle relieve real. La foto queda como textura.'
+            : 'Foto del objeto sobre un fondo liso (pared, mesa, papel). La silueta se recorta por color y se infla en 3D con la foto como textura.')
+      : 'Dos fotos del mismo objeto: una de frente y otra de lado (girando el objeto 90°), a la misma distancia. Toca el objeto en cada una. Se talla el volumen que encaja con las dos siluetas y se colorea con las fotos.';
+    $('filaTol').hidden = ia;
+    $('filaZona').hidden = !ia;
+  };
 
   hoja.querySelectorAll('#fotoModo button').forEach((b) => b.addEventListener('click', () => {
     n = +b.dataset.n;
@@ -22,24 +35,46 @@ export function instalarDialogoFoto({ alCrear, aviso }) {
     $('filaGrosor').hidden = n === 2;
     $('filaInvertir').hidden = n === 1;
     ranuras[0].querySelector('.etq').textContent = n === 1 ? 'Foto' : 'Frente';
-    $('fotoAyuda').textContent = n === 1
-      ? 'Foto del objeto sobre un fondo liso (pared, mesa, papel). La silueta se recorta sola y se infla en 3D con la foto como textura.'
-      : 'Dos fotos del mismo objeto sobre fondo liso: una de frente y otra de lado (girando el objeto 90°), a la misma distancia. Se talla el volumen que encaja con las dos siluetas y se colorea con las fotos.';
+    ayuda();
     actualizarBoton();
   }));
+  $('fIA').addEventListener('change', () => { ayuda(); fotos.forEach((f, i) => f && analizar(i)); });
+  hoja.querySelectorAll('#filaZona [data-zona]').forEach((b) => b.addEventListener('click', () => {
+    if (b.dataset.zona === 'reiniciar') { fotos.forEach((f, i) => { if (f) { f.puntos = [{ x: 0.5, y: 0.5, dentro: true }]; analizar(i); } }); return; }
+    quitar = b.dataset.zona === 'quitar';
+    hoja.querySelectorAll('#filaZona [data-zona]').forEach((q) => q.classList.toggle('activo', q === b));
+  }));
+  ayuda();
 
-  ranuras.forEach((r, i) => r.querySelectorAll('input[type=file]').forEach((inp) => inp.addEventListener('change', async () => {
-    const archivo = inp.files[0];
-    inp.value = '';
-    if (!archivo) return;
-    try {
-      fotos[i] = await cargar(archivo);
+  ranuras.forEach((r, i) => {
+    r.querySelectorAll('input[type=file]').forEach((inp) => inp.addEventListener('change', async () => {
+      const archivo = inp.files[0];
+      inp.value = '';
+      if (!archivo) return;
+      try {
+        fotos[i] = await cargar(archivo);
+        analizar(i);
+      } catch (e) {
+        aviso('No se pudo abrir la foto');
+        console.error(e);
+      }
+    }));
+    // tocar la vista previa marca el objeto (o una zona que no es del objeto)
+    r.querySelector('canvas').addEventListener('click', (e) => {
+      const f = fotos[i];
+      if (!f || !usaIA()) return;
+      const c = e.currentTarget.getBoundingClientRect();
+      // la imagen se dibuja con object-fit: contain
+      const k = Math.min(c.width / f.img.width, c.height / f.img.height);
+      const x = (e.clientX - c.left - (c.width - f.img.width * k) / 2) / (f.img.width * k);
+      const y = (e.clientY - c.top - (c.height - f.img.height * k) / 2) / (f.img.height * k);
+      if (x < 0 || y < 0 || x > 1 || y > 1) return;
+      const p = { x, y, dentro: !quitar };
+      f.puntos = f.tocado ? [...f.puntos, p] : [p];
+      f.tocado = true;
       analizar(i);
-    } catch (e) {
-      aviso('No se pudo abrir la foto');
-      console.error(e);
-    }
-  })));
+    });
+  });
 
   for (const [inp, out] of [[tol, 'oTol'], [grosor, 'oGrosor'], [detalle, 'oDetalle']]) {
     inp.addEventListener('input', () => {
@@ -48,32 +83,60 @@ export function instalarDialogoFoto({ alCrear, aviso }) {
     });
   }
 
-  function analizar(i) {
+  async function analizar(i) {
     const f = fotos[i];
     if (!f) return;
-    f.mk = mascaraDesdeImagen(f.img, { tolerancia: tol.value / 100 });
+    const turno = (f.turno = (f.turno || 0) + 1);
     f.color = null; // se recalcula al crear
-    vistaPrevia(ranuras[i].querySelector('canvas'), f);
+    const lienzo = ranuras[i].querySelector('canvas');
+    if (usaIA()) {
+      try {
+        bCrear.disabled = true;
+        if (!f.recortar) {
+          vistaPrevia(lienzo, f, null);
+          f.recortar = await ia.prepararRecorte(f.img, estado);
+        }
+        estado('Recortando…');
+        const m = await f.recortar(f.puntos);
+        if (turno !== f.turno) return; // llegó otro toque mientras tanto
+        f.mk = limpiarMascara(m);
+        estado(f.tocado ? 'Toca más zonas para añadir, o «Quitar zona» para restar.' : 'Si el recorte no es el objeto, tócalo en la foto.');
+      } catch (e) {
+        console.error(e);
+        $('fIA').checked = false; ayuda();
+        estado('');
+        aviso('No se pudo usar la IA (¿sin conexión?). Se usa el recorte por color.');
+        return analizar(i);
+      }
+    } else {
+      f.mk = mascaraDesdeImagen(f.img, { tolerancia: tol.value / 100 });
+    }
+    vistaPrevia(lienzo, f, usaIA() ? f.puntos : null);
     actualizarBoton();
   }
 
-  bCrear.addEventListener('click', () => {
+  bCrear.addEventListener('click', async () => {
     bCrear.disabled = true;
     bCrear.textContent = 'Creando…';
-    // deja pintar el «Creando…» antes del cálculo
-    setTimeout(() => {
-      try {
-        const malla = n === 1 ? desdeUnaFoto(fotos[0], +grosor.value / 100, +detalle.value)
-                              : desdeDosFotos(fotos[0], fotos[1], +detalle.value, invertir.checked);
-        if (!malla) aviso('No se encontró el objeto en la foto. Prueba con otro recorte del fondo.');
-        else { hoja.hidden = true; alCrear(malla); }
-      } catch (e) {
-        console.error(e);
-        aviso('No se pudo crear el modelo');
+    try {
+      let prof = null;
+      if (n === 1 && usaIA()) {
+        const f = fotos[0];
+        try { f.prof = f.prof || await ia.estimarProfundidad(f.img, estado); prof = f.prof; }
+        catch (e) { console.error(e); aviso('Sin profundidad de la IA: se usa el inflado.'); }
+        estado('');
       }
-      bCrear.textContent = 'Crear modelo';
-      actualizarBoton();
-    }, 30);
+      await new Promise((r) => setTimeout(r, 30)); // deja pintar el «Creando…»
+      const malla = n === 1 ? desdeUnaFoto(fotos[0], +grosor.value / 100, +detalle.value, prof)
+                            : desdeDosFotos(fotos[0], fotos[1], +detalle.value, invertir.checked);
+      if (!malla) aviso('No se encontró el objeto en la foto. Tócalo en la foto o cambia el recorte.');
+      else { hoja.hidden = true; alCrear(malla); }
+    } catch (e) {
+      console.error(e);
+      aviso('No se pudo crear el modelo');
+    }
+    bCrear.textContent = 'Crear modelo';
+    actualizarBoton();
   });
 
   return { abrir() { hoja.hidden = false; } };
@@ -88,14 +151,16 @@ async function cargar(archivo) {
   const ctx = lienzo.getContext('2d', { willReadFrequently: true });
   ctx.drawImage(bmp, 0, 0, lienzo.width, lienzo.height);
   bmp.close?.();
-  return { img: ctx.getImageData(0, 0, lienzo.width, lienzo.height), mk: null, color: null };
+  return { img: ctx.getImageData(0, 0, lienzo.width, lienzo.height), mk: null, color: null, puntos: [{ x: 0.5, y: 0.5, dentro: true }], recortar: null, prof: null };
 }
 
-// Foto con el fondo oscurecido y el contorno del recorte resaltado.
-function vistaPrevia(cv, f) {
+// Foto con el fondo oscurecido, el contorno del recorte resaltado y los puntos tocados.
+// Sin máscara (mientras la IA analiza) se ve la foto tal cual.
+function vistaPrevia(cv, f, puntos) {
   const { width: w, height: h } = f.img;
   cv.width = w; cv.height = h;
   const ctx = cv.getContext('2d');
+  if (!f.mk) { ctx.putImageData(f.img, 0, 0); return; }
   const out = ctx.createImageData(w, h);
   const m = f.mk.mascara, src = f.img.data, dst = out.data;
   for (let p = 0, i = 0; p < w * h; p++, i += 4) {
@@ -105,10 +170,17 @@ function vistaPrevia(cv, f) {
     else { dst[i] = src[i] * 0.25; dst[i + 1] = src[i + 1] * 0.25; dst[i + 2] = src[i + 2] * 0.3; dst[i + 3] = 120; }
   }
   ctx.putImageData(out, 0, 0);
+  for (const q of puntos || []) {
+    ctx.beginPath();
+    ctx.arc(q.x * w, q.y * h, Math.max(5, w / 70), 0, Math.PI * 2);
+    ctx.fillStyle = q.dentro ? '#2fe07a' : '#ff4d4d';
+    ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+  }
 }
 
-function desdeUnaFoto(f, grosor, detalle) {
-  const r = relieveDesdeMascara(f.mk, { res: detalle * 1.5, grosor });
+function desdeUnaFoto(f, grosor, detalle, profundidad) {
+  const r = relieveDesdeMascara(f.mk, { res: detalle * 1.5, grosor, profundidad });
   if (!r) return null;
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(r.posiciones, 3));

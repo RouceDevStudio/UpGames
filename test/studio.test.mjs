@@ -114,4 +114,21 @@ test('dos fotos: círculo de frente + cuadrado de lado ≈ cilindro (π/4)', () 
   assert.strictEqual(m.uvFrente.length, (m.posiciones.length / 3) * 2);
 });
 
+test('una foto con profundidad (IA): lo cercano sobresale más y la malla sigue cerrada', () => {
+  const w = 120, h = 90;
+  const img = imagen(w, h, (x, y) => x >= 20 && x < 100 && y >= 15 && y < 75);
+  // profundidad: la mitad izquierda cerca (1), la derecha lejos (0)
+  const data = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) data[y * w + x] = x < 60 ? 1 : 0;
+  const mk = mascaraDesdeImagen(img);
+  const m = relieveDesdeMascara(mk, { res: 40, grosor: 0.5, profundidad: { data, width: w, height: h }, pesoProfundidad: 1 });
+  assert.ok(esCerrada(m.indices) && volumen(m.posiciones, m.indices) > 0);
+  let zi = 0, zd = 0;
+  for (let v = 0; v < m.posiciones.length; v += 3) {
+    const x = m.posiciones[v], z = m.posiciones[v + 2];
+    if (x < -0.2) zi = Math.max(zi, z); else if (x > 0.2) zd = Math.max(zd, z);
+  }
+  assert.ok(zi > zd * 3, `izquierda ${zi} derecha ${zd}`);
+});
+
 console.log(`\n${passed} pruebas correctas`);

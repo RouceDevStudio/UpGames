@@ -122,6 +122,8 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 .segm { display: flex; gap: 4px; background: rgba(255,255,255,.05); border-radius: 14px; padding: 4px; margin: 4px 0 8px; }
 .segm button { flex: 1; height: 42px; border-radius: 11px; font-weight: 700; font-size: 13px; color: var(--tenue); }
 .segm button.activo { background: var(--foto); color: #fff; }
+.nota.estado { color: var(--foto); font-weight: 600; min-height: 1em; }
+.ranura canvas { cursor: crosshair; }
 .nota { color: var(--tenue); font-size: 13px; line-height: 1.4; margin-bottom: 10px; }
 .fotos { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 10px; }
 .ranura { background: rgba(255,255,255,.04); border: 1px dashed rgba(255,255,255,.18); border-radius: 16px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
