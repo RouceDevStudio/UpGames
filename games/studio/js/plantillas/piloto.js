@@ -1,8 +1,11 @@
 // Plantilla «Piloto»: piloto de Fórmula 1 de pie, con la mano derecha sujetando el volante y la
-// izquierda en la cadera. Modelado con las herramientas de Studio: tubos por articulaciones
-// (piernas, brazos, torso, correas), elipsoides (casco, manos, hombros), loft (botas) y cajas.
+// izquierda en la cadera. El cuerpo (mono) es una sola pieza hecha con modelado de caja y
+// subdivisión (ver cuerpo.js); el resto con tubos (correas), elipsoides (casco, manos), loft
+// (botas) y cajas.
 // Medidas en metros (1,80 m de alto, 1,84 m con casco). Mira hacia +z; x > 0 es su izquierda.
-import { caja, barra, cilindroX, elipsoide, loft, tubo } from './forma.js';
+import { caja, barra, cilindroX, elipsoide, loft, tubo, objetoDeMalla } from './forma.js';
+import { cuerpoPiloto } from './cuerpo.js';
+import { mallas } from '../escena.js';
 
 const MONO = 0xd8141f, NEGRO = 0x17191d, GRIS = 0x3a3e45, CASCO = 0xffd23f, BLANCO = 0xf1f2f4, VISERA = 0x0d1a2b;
 
@@ -13,12 +16,7 @@ export function construirPiloto() {
   // ---------- piernas: cadera → rodilla → tobillo ----------
   const piernas = { der: [[-0.10, 0.93, 0.0], [-0.115, 0.70, 0.02], [-0.125, 0.50, 0.035], [-0.13, 0.30, 0.0], [-0.135, 0.11, -0.01]],
                     izq: [[0.10, 0.93, 0.0], [0.12, 0.70, 0.01], [0.135, 0.50, 0.02], [0.15, 0.30, -0.01], [0.165, 0.11, -0.03]] };
-  const grosorPierna = [[0.095, 0.10], [0.078, 0.085], [0.06, 0.065], [0.058, 0.064], [0.045, 0.05]];
   for (const [lado, pts] of Object.entries(piernas)) {
-    add(tubo(`pierna_${lado}`, MONO, pts.map((p, i) => [...p, ...grosorPierna[i]])));
-    // rodillera (costura del mono)
-    const [x, , z] = pts[2];
-    add(elipsoide(`rodilla_${lado}`, [0.11, 0.09, 0.07], [x, 0.51, z + 0.035], [0, 0, 0], MONO));
     // bota: loft a lo largo del pie, con suela negra
     const [ax, , az] = pts[4];
     add(loft(`bota_${lado}`, NEGRO, [
@@ -31,37 +29,29 @@ export function construirPiloto() {
     add(caja(`suela_${lado}`, [0.10, 0.015, 0.29], [ax, 0.008, az + 0.065], [0, 0, 0], GRIS));
   }
 
-  // ---------- torso: de la pelvis al cuello (secciones horizontales) ----------
-  add(tubo('torso', MONO, [
-    [0, 0.86, 0, 0.165, 0.115],
-    [0, 0.95, 0, 0.18, 0.125],
-    [0, 1.05, 0.005, 0.16, 0.115],
-    [0, 1.22, 0.01, 0.185, 0.13],
-    [0, 1.36, 0.0, 0.20, 0.125],
-    [0, 1.45, -0.01, 0.17, 0.105],
-    [0, 1.50, -0.01, 0.075, 0.07],
-  ]));
-  for (const s of [1, -1]) add(elipsoide(`hombro_${s > 0 ? 'izq' : 'der'}`, [0.13, 0.12, 0.13], [0.195 * s, 1.43, -0.005], [0, 0, 0], MONO));
-  // cuello alto del mono
-  add(tubo('cuello', MONO, [[0, 1.48, -0.005, 0.07, 0.068], [0, 1.56, 0.0, 0.062, 0.06]], { sub: 1 }));
+  // ---------- mono: torso, piernas, brazos y cuello en una sola pieza (modelado de caja) ----------
+  const cuerpo = cuerpoPiloto();
+  // superficie del mono, para apoyar encima correas y cinturón
+  const ref = cuerpo.clone(); // objetoDeMalla centra la malla del objeto: se consulta una copia
+  const frente = (x, y) => superficie(ref, x, y, 'z') + 0.006;
+  const costado = (y) => superficie(ref, null, y, 'x');
+  add(objetoDeMalla(cuerpo, 'mono', MONO, mallas));
 
   // ---------- arnés: dos correas del hombro al cinturón, cinturón y hebilla ----------
   for (const s of [1, -1]) {
     add(tubo(`arnes_correa_${s > 0 ? 'izq' : 'der'}`, NEGRO, [
-      [0.11 * s, 1.49, -0.06, 0.028, 0.008], [0.10 * s, 1.44, 0.115, 0.03, 0.008], [0.085 * s, 1.30, 0.137, 0.03, 0.008],
-      [0.07 * s, 1.15, 0.128, 0.03, 0.008], [0.055 * s, 1.03, 0.122, 0.03, 0.008],
+      [0.11 * s, 1.50, -0.06, 0.028, 0.008], [0.10 * s, 1.47, frente(0.10 * s, 1.47) - 0.02, 0.03, 0.008],
+      [0.095 * s, 1.40, frente(0.095 * s, 1.40), 0.03, 0.008], [0.085 * s, 1.30, frente(0.085 * s, 1.30), 0.03, 0.008],
+      [0.07 * s, 1.15, frente(0.07 * s, 1.15), 0.03, 0.008], [0.055 * s, 1.03, frente(0.055 * s, 1.03), 0.03, 0.008],
     ]));
-    add(caja(`arnes_ajuste_${s > 0 ? 'izq' : 'der'}`, [0.07, 0.03, 0.012], [0.093 * s, 1.34, 0.14], [-6, 0, 0], GRIS));
+    add(caja(`arnes_ajuste_${s > 0 ? 'izq' : 'der'}`, [0.07, 0.03, 0.012], [0.09 * s, 1.34, frente(0.09 * s, 1.34) + 0.006], [-6, 0, 0], GRIS));
   }
-  add(tubo('cinturon', NEGRO, anillo(0, 1.00, 0.0, 0.175, 0.128, 24).map((p) => [...p, 0.022, 0.008]), { sub: 1 }));
-  add(cilindroX('hebilla', [0, 1.0, 0.133], 0.04, 0.025, GRIS)).rotation.set(0, Math.PI / 2, Math.PI / 2);
-  add(tubo('arnes_entrepierna', NEGRO, [[0, 0.98, 0.125, 0.02, 0.008], [0, 0.90, 0.12, 0.02, 0.008]], { sub: 1 }));
+  const zc = frente(0, 1.0), ac = costado(1.0) + 0.008;
+  add(tubo('cinturon', NEGRO, anillo(0, 1.00, 0.0, ac, zc, 24).map((p) => [...p, 0.022, 0.008]), { sub: 1 }));
+  add(cilindroX('hebilla', [0, 1.0, zc + 0.008], 0.04, 0.025, GRIS)).rotation.set(0, Math.PI / 2, Math.PI / 2);
+  add(tubo('arnes_entrepierna', NEGRO, [[0, 0.98, frente(0, 0.98), 0.02, 0.008], [0, 0.90, frente(0, 0.90), 0.02, 0.008]], { sub: 1 }));
 
   // ---------- brazo derecho: cuelga y sujeta el volante ----------
-  add(tubo('brazo_der', MONO, [
-    [-0.215, 1.43, -0.005, 0.058], [-0.235, 1.30, 0.0, 0.055], [-0.25, 1.16, 0.02, 0.046],
-    [-0.26, 1.03, 0.045, 0.045], [-0.27, 0.93, 0.065, 0.036],
-  ]));
   add(tubo('guante_puno_der', NEGRO, [[-0.27, 0.95, 0.062, 0.043], [-0.273, 0.90, 0.07, 0.038]], { sub: 1 }));
   add(elipsoide('mano_der', [0.085, 0.10, 0.075], [-0.277, 0.855, 0.078], [0, 0, 0], NEGRO));
   // volante colgando de la mano por su agarre; la cara (pantalla y botones) mira hacia delante y fuera
@@ -77,10 +67,6 @@ export function construirPiloto() {
   for (const dw of [-0.1, 0.1]) add(barra(`volante_agarre_${dw < 0 ? 'a' : 'b'}`, en(0, dw, 0.11), en(0, dw, -0.11), 0.022, NEGRO));
 
   // ---------- brazo izquierdo: mano en la cadera, codo hacia fuera y atrás ----------
-  add(tubo('brazo_izq', MONO, [
-    [0.215, 1.43, -0.005, 0.058], [0.29, 1.31, -0.04, 0.054], [0.355, 1.19, -0.07, 0.047],
-    [0.30, 1.08, -0.02, 0.045], [0.235, 1.01, 0.02, 0.036],
-  ]));
   add(tubo('guante_puno_izq', NEGRO, [[0.25, 1.025, 0.012, 0.043], [0.215, 0.99, 0.03, 0.038]], { sub: 1 }));
   add(elipsoide('mano_izq', [0.06, 0.11, 0.095], [0.19, 0.965, 0.055], [0, 0, -18], NEGRO));
 
@@ -97,6 +83,20 @@ export function construirPiloto() {
   for (const s of [1, -1]) add(barra(`hans_correa_${s > 0 ? 'izq' : 'der'}`, [0.08 * s, 1.60, -0.13], [0.12 * s, 1.62, -0.02], 0.008, NEGRO));
 
   return piezas;
+}
+
+// Punto más saliente del cuerpo cerca de (x, y): eje 'z' = el pecho (máximo z), 'x' = el costado
+// (máximo |x| a esa altura).
+function superficie(m, x, y, eje, ventana = 0.025) {
+  let mejor = -Infinity;
+  for (let v = 0; v < m.nV; v++) {
+    const px = m.pos[v * 3], py = m.pos[v * 3 + 1], pz = m.pos[v * 3 + 2];
+    if (Math.abs(py - y) > ventana) continue;
+    if (eje === 'z') { if (Math.abs(px - x) < ventana * 1.2 && pz > mejor) mejor = pz; }
+    else if (Math.abs(pz) < 0.06 && Math.abs(px) < 0.25 && Math.abs(px) > mejor) mejor = Math.abs(px);
+  }
+  // sin vértices tan cerca: se amplía la búsqueda
+  return Number.isFinite(mejor) ? mejor : ventana < 0.2 ? superficie(m, x, y, eje, ventana * 2) : 0;
 }
 
 // Puntos de un óvalo horizontal (para cinturón y collarín), cerrado.

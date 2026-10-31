@@ -66,6 +66,13 @@ svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width:
 #barraEdicion .segm-ed button.activo { background: #ff8a1f; color: #fff; }
 #infoMalla { width: 100%; text-align: center; font-size: 12px; color: var(--tenue); text-shadow: 0 1px 2px #000; }
 body.editando .acciones { display: none; }
+.herramientas-ed { display: none; gap: 4px; overflow-x: auto; max-width: 100%; touch-action: pan-x; background: var(--panel); border: 1px solid var(--borde); border-radius: 16px; padding: 4px; scrollbar-width: none; }
+.herramientas-ed::-webkit-scrollbar { display: none; }
+body.editando .herramientas-ed { display: flex; }
+.herramientas-ed button { height: 46px; padding: 0 14px; border-radius: 12px; font-weight: 700; white-space: nowrap; background: rgba(255,255,255,.06); }
+.herramientas-ed button:active { background: rgba(255, 138, 31, .4); }
+.herramientas-ed button:disabled { opacity: .3; }
+.herramientas-ed .peligro { color: var(--rojo); }
 @media (max-width: 700px) { #barraEdicion .grupo button span { font-size: 12px; } #barraEdicion .segm-ed button span { display: none; } }
 
 /* Panel de escena (derecha) */
@@ -172,6 +179,9 @@ body.editando .acciones { display: none; }
 
 /* Pantallas bajas (móvil en horizontal) */
 @media (max-height: 520px) {
+  #barraEdicion { flex-wrap: nowrap; top: calc(56px + var(--sa-t)); }
+  #barraEdicion .segm-ed button span, #infoMalla { display: none; }
+  #barraEdicion .grupo button { height: 36px; }
   :root { --toque: 44px; }
   .grupo button { height: 38px; }
   #gizmos button { width: 54px; height: 48px; }

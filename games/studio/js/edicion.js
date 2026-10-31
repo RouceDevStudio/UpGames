@@ -4,6 +4,8 @@ import * as THREE from 'three';
 import { MallaHE } from './malla/mediaArista.js';
 import { aGeometria, posicionesEsquinas, normalesEsquinas } from './malla/aGeometria.js';
 import { mallas } from './escena.js';
+import * as OP from './malla/operaciones.js';
+import { subdividir } from './malla/subdividir.js';
 
 const NARANJA = new THREE.Color(0xff8a1f);
 const OSCURO = new THREE.Color(0x14171f);
@@ -36,6 +38,14 @@ function geometriaDe(m) {
   return g;
 }
 
+// Cambia la malla de un objeto por otra (tras una operación que cambia la topología).
+export function ponerMalla(obj, m) {
+  mallas.set(obj, m);
+  const vieja = obj.geometry;
+  obj.geometry = geometriaDe(m);
+  vieja.dispose();
+}
+
 // Vuelve a escribir posiciones y normales después de mover vértices.
 export function refrescarGeometria(obj) {
   const m = mallas.get(obj), g = obj.geometry;
@@ -62,6 +72,47 @@ export class ModoEdicion {
   }
 
   get activo() { return !!this.obj; }
+
+  // ---------- operaciones de modelado (sprint 3), cada una con deshacer ----------
+  // fn(malla, modo) → { malla, caras | aristas | vertices } o null si no aplica.
+  operar(nombre, fn) {
+    const obj = this.obj, antes = this.malla, selAntes = { tipo: this.tipo, sel: [...this.sel] };
+    let r;
+    try { r = fn(antes, this); } catch (e) { console.error(e); return false; }
+    if (!r || !r.malla) return false;
+    const selDespues = r.caras ? { tipo: 'f', sel: r.caras } : r.aristas ? { tipo: 'e', sel: r.aristas } : r.vertices ? { tipo: 'v', sel: r.vertices } : { tipo: this.tipo, sel: [] };
+    const poner = (m, s) => {
+      ponerMalla(obj, m);
+      if (this.obj === obj) this.recrear(m, s);
+    };
+    this.historial.hacer({ nombre, hacer: () => poner(r.malla, selDespues), deshacer: () => poner(antes, selAntes) });
+    return true;
+  }
+
+  recrear(m, s) {
+    this.malla = m;
+    for (const c of [this.puntos, this.lineas, this.caras]) { this.obj.remove(c); c.geometry.dispose(); }
+    this.crearCapas();
+    this.aplicarRayosX();
+    this.tipo = s.tipo;
+    this.sel = new Set(s.sel);
+    this.actualizar();
+  }
+
+  carasAfectadas(m = this.malla) {
+    if (this.tipo === 'f') return [...this.sel];
+    if (this.tipo === 'e') return OP.carasDeAristas(m, [...this.sel]);
+    return OP.carasDeVertices(m, [...this.sel]);
+  }
+
+  extruir() { return this.tipo === 'f' && this.sel.size && this.operar('Extruir', (m) => OP.extruirCaras(m, [...this.sel])); }
+  inset() { return this.tipo === 'f' && this.sel.size && this.operar('Inset', (m) => OP.insetCaras(m, [...this.sel], 0.25)); }
+  cortarBucle() { return this.tipo === 'e' && this.sel.size && this.operar('Corte en bucle', (m) => OP.cortarBucle(m, [...this.sel].pop(), 0.5)); }
+  subdividir() { return this.operar('Subdividir', (m) => (m.nF * 4 > 200000 ? null : subdividir(m, 1))); }
+  suavizar() { return this.operar('Suavizar', (m) => OP.suavizarVertices(m, [...this.vertsSeleccionados()], 0.5, 2)); }
+  fusionar() { return this.tipo === 'v' && this.sel.size > 1 && this.operar('Fusionar', (m) => OP.fusionarVertices(m, [...this.sel])); }
+  borrar() { return this.sel.size && this.operar('Borrar', (m) => OP.borrarCaras(m, this.carasAfectadas(m))); }
+  simetria() { return this.operar('Simetría X', (m) => OP.simetriaX(m)); }
 
   entrar(obj) {
     this.salir();

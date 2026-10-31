@@ -96,10 +96,17 @@ function pintarEdicion() {
   $('bSumar').classList.toggle('activo', edicion.anadir);
   $('bRayos').classList.toggle('activo', edicion.rayosX);
   $('bBucle').hidden = edicion.tipo !== 'e';
+  document.querySelectorAll('[data-op][data-tipos]').forEach((b) => { b.disabled = !b.dataset.tipos.includes(edicion.tipo); });
   const m = edicion.malla, nombres = { v: 'vértices', e: 'aristas', f: 'caras' };
   $('infoMalla').textContent = `${edicion.obj.name} · ${m.nV} vértices · ${m.nE} aristas · ${m.nF} caras · ${edicion.sel.size} ${nombres[edicion.tipo]} seleccionad${edicion.tipo === 'v' ? 'os' : 'as'}`;
 }
 document.querySelectorAll('[data-tipo]').forEach((b) => b.addEventListener('click', () => edicion.ponerTipo(b.dataset.tipo)));
+const PISTAS = { extruir: 'Toca primero una o más caras', inset: 'Toca primero una o más caras', cortarBucle: 'Toca primero una arista', fusionar: 'Toca dos o más vértices', borrar: 'No hay nada seleccionado', subdividir: 'La malla ya es demasiado densa' };
+function operacion(op) {
+  if (!edicion.activo) return;
+  if (!edicion[op]()) aviso(PISTAS[op] || 'No se pudo aplicar');
+}
+document.querySelectorAll('[data-op]').forEach((b) => b.addEventListener('click', () => operacion(b.dataset.op)));
 $('bSumar').onclick = () => { edicion.anadir = !edicion.anadir; pintarEdicion(); };
 $('bTodo').onclick = () => edicion.seleccionarTodo();
 $('bBucle').onclick = () => { if (!edicion.seleccionarBucle()) aviso('Toca primero una arista'); };
@@ -267,6 +274,7 @@ escena.alCambiar(pintarPanel);
 addEventListener('keydown', (e) => {
   if (e.target.matches?.('input')) return;
   const k = e.key.toLowerCase(), ctrl = e.ctrlKey || e.metaKey;
+  if (edicion.activo && ctrl && k === 'r') { e.preventDefault(); operacion('cortarBucle'); return; }
   if (k === 'tab') { e.preventDefault(); ponerModo(edicion.activo ? 'objeto' : 'editar'); return; }
   if (edicion.activo && !ctrl) {
     const tipos = { 1: 'v', 2: 'e', 3: 'f' };
@@ -274,7 +282,11 @@ addEventListener('keydown', (e) => {
     if (k === 'a') { edicion.seleccionarTodo(); return; }
     if (k === 'l') { edicion.seleccionarBucle(); return; }
     if (k === 'z' && e.altKey) { $('bRayos').click(); return; }
-    if (k === 'delete' || k === 'backspace' || k === 'x' || (e.shiftKey && k === 'd')) return; // llegan en el sprint 3
+    if (k === 'delete' || k === 'backspace' || k === 'x') { operacion('borrar'); return; }
+    if (k === 'e') { operacion('extruir'); return; }
+    if (k === 'i') { operacion('inset'); return; }
+    if (k === 'm') { operacion('fusionar'); return; }
+    if (e.shiftKey && k === 'd') return;
   }
   if (ctrl && k === 'z') { e.preventDefault(); if (e.shiftKey) historial.rehacer(); else historial.deshacer(); }
   else if (ctrl && k === 'y') { e.preventDefault(); historial.rehacer(); }

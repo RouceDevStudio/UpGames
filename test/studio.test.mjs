@@ -7,6 +7,8 @@ import { Historial } from '../games/studio/js/deshacer.js';
 import { mascaraDesdeImagen, mascaraDePlano, cajaDeMascara, relieveDesdeMascara, cascoVisual, cascoPlanos, volumen } from '../games/studio/js/foto/fotoA3D.js';
 import { MallaHE } from '../games/studio/js/malla/mediaArista.js';
 import { aGeometria } from '../games/studio/js/malla/aGeometria.js';
+import { extruirCaras, insetCaras, cortarBucle, borrarCaras, fusionarVertices, simetriaX, suavizarVertices } from '../games/studio/js/malla/operaciones.js';
+import { subdividir } from '../games/studio/js/malla/subdividir.js';
 import * as THREE from '../games/studio/lib/three.module.min.js';
 
 let passed = 0;
@@ -257,6 +259,89 @@ test('modelo desde foto → malla de media arista válida', () => {
   const m = MallaHE.desdeTriangulos(r.posiciones, r.indices, { uvs: r.uvs });
   assert.deepStrictEqual(m.validar(), []);
   assert.strictEqual(bordes(m), 0);
+});
+
+// ---------- Operaciones de modelado (sprint 3) ----------
+const cubo = () => desdeThree(new THREE.BoxGeometry(1, 1, 1));
+const cerrada = (m) => m.validar().length === 0 && bordes(m) === 0;
+const vol = (m) => { const g = aGeometria(m); return volumen(g.posiciones, g.indices); };
+const caraArriba = (m) => [...Array(m.nF).keys()].find((f) => m.vertsDeCara(f).every((v) => Math.abs(m.pos[v * 3 + 1] - 0.5) < 1e-6));
+
+test('extruir la cara de arriba de un cubo: 12 vértices, 10 caras, cerrada y con más volumen', () => {
+  const m = cubo();
+  const r = extruirCaras(m, [caraArriba(m)], 0.5);
+  assert.deepStrictEqual([r.malla.nV, r.malla.nF], [12, 10]);
+  assert.ok(cerrada(r.malla));
+  assert.ok(Math.abs(vol(r.malla) - 1.5) < 1e-6, `volumen ${vol(r.malla)}`);
+  assert.ok(r.malla.vertsDeCara(r.caras[0]).every((v) => Math.abs(r.malla.pos[v * 3 + 1] - 1) < 1e-6), 'la cara sale a y = 1');
+  assert.strictEqual(m.nV, 8, 'la malla original no cambia (para deshacer)');
+});
+
+test('extruir dos caras vecinas como región: sin caras internas', () => {
+  const m = cubo();
+  const arriba = caraArriba(m);
+  const lado = [...Array(m.nF).keys()].find((f) => m.vertsDeCara(f).every((v) => Math.abs(m.pos[v * 3] - 0.5) < 1e-6));
+  const r = extruirCaras(m, [arriba, lado], 0.2);
+  assert.ok(cerrada(r.malla));
+  assert.strictEqual(r.malla.nF, 6 + 6, 'cada arista del borde de la región da una cara lateral (6)');
+});
+
+test('inset: la cara se reduce hacia dentro con un anillo de cuadriláteros', () => {
+  const m = cubo();
+  const r = insetCaras(m, [caraArriba(m)], 0.3);
+  assert.deepStrictEqual([r.malla.nV, r.malla.nF], [12, 10]);
+  assert.ok(cerrada(r.malla));
+  assert.ok(Math.abs(vol(r.malla) - 1) < 1e-9);
+});
+
+test('corte en bucle por el centro del cubo: anillo de 4 caras partido', () => {
+  const m = cubo();
+  const e = [...Array(m.nE).keys()].find((x) => { const [a, b] = m.vertsDeArista(x); return Math.abs(m.pos[a * 3 + 1] - m.pos[b * 3 + 1]) > 0.9; }); // arista vertical
+  const r = cortarBucle(m, e, 0.5);
+  assert.deepStrictEqual([r.malla.nV, r.malla.nF], [12, 10]);
+  assert.strictEqual(r.aristas.length, 4);
+  assert.ok(cerrada(r.malla));
+  for (const x of r.aristas) for (const v of r.malla.vertsDeArista(x)) assert.ok(Math.abs(r.malla.pos[v * 3 + 1]) < 1e-9, 'el corte cae en y = 0');
+});
+
+test('Catmull-Clark: cubo → 24 cuadriláteros, 26 vértices, cerrado y más redondo', () => {
+  const r = subdividir(cubo(), 1).malla;
+  assert.deepStrictEqual([r.nV, r.nF], [26, 24]);
+  assert.ok(cerrada(r));
+  assert.strictEqual(r.nV - r.nE + r.nF, 2);
+  const r2 = subdividir(cubo(), 3).malla;
+  // tiende a una esfera: los radios se igualan
+  let mn = Infinity, mx = 0;
+  for (let v = 0; v < r2.nV; v++) { const d = Math.hypot(r2.pos[v * 3], r2.pos[v * 3 + 1], r2.pos[v * 3 + 2]); mn = Math.min(mn, d); mx = Math.max(mx, d); }
+  assert.ok(mx / mn < 1.25, `radios ${mn} … ${mx}`);
+});
+
+test('Catmull-Clark respeta los bordes abiertos (plano)', () => {
+  const r = subdividir(desdeThree(new THREE.PlaneGeometry(2, 2, 1, 1)), 1).malla;
+  assert.deepStrictEqual([r.nV, r.nF], [9, 4]);
+  assert.deepStrictEqual(r.validar(), []);
+});
+
+test('simetría en X: se refleja el lado derecho y se cose el centro', () => {
+  const m = cubo();
+  const e = [...Array(m.nE).keys()].find((x) => { const [a, b] = m.vertsDeArista(x); return Math.abs(m.pos[a * 3] - m.pos[b * 3]) > 0.9; }); // arista en x
+  let r = cortarBucle(m, e, 0.5).malla;                       // corte en x = 0
+  r = simetriaX(r).malla;
+  assert.ok(cerrada(r));
+  assert.deepStrictEqual([r.nV, r.nF], [12, 10]);
+  assert.ok(Math.abs(vol(r) - 1) < 1e-9);
+});
+
+test('borrar, fusionar y suavizar', () => {
+  const m = cubo();
+  const b = borrarCaras(m, [caraArriba(m)]).malla;
+  assert.deepStrictEqual([b.nF, bordes(b)], [5, 4]);
+  const arriba = m.vertsDeCara(caraArriba(m));
+  const f = fusionarVertices(m, arriba).malla;                // pirámide
+  assert.deepStrictEqual([f.nV, f.nF], [5, 5]);
+  assert.ok(cerrada(f));
+  const s = suavizarVertices(subdividir(m, 1).malla, [], 0.5, 3).malla;
+  assert.ok(cerrada(s));
 });
 
 console.log(`\n${passed} pruebas correctas`);

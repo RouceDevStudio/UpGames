@@ -159,8 +159,8 @@ modulos/studio.js + rutas/studio.js   en el servidor: proyectos en la nube y pub
    - primitivas y selección;
    - gizmo mover, girar y escalar;
    - deshacer.
-2. **Half-edge:** construir desde primitivas y dibujar; seleccionar vértices, aristas y caras; mover componentes.
-3. **Operaciones:** extruir, inset, loop cut, biselar, borrar, fusionar; subdividir.
+2. ✅ **Half-edge:** construir desde primitivas y dibujar; seleccionar vértices, aristas y caras; mover componentes.
+3. ✅ **Operaciones:** extruir, inset, loop cut, borrar, fusionar, suavizar, simetría X; subdividir (Catmull-Clark). Pendiente: biselar.
 4. **Modificadores:** espejo y subdivisión no destructivos; matriz; booleanas.
 5. **Materiales y texturas:** PBR, biblioteca, UV automático, textura desde la cámara.
 6. **Archivos:** guardado automático; exportar GLB/OBJ/STL; importar GLB/OBJ.

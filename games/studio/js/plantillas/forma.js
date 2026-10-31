@@ -2,6 +2,7 @@
 // giradas, escaladas y con los vértices editados (loft por secciones, tubo por articulaciones).
 import * as THREE from 'three';
 import { crearPrimitiva } from '../primitivas.js';
+import { aGeometria } from '../malla/aGeometria.js';
 
 export const D2R = Math.PI / 180;
 
@@ -127,4 +128,32 @@ export function tubo(nombre, color, puntos, { sub = 4, radiales = 24 } = {}) {
   }
   m.geometry.computeVertexNormals();
   return centrar(m);
+}
+
+// Objeto de Studio a partir de una malla de media arista (queda registrada para el modo Editar).
+export function objetoDeMalla(malla, nombre, color, mallas) {
+  const r = aGeometria(malla);
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(r.posiciones, 3));
+  g.setAttribute('normal', new THREE.BufferAttribute(r.normales, 3));
+  g.setAttribute('uv', new THREE.BufferAttribute(r.uvs, 2));
+  g.setIndex(new THREE.BufferAttribute(r.indices, 1));
+  g.userData.triCara = r.triCara;
+  const m = new THREE.Mesh(g, material(color, 0.6, 0.05));
+  m.name = nombre;
+  m.castShadow = true; m.receiveShadow = true;
+  m.userData.tipo = 'malla';
+  if (mallas) mallas.set(m, malla);
+  return centrarConMalla(m, malla);
+}
+
+// Como centrar(), pero moviendo también la malla de media arista para que sigan iguales.
+function centrarConMalla(m, malla) {
+  m.geometry.computeBoundingBox();
+  const c = m.geometry.boundingBox.getCenter(new THREE.Vector3());
+  m.geometry.translate(-c.x, -c.y, -c.z);
+  for (let v = 0; v < malla.nV; v++) { malla.pos[v * 3] -= c.x; malla.pos[v * 3 + 1] -= c.y; malla.pos[v * 3 + 2] -= c.z; }
+  m.position.copy(c);
+  m.geometry.computeBoundingSphere();
+  return m;
 }
