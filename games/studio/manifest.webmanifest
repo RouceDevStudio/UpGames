@@ -1,0 +1,16 @@
+{
+  "name": "UpGames Studio · Modelado 3D",
+  "short_name": "UpStudio",
+  "description": "Modela en 3D desde el celular o crea modelos a partir de fotos. UpGames.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#0b0f17",
+  "theme_color": "#0b0f17",
+  "lang": "es",
+  "icons": [
+    { "src": "icono.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f17">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="UpGames Studio: modela en 3D desde el celular con los dedos, o crea un modelo a partir de una o dos fotos. Exporta a GLB para Blender, Unity, Godot y APEX GP.">
+<title>UpGames Studio · Modelado 3D en el celular</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icono.svg" type="image/svg+xml">
+<link rel="stylesheet" href="estilo.css">
+<script type="importmap">
+{ "imports": { "three": "./lib/three.module.min.js", "three/addons/": "./lib/addons/" } }
+</script>
+</head>
+<body>
+<canvas id="lienzo"></canvas>
+
+<!-- Barra superior -->
+<header id="arriba">
+  <div class="marca"><img src="icono.svg" alt=""><b>Up</b>Studio</div>
+  <div class="grupo">
+    <button id="bDeshacer" class="ic" title="Deshacer (Ctrl+Z)" disabled><svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
+    <button id="bRehacer" class="ic" title="Rehacer (Ctrl+Y)" disabled><svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg></button>
+  </div>
+  <div class="grupo vistas">
+    <button data-vista="frente" title="Vista de frente (1)">Frente</button>
+    <button data-vista="lado" title="Vista de lado (3)">Lado</button>
+    <button data-vista="arriba" title="Vista de arriba (7)">Arriba</button>
+    <button data-vista="persp" title="Perspectiva (5)">3D</button>
+  </div>
+  <div class="grupo">
+    <button id="bIman" class="ic" title="Ajuste magnético a la cuadrícula"><svg viewBox="0 0 24 24"><path d="M6 3v8a6 6 0 0 0 12 0V3"/><path d="M6 7h4M14 7h4"/><path d="M10 3v8a2 2 0 0 0 4 0V3"/></svg></button>
+    <button id="bExportar" class="ic" title="Exportar GLB"><svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M4 19h16"/></svg></button>
+    <button id="bPanel" class="ic" title="Escena"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button>
+  </div>
+</header>
+
+<!-- Gizmo: mover, girar, escalar -->
+<nav id="gizmos">
+  <button data-gizmo="translate" class="activo" title="Mover (G)"><svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/><path d="M9 5l3-3 3 3M9 19l3 3 3-3M5 9l-3 3 3 3M19 9l3 3-3 3"/></svg><span>Mover</span></button>
+  <button data-gizmo="rotate" title="Girar (R)"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-3-6.2"/><path d="M20 3v5h-5"/></svg><span>Girar</span></button>
+  <button data-gizmo="scale" title="Escalar (S)"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="10" height="10"/><path d="M13 11l8-8M15 3h6v6"/></svg><span>Escalar</span></button>
+  <button id="bEspacio" title="Ejes del objeto o del mundo"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg><span id="tEspacio">Mundo</span></button>
+</nav>
+
+<!-- Panel de escena -->
+<aside id="panel">
+  <div class="cab">Escena <button id="bCerrarPanel" class="ic chico" title="Cerrar">✕</button></div>
+  <ul id="lista"></ul>
+  <div id="props" hidden>
+    <label>Nombre <input id="pNombre" maxlength="40"></label>
+    <label class="fila">Color <input id="pColor" type="color"></label>
+    <div class="fila botones">
+      <button id="pDuplicar">Duplicar</button>
+      <button id="pBorrar" class="peligro">Borrar</button>
+    </div>
+  </div>
+</aside>
+
+<!-- Barra inferior para el pulgar -->
+<footer id="abajo">
+  <div class="modos">
+    <button data-modo="objeto" class="activo">Objeto</button>
+    <button data-modo="editar" data-sprint="2">Editar</button>
+    <button data-modo="esculpir" data-sprint="7">Esculpir</button>
+    <button data-modo="pintar" data-sprint="7">Pintar</button>
+    <button data-modo="material" data-sprint="5">Material</button>
+    <button data-modo="animar" data-etapa="2">Animar</button>
+  </div>
+  <div class="acciones">
+    <button id="bAnadir" class="primario"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Añadir</button>
+    <button id="bFoto" class="foto"><svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="4"/></svg>Desde foto</button>
+  </div>
+</footer>
+
+<!-- Primitivas -->
+<div id="hojaAnadir" class="hoja" hidden>
+  <div class="hoja-cab">Añadir <button class="ic chico" data-cerrar>✕</button></div>
+  <div class="rejilla" id="rejillaPrimitivas"></div>
+</div>
+
+<!-- Desde foto -->
+<div id="hojaFoto" class="hoja ancha" hidden>
+  <div class="hoja-cab">Crear modelo desde fotos <button class="ic chico" data-cerrar>✕</button></div>
+  <div class="segm" id="fotoModo">
+    <button data-n="1" class="activo">1 foto · relieve</button>
+    <button data-n="2">2 fotos · frente + lado</button>
+  </div>
+  <p class="nota" id="fotoAyuda">Foto del objeto sobre un fondo liso (pared, mesa, papel). La silueta se recorta sola y se infla en 3D con la foto como textura.</p>
+  <div class="fotos">
+    <div class="ranura" data-ranura="0">
+      <canvas width="240" height="180"></canvas>
+      <div class="etq">Frente</div>
+      <div class="fila botones">
+        <label class="btn">Galería<input type="file" accept="image/*" hidden></label>
+        <label class="btn">Cámara<input type="file" accept="image/*" capture="environment" hidden></label>
+      </div>
+    </div>
+    <div class="ranura" data-ranura="1" hidden>
+      <canvas width="240" height="180"></canvas>
+      <div class="etq">Lado (desde la derecha)</div>
+      <div class="fila botones">
+        <label class="btn">Galería<input type="file" accept="image/*" hidden></label>
+        <label class="btn">Cámara<input type="file" accept="image/*" capture="environment" hidden></label>
+      </div>
+    </div>
+  </div>
+  <label class="deslizador">Recorte del fondo <input id="fTol" type="range" min="4" max="45" value="18"><output id="oTol">18</output></label>
+  <label class="deslizador" id="filaGrosor">Grosor <input id="fGrosor" type="range" min="5" max="100" value="35"><output id="oGrosor">35</output></label>
+  <label class="deslizador">Detalle <input id="fDetalle" type="range" min="24" max="96" value="64"><output id="oDetalle">64</output></label>
+  <label class="fila marca-lado" id="filaInvertir" hidden><input id="fInvertir" type="checkbox"> La foto de lado está tomada desde la izquierda</label>
+  <div class="fila botones fin">
+    <button id="bCrearFoto" class="primario" disabled>Crear modelo</button>
+  </div>
+</div>
+
+<!-- Menú radial (pulsación larga) -->
+<div id="radial" hidden></div>
+
+<div id="aviso"></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

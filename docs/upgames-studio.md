@@ -74,6 +74,11 @@ que se construye un modelador propio, web y táctil, que exporta a los formatos 
 **Referencias**
 - Imagen de fondo (calco), por ejemplo las capturas que me pasaste del F1.
 
+**Modelos desde fotos** (adelantado en el sprint 1)
+- 1 foto: recorte automático de la silueta sobre fondo liso, inflado en 3D con la foto como textura.
+- 2 fotos (frente + lado): casco visual con vóxeles y «surface nets», coloreado con las fotos.
+- Más adelante: más vistas (3–8 fotos alrededor) y profundidad estimada con IA en el servidor.
+
 **Exportar e importar**
 - GLB, OBJ y STL, y el formato propio `.ups`.
 
@@ -149,7 +154,7 @@ modulos/studio.js + rutas/studio.js   en el servidor: proyectos en la nube y pub
 
 ## 4. Plan de trabajo de la etapa 1 (sprints cortos)
 
-1. **Esqueleto:**
+1. ✅ **Esqueleto** (publicado en upgames.games/studio, con «Desde foto»):
    - página, PWA, Three.js, cámara orbital táctil y cuadrícula;
    - primitivas y selección;
    - gizmo mover, girar y escalar;
