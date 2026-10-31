@@ -15,7 +15,7 @@ export function mallaADatos(m) {
     uv.push(m.heUV[h * 2], m.heUV[h * 2 + 1]);
     if (col) col.push(m.heCol[h * 3], m.heCol[h * 3 + 1], m.heCol[h * 3 + 2]);
   }
-  return { pos: redondear(m.pos), cuenta, indices, uv: redondear(uv), col: col && redondear(col, 1e3) };
+  return { pos: redondear(m.pos), cuenta, indices, uv: redondear(uv), col: col && redondear(col, 1e3), pliegues: m.pliegues && m.pliegues.size ? [...m.pliegues] : undefined };
 }
 
 export function datosAMalla(d) {
@@ -28,7 +28,9 @@ export function datosAMalla(d) {
     uvs.push(u); if (colores) colores.push(cl);
     k += n; c += n;
   }
-  return MallaHE.desdePoligonos(d.pos, caras, { uvs, colores });
+  const m = MallaHE.desdePoligonos(d.pos, caras, { uvs, colores });
+  if (d.pliegues) m.pliegues = new Set(d.pliegues);
+  return m;
 }
 
 // gzip con CompressionStream (navegadores actuales y Node 18+); sin él, JSON tal cual.

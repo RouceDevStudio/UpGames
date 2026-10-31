@@ -129,8 +129,12 @@ export class MallaHE {
     const m = new MallaHE();
     for (const k of ['pos', 'vHe', 'heV', 'heNext', 'hePrev', 'heTwin', 'heFace', 'heEdge', 'heUV', 'fHe', 'eHe']) m[k] = this[k].slice();
     m.heCol = this.heCol ? this.heCol.slice() : null;
+    m.pliegues = this.pliegues ? new Set(this.pliegues) : null;
     return m;
   }
+
+  // Aristas con pliegue (fijadas): la subdivisión no las redondea. Claves "a,b" con a < b.
+  esPliegue(a, b) { return !!this.pliegues && this.pliegues.has(a < b ? `${a},${b}` : `${b},${a}`); }
 
   // ---------- consultas ----------
 

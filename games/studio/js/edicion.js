@@ -27,6 +27,7 @@ export function refrescarObjeto(obj) {
 
 const NARANJA = new THREE.Color(0xff8a1f);
 const OSCURO = new THREE.Color(0x14171f);
+const CIAN = new THREE.Color(0x00d2ff); // aristas fijadas (pliegue)
 const RADIO_TOQUE = 26; // px
 
 // Malla de media arista del objeto (se crea la primera vez y la geometría pasa a ser la suya).
@@ -132,6 +133,47 @@ export class ModoEdicion {
   fusionar() { return this.tipo === 'v' && this.sel.size > 1 && this.operar('Fusionar', (m) => OP.fusionarVertices(m, [...this.sel])); }
   borrar() { return this.sel.size && this.operar('Borrar', (m) => OP.borrarCaras(m, this.carasAfectadas(m))); }
   simetria() { return this.operar('Simetría X', (m) => OP.simetriaX(m)); }
+  biselar() { return this.tipo === 'e' && this.sel.size && this.operar('Biselar', (m) => OP.biselarAristas(m, [...this.sel], this.anchoBisel())); }
+  pliegue() { return this.tipo === 'e' && this.sel.size && this.operar('Fijar borde', (m) => OP.alternarPliegues(m, [...this.sel])); }
+  rellenar() { return this.operar('Rellenar agujero', (m) => OP.rellenarAgujeros(m, this.sel.size ? [...this.vertsSeleccionados()] : null)); }
+  puente() { return this.tipo === 'f' && this.sel.size >= 2 && this.operar('Puente', (m) => OP.puenteCaras(m, [...this.sel])); }
+
+  // Cuchillo: dos toques en la pantalla marcan la línea; el plano pasa por ella y por el ojo de la
+  // cámara. Corta las caras seleccionadas (o todas si no hay selección).
+  empezarCuchillo() { this.cuchillo = []; this.alCambiar(); }
+  puntoCuchillo(x, y) {
+    const r = this.lienzo.getBoundingClientRect();
+    this.cuchillo.push(new THREE.Vector2(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1));
+    if (this.cuchillo.length < 2) { this.alCambiar(); return true; }
+    const [a, b] = this.cuchillo.map((n) => new THREE.Vector3(n.x, n.y, 0.5).unproject(this.camara));
+    const ojo = this.camara.position.clone();
+    const nMundo = new THREE.Vector3().crossVectors(a.clone().sub(ojo), b.clone().sub(ojo)).normalize();
+    this.cuchillo = null;
+    // plano al espacio local del objeto
+    this.obj.updateMatrixWorld();
+    const inv = this.obj.matrixWorld.clone().invert();
+    const pl = new THREE.Vector3().copy(ojo).applyMatrix4(inv), nl = nMundo.clone().transformDirection(inv);
+    const caras = this.tipo === 'f' && this.sel.size ? [...this.sel] : null;
+    const ok = this.operar('Cuchillo', (m) => OP.cortarPlano(m, pl.toArray(), nl.toArray(), caras));
+    this.alCambiar();
+    return ok;
+  }
+
+  // medidas de lo seleccionado (en metros, con la escala del objeto)
+  medidas() {
+    const m = this.malla, s = this.obj.matrixWorld, P = (v) => new THREE.Vector3(m.pos[v * 3], m.pos[v * 3 + 1], m.pos[v * 3 + 2]).applyMatrix4(s);
+    const sel = [...this.sel];
+    if (this.tipo === 'v' && sel.length === 2) return `distancia ${P(sel[0]).distanceTo(P(sel[1])).toFixed(3)} m`;
+    if (this.tipo === 'e' && sel.length) { const l = sel.reduce((t, e) => { const [a, b] = m.vertsDeArista(e); return t + P(a).distanceTo(P(b)); }, 0); return `${sel.length > 1 ? 'largo total' : 'largo'} ${l.toFixed(3)} m`; }
+    const vs = this.vertsSeleccionados();
+    if (vs.size > 1) { const c = new THREE.Box3(); for (const v of vs) c.expandByPoint(P(v)); const t = c.getSize(new THREE.Vector3()); return `caja ${t.x.toFixed(3)} × ${t.y.toFixed(3)} × ${t.z.toFixed(3)} m`; }
+    return '';
+  }
+  // ancho del bisel: un quinto de la arista seleccionada más corta (como el arrastre inicial de Blender)
+  anchoBisel() {
+    const m = this.malla, P = (v) => [m.pos[v * 3], m.pos[v * 3 + 1], m.pos[v * 3 + 2]];
+    return Math.min(...[...this.sel].map((e) => { const [a, b] = m.vertsDeArista(e); return Math.hypot(...[0, 1, 2].map((k) => P(a)[k] - P(b)[k])); })) * (this.factorBisel || 0.2);
+  }
 
   entrar(obj) {
     this.salir();
@@ -217,7 +259,7 @@ export class ModoEdicion {
       if (this.tipo === 'e') si = this.sel.has(e);
       else if (caraSel) { const h = m.eHe[e], t = m.heTwin[h]; si = caraSel.has(m.heFace[h]) || (t >= 0 && caraSel.has(m.heFace[t])); }
       else si = vs.has(a) && vs.has(b);
-      const c = si ? NARANJA : OSCURO;
+      const c = si ? NARANJA : m.esPliegue(a, b) ? CIAN : OSCURO;
       lc.setXYZ(e * 2, c.r, c.g, c.b); lc.setXYZ(e * 2 + 1, c.r, c.g, c.b);
     }
     lp.needsUpdate = lc.needsUpdate = true;
@@ -274,6 +316,7 @@ export class ModoEdicion {
   }
 
   tocar(x, y, sumar = false) {
+    if (this.cuchillo) return this.puntoCuchillo(x, y);
     const elem = this.elegir(x, y);
     const sumando = sumar || this.anadir;
     if (elem < 0) { if (!sumando) { this.sel.clear(); this.actualizar(); } return; }
@@ -352,10 +395,31 @@ export class ModoEdicion {
       P0inv: this.pivote.matrixWorld.clone().invert(),
     };
     this.mover0.antes = this.mover0.verts.map((v) => this.malla.pos.slice(v * 3, v * 3 + 3));
+    // imán a vértices: candidatos = los vértices no seleccionados de este objeto y los de los demás
+    if (this.ajusteVertices) {
+      const sel = new Set(this.mover0.verts), cand = [], t = new THREE.Vector3();
+      const m = this.malla;
+      for (let v = 0; v < m.nV; v++) if (!sel.has(v)) cand.push(t.set(m.pos[v * 3], m.pos[v * 3 + 1], m.pos[v * 3 + 2]).applyMatrix4(this.mover0.W).toArray());
+      this.obj.parent.children.forEach((o) => {
+        if (o === this.obj || !o.visible || !o.isMesh) return;
+        o.updateMatrixWorld();
+        const a = o.geometry.attributes.position;
+        for (let i = 0; i < a.count; i += Math.max(1, Math.floor(a.count / 4000))) cand.push(t.fromBufferAttribute(a, i).applyMatrix4(o.matrixWorld).toArray());
+      });
+      this.mover0.candidatos = cand;
+      this.mover0.centro = this.pivote.position.clone();
+    }
   }
 
   mover() {
     const s = this.mover0; if (!s) return;
+    if (s.candidatos && this.gizmo.tc.mode === 'translate') {
+      // el centro de la selección se pega al vértice más cercano (dentro de un radio en pantalla)
+      const p = this.pivote.position, lim = this.camara.position.distanceTo(p) * 0.04;
+      let mejor = null, d = lim;
+      for (const q of s.candidatos) { const dd = Math.hypot(q[0] - p.x, q[1] - p.y, q[2] - p.z); if (dd < d) { d = dd; mejor = q; } }
+      if (mejor) p.set(...mejor);
+    }
     this.pivote.updateMatrixWorld();
     // local' = W⁻¹ · P · P0⁻¹ · W · local
     const T = s.Winv.clone().multiply(this.pivote.matrixWorld).multiply(s.P0inv).multiply(s.W);

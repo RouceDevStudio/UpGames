@@ -10,7 +10,8 @@ export function subdividir(m, niveles = 1) {
 }
 
 function unNivel(m) {
-  const { pos, caras, uvs, colores } = aPoligonos(m);
+  const { pos, caras, uvs, colores, pliegues } = aPoligonos(m);
+  const duro = (a, b) => !!pliegues && pliegues.has(a < b ? `${a},${b}` : `${b},${a}`);
   const nV = pos.length / 3;
   const P = (v) => [pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]];
   const suma = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
@@ -34,7 +35,7 @@ function unNivel(m) {
   const idArista = new Map();
   for (const [k, e] of aristas) {
     const medio = esc(suma(P(e.a), P(e.b)), 0.5);
-    const p = e.caras.length === 2 ? esc(suma(suma(P(e.a), P(e.b)), suma(pc[e.caras[0]], pc[e.caras[1]])), 0.25) : medio;
+    const p = e.caras.length === 2 && !duro(e.a, e.b) ? esc(suma(suma(P(e.a), P(e.b)), suma(pc[e.caras[0]], pc[e.caras[1]])), 0.25) : medio;
     idArista.set(k, nuevo(p));
   }
   // vértices originales: interior (F + 2R + (n−3)P)/n ; borde (B1 + B2 + 6P)/8
@@ -44,9 +45,10 @@ function unNivel(m) {
   for (let v = 0; v < nV; v++) {
     const es = aristasDe[v];
     if (!es.length) continue;
-    const borde = es.filter((e) => e.caras.length !== 2);
+    const borde = es.filter((e) => e.caras.length !== 2 || duro(e.a, e.b));
     let p;
-    if (borde.length >= 2) {
+    if (borde.length >= 3) p = P(v); // esquina: se queda donde está
+    else if (borde.length === 2) {
       const otros = borde.slice(0, 2).map((e) => P(e.a === v ? e.b : e.a));
       p = esc(suma(suma(otros[0], otros[1]), esc(P(v), 6)), 1 / 8);
     } else {
@@ -70,5 +72,15 @@ function unNivel(m) {
       if (K) K.push([ks[i], mezcla([ks[i], ks[(i + 1) % n]]), kC, mezcla([ks[(i + n - 1) % n], ks[i]])]);
     }
   });
-  return dePoligonos({ pos: out, caras: C, uvs: U, colores: K }).malla;
+  // cada arista con pliegue se parte en dos aristas con pliegue
+  let pl = null;
+  if (pliegues && pliegues.size) {
+    pl = new Set();
+    for (const k of pliegues) {
+      const [a, b] = k.split(',').map(Number), id = idArista.get(k);
+      if (id === undefined) continue;
+      for (const [x, y] of [[a, id], [id, b]]) pl.add(x < y ? `${x},${y}` : `${y},${x}`);
+    }
+  }
+  return dePoligonos({ pos: out, caras: C, uvs: U, colores: K, pliegues: pl }).malla;
 }

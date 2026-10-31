@@ -7,7 +7,7 @@ import { Historial } from '../games/studio/js/deshacer.js';
 import { mascaraDesdeImagen, mascaraDePlano, cajaDeMascara, relieveDesdeMascara, cascoVisual, cascoPlanos, volumen } from '../games/studio/js/foto/fotoA3D.js';
 import { MallaHE } from '../games/studio/js/malla/mediaArista.js';
 import { aGeometria } from '../games/studio/js/malla/aGeometria.js';
-import { extruirCaras, insetCaras, cortarBucle, borrarCaras, fusionarVertices, simetriaX, suavizarVertices } from '../games/studio/js/malla/operaciones.js';
+import { extruirCaras, insetCaras, cortarBucle, borrarCaras, fusionarVertices, simetriaX, suavizarVertices, biselarAristas, alternarPliegues, refinarZona, rellenarAgujeros, puenteCaras, cortarPlano } from '../games/studio/js/malla/operaciones.js';
 import { subdividir } from '../games/studio/js/malla/subdividir.js';
 import { evaluar, nuevoModificador, espejo, matriz, solidificar } from '../games/studio/js/malla/modificadores.js';
 import { poligonosDeMalla, mallaDePoligonos, union, resta, interseccion } from '../games/studio/js/malla/csg.js';
@@ -424,6 +424,84 @@ test('formato .ups: malla → datos → gzip → malla, igual que la original', 
   assert.ok(Math.abs(vol(m) - vol(m2)) < 1e-4);
   assert.ok(m2.heCol && m2.heCol.length === m.heCol.length);
   assert.ok(bytes.length < JSON.stringify(mallaADatos(m)).length / 2, 'comprimido');
+});
+
+// ---------- Bisel y pliegues ----------
+const aristasCubo = (m, cond) => [...Array(m.nE).keys()].filter((e) => { const [a, b] = m.vertsDeArista(e); return cond([m.pos[a * 3], m.pos[a * 3 + 1], m.pos[a * 3 + 2]], [m.pos[b * 3], m.pos[b * 3 + 1], m.pos[b * 3 + 2]]); });
+test('biselar una arista del cubo: cerrada, 10 vértices, una cara más y algo menos de volumen', () => {
+  const m = cubo();
+  const e = aristasCubo(m, (a, b) => a[1] > 0.4 && b[1] > 0.4 && a[2] > 0.4 && b[2] > 0.4); // arista de arriba delante
+  const r = biselarAristas(m, e, 0.1).malla;
+  assert.ok(cerrada(r), JSON.stringify(r.validar().slice(0, 3)));
+  assert.strictEqual(r.nF, 6 + 1); // en vértices de 3 aristas no hace falta triángulo de cierre
+  const v = vol(r);
+  assert.ok(v < 1 && v > 0.99, `volumen ${v}`); // quita un prisma de 0,1 × 0,1 / 2 × 1 = 0,005
+});
+test('biselar las 4 aristas de arriba (bucle) y las 12 del cubo: cerrado', () => {
+  const m = cubo();
+  const arriba = aristasCubo(m, (a, b) => a[1] > 0.4 && b[1] > 0.4);
+  const r = biselarAristas(m, arriba, 0.1).malla;
+  assert.ok(cerrada(r));
+  const t = biselarAristas(m, [...Array(m.nE).keys()], 0.1).malla;
+  assert.ok(cerrada(t));
+  assert.strictEqual(t.nF, 6 + 12 + 8, 'caras + biseles + esquinas');
+  assert.ok(vol(t) < 1 && vol(t) > 0.9);
+});
+test('biselar una arista en una malla de vértices de 4 aristas (con triángulos de cierre)', () => {
+  const m = desdeThree(new THREE.PlaneGeometry(3, 3, 3, 3)); // plano 3 × 3: la arista central tiene vértices interiores
+  const sol = solidificar(m, 0.2); // cerrado
+  const e = [...Array(sol.nE).keys()].find((x) => { const [a, b] = sol.vertsDeArista(x); const p = (v) => [sol.pos[v * 3], sol.pos[v * 3 + 1], sol.pos[v * 3 + 2]]; return Math.abs(p(a)[2]) < 1e-6 && Math.abs(p(b)[2]) < 1e-6 && Math.abs(p(a)[0] - p(b)[0]) < 1e-6 && Math.abs(p(a)[1] + p(b)[1]) < 1e-6 && Math.abs(Math.abs(p(a)[1] - p(b)[1]) - 1) < 1e-6 && Math.abs(p(a)[0] - 0.5) < 1e-6; });
+  const r = biselarAristas(sol, [e], 0.1).malla;
+  assert.ok(cerrada(r), JSON.stringify(r.validar().slice(0, 3)));
+  assert.strictEqual(r.nF, sol.nF + 1 + 2, 'cara del bisel + dos triángulos');
+});
+
+test('pliegues: las aristas fijadas se conservan al subdividir (cubo con aristas vivas)', () => {
+  const m = cubo();
+  const todas = [...Array(m.nE).keys()];
+  const duro = alternarPliegues(m, todas).malla;
+  const r = subdividir(duro, 2).malla;
+  assert.ok(Math.abs(vol(r) - 1) < 1e-6, `con pliegues sigue siendo un cubo (${vol(r)})`);
+  assert.strictEqual(r.pliegues.size, 12 * 4);
+  const blando = subdividir(m, 2).malla;
+  assert.ok(vol(blando) < 0.8);
+  assert.strictEqual(alternarPliegues(duro, todas).malla.pliegues.size, 0, 'alternar otra vez los quita');
+});
+
+test('detalle local: solo se parten las caras cerca del pincel y la malla sigue cerrada', () => {
+  const m = subdividir(cubo(), 2).malla; // 96 caras
+  const r = refinarZona(m, [[0, 0.5, 0]], 0.2, 0.05, 2).malla;
+  assert.deepStrictEqual(r.validar(), []);
+  assert.strictEqual(bordes(r), 0);
+  assert.ok(r.nF > m.nF && r.nF < m.nF * 2, `${m.nF} → ${r.nF} caras (local, no toda la malla)`);
+  assert.ok(Math.abs(vol(r) - vol(m)) < vol(m) * 0.01, 'casi no cambia la forma');
+});
+
+// ---------- Precisión ----------
+test('rellenar agujero: cubo sin la tapa vuelve a estar cerrado', () => {
+  const m = cubo();
+  const abierta = borrarCaras(m, [caraArriba(m)]).malla;
+  const r = rellenarAgujeros(abierta).malla;
+  assert.ok(cerrada(r));
+  assert.ok(Math.abs(vol(r) - 1) < 1e-9);
+});
+test('puente: dos cubos separados unidos por sus caras enfrentadas → una pieza cerrada', () => {
+  const a = desdeThree(new THREE.BoxGeometry(1, 1, 1).translate(-1, 0, 0)), b = desdeThree(new THREE.BoxGeometry(1, 1, 1).translate(1, 0, 0));
+  const P = [...a.pos, ...b.pos], C = [];
+  for (let f = 0; f < a.nF; f++) C.push(a.vertsDeCara(f));
+  for (let f = 0; f < b.nF; f++) C.push(b.vertsDeCara(f).map((v) => v + a.nV));
+  const dos = MallaHE.desdePoligonos(P, C);
+  const enfrentadas = [...Array(dos.nF).keys()].filter((f) => dos.vertsDeCara(f).every((v) => Math.abs(Math.abs(dos.pos[v * 3]) - 0.5) < 1e-6));
+  const r = puenteCaras(dos, enfrentadas).malla;
+  assert.ok(cerrada(r));
+  assert.ok(Math.abs(vol(r) - 3) < 1e-6, `volumen ${vol(r)}`); // 1 + 1 + el tubo de 1 × 1 × 1
+});
+test('cuchillo: cortar el cubo por y = 0,1 → 4 aristas nuevas, cerrado y mismo volumen', () => {
+  const r = cortarPlano(cubo(), [0, 0.1, 0], [0, 1, 0]);
+  assert.strictEqual(r.aristas.length, 4);
+  assert.ok(cerrada(r.malla));
+  assert.ok(Math.abs(vol(r.malla) - 1) < 1e-9);
+  assert.strictEqual(r.malla.nF, 10);
 });
 
 await Promise.all(pendientes);

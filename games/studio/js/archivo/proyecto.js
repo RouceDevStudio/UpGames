@@ -46,7 +46,7 @@ export function escenaADatos(escena) {
   return {
     formato: 'upgames-studio', version: VERSION_UPS, fecha: new Date().toISOString(),
     objetos: escena.objetos.map((o) => ({
-      nombre: o.name, tipo: o.userData.tipo, visible: o.visible, bloqueado: !!o.userData.bloqueado,
+      nombre: o.name, tipo: o.userData.tipo, visible: o.visible, bloqueado: !!o.userData.bloqueado, grupo: o.userData.grupo, nombreGrupo: o.userData.nombreGrupo,
       p: o.position.toArray(), q: o.quaternion.toArray(), s: o.scale.toArray(), uuid: o.uuid,
       malla: mallaADatos(mallaDe(o)), material: materialADatos(o.material), modificadores: o.userData.modificadores || [],
     })),
@@ -59,6 +59,7 @@ export function datosAObjetos(d) {
     const m = new THREE.Mesh(new THREE.BufferGeometry(), datosAMaterial(x.material));
     m.name = x.nombre; m.visible = x.visible; m.uuid = x.uuid || m.uuid;
     m.userData.tipo = x.tipo; m.userData.bloqueado = x.bloqueado; m.userData.modificadores = x.modificadores || [];
+    if (x.grupo) { m.userData.grupo = x.grupo; m.userData.nombreGrupo = x.nombreGrupo; }
     m.position.fromArray(x.p); m.quaternion.fromArray(x.q); m.scale.fromArray(x.s);
     if (x.tipo === 'referencia') { // calco: sin luz, semitransparente
       m.material = new THREE.MeshBasicMaterial({ map: m.material.map, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, toneMapped: false });
@@ -166,6 +167,9 @@ export async function importar(archivo) {
       map: mat?.map || null, emissive: mat?.emissive ? mat.emissive.getHex() : 0, opacity: mat?.opacity ?? 1, transparent: !!mat?.transparent, vertexColors: !!geo.attributes.color,
     }));
     n.matrixWorld.decompose(m.position, m.quaternion, m.scale);
+    // piezas dentro de un nodo con nombre (p. ej. un coche exportado desde Studio) → un grupo
+    const padre = n.parent;
+    if (padre && padre !== raiz && padre.name && !padre.isMesh) { m.userData.grupo = `i${padre.uuid.slice(0, 8)}`; m.userData.nombreGrupo = padre.name; }
     m.name = n.name || 'Importado';
     m.userData.tipo = 'importado';
     m.castShadow = m.receiveShadow = true;
@@ -194,7 +198,18 @@ function visiblesSinCapas(raiz) {
 export async function exportar(formato, escena, nombre = 'upgames-studio') {
   const volver = visiblesSinCapas(escena.raiz);
   try {
-    if (formato === 'glb') return await exportarGLB(escena.raiz, nombre);
+    if (formato === 'glb') {
+      // los grupos salen como un nodo con sus piezas dentro (p. ej. «Monoplaza» con rueda_del_izq…)
+      const raiz = new THREE.Group(), nodos = new Map();
+      for (const o of escena.objetos) {
+        if (!o.visible) continue;
+        const c = o.clone(false); c.userData = {};
+        const g = o.userData.grupo;
+        if (g) { if (!nodos.has(g)) { const n = new THREE.Group(); n.name = o.userData.nombreGrupo || 'Grupo'; nodos.set(g, n); raiz.add(n); } nodos.get(g).add(c); }
+        else raiz.add(c);
+      }
+      return await exportarGLB(raiz, nombre);
+    }
     const grupo = new THREE.Group();
     for (const o of escena.objetos) if (o.visible) { const c = o.clone(false); c.userData = {}; grupo.add(c); }
     if (!grupo.children.length) throw new Error('vacío');

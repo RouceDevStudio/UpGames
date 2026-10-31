@@ -60,6 +60,7 @@
     <button id="bTodo" title="Seleccionar todo o nada (A)"><span>Todo</span></button>
     <button id="bBucle" title="Bucle de aristas desde la última arista tocada (L)" hidden><span>Bucle</span></button>
     <button id="bRayos" title="Ver y tocar a través de la malla (Alt+Z)"><span>Rayos X</span></button>
+    <button id="bImanVert" title="Al mover, la selección se pega al vértice más cercano"><span>Imán vért.</span></button>
   </div>
   <div id="infoMalla"></div>
 </div>
@@ -72,8 +73,24 @@
     <button data-pincel="pellizcar">Pellizcar</button>
     <button data-pincel="arrastrar">Arrastrar</button>
     <button data-pincel="aplanar">Aplanar</button>
+    <button data-pincel="surco" title="Hunde una línea fina: costuras y ranuras">Surco</button>
+    <button data-pincel="capa" title="Sube hasta una altura fija (no se acumula)">Capa</button>
+    <button data-pincel="arrugar" title="Pliegues de tela a lo largo del trazo">Arrugar</button>
+    <button data-pincel="alfa" title="Sello con patrón: costura, puntos, rejilla…">Alfa</button>
+    <button data-pincel="detalle" title="Añade vértices solo donde pasas el pincel">Detalle</button>
     <button data-pincel="mascara">Máscara</button>
+    <select id="selAlfa" title="Patrón del pincel Alfa"></select>
     <label id="filaColorPincel" class="color-pincel">Color <input id="pColorPincel" type="color" value="#d8141f"></label>
+    <span id="opcionesTextura" class="opciones-textura">
+      <button id="bEnTextura" title="Pinta píxeles de una textura (más nítido) en vez de vértices">Textura</button>
+      <button data-herr="pincel" title="Pincel">Pincel</button>
+      <button data-herr="calco" title="Calcomanía: toca el modelo para estamparla">Calcomanía</button>
+      <label class="btn chico" title="Imagen para la calcomanía (logo, patrocinador)">Imagen<input id="fCalco" type="file" accept="image/*" hidden></label>
+      <button id="bCalcoTexto" title="Calcomanía con un texto o número">Texto</button>
+      <select id="selCapaPintura" title="Capa en la que se pinta"></select>
+      <button id="bCapaPintura" title="Nueva capa">+ Capa</button>
+      <button id="bVerCapa" title="Mostrar u ocultar la capa">👁</button>
+    </span>
   </div>
   <div class="grupo ajustes-pincel">
     <label>Radio <input id="pRadio" type="range" min="0.01" max="0.6" step="0.005"></label>
@@ -82,6 +99,8 @@
     <button id="bSimetriaPincel" title="Simetría en X">Simetría</button>
     <button id="bMasDetalle" title="Subdivide para tener más vértices">Más detalle</button>
     <button id="bLimpiarMascara">Quitar máscara</button>
+    <button id="bNuevaCapa" title="Lo que esculpas después queda en una capa con intensidad ajustable">Nueva capa</button>
+    <label id="filaCapa" hidden>Capa <input id="pCapa" type="range" min="0" max="2" step="0.01" value="1"></label>
   </div>
   <div id="infoPincel"></div>
 </div>
@@ -94,7 +113,13 @@
     <button data-pest="objeto">Objeto</button>
     <button data-pest="mods">Modificadores</button>
   </div>
-  <div class="pest" data-pest="escena"><ul id="lista"></ul></div>
+  <div class="pest" data-pest="escena">
+    <div class="fila botones barra-escena">
+      <button id="bVarios" title="Tocar en la lista (o Mayús + toque en la vista) marca varios objetos">Seleccionar varios</button>
+      <button id="bAgrupar" title="Agrupa los objetos marcados">Agrupar</button>
+    </div>
+    <ul id="lista"></ul>
+  </div>
   <div class="pest" data-pest="objeto" hidden>
     <p class="nota vacio" id="propsVacio">Toca un objeto en la vista o en la pestaña Escena.</p>
     <div id="props" hidden>
@@ -109,6 +134,11 @@
         <button id="pDuplicar">Duplicar</button>
         <button id="pMaterial">Material…</button>
         <button id="pBorrar" class="peligro">Borrar</button>
+      </div>
+      <div class="fila botones" id="filaGrupo" hidden>
+        <span class="grupo-nombre">Grupo: <b id="nombreGrupo"></b></span>
+        <button id="bSoloPieza" title="Mover solo la pieza tocada, no todo el grupo">Solo esta pieza</button>
+        <button id="bDesagrupar">Desagrupar</button>
       </div>
       <p class="nota" id="pInfo"></p>
     </div>
@@ -134,10 +164,15 @@
     <button data-op="extruir" data-tipos="f" title="Extruir caras (E)">Extruir</button>
     <button data-op="inset" data-tipos="f" title="Inset: cara hacia dentro (I)">Inset</button>
     <button data-op="cortarBucle" data-tipos="e" title="Corte en bucle por la arista (Ctrl+R)">Cortar bucle</button>
+    <button data-op="biselar" data-tipos="e" title="Biselar: redondea las aristas seleccionadas (Ctrl+B)">Biselar</button>
+    <button data-op="pliegue" data-tipos="e" title="Fijar borde: la subdivisión no redondea estas aristas (Mayús+E)">Fijar borde</button>
     <button data-op="fusionar" data-tipos="v" title="Fusionar vértices en el centro (M)">Fusionar</button>
     <button data-op="subdividir" title="Subdividir y suavizar (Catmull-Clark)">Subdividir</button>
     <button data-op="suavizar" title="Suavizar vértices">Suavizar</button>
     <button data-op="simetria" title="Simetría: refleja el lado derecho (x ≥ 0)">Simetría X</button>
+    <button data-op="rellenar" title="Rellenar agujeros (los que tocan la selección, o todos) (Alt+F)">Rellenar</button>
+    <button data-op="puente" data-tipos="f" title="Puente: une dos zonas de caras enfrentadas con un tubo">Puente</button>
+    <button data-op="empezarCuchillo" title="Cuchillo: toca dos puntos en la pantalla para cortar en línea recta (K)">Cuchillo</button>
     <button data-op="borrar" class="peligro" title="Borrar (X)">Borrar</button>
   </div>
   <div class="acciones">

@@ -297,3 +297,22 @@ body.editando #estado, body.pincelando #estado { top: auto; bottom: calc(132px +
 .tarjeta-proyecto .botones { display: flex; gap: 4px; padding: 0 6px 6px; }
 .tarjeta-proyecto .botones button { flex: 1; height: 32px; border-radius: 8px; font-size: 12px; font-weight: 700; background: rgba(255,255,255,.08); }
 .tarjeta-proyecto .botones .peligro { color: var(--rojo); flex: 0 0 34px; }
+
+#selAlfa { background: rgba(255,255,255,.07); border: 1px solid var(--borde); border-radius: 10px; color: var(--texto); padding: 6px; font: inherit; font-size: 12px; }
+#filaCapa input { width: 90px; accent-color: #00d2ff; }
+
+.opciones-textura { display: inline-flex; flex-wrap: wrap; gap: 2px; align-items: center; }
+.opciones-textura .btn.chico { min-height: 0; height: 38px; padding: 0 10px; font-size: 13px; flex: 0; display: inline-grid; }
+#selCapaPintura { background: rgba(255,255,255,.07); border: 1px solid var(--borde); border-radius: 10px; color: var(--texto); padding: 6px; font: inherit; font-size: 12px; max-width: 110px; }
+
+/* Grupos */
+.barra-escena button { min-height: 36px; font-size: 12px; }
+.barra-escena button.activo { background: rgba(47, 123, 255, .35); }
+#lista li.marcado { outline: 2px solid var(--acento2); outline-offset: -2px; }
+#lista li.en-grupo { padding-left: 22px; }
+#lista li.cab-grupo { height: 30px; font-size: 11px; font-weight: 800; color: var(--acento2); text-transform: uppercase; letter-spacing: .4px; padding-left: 8px; }
+#filaGrupo { flex-wrap: wrap; font-size: 12px; }
+#filaGrupo .grupo-nombre { flex: 1 0 100%; color: var(--tenue); }
+#filaGrupo .grupo-nombre b { color: var(--texto); }
+#filaGrupo button { min-height: 36px; font-size: 12px; }
+#bSoloPieza.activo { background: rgba(255, 138, 31, .4); }

@@ -14,7 +14,8 @@ import { evaluar } from './malla/modificadores.js';
 import { poligonosDeMalla } from './malla/csg.js';
 import { instalarModificadores } from './ui/modificadores.js';
 import { instalarMateriales } from './ui/materiales.js';
-import { Pincel } from './herramientas/pincel.js';
+import { Pincel, ALFAS } from './herramientas/pincel.js';
+import { calcoDeTexto, calcoDeImagen } from './herramientas/pinturaTextura.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { construirMonoplaza } from './plantillas/monoplaza.js';
 import { construirPiloto } from './plantillas/piloto.js';
@@ -67,7 +68,22 @@ const caja = new THREE.BoxHelper(undefined, 0x00d2ff);
 caja.material.depthTest = false; caja.material.transparent = true; caja.material.opacity = 0.6;
 caja.renderOrder = 2; caja.visible = false;
 scene.add(caja);
-escena.alCambiar(() => { caja.visible = !!escena.seleccion && !edicion.activo && !(typeof pincel !== 'undefined' && pincel.activo); if (caja.visible) caja.setFromObject(escena.seleccion); });
+// recuadro de selección: el objeto, o todo el grupo; los marcados (selección múltiple) en amarillo
+const cajaGrupo = new THREE.Box3Helper(new THREE.Box3(), 0x00d2ff);
+cajaGrupo.material.depthTest = false; cajaGrupo.renderOrder = 2; cajaGrupo.visible = false;
+scene.add(cajaGrupo);
+const cajasMarcados = new THREE.Group(); scene.add(cajasMarcados);
+function actualizarCajas() {
+  const s = escena.seleccion, libre = !edicion.activo && !(typeof pincel !== 'undefined' && pincel.activo);
+  const grupo = s && escena.enGrupo(s);
+  caja.visible = !!s && libre && !grupo;
+  if (caja.visible) caja.setFromObject(s);
+  cajaGrupo.visible = !!grupo && libre;
+  if (cajaGrupo.visible) { cajaGrupo.box.makeEmpty(); for (const o of escena.miembros(s)) cajaGrupo.box.expandByObject(o); }
+  for (const c of [...cajasMarcados.children]) { cajasMarcados.remove(c); c.geometry.dispose(); }
+  for (const o of escena.marcados) { if (o.parent !== escena.raiz) continue; const h = new THREE.Box3Helper(new THREE.Box3().setFromObject(o), 0xffd23f); h.material.depthTest = false; h.renderOrder = 2; cajasMarcados.add(h); }
+}
+escena.alCambiar(() => actualizarCajas());
 
 function anadirPrimitiva(id) {
   const m = crearPrimitiva(id);
@@ -131,6 +147,19 @@ function pintarPincel() {
   const esc = pincel.modo === 'esculpir';
   document.querySelectorAll('[data-pincel]').forEach((b) => { b.hidden = !esc; b.classList.toggle('activo', b.dataset.pincel === pincel.tipo); });
   $('filaColorPincel').hidden = esc; $('bLimpiarMascara').hidden = !esc; $('bRestar').hidden = !esc;
+  $('selAlfa').hidden = !esc || pincel.tipo !== 'alfa'; $('bNuevaCapa').hidden = !esc;
+  // pintar: vértice o textura, herramienta y capas
+  $('opcionesTextura').hidden = esc;
+  $('bEnTextura').classList.toggle('activo', pincel.enTextura);
+  const tex = !esc && pincel.enTextura && pincel.textura.obj;
+  for (const id of ['selCapaPintura', 'bCapaPintura', 'bVerCapa', 'fCalco', 'bCalcoTexto']) ($(id).closest('label') || $(id)).hidden = !tex;
+  document.querySelectorAll('[data-herr]').forEach((b) => { b.hidden = !tex; b.classList.toggle('activo', pincel.textura.herramienta === b.dataset.herr); });
+  if (tex) {
+    const capas = pincel.textura.capas, act = pincel.textura.obj.userData.capaActiva;
+    $('selCapaPintura').innerHTML = capas.map((c, i) => `<option value="${i}" ${i === act ? 'selected' : ''}>${c.visible ? '' : '(oculta) '}${c.nombre}</option>`).join('');
+  }
+  $('filaCapa').hidden = !esc || !pincel.capaEsc || pincel.capaEsc.malla !== pincel.malla;
+  $('bNuevaCapa').classList.toggle('activo', !$('filaCapa').hidden);
   $('bRestar').classList.toggle('activo', pincel.restar);
   $('bSimetriaPincel').classList.toggle('activo', pincel.simetria);
   $('pRadio').value = pincel.radio; $('pFuerza').value = pincel.fuerza;
@@ -144,6 +173,31 @@ $('pFuerza').oninput = () => { pincel.fuerza = +$('pFuerza').value; };
 $('pColorPincel').oninput = () => { pincel.color.set($('pColorPincel').value); };
 $('bMasDetalle').onclick = () => { if (!pincel.masDetalle()) aviso('La malla ya tiene mucho detalle'); pintarPincel(); };
 $('bLimpiarMascara').onclick = () => pincel.limpiarMascara();
+$('selAlfa').innerHTML = Object.entries(ALFAS).map(([k, a]) => `<option value="${k}">${a.nombre}</option>`).join('');
+$('selAlfa').onchange = () => { pincel.alfa = $('selAlfa').value; };
+$('bNuevaCapa').onclick = () => { pincel.nuevaCapa(); $('pCapa').value = 1; pintarPincel(); aviso('Capa nueva: esculpe y luego ajusta su intensidad'); };
+$('pCapa').oninput = () => pincel.intensidadCapa(+$('pCapa').value);
+$('pCapa').onchange = () => pincel.intensidadCapa(+$('pCapa').value, true);
+pincel.alCambiarMalla = () => pintarPincel();
+$('bEnTextura').onclick = () => { pincel.usarTextura(!pincel.enTextura); pintarPincel(); if (pincel.enTextura) aviso('Pintando sobre textura (se aplicó UV automático si hacía falta)'); };
+document.querySelectorAll('[data-herr]').forEach((b) => b.addEventListener('click', () => {
+  if (b.dataset.herr === 'calco' && !pincel.textura.calco) pincel.textura.calco = calcoDeTexto('1', { color: '#ffffff' });
+  pincel.textura.herramienta = b.dataset.herr; pintarPincel();
+  if (b.dataset.herr === 'calco') aviso('Toca el modelo para estampar la calcomanía (su tamaño es el radio)');
+}));
+$('fCalco').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try { pincel.textura.calco = await calcoDeImagen(f); pincel.textura.herramienta = 'calco'; pintarPincel(); aviso('Calcomanía lista: toca el modelo'); }
+  catch (err) { console.error(err); aviso('No se pudo abrir la imagen'); }
+});
+$('bCalcoTexto').onclick = () => {
+  const t = prompt('Texto o número de la calcomanía', '1'); if (!t) return;
+  pincel.textura.calco = calcoDeTexto(t.slice(0, 24), { color: `#${pincel.color.getHexString()}` });
+  pincel.textura.herramienta = 'calco'; pintarPincel(); aviso('Calcomanía de texto lista (usa el color del pincel): toca el modelo');
+};
+$('selCapaPintura').onchange = () => { pincel.textura.obj.userData.capaActiva = +$('selCapaPintura').value; pintarPincel(); };
+$('bCapaPintura').onclick = () => { pincel.textura.anadirCapa(); pintarPincel(); };
+$('bVerCapa').onclick = () => { const c = pincel.textura.activa; c.visible = !c.visible; pincel.textura.componer(); pintarPincel(); };
 function pintarEdicion() {
   if (!edicion.activo) return;
   document.querySelectorAll('[data-tipo]').forEach((q) => q.classList.toggle('activo', q.dataset.tipo === edicion.tipo));
@@ -152,18 +206,24 @@ function pintarEdicion() {
   $('bBucle').hidden = edicion.tipo !== 'e';
   document.querySelectorAll('[data-op][data-tipos]').forEach((b) => { b.disabled = !b.dataset.tipos.includes(edicion.tipo); });
   const m = edicion.malla, nombres = { v: 'vértices', e: 'aristas', f: 'caras' };
-  $('infoMalla').textContent = `${edicion.obj.name} · ${m.nV} vértices · ${m.nE} aristas · ${m.nF} caras · ${edicion.sel.size} ${nombres[edicion.tipo]} seleccionad${edicion.tipo === 'v' ? 'os' : 'as'}`;
+  const med = edicion.medidas();
+  $('infoMalla').textContent = edicion.cuchillo ? `Cuchillo: toca ${edicion.cuchillo.length ? 'el segundo' : 'el primer'} punto de la línea de corte`
+    : `${edicion.obj.name} · ${m.nV} vértices · ${m.nE} aristas · ${m.nF} caras · ${edicion.sel.size} ${nombres[edicion.tipo]} seleccionad${edicion.tipo === 'v' ? 'os' : 'as'}${med ? ' · ' + med : ''}`;
+  $('bImanVert').classList.toggle('activo', !!edicion.ajusteVertices);
+  document.querySelector('[data-op="empezarCuchillo"]').classList.toggle('activo', !!edicion.cuchillo);
 }
 document.querySelectorAll('[data-tipo]').forEach((b) => b.addEventListener('click', () => edicion.ponerTipo(b.dataset.tipo)));
-const PISTAS = { extruir: 'Toca primero una o más caras', inset: 'Toca primero una o más caras', cortarBucle: 'Toca primero una arista', fusionar: 'Toca dos o más vértices', borrar: 'No hay nada seleccionado', subdividir: 'La malla ya es demasiado densa' };
+const PISTAS = { rellenar: 'No hay agujeros que rellenar', puente: 'Toca dos zonas de caras enfrentadas con el mismo número de lados', empezarCuchillo: '', biselar: 'Toca primero una o más aristas (aristas interiores)', pliegue: 'Toca primero una o más aristas', extruir: 'Toca primero una o más caras', inset: 'Toca primero una o más caras', cortarBucle: 'Toca primero una arista', fusionar: 'Toca dos o más vértices', borrar: 'No hay nada seleccionado', subdividir: 'La malla ya es demasiado densa' };
 function operacion(op) {
   if (!edicion.activo) return;
+  if (op === 'empezarCuchillo') { edicion.empezarCuchillo(); aviso('Cuchillo: toca dos puntos en la pantalla'); return; }
   if (!edicion[op]()) aviso(PISTAS[op] || 'No se pudo aplicar');
 }
 document.querySelectorAll('[data-op]').forEach((b) => b.addEventListener('click', () => operacion(b.dataset.op)));
 $('bSumar').onclick = () => { edicion.anadir = !edicion.anadir; pintarEdicion(); };
 $('bTodo').onclick = () => edicion.seleccionarTodo();
 $('bBucle').onclick = () => { if (!edicion.seleccionarBucle()) aviso('Toca primero una arista'); };
+$('bImanVert').onclick = () => { edicion.ajusteVertices = !edicion.ajusteVertices; pintarEdicion(); };
 $('bRayos').onclick = () => { edicion.rayosX = !edicion.rayosX; edicion.aplicarRayosX(); pintarEdicion(); };
 // si el objeto que se edita desaparece (borrado o deshecho), volver al modo objeto
 escena.alCambiar(() => { if ((edicion.activo && edicion.obj.parent !== escena.raiz) || (pincel.activo && pincel.obj.parent !== escena.raiz)) ponerModo('objeto'); });
@@ -181,7 +241,13 @@ function objetoEn(x, y) {
 instalarGestos(lienzo, camOrb, {
   ocupado: () => gizmo.arrastrando,
   pincel: { empezar: (x, y) => pincel.activo && pincel.empezar(x, y), mover: (x, y) => pincel.mover(x, y), terminar: () => pincel.terminar() },
-  alTocar: (x, y, sumar) => { if (edicion.activo) edicion.tocar(x, y, sumar); else escena.seleccionar(objetoEn(x, y)); },
+  alTocar: (x, y, sumar) => {
+    if (edicion.activo) return edicion.tocar(x, y, sumar);
+    const o = objetoEn(x, y);
+    if (sumar || modoVarios) { if (o) { if (escena.marcados.has(o)) escena.marcados.delete(o); else escena.marcados.add(o); escena.avisar(); } return; }
+    if (o !== escena.seleccion) escena.soloPieza = false;
+    escena.seleccionar(o);
+  },
   alDobleToque: (x, y) => { if (!edicion.activo) { const o = objetoEn(x, y); if (o) escena.seleccionar(o); } enfocar(); },
   alPulsacionLarga: (x, y, id) => {
     if (edicion.activo) return radialEdicion(x, y, id);
@@ -345,7 +411,10 @@ $('bFoto').onclick = () => { abrirHoja(null); dialogoFoto.abrir(); };
 $('rejillaPrimitivas').innerHTML = PRIMITIVAS.map((p) => `<button data-prim="${p.id}">${p.icono}${p.nombre}</button>`).join('');
 function crearPlantilla(construir, nombre, texto) {
   if (edicion.activo) ponerModo('objeto');
-  const piezas = escena.anadirVarios(construir(), `Plantilla ${nombre}`);
+  const nuevas = construir(), id = `g${Date.now().toString(36)}`;
+  const titulo = nombre[0].toUpperCase() + nombre.slice(1);
+  for (const o of nuevas) { o.userData.grupo = id; o.userData.nombreGrupo = titulo; }
+  const piezas = escena.anadirVarios(nuevas, `Plantilla ${nombre}`);
   $('hojaAnadir').hidden = true;
   escena.seleccionar(null);
   const s = escena.esferaDe(null);
@@ -398,12 +467,24 @@ const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>'
 function pintarPanel() {
   const lista = $('lista');
   const objs = escena.objetos;
-  lista.innerHTML = objs.length ? objs.map((o, i) => `
-    <li data-i="${i}" class="${o === escena.seleccion ? 'sel' : ''} ${o.visible ? '' : 'oculto'}">
+  const fila = (o, i, extra = '') => `
+    <li data-i="${i}" class="${o === escena.seleccion || (escena.enGrupo(escena.seleccion) && o.userData.grupo === escena.seleccion?.userData.grupo) ? 'sel' : ''} ${o.visible ? '' : 'oculto'} ${escena.marcados.has(o) ? 'marcado' : ''} ${extra}">
       <span class="n">${esc(o.name)}</span>
       <button data-acc="ver" class="${o.visible ? 'on' : ''}" title="Mostrar u ocultar">${OJO}</button>
       <button data-acc="bloq" class="${o.userData.bloqueado ? 'on' : ''}" title="Bloquear">${CANDADO}</button>
-    </li>`).join('') : '<li class="vacio">Vacía. Toca «Añadir» o «Desde foto».</li>';
+    </li>`;
+  // primero los objetos sueltos, luego cada grupo con su cabecera
+  const grupos = new Map(), sueltos = [];
+  objs.forEach((o, i) => { const g = o.userData.grupo; if (g) { if (!grupos.has(g)) grupos.set(g, []); grupos.get(g).push([o, i]); } else sueltos.push([o, i]); });
+  let html = sueltos.map(([o, i]) => fila(o, i)).join('');
+  for (const [g, ms] of grupos) html += `<li class="cab-grupo" data-grupo="${g}">▾ ${esc(ms[0][0].userData.nombreGrupo || 'Grupo')} · ${ms.length}</li>` + ms.map(([o, i]) => fila(o, i, 'en-grupo')).join('');
+  lista.innerHTML = objs.length ? html : '<li class="vacio">Vacía. Toca «Añadir» o «Desde foto».</li>';
+  $('bVarios').classList.toggle('activo', modoVarios);
+  $('bAgrupar').disabled = escena.marcados.size < 2;
+  $('bAgrupar').textContent = escena.marcados.size >= 2 ? `Agrupar (${escena.marcados.size})` : 'Agrupar';
+  const sg = escena.seleccion;
+  $('filaGrupo').hidden = !sg?.userData.grupo;
+  if (sg?.userData.grupo) { $('nombreGrupo').textContent = `${sg.userData.nombreGrupo || 'Grupo'} (${escena.miembros(sg).length} piezas)`; $('bSoloPieza').classList.toggle('activo', escena.soloPieza); }
   const s = escena.seleccion;
   $('props').hidden = !s; $('propsVacio').hidden = !!s; $('modsVacio').hidden = !!s;
   $('selMod').hidden = !s;
@@ -418,7 +499,9 @@ function pintarPanel() {
       inp.value = Math.abs(v) < 1e-9 ? 0 : +v.toFixed(inp.dataset.tr[0] === 'r' ? 1 : 3);
     });
     const g = s.geometry, tri = g.index ? g.index.count / 3 : g.attributes.position.count / 3, mods = (s.userData.modificadores || []).length;
-    $('pInfo').textContent = `${Math.round(tri).toLocaleString('es')} triángulos${mods ? ` · ${mods} modificador${mods > 1 ? 'es' : ''}` : ''}${s.userData.bloqueado ? ' · bloqueado' : ''}`;
+    const bb = new THREE.Box3(); for (const q of escena.enGrupo(s) ? escena.miembros(s) : [s]) bb.expandByObject(q);
+    const tam = bb.getSize(new THREE.Vector3()), m2 = (x) => (x < 1 ? `${Math.round(x * 100)} cm` : `${x.toFixed(2)} m`);
+    $('pInfo').textContent = `Medidas: ${m2(tam.x)} × ${m2(tam.y)} × ${m2(tam.z)} · ${Math.round(tri).toLocaleString('es')} triángulos${mods ? ` · ${mods} modificador${mods > 1 ? 'es' : ''}` : ''}${s.userData.bloqueado ? ' · bloqueado' : ''}`;
   }
   actualizarEstado();
 }
@@ -461,6 +544,7 @@ $('lista').addEventListener('click', (e) => {
   if (!li) return;
   const o = escena.objetos[+li.dataset.i];
   const acc = e.target.closest('[data-acc]')?.dataset.acc;
+  if (!acc && modoVarios) { if (escena.marcados.has(o)) escena.marcados.delete(o); else escena.marcados.add(o); escena.avisar(); return; }
   if (acc === 'ver') escena.alternarVisible(o);
   else if (acc === 'bloq') escena.alternarBloqueo(o);
   else if (o.visible) { if (edicion.activo && edicion.obj !== o) ponerModo('objeto'); escena.seleccionar(o); }
@@ -469,6 +553,21 @@ $('pNombre').addEventListener('change', () => escena.seleccion && escena.renombr
 $('pNombre').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') e.target.blur(); });
 $('pColor').addEventListener('change', () => escena.seleccion && escena.colorear(escena.seleccion, parseInt($('pColor').value.slice(1), 16)));
 $('pDuplicar').onclick = () => escena.duplicar();
+let modoVarios = false;
+$('bVarios').onclick = () => { modoVarios = !modoVarios; if (!modoVarios) escena.marcados.clear(); escena.avisar(); if (modoVarios) aviso('Toca objetos en la lista o en la vista para marcarlos'); };
+$('bAgrupar').onclick = () => {
+  const objs = [...escena.marcados];
+  const nombre = prompt('Nombre del grupo', 'Grupo'); if (nombre === null) return;
+  const id = escena.agrupar(objs, nombre.trim() || 'Grupo');
+  if (id) { modoVarios = false; escena.soloPieza = false; escena.seleccionar(objs[0]); escena.avisar(); aviso(`Grupo «${nombre || 'Grupo'}»: se mueve entero`, conDeshacer); }
+};
+$('bDesagrupar').onclick = () => { if (escena.seleccion) { escena.desagrupar(escena.seleccion); aviso('Desagrupado', conDeshacer); } };
+$('bSoloPieza').onclick = () => { escena.soloPieza = !escena.soloPieza; escena.avisar(); };
+$('lista').addEventListener('click', (e) => {
+  const cab = e.target.closest('.cab-grupo'); if (!cab) return;
+  const o = escena.objetos.find((q) => q.userData.grupo === cab.dataset.grupo);
+  if (o) { escena.soloPieza = false; escena.seleccionar(o); escena.avisar(); }
+});
 $('pBorrar').onclick = () => borrarSeleccion();
 $('pMaterial').onclick = () => { panel.classList.remove('abierto'); materiales.abrir(); };
 escena.alCambiar(pintarPanel);
@@ -481,6 +580,8 @@ addEventListener('keydown', (e) => {
   if (e.target.matches?.('input')) return;
   const k = e.key.toLowerCase(), ctrl = e.ctrlKey || e.metaKey;
   if (ctrl && k === 's') { e.preventDefault(); guardarComo(false); return; }
+  if (edicion.activo && ctrl && k === 'b') { e.preventDefault(); operacion('biselar'); return; }
+  if (edicion.activo && e.shiftKey && k === 'e') { operacion('pliegue'); return; }
   if (edicion.activo && ctrl && k === 'r') { e.preventDefault(); operacion('cortarBucle'); return; }
   if (k === 'tab') { e.preventDefault(); ponerModo(edicion.activo ? 'objeto' : 'editar'); return; }
   if (edicion.activo && !ctrl) {
@@ -493,6 +594,8 @@ addEventListener('keydown', (e) => {
     if (k === 'e') { operacion('extruir'); return; }
     if (k === 'i') { operacion('inset'); return; }
     if (k === 'm') { operacion('fusionar'); return; }
+    if (k === 'k') { operacion('empezarCuchillo'); return; }
+    if (k === 'f' && e.altKey) { operacion('rellenar'); return; }
     if (e.shiftKey && k === 'd') return;
   }
   if (ctrl && k === 'z') { e.preventDefault(); if (e.shiftKey) historial.rehacer(); else historial.deshacer(); }
@@ -547,6 +650,7 @@ renderer.setAnimationLoop(() => {
   camOrb.actualizar(Math.min(0.1, (ahora - antes) / 1000));
   antes = ahora;
   if (caja.visible) caja.update();
+  if (cajaGrupo.visible && gizmo.arrastrando) { cajaGrupo.box.makeEmpty(); for (const o of escena.miembros(escena.seleccion)) cajaGrupo.box.expandByObject(o); }
   renderer.render(scene, camara);
 });
 

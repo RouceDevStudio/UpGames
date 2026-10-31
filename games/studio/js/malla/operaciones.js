@@ -13,11 +13,11 @@ export function aPoligonos(m) {
     uvs.push(hs.map((h) => [m.heUV[h * 2], m.heUV[h * 2 + 1]]));
     if (colores) colores.push(hs.map((h) => [m.heCol[h * 3], m.heCol[h * 3 + 1], m.heCol[h * 3 + 2]]));
   }
-  return { pos: m.pos.slice(), caras, uvs, colores };
+  return { pos: m.pos.slice(), caras, uvs, colores, pliegues: m.pliegues ? new Set(m.pliegues) : null };
 }
 
 // Quita vértices sin usar, esquinas repetidas seguidas y caras de menos de 3 vértices.
-export function dePoligonos({ pos, caras, uvs, colores }) {
+export function dePoligonos({ pos, caras, uvs, colores, pliegues = null }) {
   const C = [], U = [], K = colores ? [] : null;
   caras.forEach((c, f) => {
     const vs = [], us = [], ks = [];
@@ -31,7 +31,20 @@ export function dePoligonos({ pos, caras, uvs, colores }) {
   });
   const nuevo = new Int32Array(pos.length / 3).fill(-1), P = [];
   for (const c of C) for (const v of c) if (nuevo[v] < 0) { nuevo[v] = P.length / 3; P.push(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]); }
-  return { malla: MallaHE.desdePoligonos(P, C.map((c) => c.map((v) => nuevo[v])), { uvs: U, colores: K }), remapa: nuevo, indiceCara: C };
+  const malla = MallaHE.desdePoligonos(P, C.map((c) => c.map((v) => nuevo[v])), { uvs: U, colores: K });
+  // pliegues: se conservan los que siguen siendo aristas de la malla nueva
+  if (pliegues && pliegues.size) {
+    const aristas = new Set();
+    for (let e = 0; e < malla.nE; e++) { const [a, b] = malla.vertsDeArista(e); aristas.add(a < b ? `${a},${b}` : `${b},${a}`); }
+    malla.pliegues = new Set();
+    for (const k of pliegues) {
+      const [a, b] = k.split(',').map((x) => nuevo[+x]);
+      if (a < 0 || b < 0) continue;
+      const kk = a < b ? `${a},${b}` : `${b},${a}`;
+      if (aristas.has(kk)) malla.pliegues.add(kk);
+    }
+  }
+  return { malla, remapa: nuevo, indiceCara: C };
 }
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -288,4 +301,283 @@ export function moverVertices(m, verts, fn) {
     out.pos[v * 3] = q[0]; out.pos[v * 3 + 1] = q[1]; out.pos[v * 3 + 2] = q[2];
   }
   return { malla: out };
+}
+
+// ---------- pliegues (fijar bordes) ----------
+// Marca o desmarca aristas como pliegue: la subdivisión Catmull-Clark las deja vivas.
+export function alternarPliegues(m, aristas) {
+  const out = m.clone();
+  out.pliegues = out.pliegues || new Set();
+  const claves = aristas.map((e) => { const [a, b] = m.vertsDeArista(e); return a < b ? `${a},${b}` : `${b},${a}`; });
+  const todas = claves.every((k) => out.pliegues.has(k));
+  for (const k of claves) { if (todas) out.pliegues.delete(k); else out.pliegues.add(k); }
+  return { malla: out, aristas };
+}
+
+// ---------- biselar aristas ----------
+// Cada arista seleccionada se sustituye por una cara estrecha (chaflán) de ancho `ancho`.
+// En cada vértice el abanico de caras se parte en «sectores» por las aristas seleccionadas y
+// cada sector recibe un vértice nuevo desplazado hacia dentro; donde solo llega una arista
+// seleccionada se crean dos vértices y un triángulo de cierre; donde llegan tres o más, una
+// cara de esquina. Solo vértices interiores (sin bordes abiertos).
+export function biselarAristas(m, seleccion, ancho = null) {
+  const sel = new Set(seleccion.filter((e) => Number.isInteger(e) && e >= 0 && e < m.nE));
+  if (!sel.size) return null;
+  const P = aPoligonos(m);
+  const pos = P.pos;
+  const V = (v) => [pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]];
+  const largo = (e) => { const [a, b] = m.vertsDeArista(e); return Math.hypot(...sub(V(a), V(b))); };
+  if (ancho === null) ancho = Math.min(...[...sel].map(largo)) * 0.2;
+  // por esquina (cara, vértice) → lista de vértices que la sustituyen
+  const esquina = new Map(), ck = (f, v) => `${f}:${v}`;
+  const extra = []; // triángulos de cierre y caras de esquina
+  const nuevo = (p) => nuevoVertice(pos, p);
+  const desde = (v, x, w) => { const a = V(v), d = norm(sub(V(x), a)), l = Math.min(w, Math.hypot(...sub(V(x), a)) * 0.45); return [a[0] + d[0] * l, a[1] + d[1] * l, a[2] + d[2] * l]; };
+  const verticesSel = new Set();
+  for (const e of sel) for (const v of m.vertsDeArista(e)) verticesSel.add(v);
+  for (const v of verticesSel) {
+    // abanico ordenado de medias aristas que salen de v
+    const h0 = m.vHe[v];
+    const fan = [];
+    let h = h0, borde = false;
+    do { fan.push(h); const t = m.heTwin[m.hePrev[h]]; if (t < 0) { borde = true; break; } h = t; } while (h !== h0 && fan.length < 64);
+    if (borde) return null; // bordes abiertos: no se bisela
+    const k = fan.length, objetivo = (i) => m.heV[m.heNext[fan[i]]];
+    const marcadas = fan.map((hh) => sel.has(m.heEdge[hh]));
+    const c = marcadas.filter(Boolean).length;
+    if (c === 1) {
+      const i0 = marcadas.indexOf(true);
+      const f = (j) => m.heFace[fan[(i0 + j) % k]];
+      const a1 = nuevo(desde(v, objetivo((i0 + 1) % k), ancho)), a2 = nuevo(desde(v, objetivo((i0 + k - 1) % k), ancho));
+      esquina.set(ck(f(0), v), [a1]);
+      esquina.set(ck(f(k - 1), v), [a2]);
+      if (k === 3) esquina.set(ck(f(1), v), [a2, a1]);
+      else { esquina.set(ck(f(1), v), [v, a1]); esquina.set(ck(f(k - 2), v), [a2, v]); extra.push([a1, v, a2]); }
+    } else {
+      // sectores: caras entre dos aristas seleccionadas consecutivas
+      const i0 = marcadas.indexOf(true), sectores = [];
+      let actual = null;
+      for (let j = 0; j < k; j++) {
+        const i = (i0 + j) % k;
+        if (marcadas[i]) { actual = { caras: [], interiores: [], ini: i }; sectores.push(actual); }
+        actual.caras.push(m.heFace[fan[i]]);
+        const sig = (i + 1) % k;
+        if (!marcadas[sig]) actual.interiores.push(objetivo(sig));
+        else actual.fin = sig;
+      }
+      const verts = sectores.map((s) => {
+        let p;
+        if (s.interiores.length) p = media(s.interiores.map((x) => desde(v, x, ancho)));
+        else { const a = V(v), d1 = norm(sub(V(objetivo(s.ini)), a)), d2 = norm(sub(V(objetivo(s.fin)), a)); p = [a[0] + (d1[0] + d2[0]) * ancho, a[1] + (d1[1] + d2[1]) * ancho, a[2] + (d1[2] + d2[2]) * ancho]; }
+        const nv = nuevo(p);
+        for (const f of s.caras) esquina.set(ck(f, v), [nv]);
+        return nv;
+      });
+      if (c >= 3) extra.push({ esquina: verts, v });
+    }
+  }
+  // caras originales con las esquinas sustituidas
+  const C = [], U = [], K = P.colores ? [] : null;
+  P.caras.forEach((cara, f) => {
+    const vs = [], us = [], ks = [];
+    cara.forEach((v, i) => {
+      for (const w of esquina.get(ck(f, v)) || [v]) { vs.push(w); us.push(P.uvs[f][i]); if (K) ks.push(P.colores[f][i]); }
+    });
+    C.push(vs); U.push(us); if (K) K.push(ks);
+  });
+  const de = (f, v) => (esquina.get(ck(f, v)) || [v]);
+  // caras del bisel: [aF, aG, bG, bF]
+  for (const e of sel) {
+    const h = m.eHe[e], t = m.heTwin[h];
+    if (t < 0) continue;
+    const a = m.heV[h], b = m.heV[t], F = m.heFace[h], G = m.heFace[t];
+    const aF = de(F, a), bF = de(F, b), aG = de(G, a), bG = de(G, b);
+    const q = [aF[0], aG[aG.length - 1], bG[0], bF[bF.length - 1]];
+    C.push(q); U.push(q.map(() => [0, 0])); if (K) K.push(q.map(() => P.colores[F][0]));
+  }
+  // triángulos de cierre y caras de esquina (orientadas hacia fuera)
+  for (const x of extra) {
+    let vs = Array.isArray(x) ? x : x.esquina;
+    if (!Array.isArray(x)) {
+      const n = normalPoligono(pos, vs), mm = [0, 0, 0];
+      for (let f = 0; f < m.nF; f++) if (m.vertsDeCara(f).includes(x.v)) { const nn = m.normalCara(f); mm[0] += nn[0]; mm[1] += nn[1]; mm[2] += nn[2]; }
+      if (n[0] * mm[0] + n[1] * mm[1] + n[2] * mm[2] < 0) vs = vs.slice().reverse();
+    }
+    C.push(vs); U.push(vs.map(() => [0, 0])); if (K) K.push(vs.map(() => [0.5, 0.5, 0.5]));
+  }
+  const r = dePoligonos({ pos, caras: C, uvs: U, colores: K, pliegues: P.pliegues });
+  return { malla: r.malla };
+}
+
+// ---------- detalle local (esculpir con más resolución solo donde hace falta) ----------
+// Parte en 4 las caras cercanas a algún centro (distancia < r) cuya arista más larga pasa de
+// `objetivo`: cuadriláteros en 4 cuadriláteros y el resto en abanico desde el centro. Las caras
+// vecinas reciben el punto medio en su lado (sin grietas: quedan con un vértice más).
+export function refinarZona(m, centros, r, objetivo, pasadas = 2, maxCaras = 120000) {
+  let malla = m;
+  for (let k = 0; k < pasadas; k++) {
+    const P = aPoligonos(malla), pos = P.pos;
+    const V = (v) => [pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]];
+    const d2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+    const partir = new Set();
+    P.caras.forEach((c, f) => {
+      const cen = media(c.map(V));
+      if (!centros.some((q) => d2(q, cen) < r * r)) return;
+      let larga = 0;
+      c.forEach((v, i) => { larga = Math.max(larga, d2(V(v), V(c[(i + 1) % c.length]))); });
+      if (larga > objetivo * objetivo) partir.add(f);
+    });
+    if (!partir.size || malla.nF + partir.size * 3 > maxCaras) break;
+    const medios = new Map(), clave = (a, b) => (a < b ? `${a},${b}` : `${b},${a}`);
+    const medio = (a, b) => { const kk = clave(a, b); if (!medios.has(kk)) medios.set(kk, nuevoVertice(pos, media([V(a), V(b)]))); return medios.get(kk); };
+    for (const f of partir) P.caras[f].forEach((v, i, c) => medio(v, c[(i + 1) % c.length]));
+    const C = [], U = [], K = P.colores ? [] : null;
+    const mez = (l) => l[0].map((_, j) => l.reduce((s, x) => s + x[j], 0) / l.length);
+    P.caras.forEach((c, f) => {
+      const us = P.uvs[f], ks = P.colores && P.colores[f], n = c.length;
+      if (partir.has(f)) {
+        const mid = c.map((v, i) => medio(v, c[(i + 1) % n]));
+        const muv = c.map((_, i) => mez([us[i], us[(i + 1) % n]])), mk = ks && c.map((_, i) => mez([ks[i], ks[(i + 1) % n]]));
+        const cen = nuevoVertice(pos, media(c.map(V))), cuv = mez(us), ck = ks && mez(ks);
+        for (let i = 0; i < n; i++) {
+          const j = (i + n - 1) % n;
+          C.push([c[i], mid[i], cen, mid[j]]); U.push([us[i], muv[i], cuv, muv[j]]);
+          if (K) K.push([ks[i], mk[i], ck, mk[j]]);
+        }
+        return;
+      }
+      // vecina: se le insertan los puntos medios de sus lados partidos
+      const vs = [], uu = [], kk = [];
+      c.forEach((v, i) => {
+        vs.push(v); uu.push(us[i]); if (K) kk.push(ks[i]);
+        const w = c[(i + 1) % n], id = medios.get(clave(v, w));
+        if (id !== undefined) { vs.push(id); uu.push(mez([us[i], us[(i + 1) % n]])); if (K) kk.push(mez([ks[i], ks[(i + 1) % n]])); }
+      });
+      C.push(vs); U.push(uu); if (K) K.push(kk);
+    });
+    // los pliegues partidos siguen siendo pliegue en sus dos mitades
+    let pl = P.pliegues;
+    if (pl && pl.size) {
+      pl = new Set(pl);
+      for (const [kk, id] of medios) if (pl.has(kk)) { const [a, b] = kk.split(',').map(Number); pl.delete(kk); pl.add(clave(a, id)); pl.add(clave(id, b)); }
+    }
+    malla = dePoligonos({ pos, caras: C, uvs: U, colores: K, pliegues: pl }).malla;
+  }
+  return { malla };
+}
+
+// ---------- precisión: rellenar, puente y cuchillo ----------
+
+// Bucles de borde (aristas sin cara al otro lado), en el sentido de sus caras.
+export function buclesDeBorde(m) {
+  const sale = new Map(); // vértice → media arista de borde que sale de él
+  for (let h = 0; h < m.nHE; h++) if (m.heTwin[h] < 0) sale.set(m.heV[h], h);
+  const visto = new Set(), bucles = [];
+  for (const [, h0] of sale) {
+    if (visto.has(h0)) continue;
+    const vs = [];
+    let h = h0;
+    while (h !== undefined && !visto.has(h) && vs.length < 1e5) { visto.add(h); vs.push(m.heV[h]); h = sale.get(m.heV[m.heNext[h]]); }
+    if (vs.length >= 3) bucles.push(vs);
+  }
+  return bucles;
+}
+
+// Rellena los agujeros (todos, o solo los que tocan `verts`) con una cara cada uno.
+export function rellenarAgujeros(m, verts = null) {
+  const s = verts && verts.length ? new Set(verts) : null;
+  const bucles = buclesDeBorde(m).filter((b) => !s || b.some((v) => s.has(v)));
+  if (!bucles.length) return null;
+  const P = aPoligonos(m);
+  const nuevas = [];
+  for (const b of bucles) {
+    const c = b.slice().reverse(); // la cara nueva va en sentido contrario al borde
+    nuevas.push(P.caras.length); P.caras.push(c); P.uvs.push(c.map(() => [0, 0]));
+    if (P.colores) P.colores.push(c.map(() => [0.6, 0.6, 0.6]));
+  }
+  return { malla: dePoligonos(P).malla, caras: nuevas };
+}
+
+// Puente: borra dos zonas de caras enfrentadas y une sus bordes con un tubo de cuadriláteros
+// (los dos bordes deben tener el mismo número de vértices).
+export function puenteCaras(m, caras) {
+  const quitar = new Set(caras);
+  if (quitar.size < 2) return null;
+  const tocados = new Set(caras.flatMap((f) => m.vertsDeCara(f)));
+  const sin = borrarCaras(m, [...quitar]);
+  // los vértices conservan su número salvo que queden sueltos: se buscan por posición
+  const bm = sin.malla, P = aPoligonos(bm);
+  const pos = (mm, v) => [mm.pos[v * 3], mm.pos[v * 3 + 1], mm.pos[v * 3 + 2]];
+  const cerca = (p) => [...tocados].some((v) => Math.hypot(...sub(pos(m, v), p)) < 1e-7);
+  const bucles = buclesDeBorde(bm).filter((b) => b.every((v) => cerca(pos(bm, v))));
+  if (bucles.length !== 2 || bucles[0].length !== bucles[1].length) return null;
+  const [A, B] = bucles, n = A.length;
+  // emparejar a_i con b_(s−i), el desfase s que dé la menor distancia
+  let mejor = 0, dmin = Infinity;
+  for (let s = 0; s < n; s++) {
+    let d = 0;
+    for (let i = 0; i < n; i++) d += Math.hypot(...sub(pos(bm, A[i]), pos(bm, B[((s - i) % n + n) % n])));
+    if (d < dmin) { dmin = d; mejor = s; }
+  }
+  const pb = (i) => B[((mejor - i) % n + n) % n];
+  const nuevas = [];
+  for (let i = 0; i < n; i++) {
+    const a0 = A[i], a1 = A[(i + 1) % n];
+    nuevas.push(P.caras.length);
+    P.caras.push([a1, a0, pb(i), pb(i + 1)]); P.uvs.push([[0, 0], [0, 0], [0, 0], [0, 0]]);
+    if (P.colores) P.colores.push([[0.6, 0.6, 0.6], [0.6, 0.6, 0.6], [0.6, 0.6, 0.6], [0.6, 0.6, 0.6]]);
+  }
+  return { malla: dePoligonos(P).malla, caras: nuevas };
+}
+
+// Cuchillo recto: corta las caras (todas, o las de `caras`) con el plano (punto, normal); las
+// aristas cortadas reciben un vértice y cada cara cruzada se parte en dos.
+export function cortarPlano(m, punto, normal, caras = null) {
+  const P = aPoligonos(m), pos = P.pos, EPS = 1e-6;
+  const dist = (v) => (pos[v * 3] - punto[0]) * normal[0] + (pos[v * 3 + 1] - punto[1]) * normal[1] + (pos[v * 3 + 2] - punto[2]) * normal[2];
+  const usar = caras && caras.length ? new Set(caras) : null;
+  const cortes = new Map(), clave = (a, b) => (a < b ? `${a},${b}` : `${b},${a}`);
+  const nuevosV = new Set();
+  const corte = (a, b) => {
+    const k = clave(a, b);
+    if (!cortes.has(k)) {
+      const da = dist(a), db = dist(b), t = da / (da - db);
+      const v = nuevoVertice(pos, [0, 1, 2].map((i) => pos[a * 3 + i] + (pos[b * 3 + i] - pos[a * 3 + i]) * t));
+      cortes.set(k, { v, t, a });
+      nuevosV.add(v);
+    }
+    return cortes.get(k);
+  };
+  // primero los vértices de corte de todas las aristas cruzadas (para que las vecinas los compartan)
+  P.caras.forEach((c, f) => {
+    if (usar && !usar.has(f)) return;
+    c.forEach((a, i) => { const b = c[(i + 1) % c.length], da = dist(a), db = dist(b); if ((da > EPS && db < -EPS) || (da < -EPS && db > EPS)) corte(a, b); });
+  });
+  if (!cortes.size) return null;
+  const C = [], U = [], K = P.colores ? [] : null;
+  P.caras.forEach((c, f) => {
+    const us = P.uvs[f], ks = P.colores && P.colores[f];
+    const vs = [], uu = [], kk = [], enPlano = [];
+    c.forEach((a, i) => {
+      const j = (i + 1) % c.length, b = c[j];
+      vs.push(a); uu.push(us[i]); if (K) kk.push(ks[i]);
+      if (Math.abs(dist(a)) <= EPS) enPlano.push(vs.length - 1);
+      const x = cortes.get(clave(a, b));
+      if (x) {
+        const t = x.a === a ? x.t : 1 - x.t;
+        vs.push(x.v); uu.push([us[i][0] + (us[j][0] - us[i][0]) * t, us[i][1] + (us[j][1] - us[i][1]) * t]); if (K) kk.push(ks[i]);
+        if (!usar || usar.has(f)) enPlano.push(vs.length - 1);
+      }
+    });
+    // cara cruzada: exactamente dos puntos en el plano que no son vecinos → dos caras
+    if ((!usar || usar.has(f)) && enPlano.length === 2 && (enPlano[1] - enPlano[0]) % (vs.length - 1) !== 1 && enPlano[1] - enPlano[0] !== 1) {
+      const [i, j] = enPlano, parte = (desde, hasta) => { const r = []; for (let k = desde; ; k = (k + 1) % vs.length) { r.push(k); if (k === hasta) break; } return r; };
+      for (const idx of [parte(i, j), parte(j, i)]) { C.push(idx.map((k) => vs[k])); U.push(idx.map((k) => uu[k])); if (K) K.push(idx.map((k) => kk[k])); }
+    } else { C.push(vs); U.push(uu); if (K) K.push(kk); }
+  });
+  const r = dePoligonos({ pos, caras: C, uvs: U, colores: K, pliegues: P.pliegues });
+  const nv = new Set([...nuevosV].map((v) => r.remapa[v]));
+  const aristas = [];
+  for (let e = 0; e < r.malla.nE; e++) { const [a, b] = r.malla.vertsDeArista(e); if (nv.has(a) && nv.has(b)) aristas.push(e); }
+  return { malla: r.malla, aristas };
 }
