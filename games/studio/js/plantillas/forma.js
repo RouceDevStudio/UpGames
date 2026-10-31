@@ -137,9 +137,11 @@ export function objetoDeMalla(malla, nombre, color, mallas) {
   g.setAttribute('position', new THREE.BufferAttribute(r.posiciones, 3));
   g.setAttribute('normal', new THREE.BufferAttribute(r.normales, 3));
   g.setAttribute('uv', new THREE.BufferAttribute(r.uvs, 2));
+  if (r.colores) g.setAttribute('color', new THREE.BufferAttribute(r.colores, 3));
   g.setIndex(new THREE.BufferAttribute(r.indices, 1));
   g.userData.triCara = r.triCara;
-  const m = new THREE.Mesh(g, material(color, 0.6, 0.05));
+  const m = new THREE.Mesh(g, material(r.colores ? 0xffffff : color, 0.6, 0.05));
+  m.material.vertexColors = !!r.colores; // pintada por vértice
   m.name = nombre;
   m.castShadow = true; m.receiveShadow = true;
   m.userData.tipo = 'malla';

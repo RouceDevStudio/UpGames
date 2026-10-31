@@ -71,12 +71,7 @@ export class Pincel {
     if (!hit) return false;
     const m = this.malla;
     this.antes = { pos: m.pos.slice(), col: m.heCol ? m.heCol.slice() : null, mascara: this.mascara().slice() };
-    // vecinos y esquinas por vértice (para alisar y para pintar rápido)
-    this.vecinos = Array.from({ length: m.nV }, () => []);
-    for (let e = 0; e < m.nE; e++) { const [a, b] = m.vertsDeArista(e); this.vecinos[a].push(b); this.vecinos[b].push(a); }
-    this.esquinas = Array.from({ length: m.nV }, () => []);
-    for (let h = 0; h < m.nHE; h++) this.esquinas[m.heV[h]].push(h);
-    this.normales = this.normalesVertice();
+    this.prepararMalla(m);
     this.obj.updateMatrixWorld();
     this.inv = this.obj.matrixWorld.clone().invert();
     this.escala = this.obj.matrixWorld.getMaxScaleOnAxis();
@@ -218,6 +213,17 @@ export class Pincel {
   }
 
   // ---------- utilidades ----------
+
+  // vecinos, esquinas y normales por vértice (para alisar, pintar rápido e inflar). También lo
+  // usan las plantillas para esculpir por código con los mismos pinceles.
+  prepararMalla(m) {
+    this.malla = m;
+    this.vecinos = Array.from({ length: m.nV }, () => []);
+    for (let e = 0; e < m.nE; e++) { const [a, b] = m.vertsDeArista(e); this.vecinos[a].push(b); this.vecinos[b].push(a); }
+    this.esquinas = Array.from({ length: m.nV }, () => []);
+    for (let h = 0; h < m.nHE; h++) this.esquinas[m.heV[h]].push(h);
+    this.normales = this.normalesVertice();
+  }
 
   mascara() {
     let k = this.mascaras.get(this.malla);
