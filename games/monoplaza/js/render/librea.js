@@ -222,8 +222,48 @@ export function texturaCasco(diseno = 'clasico', colores = {}) {
   return t;
 }
 
+// Lluvia sobre la carrocería: la pintura se oscurece y brilla más, y gotas que resbalan hacia
+// atrás dejando un rastro corto. Un único par de uniformes para todos los coches (main.js los
+// actualiza con la lluvia y el reloj).
+export const LLUVIA_CARROCERIA = { mojado: { value: 0 }, tiempo: { value: 0 } };
+function conGotas(mat) {
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uMojado = LLUVIA_CARROCERIA.mojado; sh.uniforms.uTiempoG = LLUVIA_CARROCERIA.tiempo;
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+      uniform float uMojado; uniform float uTiempoG;
+      float gotasAgua(vec2 uv) {
+        if (uMojado < 0.01) return 0.0;
+        // en el atlas, u recorre el coche de morro a cola (al revés en el lado izquierdo)
+        float lado = uv.y > 0.75 ? -1.0 : 1.0;
+        vec2 p = uv * vec2(70.0, 150.0);
+        vec2 c = floor(p), f = fract(p);
+        float h = fract(sin(dot(c, vec2(12.9898, 78.233))) * 43758.5453);
+        if (h > uMojado * 0.6) return 0.0;
+        float cx = fract(h * 7.31 + lado * uTiempoG * (0.12 + 0.45 * h));
+        float cy = 0.25 + 0.5 * fract(h * 13.7);
+        float gota = smoothstep(0.2, 0.06, length((f - vec2(cx, cy)) * vec2(1.0, 0.7)));
+        float tras = (f.x - cx) * lado;             // por detrás de la gota, en su camino
+        float rastro = smoothstep(0.05, 0.0, abs(f.y - cy)) * step(0.0, tras) * (1.0 - smoothstep(0.0, 0.45, tras)) * 0.5;
+        return max(gota, rastro);
+      }`);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+      #ifdef USE_MAP
+        float gG = gotasAgua(vMapUv);
+        roughnessFactor = mix(roughnessFactor, 0.06, uMojado * 0.75);
+        roughnessFactor = mix(roughnessFactor, 0.0, gG);
+        diffuseColor.rgb *= 1.0 - 0.18 * uMojado;
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.7 + 0.22, gG * 0.55);
+      #endif`);
+  };
+  mat.customProgramCacheKey = () => 'libreaGotas';
+  return mat;
+}
+
 // Material de la carrocería según el acabado comprado
 export function materialLibrea(textura, acabado = 'brillo', fisico = true) {
+  return conGotas(materialLibreaBase(textura, acabado, fisico));
+}
+function materialLibreaBase(textura, acabado, fisico) {
   const base = { map: textura };
   if (!fisico) return new THREE.MeshStandardMaterial({ ...base, metalness: acabado === 'cromado' || acabado === 'dorado' ? 0.8 : 0.3, roughness: acabado === 'mate' ? 0.8 : 0.35 });
   switch (acabado) {

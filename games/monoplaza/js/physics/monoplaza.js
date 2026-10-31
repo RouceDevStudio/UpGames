@@ -547,13 +547,21 @@ export class Monoplaza {
       const agua = aguaAqui;
       if (agua > 0) mu *= factorAgua(nm.c, agua) * (w.sup > SUP_ESCAPE ? 1 - 0.35 * agua : 1);
       // neumáticos sucios tras pisar hierba o grava: se limpian rodando unos cientos de metros
-      if (w.sup > SUP_ESCAPE && Math.abs(vl) > 2) { w.suciedad = Math.min(1, (w.suciedad || 0) + dt * 1.2); w.sucioHierba = w.sup === SUP_GRAVA ? 0.1 : 0.7; }
+      if (w.sup > SUP_ESCAPE && Math.abs(vl) > 2) {
+        w.suciedad = Math.min(1, (w.suciedad || 0) + dt * 1.2); w.sucioHierba = w.sup === SUP_GRAVA ? 0.1 : 0.7;
+        // por la hierba deprisa, las tomas de los pontones se tragan briznas (se limpian en boxes)
+        if (w.sup !== SUP_GRAVA && Math.abs(vl) > 25) this.pastoPontones = Math.min(1, (this.pastoPontones || 0) + dt * 0.4);
+      }
       else if (w.suciedad > 0) w.suciedad = Math.max(0, w.suciedad - Math.abs(vl) * dt / (w.sup === SUP_ASFALTO ? 200 : 800));
       if (w.suciedad > 0) mu *= 1 - 0.15 * w.suciedad;
       // la pista gana goma con las vueltas (más agarre en la trazada) y la lluvia se la lleva
       if (w.sup === SUP_ASFALTO) mu *= 0.975 + 0.04 * (c.goma ?? 0.6);
       // canicas fuera de la trazada en seco: casi como pisar rodamientos
-      if (w.sup === SUP_ASFALTO && agua < 0.2 && c.enCanicas?.(iw, w.d)) mu *= 0.86;
+      if (w.sup === SUP_ASFALTO && agua < 0.2 && c.enCanicas?.(iw, w.d)) {
+        mu *= 0.86;
+        // la goma recoge las canicas: sale sucia y tarda unas curvas en limpiarse
+        if (Math.abs(vl) > 15) { w.suciedad = Math.min(0.55, (w.suciedad || 0) + dt * 0.5); w.sucioHierba = 0; }
+      }
       // charco: aquaplaning que crece con la velocidad y la profundidad (y menos con los de lluvia)
       w.charco = c.charco ? c.charco(iw, w.d, agua) : 0;
       if (w.charco > 0) {

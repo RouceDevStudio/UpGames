@@ -169,6 +169,20 @@ class Parada {
       this.grupo.add(this.alaVieja, this.alaNueva);
       this._alaCoche = a;
     }
+    // botella de agua para el piloto (blanca con pajita) y briznas en la toma del pontón
+    if (this.trabajo.bebida && this.estab.length > 1) {
+      const e = equipamiento();
+      const b = new THREE.Group();
+      b.add(new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.2, 10), new THREE.MeshStandardMaterial({ color: 0xf2f4f7, roughness: 0.4 })));
+      const paj = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.18, 5), e.negro); paj.position.set(0.05, 0.14, 0); paj.rotation.z = -0.6; b.add(paj);
+      b.visible = false; this.grupo.add(b); this.botella = b;
+    }
+    if (this.trabajo.limpiar && this.estab.length) {
+      const brizna = new THREE.MeshStandardMaterial({ color: 0x5f8a3a, roughness: 0.9, side: THREE.DoubleSide });
+      const pasto = new THREE.Group();
+      for (let k = 0; k < 9; k++) { const p = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.02), brizna); p.position.set(Math.random() * 0.1, Math.random() * 0.12, (Math.random() - 0.5) * 0.1); p.rotation.set(Math.random() * 3, Math.random() * 3, 0); pasto.add(p); }
+      pasto.position.set(0.82, 0.42, 0.62); this.grupo.add(pasto); this.pasto = pasto;
+    }
     // suspensión: una pieza de recambio (brazo de carbono) por cada esquina rota
     if (this.trabajo.susp) {
       const e = equipamiento();
@@ -320,6 +334,24 @@ class Parada {
         p.poner(ajusta ? 'pistola' : 'preparado', 0.18);
         p.extra.hD = ajusta ? [0, 0, Math.sin(t * 14 + j) * 0.3] : [0, 0, 0];
       }
+    }
+    // limpieza de la toma del pontón derecho: mete la mano y saca las briznas, que caen al suelo
+    if (this.pasto) {
+      const p = this.estab[this.estab.length - 1], lim = entre(t, 0.25, Math.min(D - 0.5, 1.6));
+      if (lim > 0 && lim < 1) { p.poner('estabiliza', 0.15); p.extra.hD = [0, 0, Math.sin(t * 18) * 0.35]; p.extra.hI = [0, 0, Math.sin(t * 15 + 1) * 0.2]; }
+      else if (lim >= 1) { p.extra.hD = [0, 0, 0]; p.extra.hI = [0, 0, 0]; }
+      if (lim > 0.5) { this.pasto.position.y = Math.max(0.01, 0.42 - (lim - 0.5) * 1.6); this.pasto.position.z = 0.62 + (lim - 0.5) * 0.9; }
+    }
+    // agua para el piloto: se acerca por la izquierda, le acerca la botella al casco y se la retira
+    if (this.botella) {
+      const p = this.estab[0], u = entre(t, 0.3, Math.max(0.9, D - 0.5));
+      this.botella.visible = u > 0 && u < 1;
+      if (u > 0 && u < 1) {
+        const ida = Math.min(1, u * 3), vuelta = Math.max(0, (u - 0.75) * 4), k = suave(ida) * (1 - suave(vuelta));
+        p.poner('de_pie', 0.15); p.extra.hD = [0, 0, 1.3 * k];
+        this.botella.position.set(0.12 + 0.1 * k, 0.75 + 0.2 * k, -(1.05 - 0.75 * k));
+        this.botella.rotation.x = 0.9 * k;
+      } else if (u >= 1) p.extra.hD = [0, 0, 0];
     }
     // semáforo: verde al bajar los gatos
     const verde = t > D - 0.12;

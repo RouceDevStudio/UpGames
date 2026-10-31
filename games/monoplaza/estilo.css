@@ -636,3 +636,9 @@ body.en-repe #bCocheNuevo { display: none; }
   .tarjeta-circuito .segm.circuitos b { padding: 4px 6px; font-size: 11px; }
   .pie-bt { padding: 5px 10px; font-size: 12px; min-height: 0; }
 }
+
+/* entrevista del podio */
+.entrevista { position: fixed; left: 50%; bottom: calc(11vh + 10px); transform: translate(-50%, 20px); z-index: 35; max-width: min(640px, 90vw); padding: 12px 18px; background: rgba(5,7,12,.82); border-left: 4px solid var(--rojo); opacity: 0; transition: opacity .4s, transform .4s; pointer-events: none; display: flex; flex-direction: column; gap: 4px; }
+.entrevista.visible { opacity: 1; transform: translate(-50%, 0); }
+.entrevista b { font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; color: #ffd23f; }
+.entrevista span { font-size: 15px; font-style: italic; line-height: 1.35; }

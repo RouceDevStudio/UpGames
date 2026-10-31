@@ -273,7 +273,7 @@ const HUESOS = ['tronco', 'cabeza', 'hI', 'hD', 'cI', 'cD', 'mI', 'mD', 'kI', 'k
  * opc: { color, texto, numero, rol: 'mecanico' | 'ingeniero' | 'piloto', piel, alto }
  */
 export class Persona {
-  constructor({ color = '#0d47ff', texto = 'UPGAMES', numero = 1, rol = 'mecanico', piel = '#c9967a', alto = 1, calidad = 2 } = {}) {
+  constructor({ color = '#0d47ff', texto = 'UPGAMES', numero = 1, rol = 'mecanico', piel = '#c9967a', alto = 1, calidad = 2, podio = false } = {}) {
     const g = geometrias();
     this.rol = rol;
     const piloto = rol === 'piloto';
@@ -317,7 +317,7 @@ export class Persona {
       const vis = malla(g.visera, new THREE.MeshStandardMaterial({ color: 0x0c1016, roughness: 0.05, metalness: 0.8 }), cabeza, 0, 0.1, 0);
       vis.rotation.y = Math.PI;
       malla(g.mentonera, matCasco, cabeza, 0.02, 0.06, 0);
-    } else if (piloto) {
+    } else if (piloto && !podio) {
       // cabeza bajo el casco (el casco se pone aparte): solo el sotocasco ignífugo
       malla(g.craneo, matNegro, cabeza, 0.01, 0.1, 0).scale.set(0.95, 1.1, 0.88);
     } else {

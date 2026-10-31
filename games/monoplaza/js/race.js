@@ -236,12 +236,14 @@ export class Sesion {
     const alaDel = Math.round(ex.alaDel || 0);
     const extra = (morro ? 6.5 + Math.random() * 1.5 : 0) + (susp ? 7 + Math.random() * 2 : 0) + (alaDel && !morro ? 0.3 : 0);
     const duracion = 2.1 + Math.random() * 0.7 + extra + (Math.random() < 0.06 ? 2.5 : 0);
-    const trabajo = { morro, susp: susp ? esquinas : null, alaDel, extra };
+    // si ha pisado hierba, el pontón trae briznas en la toma de aire: un mecánico la limpia
+    const limpiar = car.ruedas.some(w => (w.sucioHierba ?? 0) > 0.5 && (w.suciedad || 0) > 0.08) || (car.pastoPontones || 0) > 0;
+    const trabajo = { morro, susp: susp ? esquinas : null, alaDel, extra, limpiar };
     p.box = new PilotoBox(car, c, this._garajeDe(p), {
       duracion,
       alParar: () => { p.paradaInfo = { inicio: this.tiempo, duracion, morro, susp, alaDel, compuesto }; this.eventos.push({ tipo: 'paradaIni', p, duracion, morro, trabajo }); },
       alTerminar: () => {
-        car.repararEnBoxes(compuesto, { susp, alaDel }); p.paradas++; p.trabajoBox = null;
+        car.repararEnBoxes(compuesto, { susp, alaDel }); p.paradas++; p.trabajoBox = null; car.pastoPontones = 0;
         if (this.depositoMax) car.combustible = this.depositoMax;      // repostaje (resistencia)
         this.eventos.push({ tipo: 'paradaFin', p, duracion });
         p.paradaInfo = null;
@@ -360,7 +362,8 @@ export class Sesion {
         if (p.terminado) { car.mandos.acelerador *= 0.5; car.mandos.drs = false; }
       }
       // coche de seguridad virtual: todos limitados a un ritmo lento (~35 % más lento) sin DRS
-      car.limiteVsc = p.box ? 0 : (this._lim.get(p) || (this.vsc ? this.c.perfil[car.proj.i] * 0.64 : 0));
+      // tras la bandera a cuadros: vuelta de enfriamiento a ritmo de paseo
+      car.limiteVsc = p.box ? 0 : (this._lim.get(p) || (this.vsc ? this.c.perfil[car.proj.i] * 0.64 : 0) || (p.terminado && this.modo === 'carrera' ? this.c.perfil[car.proj.i] * 0.5 : 0));
       car.paso(dt);
       // averías mecánicas (solo en carreras contra la IA, si están activadas)
       if (this.tasaAverias > 0 && this.estado === 'carrera') {

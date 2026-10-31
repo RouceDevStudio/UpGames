@@ -596,8 +596,25 @@ function pintarPantalla(p, car, info = {}) {
   if (car.dano?.aleronTras > 0.05) avisos.push('ALERÓN TRAS');
   if (car.dano?.pinchazo.some(Boolean)) avisos.push('PINCHAZO');
   if (info.box) avisos.push('BOX BOX');
+  // gráfica del delta a lo largo de la vuelta (verde = ganando a tu mejor vuelta)
+  if (info.frac != null && info.delta != null) {
+    const N = 64, h = p.hist ??= { d: new Float32Array(N).fill(NaN), ult: 0 };
+    const k = Math.min(N - 1, Math.floor(info.frac * N));
+    if (k < h.ult - 8) h.d.fill(NaN);                       // vuelta nueva
+    h.d[k] = info.delta; h.ult = k;
+    const gx = W - 140, gy = 170, gw = 128, gh = 34, esc = 1 / Math.max(0.3, ...Array.from(h.d).filter(v => v === v).map(Math.abs));
+    x.fillStyle = '#0c111a'; x.fillRect(gx, gy, gw, gh);
+    x.strokeStyle = '#2a3242'; x.lineWidth = 1; x.beginPath(); x.moveTo(gx, gy + gh / 2); x.lineTo(gx + gw, gy + gh / 2); x.stroke();
+    for (let i = 0; i < N; i++) {
+      const v = h.d[i]; if (v !== v) continue;
+      const bh = Math.max(1, Math.abs(v) * esc * gh / 2);
+      x.fillStyle = v <= 0 ? '#2fe07a' : '#ff3b3b';
+      x.fillRect(gx + i * gw / N, v <= 0 ? gy + gh / 2 - bh : gy + gh / 2, Math.max(1, gw / N - 0.5), bh);
+    }
+    x.fillStyle = '#ffd23f'; x.fillRect(gx + k * gw / N, gy, 2, gh);
+  }
   x.fillStyle = '#ff3b3b';
-  avisos.slice(0, 2).forEach((t, i) => x.fillText(t, W - 14, 196 + i * 26));
+  avisos.slice(0, 1).forEach((t, i) => x.fillText(t, W - 14, 226 + i * 26));
   x.fillStyle = '#8a94a6'; x.font = '700 16px Arial'; x.fillText(`${car.combustible.toFixed(1)} KG`, W - 14, 252);
   p.tex.needsUpdate = true;
 }

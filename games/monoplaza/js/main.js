@@ -26,7 +26,7 @@ import { Persona } from './render/personas.js';
 import { construirEscenario, ponerHora, ponerAgua, tv } from './render/escenario.js';
 import { crearModelo, dibujarPlantilla } from './render/cocheModelo.js';
 import { GestorBoxes, Escombros } from './render/equipo.js';
-import { NOMBRES_PATRON, NOMBRES_CASCO } from './render/librea.js';
+import { NOMBRES_PATRON, NOMBRES_CASCO, LLUVIA_CARROCERIA } from './render/librea.js';
 import { cuenta, Multijugador, empaquetar, aplicarEstado, fantasmaAServidor, fantasmaDeServidor, API } from './red.js';
 import { Efectos } from './render/efectos.js';
 import { Camara, NOMBRES_CAMARA } from './render/camara.js';
@@ -39,6 +39,7 @@ import * as PROG from './progresion.js';
 import * as ED from './editorCircuito.js';
 import { iniciarIdioma } from './idioma.js';
 import { PIVOTE_VUELO, MEZCLA_NOMBRES } from './physics/monoplaza.js';
+import { Podio } from './render/podio.js';
 
 const $ = (s) => document.querySelector(s);
 const esTactil = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -377,6 +378,14 @@ function pintarRetrovisores() {
   m.piloto && (m.piloto.grupo.visible = true);
   renderer.setRenderTarget(null);
   renderer.shadowMap.autoUpdate = auto;
+}
+
+/** Carrocerías mojadas: suben con la lluvia y se secan despacio cuando para. */
+function actualizarGotas(dt) {
+  const u = LLUVIA_CARROCERIA, ll = sesion?.clima?.lluvia || 0, ag = sesion?.clima?.agua || 0;
+  const obj = Math.min(1, ll * 2.5 + ag * 0.6);
+  u.mojado.value += (obj - u.mojado.value) * Math.min(1, dt * (obj > u.mojado.value ? 0.5 : 0.08));
+  u.tiempo.value += dt;
 }
 
 /** En calidad media el compositor solo se usa mientras hay calor que dibujar (ahorra un pase). */
@@ -1327,13 +1336,13 @@ function procesarEventos() {
       estadoRadio.ganador = true; sonido.ovacion(2.5);
       radio.decir(`¡${e.p.nombre.replace('@', '')} gana en el ${circuito.def.corto}!`, { tipo: 'megafonia' });
       if (e.p.jugador) { mensaje('🏆 ¡VICTORIA!', '', 3); radio.decir('¡¡Ganamos!! ¡Increíble carrera, campeón!', { prioridad: true }); entrada.vibrar(300); if (enRed) multi.meta(informeIncidentes()); celebrar(e.p); }
-      if (!enRed && e.p.jugador) setTimeout(() => { if (jugando && sesion.modo === 'carrera' && sesion.jugador.terminado) mostrarResultados(); }, 12000);
+      if (!enRed && e.p.jugador) iniciarEnfriamiento(e.p);
     }
     else if (e.tipo === 'meta' && e.p.jugador) {
       mensaje('🏁 BANDERA A CUADROS', `Terminas P${e.p.posicion}`, 3);
       radio.decir(e.p.posicion <= 3 ? `¡Bandera a cuadros! P${e.p.posicion}, ¡al podio! Gran trabajo.` : `Bandera a cuadros. Terminas P${e.p.posicion}. Buen esfuerzo, vuelve a boxes.`, { prioridad: true, clave: 'metaJ', cada: 30 });
       if (enRed) multi.meta(informeIncidentes());
-      else setTimeout(() => { if (jugando && sesion.modo === 'carrera') mostrarResultados(); }, e.p.posicion <= 3 ? 10000 : 3500);
+      else iniciarEnfriamiento(e.p);
       if (e.p.posicion <= 3) celebrar(e.p);
     }
     else if (e.tipo === 'vuelta' && e.p.jugador && enRed && e.valida) multi.vuelta(e.t);
@@ -1341,6 +1350,8 @@ function procesarEventos() {
     if (e.tipo === 'entraBoxes' && e.p.jugador) { mensaje('ENTRANDO A BOXES', 'El equipo conduce: limitador a 80 km/h', 2); radio.decir('Box, box. Te llevamos al garaje, limitador puesto.', { prioridad: true, clave: 'boxEnt', cada: 10 }); }
     else if (e.tipo === 'paradaIni') {
       const k = sesion.participantes.indexOf(e.p);
+      // día de calor: le pasan agua al piloto mientras cambian las ruedas
+      if (e.trabajo) e.trabajo.bebida = escenario?.hora === 'dia' && (sesion.clima?.lluvia || 0) < 0.05;
       gestorBoxes.empezar(k, e.p.coche, modelos[k], { color: e.p.equipo.base, texto: e.p.equipo.corto === 'UPG' ? 'UPGAMES' : e.p.equipo.nombre.split(' ')[0].toUpperCase(), compuesto: e.p.paradaInfo?.compuesto, duracion: e.duracion, morro: e.morro, trabajo: e.trabajo });
       if (e.p.jugador) paradaJugador = { t0: performance.now(), duracion: e.duracion, k };
       if (e.p.jugador) radio.decir('Gatos arriba. Ruedas fuera…', { clave: 'gatos', cada: 10 });
@@ -1369,7 +1380,7 @@ function procesarEventos() {
         else { $('#bCocheNuevo').classList.add('visible'); radio.decir('Tranquilo. Cuando quieras te preparamos otro coche.', { clave: 'cocheNuevo', cada: 30 }); }
       }
     }
-    else if (e.tipo === 'finCarrera' && !enRed) { if (jugando && !$('#resultados').classList.contains('visible')) setTimeout(() => { if (jugando) mostrarResultados(); }, 1500); }
+    else if (e.tipo === 'finCarrera' && !enRed) { if (jugando && !$('#resultados').classList.contains('visible')) setTimeout(() => { if (jugando && !finCarrera) mostrarResultados(); }, 1500); }
   }
   sesion.eventos.length = 0;
   const c = sesion.jugador.coche;
@@ -1591,6 +1602,7 @@ function bucle(ahora) {
       else if (e === 'box') alternarPanelBox();
     }
     if (sesion._pilotoPrueba) sesion._pilotoPrueba.conducir(dt, sesion.coches);
+    else if (finCarrera?.ia && sesion.jugador.terminado) finCarrera.ia.conducir(dt, sesion.coches);
     else if (sesion.jugador.box) { /* la calle de boxes la conduce el ingeniero */ }
     else {
       j.mandos.direccion = entrada.direccion;
@@ -1667,7 +1679,8 @@ function bucle(ahora) {
     pos: sesion.modo === 'carrera' ? pj.posicion : null,
     vuelta: sesion.modo === 'carrera' ? `VUELTA ${Math.max(1, Math.min(pj.vuelta, sesion.vueltasTotales))}/${sesion.vueltasTotales}` : `VUELTA ${Math.max(0, pj.vuelta)}`,
     tiempo: pj.vuelta > 0 ? fmt(pj.tVuelta) : '',
-    delta: sesion.modo !== 'carrera' ? sesion.delta() : null,
+    delta: sesion.delta?.() ?? null,
+    frac: pj.coche.proj ? pj.coche.proj.s / circuito.largo : null,
     box: !!pj.solicitudBox,
     vueltasFuel: fuelVuelta.porVuelta ? pj.coche.combustible / fuelVuelta.porVuelta : null,
     vueltasQuedan: sesion.modo === 'carrera' ? sesion.vueltasTotales - pj.vuelta + 1 : 0,
@@ -1676,6 +1689,7 @@ function bucle(ahora) {
   // cámara, luz y efectos
   const mJ = modelos[sesion.participantes.indexOf(sesion.jugador)];
   camara.actualizar(dt, j, mJ);
+  if (finCarrera) actualizarFinal(dt);
   if (cineSalida && jugando) actualizarCineSalida(dt);
   if (finPendiente && !cineSalida && !repe && !salidasPendientes.some(x => x.p.jugador)) { const fn = finPendiente; finPendiente = null; fn(); }
   if (jugando && espectando && camEsp) actualizarEspectador(dt, j, mJ);
@@ -1757,6 +1771,7 @@ function bucle(ahora) {
   // render
   actualizarDesenfoque(sesion.jugador?.coche?.velocidad || 0, dt);
   actualizarCalor(dt, sesion.coches, sesion.jugador?.coche);
+  actualizarGotas(dt);
   if (jugando) pintarRetrovisores();
   renderizar();
   if (fotoPendiente) guardarFoto();
@@ -1772,6 +1787,65 @@ function bucle(ahora) {
       if (tLento >= 4 && calidad > 0) { cambiarCalidad(calidad - 1); tLento = 0; }
     }
     fpsAcum = 0; fpsN = 0;
+  }
+}
+
+// --- Después de la bandera: vuelta de enfriamiento, podio y resultados ---------------------
+// La IA lleva el coche a ritmo de paseo, el piloto saluda al público con la mano y, si ha
+// quedado entre los tres primeros, la ceremonia del podio (champán y entrevista) antes de
+// la clasificación final. Un toque en la pantalla salta a los resultados.
+let finCarrera = null;
+function iniciarEnfriamiento(p) {
+  if (finCarrera || sesion.modo !== 'carrera') return;
+  finCarrera = { t: 0, fase: 'enfriamiento', p, podio: null, ia: null };
+  import('./ai.js').then(({ PilotoIA }) => { if (finCarrera) finCarrera.ia = new PilotoIA(p.coche, circuito, 0.9, 0.1, { humano: false }); });
+  setTimeout(() => { addEventListener('pointerdown', saltarFinal, { once: true }); addEventListener('keydown', saltarFinal, { once: true }); }, 1500);
+}
+function saltarFinal() { if (finCarrera && jugando) terminarFinal(); }
+function terminarFinal(sinResultados = false) {
+  if (!finCarrera) return;
+  removeEventListener('pointerdown', saltarFinal); removeEventListener('keydown', saltarFinal);
+  if (finCarrera.podio) { finCarrera.podio.quitar(); for (const mo of modelos) mo.raiz.visible = true; }
+  const k = sesion.participantes.indexOf(sesion.jugador);
+  modelos[k]?.piloto?.saludar?.(false);
+  document.body.classList.remove('cine-salida'); $('#cineEtiqueta').textContent = ''; $('#entrevista').classList.remove('visible');
+  finCarrera = null;
+  if (!sinResultados && jugando && sesion.modo === 'carrera') mostrarResultados();
+}
+const FRASES_GANADOR = [
+  (n, e) => `Increíble. El coche iba de maravilla, gracias a todo ${e}. ¡Esta va para la fábrica!`,
+  (n, e) => `Ha sido durísimo, los neumáticos al final no daban más, pero la estrategia fue perfecta.`,
+  (n, e) => `Desde la salida supe que podíamos. Gracias a los aficionados, ¡qué ambiente!`,
+  (n, e) => `Una carrera muy limpia. ${e} me dio un cohete hoy. Disfrutemos esta victoria.`,
+];
+function actualizarFinal(dt) {
+  if (!jugando || !sesion?.jugador?.terminado) { terminarFinal(true); return; }
+  const f = finCarrera;
+  f.t += dt;
+  const k = sesion.participantes.indexOf(sesion.jugador);
+  const pil = modelos[k]?.piloto;
+  if (f.fase === 'enfriamiento') {
+    // saluda al público un rato, con la mano izquierda fuera de la cabina
+    pil?.saludar?.(f.t > 1.5 && f.t < 6.5);
+    if (f.t > 8.5) {
+      pil?.saludar?.(false);
+      if (sesion.jugador.posicion <= 3 && calidad >= 1) {
+        f.fase = 'podio'; f.t = 0;
+        const top = (sesion.orden || sesion.participantes).slice(0, 3).map(q => ({ equipo: q.equipo, numero: q.numero || 1, nombre: q.nombre }));
+        // en medio de la recta de meta, de cara a la grada y con los boxes detrás; los coches se
+        // ocultan mientras dura la ceremonia
+        const m = circuito.muestra(70), nx = -m.tz, nz = m.tx;
+        f.podio = new Podio(scene, top, { x: m.x, y: m.y + 0.02, z: m.z, ang: Math.atan2(-nx, -nz) }, calidad);
+        for (const mo of modelos) mo.raiz.visible = false;
+        document.body.classList.add('cine-salida'); $('#cineEtiqueta').textContent = '🏆 PODIO';
+        sonido.ovacion(3);
+        const g = top[0], nom = g.nombre.replace('@', '');
+        const frase = FRASES_GANADOR[Math.floor(Math.random() * FRASES_GANADOR.length)](nom, g.equipo.nombre);
+        setTimeout(() => { if (finCarrera?.fase === 'podio') { $('#entTit').textContent = `🎙️ ${nom} · ${g.equipo.nombre}`; $('#entTxt').textContent = `«${frase}»`; $('#entrevista').classList.add('visible'); radio.decir(frase, { tipo: 'megafonia' }); } }, 4500);
+      } else terminarFinal();
+    }
+  } else if (f.fase === 'podio') {
+    if (!f.podio.actualizar(dt, efectos, camara.cam)) terminarFinal();
   }
 }
 

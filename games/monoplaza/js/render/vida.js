@@ -3,6 +3,13 @@
 
 import * as THREE from 'three';
 
+function texturaCuadros() {
+  const cv = document.createElement('canvas'); cv.width = 128; cv.height = 96;
+  const x = cv.getContext('2d');
+  for (let i = 0; i < 8; i++) for (let k = 0; k < 6; k++) { x.fillStyle = (i + k) % 2 ? '#111' : '#f4f4f4'; x.fillRect(i * 16, k * 16, 16, 16); }
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
 export class Comisarios {
   constructor(scene, c, calidad) {
     this.c = c;
@@ -13,7 +20,8 @@ export class Comisarios {
     const matAsta = new THREE.MeshStandardMaterial({ color: 0x222222 });
     this.mats = { amarilla: new THREE.MeshStandardMaterial({ color: 0xffd21f, side: THREE.DoubleSide, roughness: 0.7 }),
       verde: new THREE.MeshStandardMaterial({ color: 0x18c45a, side: THREE.DoubleSide, roughness: 0.7 }),
-      azul: new THREE.MeshStandardMaterial({ color: 0x1f6fff, side: THREE.DoubleSide, roughness: 0.7 }) };
+      azul: new THREE.MeshStandardMaterial({ color: 0x1f6fff, side: THREE.DoubleSide, roughness: 0.7 }),
+      cuadros: new THREE.MeshStandardMaterial({ map: texturaCuadros(), side: THREE.DoubleSide, roughness: 0.7 }) };
     const geoCuerpo = new THREE.CapsuleGeometry(0.2, 0.9, 4, 8); geoCuerpo.translate(0, 0.65, 0);
     const geoCabeza = new THREE.SphereGeometry(0.14, 10, 8); geoCabeza.translate(0, 1.42, 0);
     const geoBandera = new THREE.PlaneGeometry(0.9, 0.6, 6, 1); geoBandera.translate(0.45, 0, 0);
@@ -34,6 +42,21 @@ export class Comisarios {
       scene.add(g);
       this.puestos.push({ s, g, brazo, bandera, fase: Math.random() * 6, verdeHasta: 0 });
     }
+    // comisario de meta, sobre el muro de boxes justo en la línea, con la bandera a cuadros
+    {
+      const m = c.muestra(2), i = m.i, d = c.semiAncho[i] + (c.pit?.muroA ?? 2) + 0.3;
+      const g = new THREE.Group();
+      g.add(new THREE.Mesh(geoCuerpo, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 })), new THREE.Mesh(geoCabeza, matCasco));
+      const brazo = new THREE.Group(); brazo.position.set(0, 1.25, 0);
+      const asta = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 1.4, 5), matAsta); asta.position.y = 0.7; brazo.add(asta);
+      const geoGrande = new THREE.PlaneGeometry(1.3, 0.9, 8, 1); geoGrande.translate(0.65, 0, 0);
+      const bandera = new THREE.Mesh(geoGrande, this.mats.cuadros); bandera.position.y = 1.1; bandera.visible = false; brazo.add(bandera);
+      g.add(brazo);
+      g.position.set(m.x - m.tz * d, m.y + 1.1, m.z + m.tx * d);
+      g.rotation.y = -Math.atan2(m.tz, m.tx) - Math.PI / 2;
+      scene.add(g);
+      this.meta = { g, brazo, bandera, fase: 0 };
+    }
     this.t = 0;
   }
 
@@ -41,9 +64,32 @@ export class Comisarios {
   actualizar(dt, sesion) {
     this.t += dt;
     const L = this.c.largo;
+    // azul: un coche con una vuelta más se acerca por detrás del jugador (a menos de 180 m)
+    let sAzul = null;
+    const j = sesion?.jugador;
+    if (j && sesion.modo === 'carrera' && sesion.estado === 'carrera' && !j.terminado && !j.box) {
+      const recJ = j.vuelta * L + (j.coche.proj?.s || 0);
+      for (const q of sesion.participantes) {
+        if (q === j || q.abandono || q.terminado || q.box) continue;
+        const dif = q.vuelta * L + (q.coche.proj?.s || 0) - recJ;
+        if (dif > L - 180 && dif < L - 5) { sAzul = j.coche.proj.s; break; }
+      }
+    }
+    // bandera a cuadros al terminar el ganador
+    if (this.meta) {
+      const mt = this.meta, on = !!sesion?.banderaFinal;
+      mt.bandera.visible = on;
+      if (on) {
+        mt.brazo.rotation.z = Math.sin(this.t * 6) * 0.9;
+        const pos = mt.bandera.geometry.attributes.position;
+        for (let k = 0; k < pos.count; k++) { const x = pos.getX(k); pos.setZ(k, Math.sin(this.t * 13 + x * 5) * 0.1 * x); }
+        pos.needsUpdate = true;
+      } else mt.brazo.rotation.z = 0.2;
+    }
     for (const p of this.puestos) {
       let tipo = null;
       if (sesion?.vsc) tipo = 'amarilla';
+      else if (sAzul != null && this.c.envolver(p.s - sAzul) < 320) tipo = 'azul';
       else if (sesion?.amarillas?.length) {
         for (const a of sesion.amarillas) {
           const ds = this.c.envolver(a.s - p.s);

@@ -148,7 +148,7 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
   const choque = { t: 99, dur: 0, w: 0, ang: 0, soltar: 0, golpePrevio: 0 };
   // pulsaciones en el volante: el pulgar va al botón (o los dedos tiran de la leva) y vuelve
   const pulsos = [{ t: 9, dur: 0.45, tipo: 'boton' }, { t: 9, dur: 0.45, tipo: 'boton' }];
-  const despl = new THREE.Vector3();
+  const despl = new THREE.Vector3(), saludoPos = new THREE.Vector3();
 
   const cilindro = (m, a, b) => {
     tmp.copy(b).sub(a); const L = tmp.length();
@@ -179,6 +179,9 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
     grupo, cuello, casco: cabeza,
     cabezaG: { x: 0, vx: 0, z: 0, vz: 0 },   // inclinación de la cabeza (la usa la cámara de cabina)
     mirada: 0,
+    saludo: 0, _saludar: false,
+    /** Saluda al público con la mano izquierda fuera de la cabina (vuelta de enfriamiento). */
+    saludar(si) { this._saludar = !!si; },
     /** La mano de ese lado (-1 izq., 1 dcha.) pulsa un botón del volante o tira de la leva. */
     pulsar(lado = 1, tipo = 'boton') {
       const p = pulsos[lado > 0 ? 1 : 0];
@@ -238,6 +241,7 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
       cuello.rotation.x = hg.x;
       cuello.rotation.z = hg.z - choque.soltar * 0.18;   // barbilla al pecho
       cuello.position.y = 0.72 - choque.soltar * 0.012;
+      this.saludo += ((this._saludar ? 1 : 0) - this.saludo) * Math.min(1, dt * 4);
       // brazos: empuñadura del volante ↔ brazos cruzados sobre el pecho
       for (let s = 0; s < 2; s++) {
         const lado = s ? 1 : -1;
@@ -255,6 +259,8 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
         // cruzados: cada mano al hombro contrario, una algo por encima de la otra
         pecho.set(0.13 + s * 0.02, 0.63 + s * 0.035, -lado * 0.1);
         T.copy(agarre).lerp(pecho, choque.soltar);
+        // saludo: la mano izquierda sube por encima del borde de la cabina y se mueve de lado a lado
+        if (s === 0 && this.saludo > 0.01) T.lerp(saludoPos.set(0.02, 1.0 + 0.03 * Math.sin(tv * 5), -0.3 + 0.07 * Math.sin(tv * 7)), this.saludo);
         S.set(0.05, 0.665, lado * 0.165);
         ik(brazos[s], S, T, lado);
         hombros[s].position.copy(S);
