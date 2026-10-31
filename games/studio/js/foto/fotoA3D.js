@@ -50,6 +50,24 @@ export function mascaraDesdeImagen(img, { tolerancia = 0.18 } = {}) {
   return manchaMayor(m, w, h);
 }
 
+// Máscara de la IA: se queda con la mancha más grande y le rellena los agujeros.
+export function limpiarMascara({ mascara, width: w, height: h }) {
+  const fuera = new Uint8Array(w * h), pila = [];
+  const sembrar = (p) => { if (!mascara[p] && !fuera[p]) { fuera[p] = 1; pila.push(p); } };
+  for (let x = 0; x < w; x++) { sembrar(x); sembrar((h - 1) * w + x); }
+  for (let y = 0; y < h; y++) { sembrar(y * w); sembrar(y * w + w - 1); }
+  while (pila.length) {
+    const p = pila.pop(), x = p % w;
+    if (x > 0) sembrar(p - 1);
+    if (x < w - 1) sembrar(p + 1);
+    if (p >= w) sembrar(p - w);
+    if (p < w * (h - 1)) sembrar(p + w);
+  }
+  const m = new Uint8Array(w * h);
+  for (let p = 0; p < w * h; p++) m[p] = fuera[p] ? 0 : 1;
+  return manchaMayor(m, w, h);
+}
+
 function manchaMayor(m, w, h) {
   const etiqueta = new Int32Array(w * h);
   let mejor = 0, mejorTam = 0, n = 0;
@@ -139,7 +157,10 @@ function rejillaDeMascara(mk, res) {
 
 // Devuelve { posiciones, uvs, indices } con alto 1 (y de 0 a 1), centrado en x y z.
 // grosor: relación entre el espesor máximo y el ancho del objeto (0.05..1).
-export function relieveDesdeMascara(mk, { res = 96, grosor = 0.35 } = {}) {
+// profundidad (opcional): { data: 0..1 (1 = cerca), width, height } del tamaño de la máscara, p. ej.
+// la de la IA. La cara de delante sigue esa profundidad (mezclada con el inflado según
+// pesoProfundidad) y la de atrás es su reflejo.
+export function relieveDesdeMascara(mk, { res = 96, grosor = 0.35, profundidad = null, pesoProfundidad = 0.75, suavizado = 4 } = {}) {
   const r = rejillaDeMascara(mk, res);
   if (!r) return null;
   const { celdas, cw, ch, caja, paso } = r;
@@ -160,12 +181,15 @@ export function relieveDesdeMascara(mk, { res = 96, grosor = 0.35 } = {}) {
   dmax = Math.max(dmax, 1);
   const anchoCeldas = cw - 2, altoCeldas = ch - 2, escala = 1 / altoCeldas;
   const zMax = grosor * 0.5 * anchoCeldas * escala, canto = Math.max(zMax * 0.08, escala * 0.5);
+  const prof = profundidad ? profundidadEnEsquinas(profundidad, usado, vw, vh, caja, paso) : null;
   const pos = [], uv = [], idx = [];
   const frente = new Int32Array(vw * vh).fill(-1), atras = new Int32Array(vw * vh).fill(-1);
   for (let j = 0; j < vh; j++) for (let i = 0; i < vw; i++) {
     const k = j * vw + i; if (!usado[k]) continue;
     const t = Math.min(1, dist[k] / dmax);
-    const z = canto + (zMax - canto) * Math.sqrt(1 - (1 - t) * (1 - t));
+    let forma = Math.sqrt(1 - (1 - t) * (1 - t));
+    if (prof) forma = (1 - pesoProfundidad) * forma + pesoProfundidad * prof[k] * Math.sqrt(t); // el borde sigue cerrando
+    const z = canto + (zMax - canto) * forma;
     const x = (i - 1 - anchoCeldas / 2) * escala, y = (altoCeldas - (j - 1)) * escala;
     const u = Math.min(1, Math.max(0, (caja.x0 + (i - 1) * paso) / mk.width));
     const v = Math.min(1, Math.max(0, 1 - (caja.y0 + (j - 1) * paso) / mk.height));
@@ -184,7 +208,38 @@ export function relieveDesdeMascara(mk, { res = 96, grosor = 0.35 } = {}) {
     if (!dentro(i, j + 1)) canto4(c, d);
     if (!dentro(i + 1, j)) canto4(d, b);
   }
-  return { posiciones: new Float32Array(pos), uvs: new Float32Array(uv), indices: new Uint32Array(idx) };
+  const posiciones = new Float32Array(pos), indices = new Uint32Array(idx);
+  // quita la escalera del contorno y el ruido de la profundidad sin encoger la figura
+  taubin(posiciones, indices, suavizado);
+  return { posiciones, uvs: new Float32Array(uv), indices };
+}
+
+// Profundidad muestreada en las esquinas de la rejilla, suavizada y normalizada a 0..1 dentro
+// del objeto (percentiles 3 y 97 para que un píxel suelto no aplaste el resto).
+function profundidadEnEsquinas(pr, usado, vw, vh, caja, paso) {
+  const n = vw * vh, d = new Float32Array(n);
+  for (let j = 0; j < vh; j++) for (let i = 0; i < vw; i++) {
+    const x = Math.min(pr.width - 1, Math.max(0, Math.round(caja.x0 + (i - 1) * paso)));
+    const y = Math.min(pr.height - 1, Math.max(0, Math.round(caja.y0 + (j - 1) * paso)));
+    d[j * vw + i] = pr.data[y * pr.width + x];
+  }
+  // suavizado 3×3 dentro del objeto (quita el ruido de escalera)
+  const s = new Float32Array(n);
+  for (let j = 0; j < vh; j++) for (let i = 0; i < vw; i++) {
+    let a = 0, c = 0;
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+      const I = i + di, J = j + dj;
+      if (I < 0 || J < 0 || I >= vw || J >= vh || !usado[J * vw + I]) continue;
+      a += d[J * vw + I]; c++;
+    }
+    s[j * vw + i] = c ? a / c : d[j * vw + i];
+  }
+  const vals = [];
+  for (let k = 0; k < n; k++) if (usado[k]) vals.push(s[k]);
+  vals.sort((p, q) => p - q);
+  const lo = vals[Math.floor(vals.length * 0.03)] ?? 0, hi = vals[Math.floor(vals.length * 0.97)] ?? 1, k1 = 1 / (hi - lo || 1);
+  for (let k = 0; k < n; k++) s[k] = Math.min(1, Math.max(0, (s[k] - lo) * k1));
+  return s;
 }
 
 // ---------- Dos fotos: casco visual ----------
@@ -299,6 +354,39 @@ export function surfaceNets(campo, X, Y, Z, iso = 0.5) {
     quad(c(i - 1, j - 1, k), c(i, j - 1, k), c(i, j, k), c(i - 1, j, k), a);
   }
   return { posiciones: new Float32Array(pos), indices: new Uint32Array(idx) };
+}
+
+// Suavizado de Taubin: un paso que encoge (λ) y otro que infla (μ), así el volumen se mantiene.
+export function taubin(p, idx, pasadas = 4, lambda = 0.5, mu = -0.53) {
+  const n = p.length / 3, vec = vecinos(idx, n), tmp = new Float32Array(p.length);
+  const paso = (f) => {
+    for (let v = 0; v < n; v++) {
+      const a = vec.inicio[v], b = vec.inicio[v + 1];
+      if (a === b) { tmp[v * 3] = p[v * 3]; tmp[v * 3 + 1] = p[v * 3 + 1]; tmp[v * 3 + 2] = p[v * 3 + 2]; continue; }
+      let x = 0, y = 0, z = 0;
+      for (let k = a; k < b; k++) { const u = vec.lista[k] * 3; x += p[u]; y += p[u + 1]; z += p[u + 2]; }
+      const c = 1 / (b - a);
+      tmp[v * 3] = p[v * 3] + f * (x * c - p[v * 3]);
+      tmp[v * 3 + 1] = p[v * 3 + 1] + f * (y * c - p[v * 3 + 1]);
+      tmp[v * 3 + 2] = p[v * 3 + 2] + f * (z * c - p[v * 3 + 2]);
+    }
+    p.set(tmp);
+  };
+  for (let i = 0; i < pasadas; i++) { paso(lambda); paso(mu); }
+}
+
+// Vecinos de cada vértice (sin repetir), en formato CSR.
+function vecinos(idx, n) {
+  const sets = Array.from({ length: n }, () => new Set());
+  for (let t = 0; t < idx.length; t += 3) for (let e = 0; e < 3; e++) {
+    const a = idx[t + e], b = idx[t + (e + 1) % 3];
+    sets[a].add(b); sets[b].add(a);
+  }
+  const inicio = new Int32Array(n + 1);
+  for (let v = 0; v < n; v++) inicio[v + 1] = inicio[v] + sets[v].size;
+  const lista = new Int32Array(inicio[n]);
+  for (let v = 0; v < n; v++) { let k = inicio[v]; for (const u of sets[v]) lista[k++] = u; }
+  return { inicio, lista };
 }
 
 function laplaciano(p, idx) {

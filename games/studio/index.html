@@ -90,11 +90,18 @@
     <button data-n="1" class="activo">1 foto · relieve</button>
     <button data-n="2">2 fotos · frente + lado</button>
   </div>
-  <p class="nota" id="fotoAyuda">Foto del objeto sobre un fondo liso (pared, mesa, papel). La silueta se recorta sola y se infla en 3D con la foto como textura.</p>
+  <label class="fila marca-lado"><input id="fIA" type="checkbox" checked> Recorte y profundidad con IA (recomendado; la primera vez descarga ≈ 35 MB)</label>
+  <p class="nota" id="fotoAyuda"></p>
+  <div class="segm" id="filaZona">
+    <button data-zona="anadir" class="activo">Tocar = objeto</button>
+    <button data-zona="quitar">Tocar = quitar</button>
+    <button data-zona="reiniciar">Reiniciar</button>
+  </div>
+  <p class="nota estado" id="fotoEstado"></p>
   <div class="fotos">
     <div class="ranura" data-ranura="0">
       <canvas width="240" height="180"></canvas>
-      <div class="etq">Frente</div>
+      <div class="etq">Foto</div>
       <div class="fila botones">
         <label class="btn">Galería<input type="file" accept="image/*" hidden></label>
         <label class="btn">Cámara<input type="file" accept="image/*" capture="environment" hidden></label>
@@ -109,7 +116,7 @@
       </div>
     </div>
   </div>
-  <label class="deslizador">Recorte del fondo <input id="fTol" type="range" min="4" max="45" value="18"><output id="oTol">18</output></label>
+  <label class="deslizador" id="filaTol">Recorte del fondo <input id="fTol" type="range" min="4" max="45" value="18"><output id="oTol">18</output></label>
   <label class="deslizador" id="filaGrosor">Grosor <input id="fGrosor" type="range" min="5" max="100" value="35"><output id="oGrosor">35</output></label>
   <label class="deslizador">Detalle <input id="fDetalle" type="range" min="24" max="96" value="64"><output id="oDetalle">64</output></label>
   <label class="fila marca-lado" id="filaInvertir" hidden><input id="fInvertir" type="checkbox"> La foto de lado está tomada desde la izquierda</label>
