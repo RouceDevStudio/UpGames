@@ -2,6 +2,13 @@
 import * as THREE from 'three';
 import { mascaraDesdeImagen, mascaraDePlano, limpiarMascara, relieveDesdeMascara, cascoVisual, cascoPlanos, sangrar } from './fotoA3D.js';
 import * as ia from './ia.js';
+import { importar } from '../archivo/proyecto.js';
+
+// IA en la nube (servidor de UpGames → TRELLIS). La web comparte la sesión de upgames.games.
+const API = new URLSearchParams(location.search).get('api')?.match(/^http:\/\/(localhost|127\.0\.0\.1):\d+$/)?.[0] || 'https://upgames-production.up.railway.app';
+function tokenUpGames() {
+  try { const t = localStorage.getItem('token') || localStorage.getItem('apexgp.token'); return t && t.length > 20 && t !== 'null' ? t : null; } catch { return null; }
+}
 
 const LADO_MAX = 480; // las fotos se analizan reducidas a este lado máximo
 const LADO_MAX_PLANOS = 1024; // los planos necesitan más resolución
@@ -16,15 +23,17 @@ export function instalarDialogoFoto({ alCrear, aviso }) {
   let n = 1, quitar = false;
   const $ = (id) => document.getElementById(id);
   const tol = $('fTol'), grosor = $('fGrosor'), detalle = $('fDetalle'), invertir = $('fInvertir'), bCrear = $('bCrearFoto');
-  const usaIA = () => $('fIA').checked && n !== 3; // los planos (fondo liso de render) van por color
+  const usaIA = () => $('fIA').checked && n < 3; // los planos (fondo liso de render) van por color; la nube no recorta
   const estado = (t) => { $('fotoEstado').textContent = t || ''; };
 
   // ranuras que hacen falta en cada modo (en planos, «atrás» es opcional)
-  const necesarias = () => (n === 3 ? [0, 1, 2] : n === 2 ? [0, 1] : [0]);
+  const necesarias = () => (n === 3 ? [0, 1, 2] : n === 2 ? [0, 1] : [0]); // en la nube: la primera (las demás opcionales)
   const actualizarBoton = () => { bCrear.disabled = !necesarias().every((i) => valida(fotos[i])); };
   const ayuda = () => {
     const ia = usaIA();
-    $('fotoAyuda').textContent = n === 3
+    $('fotoAyuda').textContent = n === 4
+      ? 'IA generativa en la nube (TRELLIS): de 1 a 4 fotos del mismo objeto (mejor con fondo limpio y desde varios lados) → un modelo completo de 360° con textura, en 1 o 2 minutos. Necesita tu sesión de UpGames; las fotos se envían al servicio de IA (Hugging Face).'
+      : n === 3
       ? 'Vistas sin perspectiva del mismo objeto, como los planos de Blender (vista ortográfica): lado con el frente a la izquierda, frente, arriba con el largo en horizontal y, si la tienes, atrás. Se talla el volumen que encaja con todas y se pinta con cada vista. Es el modo para coches y objetos con planos.'
       : n === 1
       ? (ia ? 'Toca el objeto en la foto: la IA lo separa del fondo (aunque no sea liso) y calcula su profundidad para darle relieve real. La foto queda como textura.'
@@ -37,11 +46,12 @@ export function instalarDialogoFoto({ alCrear, aviso }) {
   hoja.querySelectorAll('#fotoModo button').forEach((b) => b.addEventListener('click', () => {
     n = +b.dataset.n;
     hoja.querySelectorAll('#fotoModo button').forEach((q) => q.classList.toggle('activo', q === b));
-    const etiquetas = n === 3 ? ['Lado (frente a la izquierda)', 'Frente', 'Arriba', 'Atrás (opcional)'] : n === 2 ? ['Frente', 'Lado (desde la derecha)'] : ['Foto'];
+    const etiquetas = n === 4 ? ['Foto principal', 'Otra vista (opcional)', 'Otra vista (opcional)', 'Otra vista (opcional)'] : n === 3 ? ['Lado (frente a la izquierda)', 'Frente', 'Arriba', 'Atrás (opcional)'] : n === 2 ? ['Frente', 'Lado (desde la derecha)'] : ['Foto'];
     ranuras.forEach((r, i) => { r.hidden = i >= etiquetas.length; if (etiquetas[i]) r.querySelector('.etq').textContent = etiquetas[i]; });
     $('filaGrosor').hidden = n !== 1;
     $('filaInvertir').hidden = n !== 2;
-    $('filaIA').hidden = n === 3;
+    $('filaIA').hidden = n >= 3;
+    for (const id of ['filaTol', 'filaDetalle']) { const el = $(id); if (el) el.hidden = n === 4 || (id === 'filaTol' && usaIA()); }
     $('filaMonoplaza').hidden = n !== 3;
     $('filaPintar').hidden = n !== 3;
     fotos.forEach((f, i) => f && analizar(i));
@@ -62,7 +72,7 @@ export function instalarDialogoFoto({ alCrear, aviso }) {
       inp.value = '';
       if (!archivo) return;
       try {
-        fotos[i] = await cargar(archivo, n === 3 ? LADO_MAX_PLANOS : LADO_MAX);
+        fotos[i] = await cargar(archivo, n >= 3 ? LADO_MAX_PLANOS : LADO_MAX);
         analizar(i);
       } catch (e) {
         aviso('No se pudo abrir la foto');
@@ -99,6 +109,7 @@ export function instalarDialogoFoto({ alCrear, aviso }) {
     const turno = (f.turno = (f.turno || 0) + 1);
     f.color = null; // se recalcula al crear
     const lienzo = ranuras[i].querySelector('canvas');
+    if (n === 4) { f.mk = { area: 1e9 }; vistaPrevia(lienzo, { img: f.img, mk: null }); actualizarBoton(); return; }
     if (usaIA()) {
       try {
         bCrear.disabled = true;
@@ -136,6 +147,7 @@ export function instalarDialogoFoto({ alCrear, aviso }) {
         catch (e) { console.error(e); aviso('Sin profundidad de la IA: se usa el inflado.'); }
         estado('');
       }
+      if (n === 4) { await desdeLaNube(); return; }
       await new Promise((r) => setTimeout(r, 30)); // deja pintar el «Creando…»
       const malla = n === 3 ? desdePlanos(fotos, +detalle.value, $('fMonoplaza').checked, $('fPintar').checked)
         : n === 1 ? desdeUnaFoto(fotos[0], +grosor.value / 100, +detalle.value, prof)
@@ -149,6 +161,34 @@ export function instalarDialogoFoto({ alCrear, aviso }) {
     bCrear.textContent = 'Crear modelo';
     actualizarBoton();
   });
+
+  // envía las fotos al servidor, espera el modelo y lo importa como objetos de Studio
+  async function desdeLaNube() {
+    try {
+      const est = await fetch(`${API}/studio/ia3d/estado`).then((r) => r.json()).catch(() => ({}));
+      if (!est.disponible) { aviso('La IA en la nube aún no está activada en el servidor (falta la clave HF_TOKEN).'); return; }
+      const t = tokenUpGames();
+      if (!t) { aviso('Inicia sesión en UpGames (upgames.games) para usar la IA en la nube.'); return; }
+      const cab = { Authorization: `Bearer ${t}`, 'Content-Type': 'application/json' };
+      const datos = fotos.filter(valida).map((f) => { const c = document.createElement('canvas'); c.width = f.img.width; c.height = f.img.height; c.getContext('2d').putImageData(f.img, 0, 0); return c.toDataURL('image/png'); });
+      const r = await fetch(`${API}/studio/ia3d`, { method: 'POST', headers: cab, body: JSON.stringify({ fotos: datos }) }).then((x) => x.json());
+      if (!r.success) { aviso(r.error || 'No se pudo enviar'); return; }
+      const FASES = { cola: 'En cola', subiendo: 'Subiendo fotos', preparando: 'Preparando', generando: 'Generando el modelo 3D', descargando: 'Descargando' };
+      for (let i = 0; i < 200; i++) {
+        await new Promise((ok) => setTimeout(ok, 3000));
+        const e = await fetch(`${API}/studio/ia3d/${r.id}`, { headers: cab }).then((x) => x.json());
+        if (e.estado === 'error') { aviso(e.error || 'La IA no pudo generar el modelo'); estado(''); return; }
+        if (e.estado === 'listo') break;
+        estado(`${FASES[e.fase] || 'Trabajando'}${e.posicion ? ` (puesto ${e.posicion})` : ''}… ${(i + 1) * 3} s`);
+      }
+      estado('Importando…');
+      const glb = await fetch(`${API}/studio/ia3d/${r.id}/glb`, { headers: cab }).then((x) => { if (!x.ok) throw new Error('No se pudo descargar'); return x.blob(); });
+      const objs = await importar(new File([glb], 'modelo-ia.glb'));
+      estado('');
+      hoja.hidden = true;
+      alCrear(objs);
+    } catch (e) { console.error(e); aviso(e.message || 'Error con la IA en la nube'); estado(''); }
+  }
 
   return { abrir() { hoja.hidden = false; } };
 }

@@ -59,7 +59,7 @@ export function construirPiloto() {
 // Casco: esfera editada (alargada, barbilla hacia delante, base plana), franjas pintadas por
 // vértice; visera = la ventana de la carcasa, recortada (borrar caras), un poco por fuera y con
 // grosor (solidificar); alerón, toma de aire y pivotes de la visera.
-function casco() {
+export function casco() {
   const C = new THREE.Vector3(0, 1.69, 0.005);
   const g = new THREE.SphereGeometry(0.5, 48, 32);
   const forma = ([x, y, z]) => {
@@ -109,7 +109,7 @@ function casco() {
 // Volante: caja de 3 × 2 cortes con el centro de abajo recogido y subdividida (cuerpo
 // redondeado), con agarres, pantalla, botones, selectores y levas detrás. Cuelga de la mano
 // derecha por un agarre; la cara mira hacia delante y hacia fuera.
-function volante() {
+export function volante() {
   const mano = ESQUELETO.MANO_DER[1];
   const ang = 45, cara = new THREE.Vector3(-Math.SQRT1_2, 0, Math.SQRT1_2), ancho = new THREE.Vector3(Math.SQRT1_2, 0, Math.SQRT1_2);
   const C = new THREE.Vector3(mano[0], mano[1] - 0.085, mano[2]).addScaledVector(ancho, -0.105);

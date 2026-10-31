@@ -3888,6 +3888,8 @@ const live = require('./rutas/live').registrar(app, server, {
 });
 // APEX GP (games/monoplaza): mejoras y cosméticos con UpCoins y salas multijugador (Socket.IO /apexgp)
 require('./rutas/apexgp').registrar(app, { verificarToken, Usuario, LiveTx: live.LiveTx, io: live.io, logger, JWT_SECRET, estaSuspendido: u => adminPanel.estaSuspendido(u) });
+// UpGames Studio: IA en la nube (fotos → modelo 3D completo con TRELLIS; necesita HF_TOKEN)
+require('./rutas/studio').registrar(app, { verificarToken, logger });
 // Acceso directo: saltarse la página puente solo con Premium (ya no se vende por publicación)
 const mercadoPago = require('./modulos/mercadopago').crear();
 const accesoDirecto = require('./rutas/accesoDirecto').registrar(app, { verificarToken, Juego, Usuario, LiveTx: live.LiveTx, logger });

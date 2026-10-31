@@ -15,10 +15,12 @@ import { poligonosDeMalla } from './malla/csg.js';
 import { instalarModificadores } from './ui/modificadores.js';
 import { instalarMateriales } from './ui/materiales.js';
 import { Pincel, ALFAS } from './herramientas/pincel.js';
+import { Presentacion } from './herramientas/presentacion.js';
 import { calcoDeTexto, calcoDeImagen } from './herramientas/pinturaTextura.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { construirMonoplaza } from './plantillas/monoplaza.js';
 import { construirPiloto } from './plantillas/piloto.js';
+import { PIEZAS, crearPieza } from './plantillas/biblioteca.js';
 
 const $ = (id) => document.getElementById(id);
 const lienzo = $('lienzo');
@@ -421,6 +423,18 @@ function crearPlantilla(construir, nombre, texto) {
   camOrb.enfocar(s.center, s.radius);
   aviso(`${texto}: ${piezas.length} piezas con nombre. Exporta a GLB para APEX GP.`);
 }
+$('rejillaPiezas').innerHTML = PIEZAS.map((p) => `<button data-pieza="${p.id}"><svg viewBox="0 0 32 32"><path d="M6 12l10-6 10 6v10l-10 6-10-6z"/><path d="M6 12l10 6 10-6M16 18v10"/></svg>${p.nombre}</button>`).join('');
+$('rejillaPiezas').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-pieza]'); if (!b) return;
+  if (edicion.activo || pincel.activo) ponerModo('objeto');
+  const { objs, nombre } = crearPieza(b.dataset.pieza);
+  const id = `g${Date.now().toString(36)}`;
+  for (const o of objs) { o.position.x += camOrb.centro.x; o.position.z += camOrb.centro.z; if (objs.length > 1) { o.userData.grupo = id; o.userData.nombreGrupo = nombre; } o.userData.plantilla = 'pieza'; }
+  escena.anadirVarios(objs, `Añadir ${nombre}`);
+  $('hojaAnadir').hidden = true;
+  enfocar();
+  aviso(`${nombre} añadido${objs.length > 1 ? ' (grupo: se mueve entero)' : ''}`);
+});
 $('bPlantillaF1').onclick = () => crearPlantilla(construirMonoplaza, 'monoplaza', 'Monoplaza F1 creado');
 $('bPlantillaPiloto').onclick = () => crearPlantilla(construirPiloto, 'piloto', 'Piloto creado');
 // imagen de referencia (calco): un plano con la imagen, semitransparente, mirando a la vista actual
@@ -610,6 +624,8 @@ addEventListener('keydown', (e) => {
   else if (k === '3') camOrb.vista('lado');
   else if (k === '7') camOrb.vista('arriba');
   else if (k === '5') camOrb.vista('persp');
+  else if (k === 'p' && !ctrl && !edicion.activo && !pincel.activo) presentar(!presentacion.activa);
+  else if (k === 'escape' && presentacion.activa) presentar(false);
   else if (k === 'escape') { if (edicion.activo || pincel.activo) ponerModo('objeto'); else escena.seleccionar(null); abrirHoja(null); }
 });
 
@@ -635,23 +651,45 @@ function borrarSeleccion() {
 }
 
 // ---------- Bucle ----------
+let presentacion = null; // se crea más abajo (modo Presentación)
 function ajustar() {
   const w = innerWidth, h = innerHeight;
   renderer.setSize(w, h, false);
   camara.aspect = w / h;
   camara.updateProjectionMatrix();
+  presentacion?.ajustar(w, h);
 }
 addEventListener('resize', ajustar);
 ajustar();
 
-let antes = performance.now();
+let antes = performance.now(), antesP = performance.now();
+// ---------- Presentación (render de calidad) ----------
+presentacion = new Presentacion({ renderer, scene, camara, sol, ocultar: () => [rejilla, ejes, gizmo.tc.getHelper(), caja, cajaGrupo, cajasMarcados] });
+window.__presentacion = presentacion;
+function presentar(si) {
+  if (si) {
+    if (edicion.activo || pincel.activo) ponerModo('objeto');
+    abrirHoja(null);
+    escena.seleccionar(null);
+    const s = escena.esferaDe(null); camOrb.enfocar(s.center, s.radius * 0.9);
+    presentacion.activar();
+  } else presentacion.desactivar();
+  document.body.classList.toggle('presentando', si);
+  $('barraPresentacion').hidden = !si;
+}
+$('bPresentar').onclick = () => presentar(true);
+$('bSalirPresentacion').onclick = () => presentar(false);
+$('bGirar').onclick = () => { presentacion.girar = !presentacion.girar; $('bGirar').classList.toggle('activo', presentacion.girar); };
+$('bAO').onclick = () => { presentacion.ao = !presentacion.ao; $('bAO').classList.toggle('activo', presentacion.ao); };
+$('bCaptura').onclick = async () => { const n = await presentacion.capturar(proyecto.nombre.replace(/[^\w-]+/g, '_') || 'upgames-studio'); aviso(`Imagen guardada (${Math.round(n / 1024)} KB)`); };
 renderer.setAnimationLoop(() => {
   const ahora = performance.now();
   camOrb.actualizar(Math.min(0.1, (ahora - antes) / 1000));
   antes = ahora;
   if (caja.visible) caja.update();
   if (cajaGrupo.visible && gizmo.arrastrando) { cajaGrupo.box.makeEmpty(); for (const o of escena.miembros(escena.seleccion)) cajaGrupo.box.expandByObject(o); }
-  renderer.render(scene, camara);
+  if (!presentacion.dibujar((ahora - antesP) / 1000, camOrb)) renderer.render(scene, camara);
+  antesP = ahora;
 });
 
 // Escena inicial: un cubo, como siempre

@@ -165,6 +165,10 @@ modulos/studio.js + rutas/studio.js   en el servidor: proyectos en la nube y pub
 5. ✅ **Materiales y texturas:** PBR (color, metal, rugosidad, emisión, opacidad, barniz), biblioteca de 8 materiales, entorno de luz para reflejos, UV automático por direcciones con vista UV, textura desde la galería o la cámara.
 6. ✅ **Archivos:** guardado automático (IndexedDB, cada 10 s y al salir, se recupera al abrir); formato .ups comprimido; exportar GLB/OBJ/STL; abrir e importar GLB/OBJ/.ups.
 7. ✅ **Esculpir y pintar:** inflar, alisar, pellizcar, arrastrar, aplanar y máscara, con simetría y «más detalle»; pintura por vértice sobre el modelo.
+   - Mejoras de calidad (hechas): biselar y fijar bordes; pinceles surco, capa, arrugar, alfa y detalle en
+     zona, capas de escultura; pintura en textura con capas y calcomanías; grupos; rellenar, puente,
+     cuchillo, imán a vértices y medidas; modo Presentación (GTAO, captura PNG); biblioteca de piezas;
+     IA en la nube (TRELLIS vía rutas/studio.js, necesita HF_TOKEN en Railway).
 8. **APK:** proyecto Capacitor, flujo de GitHub Actions, enlace de descarga en el servidor.
 9. **Prueba real:** modelar el monoplaza y cargarlo en APEX GP.
 
