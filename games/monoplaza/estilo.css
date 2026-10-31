@@ -668,3 +668,76 @@ body.en-repe #bCocheNuevo { display: none; }
 .mom small { display: block; color: var(--tenue); font-size: 12px; margin-top: 2px; }
 .mom .obj { color: #ffd23f; }
 .mom.hecho { border-left-color: #2fe07a; }
+
+/* ── Flujo: modo → circuito → ajustes ───────────────────────────────────── */
+.lobby-cuerpo { grid-template-columns: 1fr !important; }
+.lobby-modos { grid-template-columns: repeat(5, minmax(0, 1fr)); max-width: 1180px; }
+.modo.destacado { grid-column: span 2; grid-row: span 2; }
+@media (max-width: 860px) { .lobby-modos { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-height: 480px) { .lobby-modos { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+
+.pantalla.flujo { align-items: stretch; justify-content: center; padding: calc(14px + var(--sa-t)) calc(18px + var(--sa-r)) calc(12px + var(--sa-b)) calc(18px + var(--sa-l));
+  background: linear-gradient(90deg, rgba(3,5,10,.95), rgba(3,5,10,.82) 60%, rgba(3,5,10,.6)); backdrop-filter: blur(2px); overflow-y: auto; touch-action: pan-y; }
+.flujo-panel { width: min(1180px, 100%); display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.flujo-cab { display: flex; align-items: center; gap: 16px; }
+.flujo-cab .btn.mini { min-height: 34px; padding: 6px 12px; }
+.flujo-modo { margin-left: auto; font-weight: 900; font-style: italic; text-transform: uppercase; letter-spacing: .5px; color: #ffd23f; font-size: 14px; }
+.pasos { display: flex; gap: 6px; }
+.pasos i { font-style: normal; display: flex; align-items: center; gap: 8px; padding: 6px 14px 6px 8px; font-size: 12px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; color: var(--tenue); background: rgba(255,255,255,.05);
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 8px 50%); padding-left: 16px; }
+.pasos i:first-child { clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%); padding-left: 10px; }
+.pasos i b { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: rgba(255,255,255,.12); font-size: 11px; color: #fff; }
+.pasos i.on { color: #fff; background: linear-gradient(90deg, #e8202a, #a50d18); }
+.pasos i.on b { background: #fff; color: #a50d18; }
+.pasos i.hecho { color: #cfd6e2; }
+.pasos i.hecho b { background: #2fe07a; color: #06210f; }
+.flujo-pie { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.flujo-pie .nota { margin-right: auto; text-align: left; }
+
+.pistas-cuerpo { display: grid; grid-template-columns: minmax(220px, 330px) 1fr; gap: 16px; min-height: 0; flex: 1; }
+.pistas-lista { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; max-height: calc(100vh - 170px); padding-right: 4px; touch-action: pan-y; }
+.pistas-lista .pista { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; text-align: left;
+  background: rgba(20,24,34,.85); border: 1px solid rgba(255,255,255,.07); border-left: 3px solid transparent; transition: background .15s, border-color .15s; }
+.pistas-lista .pista:hover { background: rgba(36,42,58,.95); }
+.pistas-lista .pista.sel { border-left-color: var(--rojo); background: linear-gradient(90deg, rgba(232,32,42,.22), rgba(20,24,34,.9)); }
+.pistas-lista .pista b { font-size: 14px; font-weight: 800; }
+.pistas-lista .pista small { display: block; font-size: 11px; color: var(--tenue); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+.pistas-lista .pista .tag { font-size: 10px; font-weight: 800; padding: 3px 6px; border-radius: 3px; background: rgba(255,255,255,.08); color: #cfd6e2; white-space: nowrap; }
+.pista-prev { position: relative; display: flex; flex-direction: column; background: radial-gradient(120% 120% at 30% 20%, rgba(30,44,80,.55), rgba(8,10,16,.9)); border: 1px solid rgba(255,255,255,.08); border-top: 3px solid var(--rojo); min-height: 0; }
+.pista-prev canvas { width: 100%; flex: 1; min-height: 160px; max-height: calc(100vh - 290px); object-fit: contain; }
+.prev-info { display: flex; flex-direction: column; gap: 6px; padding: 12px 16px 14px; background: rgba(5,7,12,.55); }
+.prev-info small { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--rojo); font-weight: 800; }
+.prev-info > b { font-size: clamp(18px, 2.4vw, 28px); font-weight: 900; font-style: italic; text-transform: uppercase; line-height: 1.05; }
+.prev-datos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.prev-datos span { display: flex; flex-direction: column; padding: 6px 10px; background: rgba(255,255,255,.05); }
+.prev-datos em { font-style: normal; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--tenue); }
+.prev-datos b { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.prev-info .nota { text-align: left; }
+
+.ajustes-carrera { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.ajustes-carrera section { background: rgba(14,17,26,.88); border: 1px solid rgba(255,255,255,.07); border-top: 2px solid rgba(232,32,42,.7); padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.ajustes-carrera h3 { font-size: 12px; letter-spacing: 2.5px; text-transform: uppercase; color: var(--tenue); margin-bottom: 4px; }
+.ajustes-carrera .opcion { padding: 6px 0; border: 0; gap: 10px; }
+.ajustes-carrera .opcion label { font-size: 14px; }
+.ajustes-carrera .opcion .desc { font-size: 11px; }
+@media (max-width: 760px) { .ajustes-carrera, .pistas-cuerpo { grid-template-columns: 1fr; } .pistas-lista { max-height: 220px; } }
+@media (max-height: 480px) {
+  .pistas-lista { max-height: calc(100vh - 120px); }
+  .pista-prev canvas { max-height: calc(100vh - 210px); }
+  .prev-info { padding: 8px 12px; } .prev-datos b { font-size: 13px; }
+  .pasos i { padding: 4px 10px 4px 12px; font-size: 10px; letter-spacing: 1px; }
+  .ajustes-carrera { gap: 8px; } .ajustes-carrera section { padding: 8px 10px; }
+  .ajustes-carrera .opcion { padding: 3px 0; } .ajustes-carrera .opcion .desc { display: none; }
+}
+/* barra de botones del flujo siempre visible abajo (móvil apaisado) */
+.flujo-pie { position: sticky; bottom: calc(-12px - var(--sa-b)); padding: 8px 0 10px; margin-top: auto; background: linear-gradient(0deg, rgba(3,5,10,.97) 60%, rgba(3,5,10,0)); z-index: 2; }
+@media (max-height: 480px) {
+  .flujo-panel { gap: 8px; }
+  .pistas-cuerpo { gap: 10px; }
+  .pistas-lista { max-height: calc(100vh - 128px); }
+  .pistas-lista .pista { padding: 7px 10px; } .pistas-lista .pista small { font-size: 9.5px; }
+  .pista-prev canvas { max-height: calc(100vh - 250px); min-height: 90px; }
+  .prev-info { gap: 3px; } .prev-info > b { font-size: 16px; } .prev-info .nota { display: none; }
+  .prev-datos { gap: 5px; } .prev-datos span { padding: 3px 7px; }
+  .flujo-pie { padding: 5px 0 6px; } .flujo-pie .btn.grande { min-height: 38px; padding: 7px 16px; font-size: 15px; }
+}

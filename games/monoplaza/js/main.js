@@ -300,11 +300,73 @@ function liberarEscena() {
   scene.environment?.dispose?.();
 }
 
+// --- Paso 2 del menú: circuito con vista previa del trazado --------------------------------
+const flujo = { modo: 'carrera', pista: null };
+const NOMBRE_FLUJO = { carrera: 'Carrera', contrarreloj: 'Contrarreloj', practica: 'Práctica libre' };
+const TIPO_PISTA = (d) => d.comunidad ? 'Creado por ti' : d.tipo === 'urbano' ? 'Urbano' : d.tipo === 'parque' ? 'Rápido' : 'Técnico';
+const cachePrev = new Map();
 function pintarCircuitos() {
   const el = $('#selCircuito');
-  el.innerHTML = Object.values(CIRCUITOS).map(d => `<b data-v="${d.id}" class="${d.id === circuitoId ? 'sel' : ''}">${d.corto}<small>${d.comunidad ? '✏️ tuyo' : d.tipo === 'urbano' ? 'urbano' : d.tipo === 'parque' ? 'rápido' : 'técnico'}</small></b>`).join('');
-  el.querySelectorAll('b').forEach(b => b.onclick = () => { if (b.dataset.v !== circuitoId) cargarCircuito(b.dataset.v); });
+  flujo.pista ??= circuitoId;
+  el.innerHTML = Object.values(CIRCUITOS).map(d => `<button class="pista ${d.id === flujo.pista ? 'sel' : ''}" data-v="${d.id}"><span><b>${d.corto}</b><small>${TIPO_PISTA(d)}${d.pais ? ' · ' + d.pais : ''}</small></span>${d.hora === 'noche' ? '<span class="tag">🌙 NOCHE</span>' : records['crono:' + d.id] ? `<span class="tag">⏱ ${fmt(records['crono:' + d.id])}</span>` : ''}</button>`).join('');
+  el.querySelectorAll('.pista').forEach(b => b.onclick = () => { flujo.pista = b.dataset.v; el.querySelectorAll('.pista').forEach(x => x.classList.toggle('sel', x === b)); previsualizar(flujo.pista); });
+  previsualizar(flujo.pista);
 }
+function abrirPistas(modo) {
+  flujo.modo = modo; flujo.pista = circuitoId;
+  $('#flujoModo').textContent = NOMBRE_FLUJO[modo] || modo;
+  $('#bPistaSig').textContent = modo === 'carrera' ? 'Siguiente ›' : modo === 'practica' ? 'Salir a pista ›' : 'Empezar ›';
+  mostrar('pistas'); pintarCircuitos();
+}
+/** Dibuja el trazado (con sectores, zonas DRS, salida y calle de boxes) y sus datos. */
+function previsualizar(id) {
+  let c = id === circuito?.id ? circuito : cachePrev.get(id);
+  if (!c) { try { c = new Circuito(id); cachePrev.set(id, c); } catch { return; } }
+  const d = c.def, cv = $('#prevMapa'), x = cv.getContext('2d'), W = cv.width, H = cv.height;
+  x.clearRect(0, 0, W, H);
+  let minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity;
+  for (let i = 0; i < c.n; i++) { minx = Math.min(minx, c.x[i]); maxx = Math.max(maxx, c.x[i]); minz = Math.min(minz, c.z[i]); maxz = Math.max(maxz, c.z[i]); }
+  const esc = Math.min((W - 80) / (maxx - minx), (H - 70) / (maxz - minz));
+  const ox = (W - (maxx - minx) * esc) / 2, oz = (H - (maxz - minz) * esc) / 2;
+  const P = (i) => [ox + (c.x[i % c.n] - minx) * esc, oz + (c.z[i % c.n] - minz) * esc];
+  const trazo = (i0, i1, w, col) => { x.beginPath(); for (let i = i0; i <= i1; i += 2) { const [a, b] = P(i); i === i0 ? x.moveTo(a, b) : x.lineTo(a, b); } x.lineWidth = w; x.strokeStyle = col; x.stroke(); };
+  x.lineJoin = 'round'; x.lineCap = 'round';
+  trazo(0, c.n, 16, 'rgba(0,0,0,.55)');
+  // sectores en sus colores (como en la tele)
+  const sec = [0, ...c.sectores.map(s => Math.floor(s / c.paso)), c.n], colS = ['#e8202a', '#00b3ff', '#ffd23f'];
+  for (let k = 0; k < 3; k++) trazo(sec[k], sec[k + 1], 7, colS[k]);
+  // zonas DRS
+  for (const z of c.drs || []) {
+    const i0 = Math.floor(z.ini / c.paso), i1 = Math.floor((z.fin < z.ini ? z.fin + c.largo : z.fin) / c.paso);
+    if (i1 > i0) trazo(i0, i1, 3, '#2fe07a');
+  }
+  // línea de salida y sentido de giro
+  const [sx, sz] = P(0), [tx, tz] = P(8);
+  const ang = Math.atan2(tz - sz, tx - sx);
+  x.save(); x.translate(sx, sz); x.rotate(ang);
+  for (let k = 0; k < 6; k++) { x.fillStyle = k % 2 ? '#111' : '#fff'; x.fillRect(-3, -12 + k * 4, 6, 4); }
+  x.fillStyle = '#fff'; x.beginPath(); x.moveTo(26, 0); x.lineTo(14, -7); x.lineTo(14, 7); x.closePath(); x.fill();
+  x.restore();
+  x.font = '700 13px system-ui, sans-serif'; x.fillStyle = 'rgba(255,255,255,.7)';
+  x.fillText('S1', 14, H - 16); x.fillStyle = colS[0]; x.fillRect(4, H - 24, 6, 10);
+  x.fillStyle = colS[1]; x.fillRect(40, H - 24, 6, 10); x.fillStyle = 'rgba(255,255,255,.7)'; x.fillText('S2', 50, H - 16);
+  x.fillStyle = colS[2]; x.fillRect(76, H - 24, 6, 10); x.fillStyle = 'rgba(255,255,255,.7)'; x.fillText('S3', 86, H - 16);
+  x.fillStyle = '#2fe07a'; x.fillRect(116, H - 21, 16, 4); x.fillStyle = 'rgba(255,255,255,.7)'; x.fillText('DRS', 138, H - 16);
+  $('#prevTipo').textContent = `${TIPO_PISTA(d)}${d.pais ? ' · ' + d.pais : ''}${d.hora === 'noche' ? ' · Carrera nocturna' : ''}`;
+  $('#nombrePista').textContent = c.nombre;
+  $('#largoPista').textContent = (c.largo / 1000).toFixed(3) + ' km';
+  $('#prevCurvas').textContent = String(c.curvas?.length ?? '—');
+  $('#prevDrs').textContent = String(c.drs?.length ?? 0);
+  $('#prevRecord').textContent = records['crono:' + id] ? fmt(records['crono:' + id]) : '—';
+  $('#prevNota').textContent = id !== circuitoId ? 'Se cargará al continuar' : '';
+}
+$('#bPistaSig').addEventListener('click', async () => {
+  if (flujo.pista && flujo.pista !== circuitoId) await cargarCircuito(flujo.pista);
+  if (flujo.modo === 'carrera') {
+    $('#carPista').textContent = '📍 ' + circuito.def.corto;
+    mostrar('carrera'); pintarSegmentos('#carrera', opcCarrera);
+  } else empezar(flujo.modo);
+});
 
 function crearRenderer() {
   renderer = new THREE.WebGLRenderer({ canvas: $('#lienzo'), antialias: calidad <= 1, powerPreference: 'high-performance', stencil: false });
@@ -780,7 +842,9 @@ document.addEventListener('click', (e) => {
   const destino = b.dataset.ir;
   if (destino === 'volver') { aplicarAjustesEnVivo(); mostrar(jugando ? 'pausa' : pantallaPrevia || 'menu'); return; }
   if (destino === 'desafio') { empezarDesafio(); return; }
-  if (destino === 'contrarreloj' || destino === 'practica') { if (destino === 'contrarreloj') fantasmaRival = null; empezar(destino); return; }
+  // carrera, contrarreloj y práctica: primero el circuito (paso 2) y luego los ajustes (paso 3)
+  if (destino === 'contrarreloj' || destino === 'practica' || (destino === 'carrera' && !b.closest('#pistas'))) { if (destino === 'contrarreloj') fantasmaRival = null; abrirPistas(destino); return; }
+  if (destino === 'pistas') { mostrar('pistas'); pintarCircuitos(); return; }
   if (destino === 'garaje') { abrirGaraje(); return; }
   if (destino === 'trayectoria') { abrirTrayectoria(); return; }
   if (destino === 'editor') { abrirEditor(); return; }
