@@ -47,6 +47,22 @@
   <button id="bEspacio" title="Ejes del objeto o del mundo"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg><span id="tEspacio">Mundo</span></button>
 </nav>
 
+<!-- Barra del modo edición -->
+<div id="barraEdicion" hidden>
+  <div class="grupo segm-ed">
+    <button data-tipo="v" class="activo" title="Vértices"><svg viewBox="0 0 24 24"><path d="M5 19L12 5l7 14z" opacity=".45"/><circle cx="12" cy="5" r="2.6" fill="currentColor"/><circle cx="5" cy="19" r="2.6" fill="currentColor"/><circle cx="19" cy="19" r="2.6" fill="currentColor"/></svg><span>Vértice</span></button>
+    <button data-tipo="e" title="Aristas"><svg viewBox="0 0 24 24"><path d="M5 19L12 5" opacity=".45"/><path d="M12 5l7 14" opacity=".45"/><path d="M5 19h14" stroke-width="3.4"/></svg><span>Arista</span></button>
+    <button data-tipo="f" title="Caras"><svg viewBox="0 0 24 24"><path d="M5 19L12 5l7 14z" fill="currentColor" fill-opacity=".45"/></svg><span>Cara</span></button>
+  </div>
+  <div class="grupo">
+    <button id="bSumar" title="Tocar suma o quita de la selección (o Mayús)"><span>+ Selec.</span></button>
+    <button id="bTodo" title="Seleccionar todo o nada (A)"><span>Todo</span></button>
+    <button id="bBucle" title="Bucle de aristas desde la última arista tocada (L)" hidden><span>Bucle</span></button>
+    <button id="bRayos" title="Ver y tocar a través de la malla (Alt+Z)"><span>Rayos X</span></button>
+  </div>
+  <div id="infoMalla"></div>
+</div>
+
 <!-- Panel de escena -->
 <aside id="panel">
   <div class="cab">Escena <button id="bCerrarPanel" class="ic chico" title="Cerrar">✕</button></div>
@@ -65,7 +81,7 @@
 <footer id="abajo">
   <div class="modos">
     <button data-modo="objeto" class="activo">Objeto</button>
-    <button data-modo="editar" data-sprint="2">Editar</button>
+    <button data-modo="editar">Editar</button>
     <button data-modo="esculpir" data-sprint="7">Esculpir</button>
     <button data-modo="pintar" data-sprint="7">Pintar</button>
     <button data-modo="material" data-sprint="5">Material</button>
@@ -81,6 +97,10 @@
 <div id="hojaAnadir" class="hoja" hidden>
   <div class="hoja-cab">Añadir <button class="ic chico" data-cerrar>✕</button></div>
   <div class="rejilla" id="rejillaPrimitivas"></div>
+  <div class="hoja-cab sub">Plantillas</div>
+  <div class="rejilla">
+    <button id="bPlantillaF1"><svg viewBox="0 0 32 32"><path d="M2 20h5l3-5h8l4 3h6l2 2"/><circle cx="8" cy="21" r="3"/><circle cx="24" cy="21" r="3"/><path d="M27 13v6M2 22h3"/></svg>Monoplaza F1</button>
+  </div>
 </div>
 
 <!-- Desde foto -->

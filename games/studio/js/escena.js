@@ -1,6 +1,9 @@
 // Objetos de la escena, selección y los comandos que los cambian (todos con deshacer).
 import * as THREE from 'three';
 
+// Malla de media arista de cada objeto que ya se editó (ver edicion.js).
+export const mallas = new WeakMap();
+
 export class Escena {
   constructor(scene, historial) {
     this.scene = scene;
@@ -42,6 +45,18 @@ export class Escena {
     return obj;
   }
 
+  // Varias piezas de una vez (p. ej. una plantilla): un solo paso de deshacer.
+  anadirVarios(objs, nombre = 'Añadir') {
+    for (const o of objs) o.name = this.nombreLibre(o.name || 'Objeto');
+    const antes = this.seleccion;
+    this.historial.hacer({
+      nombre,
+      hacer: () => { for (const o of objs) this.raiz.add(o); this.seleccionar(objs[0]); this.avisar(); },
+      deshacer: () => { for (const o of objs) this.raiz.remove(o); this.seleccionar(objs.includes(antes) ? null : antes); this.avisar(); },
+    });
+    return objs;
+  }
+
   borrar(obj = this.seleccion) {
     if (!obj) return;
     const pos = this.objetos.indexOf(obj);
@@ -62,6 +77,8 @@ export class Escena {
     if (!obj) return null;
     const copia = obj.clone();
     copia.geometry = obj.geometry.clone();
+    if (mallas.has(obj)) mallas.set(copia, mallas.get(obj).clone());
+    for (const c of copia.children.filter((h) => h.userData.capa)) copia.remove(c); // capas del modo edición
     copia.material = obj.material.clone();
     copia.userData.bloqueado = false;
     copia.position.x += 0.3; copia.position.z += 0.3;

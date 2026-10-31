@@ -90,7 +90,7 @@ export function instalarGestos(el, camOrb, { ocupado, alTocar, alDobleToque, alP
         alDobleToque(e.clientX, e.clientY);
       } else {
         ultimoToque = { x: e.clientX, y: e.clientY, t: ahora };
-        alTocar(e.clientX, e.clientY);
+        alTocar(e.clientX, e.clientY, e.shiftKey);
       }
     }
     if (ptrs.size === 0) inicio = null;

@@ -1,11 +1,11 @@
 // Caché para usar Studio sin conexión. Cambia VERSION al publicar archivos nuevos.
-const VERSION = 'studio-v6';
+const VERSION = 'studio-v7';
 const ARCHIVOS = [
   './', './index.html', './estilo.css', './manifest.webmanifest', './icono.svg', './icono-512.png',
   './lib/three.module.min.js', './lib/addons/controls/TransformControls.js', './lib/addons/exporters/GLTFExporter.js',
   './js/main.js', './js/camara.js', './js/escena.js', './js/primitivas.js', './js/deshacer.js',
   './js/ui/gestos.js', './js/ui/radial.js', './js/herramientas/gizmo.js',
-  './js/foto/fotoA3D.js', './js/foto/dialogoFoto.js', './js/foto/ia.js', './js/archivo/glb.js',
+  './js/foto/fotoA3D.js', './js/foto/dialogoFoto.js', './js/foto/ia.js', './js/edicion.js', './js/malla/mediaArista.js', './js/malla/aGeometria.js', './js/plantillas/monoplaza.js', './js/archivo/glb.js',
 ];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(ARCHIVOS)).then(() => self.skipWaiting()));

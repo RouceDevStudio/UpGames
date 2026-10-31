@@ -9,6 +9,8 @@ import { PRIMITIVAS, crearPrimitiva } from './primitivas.js';
 import { crearGizmo } from './herramientas/gizmo.js';
 import { instalarDialogoFoto } from './foto/dialogoFoto.js';
 import { exportarGLB } from './archivo/glb.js';
+import { ModoEdicion } from './edicion.js';
+import { construirMonoplaza } from './plantillas/monoplaza.js';
 
 const $ = (id) => document.getElementById(id);
 const lienzo = $('lienzo');
@@ -55,7 +57,7 @@ const caja = new THREE.BoxHelper(undefined, 0x00d2ff);
 caja.material.depthTest = false; caja.material.transparent = true; caja.material.opacity = 0.6;
 caja.renderOrder = 2; caja.visible = false;
 scene.add(caja);
-escena.alCambiar(() => { caja.visible = !!escena.seleccion; if (caja.visible) caja.setFromObject(escena.seleccion); });
+escena.alCambiar(() => { caja.visible = !!escena.seleccion && !edicion.activo; if (caja.visible) caja.setFromObject(escena.seleccion); });
 
 function anadirPrimitiva(id) {
   const m = crearPrimitiva(id);
@@ -64,7 +66,45 @@ function anadirPrimitiva(id) {
   escena.anadir(m, `Añadir ${m.name}`);
   aviso(`${m.name} añadido`);
 }
-const enfocar = () => { const s = escena.esferaDe(escena.seleccion); camOrb.enfocar(s.center, s.radius); };
+const enfocar = () => {
+  const s = (edicion.activo && edicion.enfoque()) || escena.esferaDe(escena.seleccion);
+  camOrb.enfocar(s.center, s.radius);
+};
+
+// ---------- Modo edición ----------
+const edicion = new ModoEdicion({ scene, camara, lienzo, historial, gizmo, alCambiar: () => pintarEdicion() });
+function ponerModo(modo) {
+  if (modo === 'editar') {
+    const o = escena.seleccion;
+    if (!o) { aviso('Toca primero el objeto que quieres editar'); return; }
+    if (o.userData.bloqueado) { aviso('El objeto está bloqueado'); return; }
+    abrirHoja(null);
+    edicion.entrar(o);
+    caja.visible = false;
+  } else if (edicion.activo) {
+    edicion.salir();
+    escena.avisar();
+  }
+  document.body.classList.toggle('editando', edicion.activo);
+  $('barraEdicion').hidden = !edicion.activo;
+  document.querySelectorAll('[data-modo]').forEach((q) => q.classList.toggle('activo', q.dataset.modo === (edicion.activo ? 'editar' : 'objeto')));
+}
+function pintarEdicion() {
+  if (!edicion.activo) return;
+  document.querySelectorAll('[data-tipo]').forEach((q) => q.classList.toggle('activo', q.dataset.tipo === edicion.tipo));
+  $('bSumar').classList.toggle('activo', edicion.anadir);
+  $('bRayos').classList.toggle('activo', edicion.rayosX);
+  $('bBucle').hidden = edicion.tipo !== 'e';
+  const m = edicion.malla, nombres = { v: 'vértices', e: 'aristas', f: 'caras' };
+  $('infoMalla').textContent = `${edicion.obj.name} · ${m.nV} vértices · ${m.nE} aristas · ${m.nF} caras · ${edicion.sel.size} ${nombres[edicion.tipo]} seleccionad${edicion.tipo === 'v' ? 'os' : 'as'}`;
+}
+document.querySelectorAll('[data-tipo]').forEach((b) => b.addEventListener('click', () => edicion.ponerTipo(b.dataset.tipo)));
+$('bSumar').onclick = () => { edicion.anadir = !edicion.anadir; pintarEdicion(); };
+$('bTodo').onclick = () => edicion.seleccionarTodo();
+$('bBucle').onclick = () => { if (!edicion.seleccionarBucle()) aviso('Toca primero una arista'); };
+$('bRayos').onclick = () => { edicion.rayosX = !edicion.rayosX; edicion.aplicarRayosX(); pintarEdicion(); };
+// si el objeto que se edita desaparece (borrado o deshecho), volver al modo objeto
+escena.alCambiar(() => { if (edicion.activo && edicion.obj.parent !== escena.raiz) ponerModo('objeto'); });
 
 // ---------- Selección con el dedo ----------
 const ray = new THREE.Raycaster();
@@ -78,9 +118,10 @@ function objetoEn(x, y) {
 
 instalarGestos(lienzo, camOrb, {
   ocupado: () => gizmo.arrastrando,
-  alTocar: (x, y) => escena.seleccionar(objetoEn(x, y)),
-  alDobleToque: (x, y) => { const o = objetoEn(x, y); if (o) escena.seleccionar(o); enfocar(); },
+  alTocar: (x, y, sumar) => { if (edicion.activo) edicion.tocar(x, y, sumar); else escena.seleccionar(objetoEn(x, y)); },
+  alDobleToque: (x, y) => { if (!edicion.activo) { const o = objetoEn(x, y); if (o) escena.seleccionar(o); } enfocar(); },
   alPulsacionLarga: (x, y, id) => {
+    if (edicion.activo) return radialEdicion(x, y, id);
     const o = objetoEn(x, y);
     if (o) escena.seleccionar(o);
     const hay = !!escena.seleccion;
@@ -91,10 +132,24 @@ instalarGestos(lienzo, camOrb, {
       { nombre: 'Enfocar', icono: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5"/></svg>', hacer: enfocar },
       { nombre: 'Duplicar', desactivado: !hay, icono: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V4h12"/></svg>', hacer: () => escena.duplicar() },
       { nombre: 'Borrar', desactivado: !hay, icono: '<svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>', hacer: () => escena.borrar() },
-      { nombre: 'Deshacer', desactivado: !historial.puedeDeshacer, icono: '<svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>', hacer: () => historial.deshacer() },
+      { nombre: 'Editar', desactivado: !hay, icono: ICONO_EDITAR, hacer: () => ponerModo('editar') },
+      { nombre: 'Deshacer', desactivado: !historial.puedeDeshacer, icono: ICONO_DESHACER, hacer: () => historial.deshacer() },
     ], id);
   },
 });
+const ICONO_DESHACER = '<svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>';
+const ICONO_EDITAR = '<svg viewBox="0 0 24 24"><path d="M5 19L12 5l7 14z"/><circle cx="12" cy="5" r="2" fill="currentColor"/><circle cx="5" cy="19" r="2" fill="currentColor"/><circle cx="19" cy="19" r="2" fill="currentColor"/></svg>';
+function radialEdicion(x, y, id) {
+  const t = (tipo, nombre) => ({ nombre, hacer: () => edicion.ponerTipo(tipo) });
+  abrirRadial(x, y, [
+    t('v', 'Vértice'), t('e', 'Arista'), t('f', 'Cara'),
+    { nombre: 'Todo', hacer: () => edicion.seleccionarTodo() },
+    { nombre: 'Bucle', desactivado: edicion.tipo !== 'e' || !edicion.sel.size, hacer: () => edicion.seleccionarBucle() },
+    { nombre: 'Enfocar', hacer: enfocar },
+    { nombre: 'Deshacer', desactivado: !historial.puedeDeshacer, icono: ICONO_DESHACER, hacer: () => historial.deshacer() },
+    { nombre: 'Objeto', hacer: () => ponerModo('objeto') },
+  ], id);
+}
 
 // ---------- Interfaz ----------
 const dialogoFoto = instalarDialogoFoto({
@@ -130,13 +185,17 @@ const ponerModoGizmo = (m) => {
 document.querySelectorAll('[data-gizmo]').forEach((b) => b.addEventListener('click', () => ponerModoGizmo(b.dataset.gizmo)));
 
 document.querySelectorAll('[data-modo]').forEach((b) => b.addEventListener('click', () => {
-  if (b.dataset.sprint) aviso(`«${b.textContent}» llega en el sprint ${b.dataset.sprint} de la etapa 1`);
+  if (b.dataset.modo === 'objeto' || b.dataset.modo === 'editar') ponerModo(b.dataset.modo);
+  else if (b.dataset.sprint) aviso(`«${b.textContent}» llega en el sprint ${b.dataset.sprint} de la etapa 1`);
   else if (b.dataset.etapa) aviso(`«${b.textContent}» llega en la etapa ${b.dataset.etapa}`);
 }));
 
 $('bExportar').onclick = async () => {
+  const capas = [];
+  escena.raiz.traverse((o) => { if (o.userData.capa && o.visible) { capas.push(o); o.visible = false; } });
   try { await exportarGLB(escena.raiz, 'upgames-studio'); aviso('GLB exportado'); }
   catch (e) { aviso(e.message === 'vacío' ? 'No hay nada visible para exportar' : 'No se pudo exportar'); console.error(e); }
+  finally { for (const o of capas) o.visible = true; }
 };
 
 // Hojas emergentes
@@ -145,6 +204,15 @@ document.querySelectorAll('[data-cerrar]').forEach((b) => b.addEventListener('cl
 $('bAnadir').onclick = () => abrirHoja($('hojaAnadir').hidden ? 'hojaAnadir' : null);
 $('bFoto').onclick = () => { abrirHoja(null); dialogoFoto.abrir(); };
 $('rejillaPrimitivas').innerHTML = PRIMITIVAS.map((p) => `<button data-prim="${p.id}">${p.icono}${p.nombre}</button>`).join('');
+$('bPlantillaF1').onclick = () => {
+  if (edicion.activo) ponerModo('objeto');
+  const piezas = escena.anadirVarios(construirMonoplaza(), 'Plantilla monoplaza');
+  $('hojaAnadir').hidden = true;
+  escena.seleccionar(null);
+  const s = escena.esferaDe(null);
+  camOrb.enfocar(s.center, s.radius);
+  aviso(`Monoplaza F1 creado: ${piezas.length} piezas con nombre (ruedas, alerones, halo…). Exporta a GLB para APEX GP.`);
+};
 $('rejillaPrimitivas').addEventListener('click', (e) => {
   const b = e.target.closest('[data-prim]');
   if (!b) return;
@@ -183,7 +251,7 @@ $('lista').addEventListener('click', (e) => {
   const acc = e.target.closest('[data-acc]')?.dataset.acc;
   if (acc === 'ver') escena.alternarVisible(o);
   else if (acc === 'bloq') escena.alternarBloqueo(o);
-  else if (o.visible) escena.seleccionar(o);
+  else if (o.visible) { if (edicion.activo && edicion.obj !== o) ponerModo('objeto'); escena.seleccionar(o); }
 });
 $('pNombre').addEventListener('change', () => escena.seleccion && escena.renombrar(escena.seleccion, $('pNombre').value));
 $('pNombre').addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') e.target.blur(); });
@@ -196,6 +264,15 @@ escena.alCambiar(pintarPanel);
 addEventListener('keydown', (e) => {
   if (e.target.matches?.('input')) return;
   const k = e.key.toLowerCase(), ctrl = e.ctrlKey || e.metaKey;
+  if (k === 'tab') { e.preventDefault(); ponerModo(edicion.activo ? 'objeto' : 'editar'); return; }
+  if (edicion.activo && !ctrl) {
+    const tipos = { 1: 'v', 2: 'e', 3: 'f' };
+    if (tipos[k]) { edicion.ponerTipo(tipos[k]); return; }
+    if (k === 'a') { edicion.seleccionarTodo(); return; }
+    if (k === 'l') { edicion.seleccionarBucle(); return; }
+    if (k === 'z' && e.altKey) { $('bRayos').click(); return; }
+    if (k === 'delete' || k === 'backspace' || k === 'x' || (e.shiftKey && k === 'd')) return; // llegan en el sprint 3
+  }
   if (ctrl && k === 'z') { e.preventDefault(); if (e.shiftKey) historial.rehacer(); else historial.deshacer(); }
   else if (ctrl && k === 'y') { e.preventDefault(); historial.rehacer(); }
   else if (ctrl && k === 'd' || (e.shiftKey && k === 'd')) { e.preventDefault(); escena.duplicar(); }
@@ -208,7 +285,7 @@ addEventListener('keydown', (e) => {
   else if (k === '3') camOrb.vista('lado');
   else if (k === '7') camOrb.vista('arriba');
   else if (k === '5') camOrb.vista('persp');
-  else if (k === 'escape') { escena.seleccionar(null); abrirHoja(null); }
+  else if (k === 'escape') { if (edicion.activo) ponerModo('objeto'); else escena.seleccionar(null); abrirHoja(null); }
 });
 
 // ---------- Avisos ----------
@@ -250,4 +327,4 @@ pintarPanel();
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 
 // Para las pruebas en el navegador
-window.studio = { escena, historial, camOrb, gizmo, anadirPrimitiva };
+window.studio = { escena, historial, camOrb, gizmo, anadirPrimitiva, edicion, ponerModo };

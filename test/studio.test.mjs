@@ -5,6 +5,9 @@
 import assert from 'assert';
 import { Historial } from '../games/studio/js/deshacer.js';
 import { mascaraDesdeImagen, mascaraDePlano, cajaDeMascara, relieveDesdeMascara, cascoVisual, cascoPlanos, volumen } from '../games/studio/js/foto/fotoA3D.js';
+import { MallaHE } from '../games/studio/js/malla/mediaArista.js';
+import { aGeometria } from '../games/studio/js/malla/aGeometria.js';
+import * as THREE from '../games/studio/lib/three.module.min.js';
 
 let passed = 0;
 function test(name, fn) {
@@ -171,6 +174,89 @@ test('planos de un monoplaza: ruedas medidas como piezas y carrocería sin la fr
   // la carrocería ya no lleva los neumáticos ni sus cajas
   assert.ok(volumen(con.posiciones, con.indices) < volumen(sin.posiciones, sin.indices) * 0.9);
   assert.ok(esCerrada(con.indices));
+});
+
+// ---------- Malla de media arista ----------
+const desdeThree = (g, op) => MallaHE.desdeTriangulos(g.attributes.position.array, g.index ? g.index.array : null, { uvs: g.attributes.uv?.array, ...op });
+const contar = (m) => { const c = {}; for (let f = 0; f < m.nF; f++) { const n = m.vertsDeCara(f).length; c[n] = (c[n] || 0) + 1; } return c; };
+const bordes = (m) => m.heTwin.filter((t) => t < 0).length;
+
+test('cubo de Three → 8 vértices, 12 aristas, 6 cuadriláteros, cerrado (V − E + F = 2)', () => {
+  const m = desdeThree(new THREE.BoxGeometry(1, 1, 1));
+  assert.deepStrictEqual([m.nV, m.nE, m.nF], [8, 12, 6]);
+  assert.deepStrictEqual(contar(m), { 4: 6 });
+  assert.strictEqual(bordes(m), 0);
+  assert.deepStrictEqual(m.validar(), []);
+});
+
+test('esfera, cilindro, toro, cápsula y cono: cerrados, válidos y con cuadriláteros', () => {
+  const casos = {
+    esfera: [new THREE.SphereGeometry(0.5, 16, 8), 2],
+    cilindro: [new THREE.CylinderGeometry(0.5, 0.5, 1, 12), 2],
+    toro: [new THREE.TorusGeometry(0.4, 0.15, 8, 16), 0],
+    capsula: [new THREE.CapsuleGeometry(0.3, 0.6, 4, 12), 2],
+    cono: [new THREE.ConeGeometry(0.5, 1, 12), 2],
+  };
+  for (const [nombre, [g, euler]] of Object.entries(casos)) {
+    const m = desdeThree(g);
+    assert.deepStrictEqual(m.validar(), [], nombre);
+    assert.strictEqual(bordes(m), 0, `${nombre}: sin bordes`);
+    assert.strictEqual(m.nV - m.nE + m.nF, euler, `${nombre}: Euler`);
+  }
+  assert.deepStrictEqual(contar(desdeThree(new THREE.CylinderGeometry(0.5, 0.5, 1, 12))), { 3: 24, 4: 12 });
+  assert.strictEqual(contar(desdeThree(new THREE.TorusGeometry(0.4, 0.15, 8, 16)))[4], 128);
+});
+
+test('icoesfera sin unir cuadriláteros y plano con borde', () => {
+  const ico = desdeThree(new THREE.IcosahedronGeometry(0.5, 2), { cuads: false });
+  assert.deepStrictEqual(contar(ico), { 3: 180 }); // detalle 2 → 20·3²
+  assert.strictEqual(ico.nV - ico.nE + ico.nF, 2);
+  const plano = desdeThree(new THREE.PlaneGeometry(2, 2, 2, 2));
+  assert.deepStrictEqual([plano.nV, plano.nF, bordes(plano)], [9, 4, 8]);
+});
+
+test('bucle de aristas: el anillo de un cilindro y el de un toro', () => {
+  const cil = desdeThree(new THREE.CylinderGeometry(0.5, 0.5, 1, 12, 3, true)); // abierto, 3 anillos de cuadriláteros
+  // una arista vertical de la pared → su bucle da la vuelta horizontal? No: el bucle sigue la dirección de la arista
+  const e = [...Array(cil.nE).keys()].find((k) => { const [a, b] = cil.vertsDeArista(k); return Math.abs(cil.pos[a * 3 + 1] - cil.pos[b * 3 + 1]) < 1e-6 && Math.abs(cil.pos[a * 3 + 1]) < 0.3; });
+  assert.strictEqual(cil.bucle(e).length, 12, 'anillo horizontal interior de 12 aristas');
+  const toro = desdeThree(new THREE.TorusGeometry(0.4, 0.15, 8, 16));
+  for (let k = 0; k < 10; k++) { const n = toro.bucle(k).length; assert.ok(n === 8 || n === 16, `bucle ${n}`); }
+});
+
+test('a geometría: una esquina por media arista, triángulos en abanico y normales vivas en el cubo', () => {
+  const m = desdeThree(new THREE.BoxGeometry(1, 1, 1));
+  const g = aGeometria(m);
+  assert.strictEqual(g.posiciones.length, m.nHE * 3);
+  assert.strictEqual(g.indices.length, 12 * 3);
+  assert.strictEqual(g.triCara.length, 12);
+  // en un cubo (90° > 30°) cada esquina lleva la normal de su cara
+  for (let h = 0; h < m.nHE; h++) {
+    const n = m.normalCara(m.heFace[h]); const l = Math.hypot(...n);
+    assert.ok(Math.abs(g.normales[h * 3] - n[0] / l) + Math.abs(g.normales[h * 3 + 1] - n[1] / l) + Math.abs(g.normales[h * 3 + 2] - n[2] / l) < 1e-5);
+  }
+  // mover un vértice cambia todas sus esquinas
+  m.pos[0] += 1;
+  const g2 = aGeometria(m);
+  let cambiadas = 0;
+  for (let h = 0; h < m.nHE; h++) if (g2.posiciones[h * 3] !== g.posiciones[h * 3]) cambiadas++;
+  assert.strictEqual(cambiadas, 3);
+});
+
+test('las UV de cada esquina se conservan al soldar (costuras)', () => {
+  const g = new THREE.BoxGeometry(1, 1, 1);
+  const m = desdeThree(g);
+  const usadas = new Set();
+  for (let h = 0; h < m.nHE; h++) usadas.add(`${m.heUV[h * 2]},${m.heUV[h * 2 + 1]}`);
+  assert.deepStrictEqual([...usadas].sort(), ['0,0', '0,1', '1,0', '1,1']);
+});
+
+test('modelo desde foto → malla de media arista válida', () => {
+  const img = imagen(120, 90, (x, y) => Math.hypot((x - 60) / 40, (y - 45) / 30) < 1);
+  const r = relieveDesdeMascara(mascaraDesdeImagen(img), { res: 32 });
+  const m = MallaHE.desdeTriangulos(r.posiciones, r.indices, { uvs: r.uvs });
+  assert.deepStrictEqual(m.validar(), []);
+  assert.strictEqual(bordes(m), 0);
 });
 
 console.log(`\n${passed} pruebas correctas`);
