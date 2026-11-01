@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { cuerpoListo, geometriasCuerpo } from './cuerpoStudio.js';
+import { cuerpoEscaneadoListo, geometriaParaPersona, colocarHuesos, materialCuerpo } from './cuerpoEscaneado.js';
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const suave = (t) => t * t * (3 - 2 * t);
@@ -274,7 +275,7 @@ const HUESOS = ['tronco', 'cabeza', 'hI', 'hD', 'cI', 'cD', 'mI', 'mD', 'kI', 'k
  * opc: { color, texto, numero, rol: 'mecanico' | 'ingeniero' | 'piloto', piel, alto }
  */
 export class Persona {
-  constructor({ color = '#0d47ff', texto = 'UPGAMES', numero = 1, rol = 'mecanico', piel = '#c9967a', alto = 1, calidad = 2, podio = false } = {}) {
+  constructor({ color = '#0d47ff', texto = 'UPGAMES', numero = 1, rol = 'mecanico', piel = '#c9967a', alto = 1, calidad = 2, podio = false, casco = null, escaneado = true } = {}) {
     const g = geometrias();
     this.rol = rol;
     const piloto = rol === 'piloto';
@@ -302,7 +303,9 @@ export class Persona {
     const hueso = (padre, x, y, z, nombre = '') => { const h = new THREE.Bone(); h.name = nombre; h.position.set(x, y, z); (padre || BASE).add(h); huesos.push(h); return h; };
     // cuerpo de UpGames Studio (una malla suave con mono, guantes y botas) si está cargado;
     // si no, las piezas de siempre
-    const nuevo = cuerpoListo();
+    // el cuerpo escaneado (el mismo modelo del piloto, con casco) para mecánicos y pilotos
+    const esc = this.escaneado = escaneado && calidad >= 1 && !podio && (rol === 'mecanico' || piloto) && cuerpoEscaneadoListo();
+    const nuevo = esc || cuerpoListo();
 
     // cadera (raíz animada) y pelvis
     const cadera = this.cadera = hueso(null, 0, 0.95, 0, 'cadera');
@@ -314,6 +317,7 @@ export class Persona {
     const cuello = hueso(tronco, 0.01, 0.49, 0, 'cuello');
     if (!nuevo) malla(g.cuello, rol === 'mecanico' ? matNegro : matCuello, cuello).scale.set(1, 0.75, 1);   // verdugo ignífugo
     const cabeza = this.cabeza = hueso(cuello, 0.01, 0.06, 0, 'cabeza');
+    if (!esc) {
     if (rol === 'mecanico') {
       const matCasco = new THREE.MeshStandardMaterial({ map: texturaCasco(color), roughness: 0.25, metalness: 0.1 });
       malla(g.craneo, matNegro, cabeza, 0, 0.09, 0);
@@ -339,7 +343,8 @@ export class Persona {
         for (const z of [-0.1, 0.1]) malla(g.orejera, matNegro, cabeza, 0, 0.1, z);
       }
     }
-    if (piloto) {
+    }
+    if (piloto && !esc) {
       const matCinta = new THREE.MeshStandardMaterial({ color: 0x2a2a2e, roughness: 0.7 });
       const matMetal = new THREE.MeshStandardMaterial({ color: 0xb8bcc4, metalness: 1, roughness: 0.3 });
       // con el cuerpo de Studio el pecho y la cintura son más finos: el arnés se ajusta a ellos
@@ -420,7 +425,9 @@ export class Persona {
       porMat.get(p.mat).push(geo);
       p.m.removeFromParent();
     }
-    if (nuevo) {
+    if (esc) {
+      porMat.set(materialCuerpo(color, casco || (piloto ? '#ffffff' : color)), [geometriaParaPersona(huesos.map((h) => h.name))]);
+    } else if (nuevo) {
       // el cuerpo de Studio: cada parte con su material (el mono, del color del equipo)
       const partes = geometriasCuerpo(piloto && calidad >= 1 ? 2 : 1, huesos.map((h) => h.name));
       const matMono = new THREE.MeshStandardMaterial({ color, roughness: 0.82 });
@@ -439,6 +446,12 @@ export class Persona {
     cuerpo.castShadow = calidad >= 1;
     BASE.removeFromParent();
     cuerpo.add(cadera);
+    if (esc) {
+      // huesos en las articulaciones del escaneo y enlace en su pose (luego aplicar() pone la pose)
+      this.cuello = cuello;
+      colocarHuesos(this)();
+      cuerpo.updateMatrixWorld(true);
+    }
     cuerpo.bind(new THREE.Skeleton(huesos));
     R.add(cuerpo);
     R.scale.setScalar(alto);
@@ -544,7 +557,7 @@ export class Persona {
     // la cadera baja lo justo para que la pierna más baja (pie o rodilla apoyada) toque el suelo
     const bajo = (k, r) => {
       const a1 = k.rotation.z, a2 = a1 + r.rotation.z;
-      const rodilla = -0.44 * Math.cos(a1), tobillo = rodilla - 0.43 * Math.cos(a2);
+      const rodilla = -(this.largoMuslo || 0.44) * Math.cos(a1), tobillo = rodilla - (this.largoPierna || 0.43) * Math.cos(a2);
       return Math.min(rodilla - 0.06, tobillo - 0.075);
     };
     y = 0.02 - Math.min(bajo(this.kI, this.rI), bajo(this.kD, this.rD)) + (y - L(a.y ?? 0.95, b.y));

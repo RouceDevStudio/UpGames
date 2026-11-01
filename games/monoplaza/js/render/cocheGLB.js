@@ -12,7 +12,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { proyectarUV } from './librea.js';
 
 /** Dónde quedan las ruedas en el escaneo (x del eje delantero y trasero, semivía). */
-export const RUEDAS_GLB = { del: 1.913, tras: -1.589, z: 0.818 };
+export const RUEDAS_GLB = { del: 1.852, tras: -1.528, zDel: 0.924, zTras: 0.709, radio: 0.36 };   // (el modelo trae los suyos)
 
 const datos = new Map(), listos = {};
 export function cargarCocheGLB(nivel = 'medio') {
@@ -26,6 +26,8 @@ export function cargarCocheGLB(nivel = 'medio') {
 export function cocheGLBListo(nivel = 'medio') { return listos[nivel] || null; }
 
 function preparar(gltf) {
+  const ex = gltf.scene.userData?.ruedas;
+  if (ex) Object.assign(RUEDAS_GLB, ex);
   const partes = {};
   let mat = null;
   gltf.scene.traverse(o => {
@@ -45,36 +47,6 @@ function preparar(gltf) {
   if (detalle) detalle.colorSpace = THREE.NoColorSpace;     // se usa como dato (gris), no como color
   // ruedas: goma y llanta del escaneo, oscuras (el gris del escaneo da el relieve)
   return { partes, detalle, normal };
-}
-
-/**
- * Material de las ruedas escaneadas de un coche: goma mate, llanta metálica y la franja del
- * compuesto en el flanco (como las de verdad). `color` es el del compuesto; se cambia con
- * `mat.userData.compuesto.value.set(...)` al montar otro juego.
- */
-export function materialRuedaGLB(dat, color) {
-  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, map: dat.detalle, normalMap: dat.normal, roughness: 0.85, metalness: 0 });
-  const comp = { value: new THREE.Color(color) };
-  m.userData.compuesto = comp;
-  m.onBeforeCompile = (sh) => {
-    sh.uniforms.cComp = comp;
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vPR;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvPR = position;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 cComp; varying vec3 vPR;')
-      .replace('#include <map_fragment>', `#include <map_fragment>
-        {
-          float r = length(vPR.xy), g = diffuseColor.r;
-          float llanta = 1.0 - smoothstep(0.225, 0.24, r);
-          float flanco = smoothstep(0.1, 0.13, abs(vPR.z));
-          float franja = flanco * smoothstep(0.272, 0.278, r) * (1.0 - smoothstep(0.296, 0.302, r));
-          vec3 goma = vec3(0.045, 0.046, 0.05) * (0.6 + g * 0.8);
-          vec3 metal = vec3(0.16, 0.165, 0.175) * (0.5 + g);
-          diffuseColor.rgb = mix(mix(goma, metal, llanta), cComp * 0.85, franja);
-        }`)
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.35, 1.0 - smoothstep(0.225, 0.24, length(vPR.xy)));')
-      .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor = mix(metalnessFactor, 0.75, 1.0 - smoothstep(0.225, 0.24, length(vPR.xy)));');
-  };
-  m.customProgramCacheKey = () => 'ruedaGLB';
-  return m;
 }
 
 const cacheMat = new WeakMap();
@@ -118,3 +90,34 @@ export function materialCocheGLB(pintura, dat) {
   porDat.set(dat, m);
   return m;
 }
+
+// ─── Chasis desarmado (lo que queda tras un choque que destroza el coche) ──────────────────
+// El monocasco con la suspensión al aire y piezas del fondo: cuando la carrocería sale volando
+// en trozos, queda este chasis en su sitio (ya en las coordenadas y escala del coche).
+let datDes = null, cargaDes = null;
+export function cargarDesarmado() {
+  if (!cargaDes) cargaDes = new GLTFLoader().loadAsync(new URL('../../modelos/coche_desarmado.glb', import.meta.url).href).then(g => {
+    let m = null; g.scene.traverse(o => { if (o.isMesh && !m) m = o; });
+    m.material.roughness = 0.45; m.material.metalness = 0.3; m.material.color.setHex(0x3a3d44);   // carbono
+    datDes = { geo: m.geometry, mat: m.material };
+    return datDes;
+  }).catch(() => null);
+  return cargaDes;
+}
+export const desarmadoListo = () => datDes;
+
+// ─── Neumáticos montados (uno por compuesto, con la marca Up Games y su franja) ──────────────
+// Centrados, eje en z, radio 0,36 m. Versión alta para tu coche y baja para los demás.
+const RUEDA = {}, cargaRueda = {};
+export function cargarRuedas(nivel = 'alto') {
+  if (!cargaRueda[nivel]) cargaRueda[nivel] = Promise.all(['blando', 'medio', 'duro', 'inter', 'lluvia'].map(c =>
+    new GLTFLoader().loadAsync(new URL(`../../modelos/rueda_${c}_${nivel}.glb`, import.meta.url).href).then(g => {
+      let m = null; g.scene.traverse(o => { if (o.isMesh && !m) m = o; });
+      m.material.roughness = 0.8; m.material.metalness = 0.1;
+      (RUEDA[nivel] ||= {})[c] = { geo: m.geometry, mat: m.material };
+    }).catch(() => {}))).then(() => RUEDA[nivel] || null);
+  return cargaRueda[nivel];
+}
+export const ruedasListas = (nivel = 'alto') => RUEDA[nivel] || null;
+/** Geometría y material del neumático de ese compuesto (o null). */
+export function ruedaDe(nivel, compuesto) { const r = RUEDA[nivel]; return r ? (r[compuesto] || r.medio) : null; }

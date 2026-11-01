@@ -11,8 +11,32 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 /** Volante del piloto escaneado: centro y caída de la columna (en la carrocería). */
-export const VOLANTE_GLB = { x: 0.617, y: 0.637, caida: -0.06 };
-const CUELLO = new THREE.Vector3(0.201, 0.668, 0);
+// (dónde quedan el volante y el cuello lo guarda el propio modelo, según cómo se colocó)
+export const VOLANTE_GLB = { x: 0.848, y: 0.603, caida: -0.28 };
+const CUELLO = new THREE.Vector3(0.247, 0.689, 0);
+
+// el volante escaneado (pantalla, LEDs, rotativos y levas), en la mano del piloto
+let datVol = null, cargaVol = null;
+export function cargarVolanteGLB() {
+  if (!cargaVol) cargaVol = new GLTFLoader().loadAsync(new URL('../../modelos/volante.glb', import.meta.url).href)
+    .then(g => { let m = null; g.scene.traverse(o => { if (o.isMesh && !m) m = o; }); datVol = m ? { geo: m.geometry, mat: m.material } : null; return datVol; })
+    .catch(() => null);
+  return cargaVol;
+}
+export const volanteGLBListo = () => datVol;
+cargarVolanteGLB();
+// placa con el logo del juego (tapa el logo de marca que trae el escaneo en el centro)
+let texPlaca = null;
+function placaApex() {
+  if (!texPlaca) {
+    const cv = document.createElement('canvas'); cv.width = 128; cv.height = 64; const x = cv.getContext('2d');
+    x.fillStyle = '#0b0c0f'; x.fillRect(0, 0, 128, 64); x.fillStyle = '#e8202a'; x.font = '900 italic 30px Arial'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('APEX', 64, 33);
+    texPlaca = new THREE.CanvasTexture(cv); texPlaca.colorSpace = THREE.SRGBColorSpace;
+  }
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.03, 0.015), new THREE.MeshStandardMaterial({ map: texPlaca, roughness: 0.4 }));
+  m.rotation.y = -Math.PI / 2; m.position.set(-0.047, -0.007, 0.008); m.scale.setScalar(1.5);
+  return m;
+}
 
 const datos = new Map(), listos = {};
 export function cargarPilotoGLB(ligero = false) {
@@ -28,6 +52,9 @@ export function cargarPilotoGLB(ligero = false) {
 export function pilotoGLBListo(ligero = false) { return listos[ligero ? 'bajo' : 'alto'] || null; }
 
 function preparar(gltf) {
+  const ex = gltf.scene.userData || {};
+  if (ex.volante) { VOLANTE_GLB.x = ex.volante[0]; VOLANTE_GLB.y = ex.volante[1]; }
+  if (ex.cuello) CUELLO.set(ex.cuello[0], ex.cuello[1], 0);
   let malla = null;
   gltf.scene.traverse(o => { if (o.isMesh && !malla) malla = o; });
   if (!malla) return null;
@@ -84,7 +111,22 @@ export class PilotoGLB {
     this.raiz.updateMatrixWorld(true);
     this.malla.bind(new THREE.Skeleton([cuerpo, cabeza, manos]));
     this.huesos = { cuerpo, cabeza, manos };
+    // el volante escaneado va en el hueso de las manos: gira con ellas, sin deformar nada
+    this.volante = new THREE.Group(); this.volante.rotation.z = VOLANTE_GLB.caida;
+    manos.add(this.volante);
+    if (datVol) {
+      const v = new THREE.Mesh(datVol.geo, datVol.mat); v.castShadow = true;
+      this.volante.add(v, placaApex());
+    }
     this.eje = new THREE.Vector3(Math.cos(VOLANTE_GLB.caida), Math.sin(VOLANTE_GLB.caida), 0);
+  }
+
+  /** Pone la pantalla viva del juego (marcha, deltas…) sobre la pantalla del volante escaneado. */
+  ponerPantalla(mp) {
+    if (!mp || !datVol) return;
+    mp.removeFromParent(); mp.visible = true; delete mp.userData.oculto;
+    mp.position.set(-0.047, 0.056, 0.009); mp.rotation.set(0, -Math.PI / 2, 0); mp.scale.setScalar(1.15);
+    this.volante.add(mp);
   }
 
   /** La cámara de cabina va dentro del casco: ahí la cabeza se encoge hasta desaparecer. */
@@ -97,55 +139,3 @@ export class PilotoGLB {
   }
 }
 
-// ─── Piloto de pie (cuando sale del coche y camina tras el muro) ───────────────────────────
-// Modelo escaneado de pie: pies en y=0, mirando a +x, 1,75 m. Dos huesos (una pierna cada uno,
-// en la cadera) para andar; el resto del cuerpo va rígido con un leve balanceo, así no se
-// deforma. Misma interfaz que la Persona que sustituye (raiz, poner, andar, actualizar).
-let datPie = null, cargaPie = null;
-export function cargarPilotoDePie() {
-  if (!cargaPie) cargaPie = new GLTFLoader().loadAsync(new URL('../../modelos/piloto_pie.glb', import.meta.url).href).then(g => {
-    let malla = null; g.scene.traverse(o => { if (o.isMesh && !malla) malla = o; });
-    const geo = malla.geometry, pw = geo.attributes._pesos, pos = geo.attributes.position, n = pos.count;
-    const idx = new Uint16Array(n * 4), pes = new Float32Array(n * 4), zona = new Float32Array(n);
-    for (let i = 0; i < n; i++) {
-      const wi = pw.getX(i), wd = pw.getY(i);
-      idx.set([0, 1, 2, 0], i * 4); pes.set([1 - wi - wd, wi, wd, 0], i * 4);
-      const y = pos.getY(i);
-      zona[i] = y > 1.42 ? 0 : y < 0.12 ? 3 : 1;
-    }
-    geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(idx, 4));
-    geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(pes, 4));
-    geo.setAttribute('zona', new THREE.Float32BufferAttribute(zona, 1));
-    geo.deleteAttribute('_pesos');
-    datPie = { geo, mat: malla.material };
-    return datPie;
-  }).catch(e => { console.warn('piloto de pie no disponible', e); return null; });
-  return cargaPie;
-}
-export function pilotoDePieListo() { return datPie; }
-
-export class PilotoDePie {
-  constructor(dat, colores = {}) {
-    this.raiz = new THREE.Group();
-    const cuerpo = new THREE.Bone(), pI = new THREE.Bone(), pD = new THREE.Bone();
-    pI.position.set(0, 0.79, -0.11); pD.position.set(0, 0.79, 0.11);
-    cuerpo.add(pI, pD);
-    this.cuerpo = new THREE.Group(); this.cuerpo.add(cuerpo); this.raiz.add(this.cuerpo);
-    this.malla = new THREE.SkinnedMesh(dat.geo, materialPiloto(dat, colores.traje, colores.casco));
-    this.malla.frustumCulled = false; this.malla.castShadow = true;
-    this.cuerpo.add(this.malla);
-    this.raiz.updateMatrixWorld(true);
-    this.malla.bind(new THREE.Skeleton([cuerpo, pI, pD]));
-    this.piernas = [pI, pD];
-    this.andar = 0; this.salto = 0; this.extra = {}; this.fase = 0; this.cabeza = new THREE.Group();
-  }
-  poner() {}
-  actualizar(dt) {
-    const a = Math.min(1, this.andar / 1.2);
-    this.fase += dt * (4 + this.andar * 3) * (a > 0.02 ? 1 : 0);
-    const s = Math.sin(this.fase) * 0.42 * a;
-    this.piernas[0].rotation.z = s; this.piernas[1].rotation.z = -s;
-    this.cuerpo.position.y = Math.abs(Math.cos(this.fase)) * 0.03 * a;
-    this.cuerpo.rotation.x = Math.sin(this.fase) * 0.04 * a;
-  }
-}

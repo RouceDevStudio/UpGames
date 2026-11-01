@@ -4,8 +4,6 @@
 
 import * as THREE from 'three';
 import { Persona } from './personas.js';
-import { PilotoDePie, pilotoDePieListo, cargarPilotoDePie } from './pilotoGLB.js';
-cargarPilotoDePie();
 
 const MAX = 4;                 // pilotos a pie a la vez (rendimiento)
 const _v = new THREE.Vector3();
@@ -23,9 +21,9 @@ export class PilotosFuera {
   salir({ coche, modelo, equipo, numero = 1, herido = false, participante = null }) {
     if (this.lista.some(p => p.coche === coche)) return null;
     if (this.lista.length >= MAX) this._quitar(this.lista[0]);
-    const per = new Persona({ color: equipo?.base || '#0d47ff', texto: equipo?.corto === 'UPG' ? 'UPGAMES' : (equipo?.nombre || 'UPGAMES').split(' ')[0].toUpperCase(), numero, rol: 'piloto', calidad: this.calidad });
+    const per = new Persona({ color: equipo?.base || '#0d47ff', texto: equipo?.corto === 'UPG' ? 'UPGAMES' : (equipo?.nombre || 'UPGAMES').split(' ')[0].toUpperCase(), numero, rol: 'piloto', calidad: this.calidad, casco: equipo?.acento });
     // el mismo casco que lleva dentro del coche
-    if (modelo?.piloto?.casco) {
+    if (modelo?.piloto?.casco && !per.escaneado) {
       const casco = modelo.piloto.casco.clone(); casco.visible = true; casco.traverse(q => { delete q.userData.oculto; });   // (con el piloto 3D el original está oculto)
       casco.position.set(0.035, 0.06, 0); casco.scale.setScalar(1.08);
       per.cabeza.add(casco);
@@ -93,16 +91,7 @@ export class PilotosFuera {
         f.pos.y = (t < 3.4 ? base : suelo(pr.d)) + alto;
         // mira hacia delante en el coche, luego hacia el coche (de lado) antes de marcharse
         f.rumbo = t < 3.4 ? f.coche.psi : Math.atan2(-nz, -nx);
-        if (t > 5.2) {
-          f.estado = 'camina'; f.t = 0; per.poner('de_pie', 0.4);
-          // ya en el suelo: el modelo escaneado de pie (mismo casco y mono) sigue andando
-          const dp = this.calidad >= 1 && pilotoDePieListo();
-          if (dp) {
-            const nuevo = new PilotoDePie(dp, { traje: f.colores?.traje, casco: f.colores?.casco });
-            nuevo.raiz.position.copy(per.raiz.position); nuevo.raiz.rotation.copy(per.raiz.rotation);
-            this.scene.remove(per.raiz); this.scene.add(nuevo.raiz); f.per = nuevo;
-          }
-        }
+        if (t > 5.2) { f.estado = 'camina'; f.t = 0; per.poner('de_pie', 0.4); }
       } else if (f.estado === 'camina') {
         // hacia el muro y, al llegar, por encima de él hasta quedar detrás
         const objD = f.lado * (muro + 2.6);

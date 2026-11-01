@@ -27,10 +27,10 @@ export class SalidaBoxes {
     const color = equipo?.base || '#0d47ff';
     this.grupo = new THREE.Group();
     modelo.raiz.add(this.grupo);          // se mueve con el coche (y en su sistema de coordenadas)
-    const persona = (rol, numero) => { const p = new Persona({ color, texto, numero, rol, calidad }); this.grupo.add(p.raiz); return p; };
+    const persona = (rol, numero) => { const p = new Persona({ color, texto, numero, rol, calidad, casco: rol === 'piloto' ? equipo?.acento : null }); this.grupo.add(p.raiz); return p; };
     // el piloto, con su casco, entra por la izquierda
     this.piloto = persona('piloto', 1);
-    if (modelo.piloto?.casco) { const c = modelo.piloto.casco.clone(); c.visible = true; c.traverse(q => { delete q.userData.oculto; }); c.position.set(0.035, 0.06, 0); c.scale.setScalar(1.08); this.piloto.cabeza.add(c); }
+    if (modelo.piloto?.casco && !this.piloto.escaneado) { const c = modelo.piloto.casco.clone(); c.visible = true; c.traverse(q => { delete q.userData.oculto; }); c.position.set(0.035, 0.06, 0); c.scale.setScalar(1.08); this.piloto.cabeza.add(c); }
     this.piloto.raiz.rotation.y = -Math.PI / 2;
     // mecánico de los cinturones y el volante (lleva el volante en la mano derecha)
     this.mec = persona('mecanico', 21);
