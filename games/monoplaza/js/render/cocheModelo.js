@@ -9,8 +9,7 @@ import { proyectarUV, dibujarLibrea, materialLibrea } from './librea.js';
 import { normalPliegues } from './personas.js';
 import { crearPiloto } from './piloto.js';
 import { PilotoGLB, cargarPilotoGLB, pilotoGLBListo, VOLANTE_GLB, cargarVolanteGLB, volanteGLBListo } from './pilotoGLB.js';
-import { cargarCocheGLB, cocheGLBListo, materialCocheGLB, RUEDAS_GLB, cargarDesarmado, desarmadoListo, cargarRuedas, ruedasListas, ruedaDe } from './cocheGLB.js';
-cargarDesarmado();
+import { cargarCocheGLB, cocheGLBListo, materialCocheGLB, RUEDAS_GLB, cargarRuedas, ruedasListas, ruedaDe } from './cocheGLB.js';
 
 const A = COCHE.wheelbase * (1 - COCHE.repartoDel); // eje delantero
 const B = COCHE.wheelbase * COCHE.repartoDel;       // eje trasero
@@ -1073,18 +1072,10 @@ export function crearModelo(opc) {
     }
     alaTras.visible = false; estadoDanos.alaTras = true;
     for (const gp of gruposPieza) gp.g.visible = false;
-    // coche escaneado: la carrocería ha salido volando en trozos y queda el chasis desnudo
-    // (monocasco, suspensión y fondo) con el piloto dentro
-    const des = cuerpo.userData.glb && desarmadoListo();
-    if (des) {
-      if (!chasis) { chasis = new THREE.Mesh(des.geo, des.mat); chasis.castShadow = true; chasis.receiveShadow = true; carroceria.add(chasis); }
-      chasis.visible = true; cuerpo.visible = false; alaDel.visible = false;
-    }
     calor.visible = false; pivDrs.visible = false; luzLluvia.visible = false;
   }
   function recomponer() {
     if (cuerpoLejos) cuerpoLejos.userData.oculto = false;
-    if (chasis) { chasis.visible = false; cuerpo.visible = true; alaDel.visible = !estadoDanos.alaDel; }
     for (const malla of [cuerpo, mCarbono, mNegro, mMetal].filter(Boolean)) {
       if (!malla.userData.orig) continue;
       malla.geometry.attributes.position.array.set(malla.userData.orig); malla.geometry.attributes.position.needsUpdate = true;
@@ -1100,13 +1091,13 @@ export function crearModelo(opc) {
   // el escaneo), los alerones van dentro de sus grupos (se rompen y salen volando como antes) y
   // las ruedas del juego se colocan donde estaban las del escaneo. Las piezas procedurales que
   // ya trae el escaneo (suspensión, halo, retrovisores, flap del DRS) se ocultan.
-  let cuerpoLejos = null, chasis = null;
+  let cuerpoLejos = null;
   const nivelRueda = cabina ? 'alto' : 'bajo';
   const propia = (m) => { if (m.geometry.userData.compartida) { m.geometry = m.geometry.clone(); m.geometry.userData.compartida = false; } };
   function ponerCocheGLB(dat, datLejos) {
     if (!dat || cuerpo.userData.glb) return;
     cuerpo.userData.glb = true;
-    const matG = materialCocheGLB(pintura, dat);
+    const matG = materialCocheGLB(colores, dat);
     cuerpo.geometry = dat.partes.cuerpo; cuerpo.material = matG;
     posOrig = null; nrmOrig = null; nAbol = 0;
     const ocultar = (o) => { o.visible = false; o.traverse(q => { q.userData.oculto = true; }); };
@@ -1120,25 +1111,26 @@ export function crearModelo(opc) {
     }
     ruedas.forEach((r, k) => {
       const del = k < 2, x = del ? RUEDAS_GLB.del : RUEDAS_GLB.tras, z = Math.sign(r.base.z) * (del ? RUEDAS_GLB.zDel : RUEDAS_GLB.zTras);
-      r.base.x = x; r.base.z = z; r.giro.position.x = x; r.giro.position.z = z;
+      r.base.x = x; r.base.z = z; r.base.y = RUEDAS_GLB.radio; r.giro.position.set(x, RUEDAS_GLB.radio, z);
       // los neumáticos del modelo (con su llanta, la marca y la franja del compuesto) en lugar de
       // los procedurales: giran con el eje y doblan con la dirección igual que antes
       const d = ruedaDe(nivelRueda, modelo.compuesto);
       if (!d) return;
       for (const h of [...r.rot.children, ...r.giro.children]) if (h !== r.rot && h.material !== r.matFreno) ocultar(h);   // el disco de freno se queda: se ve al rojo entre los radios
-      const m = new THREE.Mesh(d.geo, d.mat); m.castShadow = true; m.receiveShadow = true;
+      const m = new THREE.Mesh(d.geo, d.mat); m.castShadow = true; m.receiveShadow = false;   // (su propia sombra sobre la goma curva hacía «acné» de triángulos)
+      m.scale.setScalar(RUEDAS_GLB.radio / 0.36);           // a la medida de los bujes del coche
       if (z < 0) m.rotation.y = Math.PI;                 // la cara con la marca, hacia fuera
       r.rot.add(m); r.mallaGLB = m;
     });
     // de lejos, la versión baja (la cambia el nivel de detalle de main.js)
     if (datLejos) {
-      cuerpoLejos = new THREE.Mesh(datLejos.partes.cuerpo, materialCocheGLB(pintura, datLejos));
+      cuerpoLejos = new THREE.Mesh(datLejos.partes.cuerpo, materialCocheGLB(colores, datLejos));
       cuerpoLejos.castShadow = true; cuerpoLejos.visible = false; cuerpoLejos.userData.lejos = true;
       carroceria.add(cuerpoLejos);
       modelo.cuerpoLejos = cuerpoLejos;
     }
     modelo.conGLB = true;
-    modelo.camaras = { cabina: [0.17, 0.84, 0], mirarCabina: [30, -1.2, 0], cara: [0.42, 1.06, 0.12], mirarCara: [0.08, 0.88, 0] };
+    modelo.camaras = { cabina: [0.22, 1.0, 0], mirarCabina: [30, -1.0, 0], cara: [0.78, 1.18, 0.1], mirarCara: [0.14, 0.98, 0] };
   }
 
   let tPantalla = 0;

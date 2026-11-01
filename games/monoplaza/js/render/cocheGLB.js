@@ -33,78 +33,49 @@ function preparar(gltf) {
   gltf.scene.traverse(o => {
     if (!o.isMesh) return;
     mat = mat || o.material;
-    let g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
-    // la UV del escaneo pasa al canal 1 (normales y sombreado); la 0 es la de la librea
-    if (g.attributes.uv) { g.setAttribute('uv1', g.attributes.uv); g.deleteAttribute('uv'); }
-    if (!o.name.startsWith('rueda')) proyectarUV(g);      // las ruedas no llevan librea
+    // sin índice: las abolladuras y la desintegración trabajan triángulo a triángulo
+    const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
     g.computeBoundingSphere();
     g.userData.compartida = true;
     partes[o.name] = g;
   });
   if (!partes.cuerpo) return null;
-  const detalle = mat?.map || null, normal = mat?.normalMap || null;
-  for (const t of [detalle, normal]) if (t) { t.channel = 1; t.anisotropy = 4; }
-  if (detalle) detalle.colorSpace = THREE.NoColorSpace;     // se usa como dato (gris), no como color
-  // ruedas: goma y llanta del escaneo, oscuras (el gris del escaneo da el relieve)
-  return { partes, detalle, normal };
+  const mapa = mat?.map || null, normal = mat?.normalMap || null;
+  for (const t of [mapa, normal]) if (t) t.anisotropy = 8;
+  return { partes, mapa, normal, colores: !!partes.cuerpo.attributes.color };
 }
 
-const cacheMat = new WeakMap();
+const cacheMat = new Map();
 /**
- * Material del coche escaneado a partir de la pintura del equipo (mantiene su acabado y las
- * gotas de lluvia). Uno por pintura.
+ * Material del coche: la textura en alta definición del propio modelo (o, en los rivales, su
+ * color grabado en los vértices) teñida con el color del equipo: las zonas claras del modelo
+ * toman el color, las oscuras quedan de carbono. Sin proyecciones, así nada se estira.
  */
-export function materialCocheGLB(pintura, dat) {
-  let porDat = cacheMat.get(pintura);
-  if (!porDat) { porDat = new Map(); cacheMat.set(pintura, porDat); }
-  if (porDat.has(dat)) return porDat.get(dat);
-  const m = pintura.clone();
-  const previo = pintura.onBeforeCompile;
-  if (dat.normal) { m.normalMap = dat.normal; m.normalScale = new THREE.Vector2(0.8, 0.8); }
-  const conDetalle = !!(dat.detalle && dat.normal);
-  m.onBeforeCompile = (sh, r) => {
-    previo?.call(m, sh, r);
-    sh.uniforms.mapaDetalle = { value: dat.detalle };
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vPosC; varying float vAbajo;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPosC = position; vAbajo = normal.y;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
-      varying vec3 vPosC; varying float vAbajo;
-      ${conDetalle ? 'uniform sampler2D mapaDetalle;' : ''}`)
-      .replace('#include <map_fragment>', `#include <map_fragment>
+export function materialCocheGLB(colores, dat) {
+  const clave = (colores.base || '') + '|' + (colores.acento || '') + '|' + (dat.mapa ? dat.mapa.uuid : 'v');
+  if (cacheMat.has(clave)) return cacheMat.get(clave);
+  const m = new THREE.MeshPhysicalMaterial({
+    map: dat.mapa, normalMap: dat.normal, vertexColors: !dat.mapa && dat.colores,
+    roughness: 0.32, metalness: 0.25, clearcoat: 0.8, clearcoatRoughness: 0.12,
+  });
+  if (dat.normal) m.normalScale = new THREE.Vector2(1, 1);
+  const cBase = new THREE.Color(colores.base || '#c8102e'), cAcento = new THREE.Color(colores.acento || '#ffffff');
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.cBase = { value: cBase }; sh.uniforms.cAcento = { value: cAcento };
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 cBase; uniform vec3 cAcento;')
+      .replace('#include <color_fragment>', `#include <color_fragment>
       {
-        // fondo plano, tabla y caras de abajo: carbono
-        float carb = max(step(vPosC.y, 0.14), smoothstep(-0.55, -0.8, vAbajo));
-        // suspensión, portamanguetas y conductos de freno: lo que sale del monocasco junto a
-        // cada eje (los pontones no llegan tan lejos ni tan cerca de las ruedas)
-        float zA = abs(vPosC.z);
-        float eje = min(abs(vPosC.x - ${RUEDAS_GLB.del.toFixed(3)}) * 1.25, abs(vPosC.x - (${RUEDAS_GLB.tras.toFixed(3)})));
-        carb = max(carb, step(vPosC.x > 0.5 ? 0.2 : 0.34, zA) * step(eje, 0.55) * step(vPosC.y, 0.72));
-        ${conDetalle ? `
-        float gD = texture2D(mapaDetalle, vNormalMapUv).r;
-        carb = max(carb, smoothstep(0.30, 0.20, gD));          // piezas oscuras del escaneo
-        diffuseColor.rgb *= clamp(0.35 + gD * 1.05, 0.55, 1.15);` : ''}
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.028, 0.03, 0.034), carb);
+        // luminancia del modelo: claro -> color del equipo (con toques del acento en lo más
+        // claro), oscuro -> carbono; el relieve y el detalle del modelo se conservan
+        float l = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+        vec3 eq = mix(cBase, cAcento, smoothstep(0.78, 0.95, l) * 0.6);
+        diffuseColor.rgb = mix(vec3(0.03, 0.032, 0.036), eq, smoothstep(0.03, 0.3, l)) * (0.85 + 0.6 * l);
       }`);
   };
-  m.customProgramCacheKey = () => 'cocheGLB' + (conDetalle ? 1 : 0) + (dat.normal ? 1 : 0);
-  porDat.set(dat, m);
+  m.customProgramCacheKey = () => 'cocheGLB3' + (dat.mapa ? 'm' : 'v');
+  cacheMat.set(clave, m);
   return m;
 }
-
-// ─── Chasis desarmado (lo que queda tras un choque que destroza el coche) ──────────────────
-// El monocasco con la suspensión al aire y piezas del fondo: cuando la carrocería sale volando
-// en trozos, queda este chasis en su sitio (ya en las coordenadas y escala del coche).
-let datDes = null, cargaDes = null;
-export function cargarDesarmado() {
-  if (!cargaDes) cargaDes = new GLTFLoader().loadAsync(new URL('../../modelos/coche_desarmado.glb', import.meta.url).href).then(g => {
-    let m = null; g.scene.traverse(o => { if (o.isMesh && !m) m = o; });
-    m.material.roughness = 0.45; m.material.metalness = 0.3; m.material.color.setHex(0x3a3d44);   // carbono
-    datDes = { geo: m.geometry, mat: m.material };
-    return datDes;
-  }).catch(() => null);
-  return cargaDes;
-}
-export const desarmadoListo = () => datDes;
 
 // ─── Neumáticos montados (uno por compuesto, con la marca Up Games y su franja) ──────────────
 // Centrados, eje en z, radio 0,36 m. Versión alta para tu coche y baja para los demás.

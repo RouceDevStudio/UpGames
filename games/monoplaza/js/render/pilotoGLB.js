@@ -25,18 +25,6 @@ export function cargarVolanteGLB() {
 }
 export const volanteGLBListo = () => datVol;
 cargarVolanteGLB();
-// placa con el logo del juego (tapa el logo de marca que trae el escaneo en el centro)
-let texPlaca = null;
-function placaApex() {
-  if (!texPlaca) {
-    const cv = document.createElement('canvas'); cv.width = 128; cv.height = 64; const x = cv.getContext('2d');
-    x.fillStyle = '#0b0c0f'; x.fillRect(0, 0, 128, 64); x.fillStyle = '#e8202a'; x.font = '900 italic 30px Arial'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('APEX', 64, 33);
-    texPlaca = new THREE.CanvasTexture(cv); texPlaca.colorSpace = THREE.SRGBColorSpace;
-  }
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.03, 0.015), new THREE.MeshStandardMaterial({ map: texPlaca, roughness: 0.4 }));
-  m.rotation.y = -Math.PI / 2; m.position.set(-0.047, -0.007, 0.008); m.scale.setScalar(1.5);
-  return m;
-}
 
 const datos = new Map(), listos = {};
 export function cargarPilotoGLB(ligero = false) {
@@ -116,7 +104,7 @@ export class PilotoGLB {
     manos.add(this.volante);
     if (datVol) {
       const v = new THREE.Mesh(datVol.geo, datVol.mat); v.castShadow = true;
-      this.volante.add(v, placaApex());
+      this.volante.add(v);
     }
     this.eje = new THREE.Vector3(Math.cos(VOLANTE_GLB.caida), Math.sin(VOLANTE_GLB.caida), 0);
   }
@@ -125,7 +113,7 @@ export class PilotoGLB {
   ponerPantalla(mp) {
     if (!mp || !datVol) return;
     mp.removeFromParent(); mp.visible = true; delete mp.userData.oculto;
-    mp.position.set(-0.047, 0.056, 0.009); mp.rotation.set(0, -Math.PI / 2, 0); mp.scale.setScalar(1.15);
+    mp.position.set(-0.052, 0.062, -0.0097); mp.rotation.set(0, -Math.PI / 2, 0); mp.scale.setScalar(1.28);
     this.volante.add(mp);
   }
 
@@ -135,7 +123,9 @@ export class PilotoGLB {
   /** cabeza: Euler del cuello del piloto procedural; giro: ángulo del volante (rad). */
   posar(cabeza, giro) {
     this.huesos.cabeza.rotation.set(cabeza.x * 0.9, cabeza.y * 0.9, cabeza.z * 0.9);
-    this.huesos.manos.quaternion.setFromAxisAngle(this.eje, giro);
+    // las manos y el volante giran juntos; más allá de ±0,6 rad el antebrazo se retorcería, así
+    // que el giro visual se limita (en carrera casi nunca se pasa)
+    this.huesos.manos.quaternion.setFromAxisAngle(this.eje, Math.max(-0.6, Math.min(0.6, giro)));
   }
 }
 
