@@ -2719,9 +2719,7 @@ async function pfSubirJuego() {
     if(res.ok) {
       LS.set('ultima_publicacion', Date.now().toString());
       window.dispatchEvent(new CustomEvent('ug:guia', { detail: 'publicar' }));
-      const dPub = await res.json().catch(() => ({}));
-      if (dPub.revisionHumana) toast('🛡 Enviado a revisión: ' + dPub.revisionHumana + '.');
-      else toast('✅ Publicado. Aparecerá como "En revisión" hasta verificar el enlace.');
+      toast('✅ Publicado. Aparecerá como "En revisión" hasta verificar el enlace.');
       document.getElementById('pf-addTitle').value='';
       document.getElementById('pf-addDescription').value='';
       document.getElementById('pf-addLink').value='';

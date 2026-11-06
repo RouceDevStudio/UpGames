@@ -3,10 +3,10 @@
  * podían saltar llamando a la API directamente). Es un filtro por palabras clave: no revisa
  * el contenido de los archivos enlazados.
  *
- *  revisar(pub, { detectGame }) →
- *    { bloquear: 'motivo' }            no se publica (piratería evidente)
- *    { revisionHumana: 'motivo' }      se publica como "pendiente" hasta que un admin la apruebe
- *    {}                                normal
+ *  revisar(pub) →
+ *    { bloquear: 'motivo' }   no se publica (el título o la descripción declaran piratería)
+ *    {}                       normal
+ *  Es automático: no crea revisiones manuales ni colas de trabajo.
  */
 'use strict';
 
@@ -22,19 +22,11 @@ const PIRATERIA = [
 ];
 const RE = new RegExp(`(^|[^a-z0-9])(${PIRATERIA.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '[\\s._-]+')).join('|')})(?=$|[^a-z0-9])`);
 
-// Archivos de app/juego instalables directos
-const ES_APK = /\.(apk|apks|xapk|apkm|obb|ipa)(\?|$)/i;
 
-function revisar(pub, { detectGame } = {}) {
+function revisar(pub) {
     const texto = norm(`${pub.title || ''} ${pub.description || ''}`);
     const m = texto.match(RE);
     if (m) return { bloquear: `contiene «${m[2].replace(/[\s._-]+/g, ' ')}», asociado a piratería o a saltarse licencias` };
-    const cat = String(pub.category || '');
-    if (cat === 'Video') return {};
-    // Juego o app COMERCIAL reconocido publicado como juego/app/ROM → revisión humana obligatoria
-    const det = typeof detectGame === 'function' ? detectGame(pub.title, pub.description) : null;
-    if (det && ['Juego', 'ROM', 'Apps'].includes(cat)) return { revisionHumana: `parece ser «${det.gameName}», un título comercial: un administrador debe confirmar que tienes autorización para publicarlo` };
-    if (ES_APK.test(String(pub.link || '')) && ['Juego', 'Apps'].includes(cat) && det) return { revisionHumana: 'enlace directo a un instalador de un título comercial' };
     return {};
 }
 
