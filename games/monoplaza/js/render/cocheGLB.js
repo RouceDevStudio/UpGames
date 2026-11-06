@@ -35,6 +35,7 @@ function preparar(gltf) {
     mat = mat || o.material;
     // sin índice: las abolladuras y la desintegración trabajan triángulo a triángulo
     const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    if (o.name === 'cuerpo') quitarTuercas(g);
     g.computeBoundingSphere();
     g.userData.compartida = true;
     partes[o.name] = g;
@@ -43,6 +44,26 @@ function preparar(gltf) {
   const mapa = mat?.map || null, normal = mat?.normalMap || null;
   for (const t of [mapa, normal]) if (t) t.anisotropy = 8;
   return { partes, mapa, normal, colores: !!partes.cuerpo.attributes.color };
+}
+
+// El escaneo trae las tuercas de sus ruedas delanteras, que asoman por fuera de la llanta de
+// las ruedas del juego: se quitan los triángulos que sobresalen de los bujes delanteros.
+function quitarTuercas(g) {
+  const p = g.attributes.position, n = p.count / 3, quedan = [];
+  for (let t = 0; t < n; t++) {
+    let fuera = false;
+    for (let v = t * 3; v < t * 3 + 3 && !fuera; v++) {
+      const x = p.getX(v), y = p.getY(v), z = Math.abs(p.getZ(v));
+      fuera = z > RUEDAS_GLB.zDel + 0.09 && x > RUEDAS_GLB.del - 0.3 && x < RUEDAS_GLB.del + 0.3 && y > 0.1 && y < 0.7;
+    }
+    if (!fuera) quedan.push(t);
+  }
+  if (quedan.length === n) return;
+  for (const nombre of Object.keys(g.attributes)) {
+    const a = g.attributes[nombre], tam = a.itemSize, nuevo = new a.array.constructor(quedan.length * 3 * tam);
+    quedan.forEach((t, k) => nuevo.set(a.array.subarray(t * 3 * tam, (t + 1) * 3 * tam), k * 3 * tam));
+    g.setAttribute(nombre, new THREE.BufferAttribute(nuevo, tam, a.normalized));
+  }
 }
 
 const cacheMat = new Map();
@@ -76,19 +97,3 @@ export function materialCocheGLB(colores, dat) {
   cacheMat.set(clave, m);
   return m;
 }
-
-// ─── Neumáticos montados (uno por compuesto, con la marca Up Games y su franja) ──────────────
-// Centrados, eje en z, radio 0,36 m. Versión alta para tu coche y baja para los demás.
-const RUEDA = {}, cargaRueda = {};
-export function cargarRuedas(nivel = 'alto') {
-  if (!cargaRueda[nivel]) cargaRueda[nivel] = Promise.all(['blando', 'medio', 'duro', 'inter', 'lluvia'].map(c =>
-    new GLTFLoader().loadAsync(new URL(`../../modelos/rueda_${c}_${nivel}.glb`, import.meta.url).href).then(g => {
-      let m = null; g.scene.traverse(o => { if (o.isMesh && !m) m = o; });
-      m.material.roughness = 0.8; m.material.metalness = 0.1;
-      (RUEDA[nivel] ||= {})[c] = { geo: m.geometry, mat: m.material };
-    }).catch(() => {}))).then(() => RUEDA[nivel] || null);
-  return cargaRueda[nivel];
-}
-export const ruedasListas = (nivel = 'alto') => RUEDA[nivel] || null;
-/** Geometría y material del neumático de ese compuesto (o null). */
-export function ruedaDe(nivel, compuesto) { const r = RUEDA[nivel]; return r ? (r[compuesto] || r.medio) : null; }

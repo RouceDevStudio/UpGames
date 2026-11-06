@@ -8,8 +8,8 @@
 import * as THREE from 'three';
 import { crearModelo } from '../js/render/cocheModelo.js';
 import { cargarPilotoGLB } from '../js/render/pilotoGLB.js';
-import { cargarCocheGLB, cargarRuedas } from '../js/render/cocheGLB.js';
-await Promise.all([cargarPilotoGLB(false), cargarPilotoGLB(true), cargarCocheGLB('alto'), cargarCocheGLB('medio'), cargarCocheGLB('bajo'), cargarRuedas('alto'), cargarRuedas('bajo'), (await import('../js/render/pilotoGLB.js')).cargarVolanteGLB()]);
+import { cargarCocheGLB } from '../js/render/cocheGLB.js';
+await Promise.all([cargarPilotoGLB(false), cargarPilotoGLB(true), cargarCocheGLB('alto'), cargarCocheGLB('medio'), cargarCocheGLB('bajo'), (await import('../js/render/pilotoGLB.js')).cargarVolanteGLB()]);
 import { EQUIPOS } from '../js/config.js';
 const q = new URLSearchParams(location.search);
 const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -28,14 +28,14 @@ const suelo = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshStan
 suelo.rotation.x = -Math.PI / 2; suelo.receiveShadow = true; scene.add(suelo);
 scene.add(new THREE.GridHelper(40, 40, 0x555555, 0x4a4a4a));
 const ie = +(q.get('equipo') || 0);
-const m = crearModelo({ equipo: EQUIPOS[ie], equipado: { patron: EQUIPOS[ie].patron, numero: 7, casco: 'rayas' }, calidad: +(q.get('calidad') ?? 3), cabina: ['cabina', 'volante'].includes(q.get('vista')) || !!q.get('pantalla') || !!q.get('alto'), glb: !q.get('procedural') });
+const m = crearModelo({ equipo: EQUIPOS[ie], equipado: { patron: EQUIPOS[ie].patron, numero: 7, casco: 'rayas' }, calidad: +(q.get('calidad') ?? 3), compuesto: q.get('compuesto') || 'medio', cabina: ['cabina', 'volante'].includes(q.get('vista')) || !!q.get('pantalla') || !!q.get('alto'), glb: !q.get('procedural') });
 if (q.get('sinPiloto') && m.piloto?.grupo) m.piloto.grupo.visible = false;
 if (q.get('gris')) m.raiz.traverse(o => { if (o.isMesh && !o.material.emissive?.getHex?.()) o.material = new THREE.MeshStandardMaterial({ color: 0xb8b8b8, roughness: 0.55 }); });
 scene.add(m.raiz);
 // ?caras=1: las caras vistas por detrás salen en rojo (normales o sentido de giro al revés)
 if (q.get('caras')) { const lista = []; m.raiz.traverse(o => { if (o.isMesh && o.material && !o.material.transparent) lista.push(o); });
   for (const o of lista) { const r2 = new THREE.Mesh(o.geometry, new THREE.MeshBasicMaterial({ color: 0xff0000, side: THREE.BackSide })); o.add(r2); } }
-const coche = { ruedas: [0, 1, 2, 3].map(k => ({ angulo: k < 2 ? +(q.get('giro') || 0) : 0, giro: 0, tFreno: +(q.get('freno') || 300), suciedad: +(q.get('sucio') || 0), sucioHierba: 0.7, izquierda: k % 2 === 0, neum: { tSup: 90, desgaste: +(q.get('desgaste') || 0), graining: +(q.get('graining') || 0), ampollas: +(q.get('ampollas') || 0), c: { tOpt: 90 } } })), dano: { pinchazo: [0, 0, 0, 0], suelta: [0, 0, 0, 0], susp: [0, 0, 0, 0], aleronTras: 0 }, cabeceo: 0, balanceo: 0, alturaDel: 0.032, alturaTras: 0.075, danoAleron: 0, drsAbierto: false, ersPotenciaActual: 0, anguloVolante: +(q.get('giro') || 0), ayF: 0, axF: 0, rpm: 11000, marcha: 5, velocidad: 50, mandos: { ersModo: 1 }, combustible: 50, ers: 3e6 };
+const coche = { ruedas: [0, 1, 2, 3].map(k => ({ angulo: k < 2 ? +(q.get('giro') || 0) : 0, giro: 0, tFreno: +(q.get('freno') || 300), suciedad: +(q.get('sucio') || 0), sucioHierba: 0.7, izquierda: k % 2 === 0, neum: { tSup: 90, desgaste: +(q.get('desgaste') || 0), graining: +(q.get('graining') || 0), ampollas: +(q.get('ampollas') || 0), c: { tOpt: 90 } } })), dano: { pinchazo: [0, 0, 0, 0], suelta: [0, 0, 0, 0], susp: [0, 0, 0, 0], aleronTras: 0 }, cabeceo: 0, balanceo: 0, alturaDel: 0.032, alturaTras: 0.075, danoAleron: 0, drsAbierto: false, ersPotenciaActual: 0, anguloVolante: +(q.get('giro') || 0), ayF: 0, axF: 0, rpm: 11000, marcha: 5, velocidad: +(q.get('vel') ?? 50), mandos: { ersModo: 1 }, combustible: 50, ers: 3e6 };
 // ?golpes=n: n golpes en el lateral izquierdo y en el morro, como si viniera de varios choques
 const nG = +(q.get('golpes') || 0);
 if (nG) {

@@ -9,10 +9,13 @@ import { proyectarUV, dibujarLibrea, materialLibrea } from './librea.js';
 import { normalPliegues } from './personas.js';
 import { crearPiloto } from './piloto.js';
 import { PilotoGLB, cargarPilotoGLB, pilotoGLBListo, VOLANTE_GLB, cargarVolanteGLB, volanteGLBListo } from './pilotoGLB.js';
-import { cargarCocheGLB, cocheGLBListo, materialCocheGLB, RUEDAS_GLB, cargarRuedas, ruedasListas, ruedaDe } from './cocheGLB.js';
+import { cargarCocheGLB, cocheGLBListo, materialCocheGLB, RUEDAS_GLB } from './cocheGLB.js';
+import { geoNeumatico, matFlanco, texturaLlanta, mascaraBrilloLlanta, aroLlanta, dibujoBanda, LLANTA, HUNDIDO } from './neumatico3D.js';
 
 const A = COCHE.wheelbase * (1 - COCHE.repartoDel); // eje delantero
 const B = COCHE.wheelbase * COCHE.repartoDel;       // eje trasero
+// radio de las ruedas sobre el coche escaneado (es algo mayor que el de la física): 18" de 0,75 m
+const RADIO_RUEDA_GLB = 0.375;
 
 // Las caras tienen que mirar hacia fuera: si las secciones van del morro hacia atrás el giro de
 // los triángulos queda al revés y se ve el interior de la pieza (el coche parecía transparente,
@@ -269,10 +272,11 @@ function texturaMono(col) {
   return t;
 }
 
-// Goma del neumático (u: alrededor, v: del flanco interior al exterior pasando por la banda).
+// Goma de la banda de rodadura (u: alrededor; la banda va de v = 0,3 a 0,7; los flancos tienen
+// su propio material en neumatico3D.js).
 // Nueva: negra y lisa. Gastada: la banda se aclara y se marca con surcos; graining: bolitas
 // de goma pegadas; ampollas: cráteres oscuros donde la goma ha reventado.
-function pintarGoma(cv, desgaste, graining, ampollas, semilla = 0, suciedad = 0, verde = 0) {
+function pintarGoma(cv, desgaste, graining, ampollas, semilla = 0, suciedad = 0, verde = 0, compuesto = 'medio') {
   const x = cv.getContext('2d'), W = cv.width, H = cv.height;
   let s = 1234 + semilla * 97; const r = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
   x.fillStyle = '#151516'; x.fillRect(0, 0, W, H);
@@ -280,6 +284,8 @@ function pintarGoma(cv, desgaste, graining, ampollas, semilla = 0, suciedad = 0,
   const y0 = H * 0.3, y1 = H * 0.7;
   const tono = Math.round(22 + desgaste * 34);
   x.fillStyle = `rgb(${tono},${tono},${tono + 2})`; x.fillRect(0, y0, W, y1 - y0);
+  // dibujo de los neumáticos de agua (intermedio y lluvia)
+  dibujoBanda(x, W, H, compuesto);
   // surcos del desgaste a lo largo de la banda
   for (let i = 0; i < 6 + desgaste * 30; i++) {
     const y = y0 + r() * (y1 - y0), a = 0.08 + desgaste * 0.25;
@@ -302,52 +308,13 @@ function pintarGoma(cv, desgaste, graining, ampollas, semilla = 0, suciedad = 0,
     const tono = r() < verde ? `rgba(${60 + r() * 30},${95 + r() * 40},${35 + r() * 20},${0.6 + r() * 0.3})` : `rgba(${95 + r() * 40},${70 + r() * 25},${45 + r() * 20},${0.55 + r() * 0.35})`;
     x.fillStyle = tono; x.fillRect(r() * W, yy, 1.5 + r() * 4, 1 + r() * 2.5);
   }
-  // letras del flanco (marca del neumático, más clara)
-  x.fillStyle = 'rgba(200,200,205,0.55)'; x.font = 'bold 9px Arial';
-  for (let i = 0; i < 4; i++) { x.fillText('UPGAMES', i * 64 + 6, H * 0.18); x.fillText('UPGAMES', i * 64 + 30, H * 0.92); }
 }
 
-// Máscara del brillo del disco visto a través de la llanta: el aro entre tapacubos y neumático
-// con huecos entre los radios (blanco = brilla)
-let _brilloLlanta = null;
-function texturaBrilloLlanta() {
-  if (_brilloLlanta) return _brilloLlanta;
-  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
-  const x = cv.getContext('2d'); x.fillStyle = '#000'; x.fillRect(0, 0, 128, 128); x.translate(64, 64);
-  const g = x.createRadialGradient(0, 0, 36, 0, 0, 50);
-  g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.35, 'rgba(255,255,255,1)'); g.addColorStop(0.8, 'rgba(255,200,160,0.9)'); g.addColorStop(1, 'rgba(255,255,255,0)');
-  x.fillStyle = g; x.beginPath(); x.arc(0, 0, 50, 0, Math.PI * 2); x.fill();
-  // los radios tapan parte del disco
-  x.fillStyle = '#000';
-  for (let k = 0; k < 10; k++) { x.save(); x.rotate(k * Math.PI / 5); x.fillRect(34, -2.5, 18, 5); x.restore(); }
-  _brilloLlanta = new THREE.CanvasTexture(cv);
-  return _brilloLlanta;
-}
-
-function texturaTapacubos(colorCompuesto) {
-  const cv = document.createElement('canvas'); cv.width = cv.height = 256;
-  const x = cv.getContext('2d');
-  x.fillStyle = '#141416'; x.fillRect(0, 0, 256, 256);
-  x.translate(128, 128);
-  // banda de color del compuesto y rotulación en el flanco
-  x.strokeStyle = colorCompuesto; x.lineWidth = 9;
-  x.beginPath(); x.arc(0, 0, 104, 0, Math.PI * 2); x.stroke();
-  x.fillStyle = '#e6e6e6'; x.font = 'bold 22px Arial'; x.textAlign = 'center';
-  for (const a of [0, Math.PI]) {
-    x.save(); x.rotate(a);
-    'APEX'.split('').forEach((ch, i) => { x.save(); x.rotate((i - 1.5) * 0.16); x.fillText(ch, 0, -114 + 22); x.restore(); });
-    x.restore();
-  }
-  // tapacubos de carbono
-  const g = x.createRadialGradient(0, 0, 10, 0, 0, 72);
-  g.addColorStop(0, '#3a3b40'); g.addColorStop(1, '#16171a');
-  x.fillStyle = g; x.beginPath(); x.arc(0, 0, 72, 0, Math.PI * 2); x.fill();
-  x.strokeStyle = '#555'; x.lineWidth = 3;
-  for (let k = 0; k < 6; k++) { x.rotate(Math.PI / 3); x.beginPath(); x.moveTo(20, 0); x.lineTo(68, 0); x.stroke(); }
-  x.fillStyle = '#c9a227'; x.beginPath(); x.arc(0, 0, 14, 0, Math.PI * 2); x.fill();
-  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
+// Cara de la llanta (radios, aro y buje) y máscara del brillo del disco de freno entre los
+// radios: una de cada para todos los coches
+let _texLlanta = null, _brilloLlanta = null;
+const texLlanta = () => (_texLlanta ||= texturaLlanta());
+const texturaBrilloLlanta = () => (_brilloLlanta ||= mascaraBrilloLlanta());
 
 const cacheMat = new Map();
 const CREAR_MAT = {
@@ -913,65 +880,58 @@ export function crearModelo(opc) {
   carroceria.add(piloto.grupo);
   const casco = piloto.casco, cuello = piloto.cuello;
 
-  // Ruedas de 18" con perfil bajo, tapacubos aerodinámico y conducto de freno
+  // Ruedas de 18" con perfil bajo (neumatico3D.js): neumático redondo con su rotulación,
+  // llanta de radios con labio y tambor, disco y conducto de freno
   const cmp = COMPUESTOS[compuesto] || COMPUESTOS.medio;
   const ruedas = [];
   const pos = [[A, -COCHE.viaDel / 2, COCHE.radioDel, 0.305], [A, COCHE.viaDel / 2, COCHE.radioDel, 0.305],
     [-B, -COCHE.viaTras / 2, COCHE.radioTras, 0.405], [-B, COCHE.viaTras / 2, COCHE.radioTras, 0.405]];
   const grupo = new THREE.Group();
-  const geoNeum = new Map();
-  // tapa de la llanta: el aro entre el tapacubos y el neumático deja ver el disco, que brilla al
-  // rojo cuando está caliente (se ve desde fuera y desde cualquier ángulo); una por eje
+  // cara de la llanta: entre los radios se ve el disco, que brilla al rojo cuando está caliente
+  // (se ve desde fuera y desde cualquier ángulo); una por eje
   const brilloLlanta = texturaBrilloLlanta();
-  const nuevaTapa = () => new THREE.MeshStandardMaterial({ map: texturaTapacubos(cmp.color), roughness: 0.45, metalness: 0.25, emissive: new THREE.Color(0xff5a14), emissiveMap: brilloLlanta, emissiveIntensity: 0 });
+  const nuevaTapa = () => new THREE.MeshStandardMaterial({ map: texLlanta(), roughness: 0.38, metalness: 0.55, emissive: new THREE.Color(0xff5a14), emissiveMap: brilloLlanta, emissiveIntensity: 0 });
   const matTapaDel = nuevaTapa(), matTapaTras = nuevaTapa();
   const matFreno = matComun('freno', () => new THREE.MeshStandardMaterial({ color: 0x1c1c1f, roughness: 0.5, metalness: 0.4 }));
+  const segN = calidad >= 2 ? 64 : calidad >= 1 ? 40 : 28;
+  const anchoGoma = cabina ? 512 : 256;
   for (const [k, [x, z, r, w]] of pos.entries()) {
     const giro = new THREE.Group(); giro.position.set(x, r, z);
     const rot = new THREE.Group(); giro.add(rot);
-    const clave = `${r}|${w}|${calidad}`;
-    if (!geoNeum.has(clave)) {
-      // flanco bajo y abombado, banda de rodadura plana con hombros redondeados
-      const perfil = [];
-      const ri = r * 0.655, re = r, hw = w / 2, rb = 0.06;
-      perfil.push(new THREE.Vector2(ri, -hw + 0.02));
-      perfil.push(new THREE.Vector2(ri + 0.02, -hw - 0.004));
-      for (let k = 0; k <= 8; k++) { const a = -Math.PI / 2 + k / 8 * Math.PI / 2; perfil.push(new THREE.Vector2(re - rb + Math.cos(a) * rb, -hw + rb + Math.sin(a) * rb)); }
-      for (let k = 0; k <= 8; k++) { const a = k / 8 * Math.PI / 2; perfil.push(new THREE.Vector2(re - rb + Math.cos(a) * rb, hw - rb + Math.sin(a) * rb)); }
-      perfil.push(new THREE.Vector2(ri + 0.02, hw + 0.004));
-      perfil.push(new THREE.Vector2(ri, hw - 0.02));
-      const gT = new THREE.LatheGeometry(perfil, calidad >= 2 ? 48 : 28); gT.rotateX(Math.PI / 2);
-      geoNeum.set(clave, gT);
-    }
-    // cada neumático con su goma: el desgaste, el graining y las ampollas se ven en la banda
-    const cvGoma = document.createElement('canvas'); cvGoma.width = 256; cvGoma.height = 64;
-    const texGoma = new THREE.CanvasTexture(cvGoma); texGoma.colorSpace = THREE.SRGBColorSpace; texGoma.wrapS = THREE.RepeatWrapping;
-    pintarGoma(cvGoma, 0, 0, 0, k);
-    const matGoma = new THREE.MeshStandardMaterial({ map: texGoma, roughness: 0.88, metalness: 0, side: THREE.DoubleSide });
-    const neum = new THREE.Mesh(geoNeum.get(clave), calidad >= 1 ? matGoma : matComun('gomaNeum')); neum.castShadow = true; neum.receiveShadow = true;
-    rot.add(neum);
     const sg = Math.sign(z);
-    const tapa = new THREE.Mesh(new THREE.CircleGeometry(r * 0.985, 40), k < 2 ? matTapaDel : matTapaTras);
-    tapa.position.z = sg * (w / 2 + 0.006); if (sg < 0) tapa.rotation.y = Math.PI;
+    // cada neumático con su goma: el desgaste, el graining y las ampollas se ven en la banda
+    const cvGoma = document.createElement('canvas'); cvGoma.width = anchoGoma; cvGoma.height = 64;
+    const texGoma = new THREE.CanvasTexture(cvGoma); texGoma.colorSpace = THREE.SRGBColorSpace; texGoma.wrapS = THREE.RepeatWrapping;
+    pintarGoma(cvGoma, 0, 0, 0, k, 0, 0, compuesto);
+    const matGoma = calidad >= 1 ? new THREE.MeshStandardMaterial({ map: texGoma, roughness: 0.88, metalness: 0 }) : matComun('goma');
+    const neum = new THREE.Mesh(geoNeumatico(r, w, segN), [matFlanco(compuesto, calidad), matGoma]); neum.castShadow = true; neum.receiveShadow = true;
+    rot.add(neum);
+    const tapa = new THREE.Mesh(new THREE.CircleGeometry(r * LLANTA, 40), k < 2 ? matTapaDel : matTapaTras);
+    tapa.position.z = sg * (w / 2 - HUNDIDO); if (sg < 0) tapa.rotation.y = Math.PI;
     rot.add(tapa);
-    const tapaIn = new THREE.Mesh(new THREE.CircleGeometry(r * 0.64, 24), metal);
-    tapaIn.position.z = -sg * (w / 2 - 0.01); if (sg > 0) tapaIn.rotation.y = Math.PI;
+    if (calidad >= 1) rot.add(aroLlanta(r, w, sg, calidad >= 2 ? 48 : 28));
+    const tapaIn = new THREE.Mesh(new THREE.CircleGeometry(r * LLANTA * 0.97, 24), metal);
+    tapaIn.position.z = -sg * (w / 2 - 0.016); if (sg > 0) tapaIn.rotation.y = Math.PI;
     rot.add(tapaIn);
     // conducto y disco de freno (no giran con la rueda)
     // cada conducto con su material: el disco de carbono se pone al rojo al frenar fuerte
     const matF = matFreno.clone(); matF.emissive = new THREE.Color(0xff3a08); matF.emissiveIntensity = 0;
-    const conducto = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.55, r * 0.62, 0.12, 20, 1, true), matF);
+    const conducto = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.5, r * 0.58, 0.12, 20, 1, true), matF);
     conducto.rotation.x = Math.PI / 2; conducto.position.z = -sg * (w / 2 - 0.02);
     giro.add(conducto);
     grupo.add(giro);
+    // fondo oscuro tras los radios (la mangueta y el disco; brilla con el freno al rojo)
+    const fondo = new THREE.Mesh(new THREE.CircleGeometry(r * LLANTA * 0.92, 32), matF);
+    fondo.position.z = sg * (w / 2 - HUNDIDO - 0.05); if (sg < 0) fondo.rotation.y = Math.PI;
+    giro.add(fondo);
     const disco = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.48, r * 0.48, 0.035, 24), matF);
     disco.rotation.x = Math.PI / 2; disco.position.z = -sg * (w / 2 - 0.07);
     giro.add(disco);
     // a alta velocidad los radios de la llanta se ven como un disco borroso (como en la tele)
-    const borroso = new THREE.Mesh(new THREE.CircleGeometry(r * 0.975, 40), matBorroso(cmp.color));
-    borroso.position.z = sg * (w / 2 + 0.009); if (sg < 0) borroso.rotation.y = Math.PI;
+    const borroso = new THREE.Mesh(new THREE.CircleGeometry(r * 0.99, 48), matBorroso(cmp.color));
+    borroso.position.z = sg * (w / 2 + 0.008); if (sg < 0) borroso.rotation.y = Math.PI;
     giro.add(borroso);
-    ruedas.push({ giro, rot, neum, tapa, borroso, matFreno: matF, base: new THREE.Vector3(x, r, z), radio: r, ancho: w, suelta: false, cvGoma, texGoma, claveGoma: '' });
+    ruedas.push({ giro, rot, neum, tapa, borroso, matFreno: matF, matGoma, base: new THREE.Vector3(x, r, z), radio: r, ancho: w, suelta: false, cvGoma, texGoma, claveGoma: '' });
   }
 
   // calor del escape: una lámina translúcida que ondula detrás del coche cuando el motor empuja
@@ -1092,7 +1052,6 @@ export function crearModelo(opc) {
   // las ruedas del juego se colocan donde estaban las del escaneo. Las piezas procedurales que
   // ya trae el escaneo (suspensión, halo, retrovisores, flap del DRS) se ocultan.
   let cuerpoLejos = null;
-  const nivelRueda = cabina ? 'alto' : 'bajo';
   const propia = (m) => { if (m.geometry.userData.compartida) { m.geometry = m.geometry.clone(); m.geometry.userData.compartida = false; } };
   function ponerCocheGLB(dat, datLejos) {
     if (!dat || cuerpo.userData.glb) return;
@@ -1109,18 +1068,13 @@ export function crearModelo(opc) {
       const m = new THREE.Mesh(dat.partes[nombre], matG); m.position.copy(grupo.position).negate(); m.castShadow = true; m.receiveShadow = true;
       grupo.add(m);
     }
+    // las ruedas, en los bujes del escaneo y a escala del coche (el escaneo es algo mayor que
+    // el coche de la física): 18" de 0,75 m de diámetro, 0,32 m de ancho delante y 0,42 detrás
     ruedas.forEach((r, k) => {
       const del = k < 2, x = del ? RUEDAS_GLB.del : RUEDAS_GLB.tras, z = Math.sign(r.base.z) * (del ? RUEDAS_GLB.zDel : RUEDAS_GLB.zTras);
-      r.base.x = x; r.base.z = z; r.base.y = RUEDAS_GLB.radio; r.giro.position.set(x, RUEDAS_GLB.radio, z);
-      // los neumáticos del modelo (con su llanta, la marca y la franja del compuesto) en lugar de
-      // los procedurales: giran con el eje y doblan con la dirección igual que antes
-      const d = ruedaDe(nivelRueda, modelo.compuesto);
-      if (!d) return;
-      for (const h of [...r.rot.children, ...r.giro.children]) if (h !== r.rot && h.material !== r.matFreno) ocultar(h);   // el disco de freno se queda: se ve al rojo entre los radios
-      const m = new THREE.Mesh(d.geo, d.mat); m.castShadow = true; m.receiveShadow = false;   // (su propia sombra sobre la goma curva hacía «acné» de triángulos)
-      m.scale.setScalar(RUEDAS_GLB.radio / 0.36);           // a la medida de los bujes del coche
-      if (z < 0) m.rotation.y = Math.PI;                 // la cara con la marca, hacia fuera
-      r.rot.add(m); r.mallaGLB = m;
+      const esc = RADIO_RUEDA_GLB / r.radio;
+      r.giro.scale.setScalar(esc); r.radio = RADIO_RUEDA_GLB;
+      r.base.x = x; r.base.z = z; r.base.y = RADIO_RUEDA_GLB; r.giro.position.set(x, RADIO_RUEDA_GLB, z);
     });
     // de lejos, la versión baja (la cambia el nivel de detalle de main.js)
     if (datLejos) {
@@ -1152,7 +1106,7 @@ export function crearModelo(opc) {
         m.neum.scale.set(1, pin ? 0.9 : 1, pin ? 1.08 : 1);
         const om = Math.abs(car.velocidad || 0) / m.radio;
         m.borroso.material.opacity = Math.min(0.9, Math.max(0, (om - 25) / 50));
-        m.borroso.visible = m.borroso.material.opacity > 0.02 && !m.suelta && !this.ruedaOculta[k] && !m.mallaGLB;
+        m.borroso.visible = m.borroso.material.opacity > 0.02 && !m.suelta && !this.ruedaOculta[k];
         const sd = d?.susp[k] || 0;
         m.giro.rotation.x = sd * 0.16 * (w.izquierda ? -1 : 1);
         m.giro.position.y = m.base.y - (pin ? m.radio * 0.1 : 0) - sd * 0.04 + this.elevar;
@@ -1164,9 +1118,9 @@ export function crearModelo(opc) {
         if (calidad >= 1 && nm && nm.desgaste != null) {
           const su = w.suciedad || 0;
           const cl = `${Math.round(nm.desgaste * 20)}|${Math.round((nm.graining || 0) * 8)}|${Math.round((nm.ampollas || 0) * 8)}|${Math.round(su * 6)}`;
-          if (cl !== m.claveGoma) { m.claveGoma = cl; pintarGoma(m.cvGoma, nm.desgaste, nm.graining || 0, nm.ampollas || 0, k, su, w.sucioHierba ?? 0.5); m.texGoma.needsUpdate = true; }
+          if (cl !== m.claveGoma) { m.claveGoma = cl; pintarGoma(m.cvGoma, nm.desgaste, nm.graining || 0, nm.ampollas || 0, k, su, w.sucioHierba ?? 0.5, this.compuesto); m.texGoma.needsUpdate = true; }
           // mojado: la goma brilla con el agua de la pista
-          m.neum.material.roughness = 0.88 - 0.45 * Math.min(1, car.aguaAqui || 0);
+          m.matGoma.roughness = 0.88 - 0.45 * Math.min(1, car.aguaAqui || 0);
         }
       }
       carroceria.rotation.z = -car.cabeceo;
@@ -1238,9 +1192,13 @@ export function crearModelo(opc) {
     // al salir de boxes con un juego nuevo se repinta la banda del compuesto
     cambiarCompuesto(nombre) {
       const c = COMPUESTOS[nombre] || COMPUESTOS.medio;
-      const tx = texturaTapacubos(c.color);
-      for (const mt of [matTapaDel, matTapaTras]) { mt.map = tx; mt.needsUpdate = true; }
-      for (const r of ruedas) { const d = ruedaDe(nivelRueda, nombre); if (r.mallaGLB && d) { r.mallaGLB.geometry = d.geo; r.mallaGLB.material = d.mat; } }
+      const fl = matFlanco(nombre, calidad), bor = matBorroso(c.color);
+      for (const r of ruedas) {
+        r.neum.material = [fl, r.matGoma];
+        r.borroso.material.map = bor.map; r.borroso.material.needsUpdate = true;
+        r.claveGoma = '';                 // la banda se repinta (dibujo de lluvia o liso)
+        if (r.cvGoma && r.matGoma.map) { pintarGoma(r.cvGoma, 0, 0, 0, 0, 0, 0, nombre); r.texGoma.needsUpdate = true; }
+      }
       this.compuesto = nombre;
     },
     reponerPiezas() {
@@ -1269,9 +1227,9 @@ export function crearModelo(opc) {
         modelo.volanteEscaneado = true;
       }
     };
-    const ya = [cocheGLBListo(nivel), cocheGLBListo('bajo'), pilotoGLBListo(!cabina), volanteGLBListo(), ruedasListas(nivelRueda)];
+    const ya = [cocheGLBListo(nivel), cocheGLBListo('bajo'), pilotoGLBListo(!cabina), volanteGLBListo()];
     if (ya.every(Boolean)) poner(ya);
-    else Promise.all([cargarCocheGLB(nivel), cargarCocheGLB('bajo'), cargarPilotoGLB(!cabina), cargarVolanteGLB(), cargarRuedas(nivelRueda)]).then(poner);
+    else Promise.all([cargarCocheGLB(nivel), cargarCocheGLB('bajo'), cargarPilotoGLB(!cabina), cargarVolanteGLB()]).then(poner);
   }
   return modelo;
 }
@@ -1285,9 +1243,10 @@ function matBorroso(color) {
   const n = 128, cv = document.createElement('canvas'); cv.width = cv.height = n;
   const x = cv.getContext('2d'), c = n / 2;
   const g = x.createRadialGradient(c, c, 0, c, c, c);
-  g.addColorStop(0, '#2b2e33'); g.addColorStop(0.16, '#8a9099'); g.addColorStop(0.2, '#30343a');
-  g.addColorStop(0.6, '#3a3e45'); g.addColorStop(0.64, '#22252a'); g.addColorStop(0.9, '#1b1d21');
-  g.addColorStop(0.93, color); g.addColorStop(0.97, color); g.addColorStop(1, '#151515');
+  // (radios: llanta hasta 0,64 con su aro brillante; goma; franja del compuesto en 0,80)
+  g.addColorStop(0, '#2b2e33'); g.addColorStop(0.1, '#8a6e14'); g.addColorStop(0.2, '#30343a');
+  g.addColorStop(0.42, '#5a5f67'); g.addColorStop(0.56, '#8e939b'); g.addColorStop(0.62, '#c3c7cd'); g.addColorStop(0.65, '#161618');
+  g.addColorStop(0.77, '#18181b'); g.addColorStop(0.785, color); g.addColorStop(0.815, color); g.addColorStop(0.83, '#18181b'); g.addColorStop(1, '#121214');
   x.fillStyle = g; x.beginPath(); x.arc(c, c, c, 0, Math.PI * 2); x.fill();
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
   const m = new THREE.MeshStandardMaterial({ map: t, transparent: true, opacity: 0, roughness: 0.5, metalness: 0.3, depthWrite: false, emissive: new THREE.Color(0xff5a14), emissiveMap: texturaBrilloLlanta(), emissiveIntensity: 0 });

@@ -7,8 +7,7 @@
 // semáforo en un pórtico sobre el coche. Llegan antes que el coche y esperan en posición.
 
 import * as THREE from 'three';
-import { cargarRuedas, ruedaDe } from './cocheGLB.js';
-cargarRuedas('bajo');
+import { ruedaMontada } from './neumatico3D.js';
 import { COCHE, COMPUESTOS } from '../config.js';
 import { Persona } from './personas.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -74,9 +73,8 @@ function equipamiento() {
 // Neumático completo (goma + llanta), opcionalmente con su manta calentadora
 function ruedaSuelta(color, compuesto, conManta) {
   const e = equipamiento(), g = new THREE.Group();
-  // el neumático «Up Games» de ese compuesto (el mismo que llevan los coches); si no, el de siempre
-  const d = ruedaDe('bajo', compuesto);
-  if (d) { const m = new THREE.Mesh(d.geo, d.mat); m.castShadow = true; g.add(m); } else g.add(new THREE.Mesh(e.neum, e.goma), new THREE.Mesh(e.rin, e.llanta));
+  // el neumático «Up Games» de ese compuesto (el mismo que llevan los coches)
+  g.add(ruedaMontada(compuesto, 0.36, 0.36));
   if (conManta) {
     const cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
     const x = cv.getContext('2d');
