@@ -11,6 +11,8 @@
  *  POST   /nexus/evento        señal de gusto (view, category…) (sesión)
  *  GET    /nexus/perfil        gustos aprendidos            (sesión)
  *  GET    /nexus/mentor/:id    consejos de una publicación propia (sesión)
+ *  POST   /nexus/buscar        { q } → filtros entendidos + resultados de todo el catálogo
+ *  POST   /nexus/compatibilidad { itemId, dispositivo } → "¿funciona en mi celular?"
  * ══════════════════════════════════════════════════════════════════
  */
 'use strict';
@@ -19,6 +21,8 @@ const llm = require('../modulos/nexus/llm');
 const cerebro = require('../modulos/nexus/cerebro');
 const memoria = require('../modulos/nexus/memoria');
 const { CATEGORIAS, VISIBLE } = require('../modulos/nexus/herramientas');
+const filtrosNexus = require('../modulos/nexus/filtros');
+const compat = require('../modulos/nexus/compatibilidad');
 
 const esId = s => /^[a-f\d]{24}$/i.test(String(s || ''));
 
@@ -150,6 +154,39 @@ function registrar(app, deps) {
         if (!item) return res.status(404).json({ ok: false, error: 'Item no encontrado' });
         if (item.usuario !== req.usuario) return res.status(403).json({ ok: false, error: 'Sin permiso' });
         res.json({ ok: true, mentor: item.nexusMentor || null, title: item.title });
+    });
+
+    // ── Nexus en la barra de búsqueda: lenguaje natural → filtros → resultados ──
+    const limBuscar = limitador(20, 600), limCompat = limitador(10, 200);
+    app.post('/nexus/buscar', async (req, res) => {
+        try {
+            const q = String(req.body?.q || '').trim();
+            if (q.length < 3) return res.status(400).json({ ok: false, error: 'Escribe qué buscas' });
+            const lim = limBuscar('b:' + (usuarioOpcional(req) || req.ip));
+            if (lim) return res.status(429).json({ ok: false, error: lim });
+            const r = await filtrosNexus.interpretar(q, { conIA: req.body?.ia !== false });
+            const items = await filtrosNexus.buscar(r.filtros, { Juego });
+            res.json({ ok: true, filtros: r.filtros, entendido: filtrosNexus.resumen(r.filtros), explicacion: r.explicacion || '', fuente: r.fuente, total: items.length, items });
+        } catch (e) {
+            logger.error(`[nexus buscar] ${e.message}`);
+            res.status(500).json({ ok: false, error: 'Nexus no pudo buscar ahora' });
+        }
+    });
+
+    // ── ¿Funciona en mi celular? ──
+    app.post('/nexus/compatibilidad', async (req, res) => {
+        try {
+            const id = req.body?.itemId;
+            if (!esId(id)) return res.status(400).json({ ok: false, error: 'id inválido' });
+            const lim = limCompat('c:' + (usuarioOpcional(req) || req.ip));
+            if (lim) return res.status(429).json({ ok: false, error: lim });
+            const item = await Juego.findOne({ _id: id, ...VISIBLE }).select('_id title description category extraData').lean();
+            if (!item) return res.status(404).json({ ok: false, error: 'Publicación no encontrada' });
+            res.json({ ok: true, ...(await compat.analizar(item, req.body?.dispositivo || {})) });
+        } catch (e) {
+            logger.error(`[nexus compat] ${e.message}`);
+            res.status(500).json({ ok: false, error: 'Nexus no pudo comprobarlo ahora' });
+        }
     });
 }
 
