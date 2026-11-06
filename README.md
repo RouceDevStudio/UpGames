@@ -24,3 +24,7 @@ Transmisiones de gameplay con chat en tiempo real, regalos y monedas. Página: `
 | `TURN_URL` / `TURN_USER` / `TURN_PASS` | — | Servidor TURN: mejora la conexión P2P detrás de redes estrictas |
 
 El estado de las salas vive en memoria, así que el backend debe correr con **una réplica**. Para usar varias hace falta el adaptador de Redis de Socket.IO.
+
+## Música de fondo
+
+`public/upgames-musica.js` reproduce de fondo las pistas de `public/audio/` (Infraction, música sin copyright), una distinta en cada sesión, normalizadas a −16 LUFS con ffmpeg (`loudnorm=I=-16:TP=-1.5:LRA=11`). El usuario la silencia o ajusta el volumen desde el botón flotante; se baja sola cuando suena un video. Para añadir una canción: normalízala igual, cópiala a `public/audio/` y agrégala a `PISTAS`.

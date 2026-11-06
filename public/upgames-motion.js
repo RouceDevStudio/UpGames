@@ -43,17 +43,44 @@
     window.addEventListener('resize', () => raf(mover), { passive: true });
   }
 
+  /* Línea de luz que barre la pantalla en cada transición (tema cyber) */
+  function barrido() {
+    if (reduce || !document.body) return;
+    const b = document.createElement('div'); b.className = 'cb-barrido'; b.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(b); setTimeout(() => b.remove(), 1300);
+  }
+  window.UGBarrido = barrido;
+
+  /* Entrada de la app: encabezado, chips, portada y navegación llegan a su sitio al cargar */
+  function initEntrada() {
+    if (reduce) return;
+    const entrar = () => { document.body.classList.add('cb-entra'); setTimeout(() => document.body.classList.remove('cb-entra'), 2200); };
+    if (document.getElementById('preloader') && typeof window.closePreloader === 'function') {
+      const orig = window.closePreloader; let hecho = false;
+      window.closePreloader = function () { const r = orig.apply(this, arguments); if (!hecho) { hecho = true; entrar(); } return r; };
+    } else entrar();
+  }
+
   /* ── 2. Transición entre vistas ── */
   function initViewTransitions() {
     const orig = window.switchTab;
     if (typeof orig !== 'function') return;
     let actual = 'main';
     const vistas = { main: 'main-view', favs: 'favs-view', economia: 'economia-view', profile: 'profile-view' };
+    const cyber = () => document.documentElement.dataset.tema === 'cyber';
     window.switchTab = function (t) {
       const prev = actual;
+      const args = arguments, self = this;
+      // Tema cyber + navegador moderno: transición real entre la vista vieja y la nueva (~1 s)
+      if (!reduce && cyber() && prev !== t && typeof document.startViewTransition === 'function') {
+        barrido();
+        try { document.startViewTransition(() => { orig.apply(self, args); actual = t; }); return; }
+        catch (_) { /* sigue abajo */ }
+      }
       orig.apply(this, arguments);
       actual = t;
       if (reduce) return;
+      if (cyber() && prev !== t) barrido();
       const id = vistas[t === 'upload' ? 'profile' : t];
       const el = id && document.getElementById(id);
       if (!el || prev === t) return;
@@ -138,6 +165,7 @@
   }
 
   function init() {
+    initEntrada();
     initNavPill();
     initViewTransitions();
     initReveal();
