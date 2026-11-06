@@ -257,6 +257,8 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: '25mb' }));
+// Los listados públicos no llevan el enlace de descarga (solo la página puente lo entrega): modulos/sinEnlace.js
+app.use(require('./modulos/sinEnlace').middleware({ usuarioOpcional: req => usuarioOpcional(req) }));
 
 // ========== ENLACES DE DESCARGA PROTEGIDOS ==========
 // El enlace real solo se entrega por POST /economia/validar-descarga (página
@@ -2534,7 +2536,7 @@ app.get('/usuarios/perfil-publico/:usuario', async (req, res) => {
             // LISTA BLANCA: antes se devolvía el documento entero (menos password y
             // paypalEmail) — incluía resetPasswordToken, email, IP, saldo y tarjetas.
             Usuario.findOne({ usuario: username })
-                .select('usuario avatar banner bio verificadoNivel isVerificado socialLinks ultimoLogin createdAt fecha listaSeguidores siguiendo estilo planHasta cosmeticos')
+                .select('usuario avatar banner bio verificadoNivel isVerificado socialLinks createdAt fecha listaSeguidores siguiendo estilo planHasta cosmeticos')
                 .lean(),
             Juego.countDocuments({ usuario: username, status: 'aprobado' })
         ]);
@@ -3803,7 +3805,8 @@ app.post('/items/buy-intent/:id', [param('id').isMongoId()], async (req, res) =>
     try {
         const errors = validationResult(req);
         if(!errors.isEmpty()) return res.status(400).json({ ok: false });
-        const { usuario, gameName, purchaseLink } = req.body;
+        if (!(await Limites.permitir(`buyIntent:${req.params.id}:${req.ip}`, [[Limites.DIA, 3]]))) return res.json({ ok: true });
+        const { usuario, gameName, purchaseLink } = req.body || {};
         logger.info(`[BuyIntent] item=${req.params.id} | game="${gameName}" | user=${usuario||'anon'} | link=${purchaseLink}`);
         // Guardar en extraData del juego para analytics futuros
         await Juego.findByIdAndUpdate(req.params.id, {
