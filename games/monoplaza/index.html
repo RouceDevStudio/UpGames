@@ -462,29 +462,18 @@
   <div id="zonaVolante"><div id="pomo"></div><span class="pista-volante">Desliza para girar</span></div>
   <div id="pedalFreno" class="pedal freno"><span>FRENO</span></div>
   <div id="pedalAcel" class="pedal acel"><span>GAS</span></div>
-  <div id="botonesSup">
-    <button id="bPausa" class="bt">❚❚</button>
-    <button id="bCam" class="bt">🎥</button>
-    <button id="bAtras" class="bt">↺</button>
-    <button id="bRecolocar" class="bt" title="Volver a la pista">⟲</button>
-    <button id="bBox" class="bt box">BOX</button>
-  </div>
-  <div id="botonesAccion">
-    <button id="bBajar" class="bt marcha-bt">−</button>
-    <button id="bSubir" class="bt marcha-bt">+</button>
-  </div>
-  <div id="botonesEnergia">
-    <button id="bDrs" class="bt energia drs-bt" aria-label="DRS: abre el alerón trasero en las rectas">
-      <svg viewBox="0 0 64 40" aria-hidden="true"><path class="ala-fija" d="M6 26 L58 26 L56 31 L8 31 Z"/><path class="flap" d="M8 20 L56 20 L54 24 L10 24 Z"/><path class="deriva" d="M4 14 L9 14 L9 34 L4 34 Z M55 14 L60 14 L60 34 L55 34 Z"/><path class="aire" d="M14 9 h14 M34 6 h16 M22 3 h10"/></svg>
-      <span>DRS</span>
-    </button>
-    <button id="bOT" class="bt energia ot-bt" aria-label="Overtake: toda la batería para adelantar (cupo por vuelta)">
-      <svg viewBox="0 0 64 40" aria-hidden="true"><path class="flecha" d="M8 28 L26 28 L26 34 L40 20 L26 6 L26 12 L8 12 Z"/><path class="flecha2" d="M40 28 L48 28 L48 34 L60 20 L48 6 L48 12 L40 12"/></svg>
-      <span id="bOTTxt">OT</span>
-    </button>
-    <!-- MFD: los mandos que se tocan poco van en un panel desplegable (como el multifunción del volante) -->
-    <button id="bMfd" class="bt mfd-bt" aria-label="Mandos del volante: ERS, mezcla, freno motor y reparto de frenada" aria-expanded="false"><b>MFD</b><i></i></button>
-    <div id="mfd" class="mfd">
+  <!-- Un solo botón en pantalla: abre el selector con todo lo demás (como el menú rápido de un simulador) -->
+  <button id="bMenu" class="bt menu-bt" aria-label="Menú rápido: boxes, cámara, volante y pausa" aria-expanded="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></svg><i class="aviso"></i>
+  </button>
+  <div id="menuRapido" class="menu-rapido" role="menu">
+    <div class="mr-sec"><b>CARRERA</b><div class="mr-fila">
+      <button id="bBox" class="bt mr box" data-cierra><span class="ic">P</span><span class="et">Entrar a boxes</span></button>
+      <button id="bCam" class="bt mr"><span class="ic">🎥</span><span class="et" id="bCamTxt">Cámara</span></button>
+      <button id="bAtras" class="bt mr"><span class="ic">↺</span><span class="et">Mirar atrás</span></button>
+      <button id="bRecolocar" class="bt mr" data-cierra title="Volver a la pista"><span class="ic">⟲</span><span class="et">A la pista</span></button>
+    </div></div>
+    <div class="mr-sec"><b>VOLANTE</b><div class="mr-fila">
     <button id="bErs" class="bt energia ers-bt" aria-label="ERS: modo de despliegue de la batería">
       <svg viewBox="0 0 64 40" aria-hidden="true"><rect class="pila" x="10" y="8" width="40" height="24" rx="4"/><rect class="borne" x="50" y="15" width="5" height="10" rx="1.5"/><rect class="carga" x="13" y="11" width="34" height="18" rx="2"/><path class="rayo" d="M33 9 L22 22 L30 22 L27 31 L40 17 L32 17 Z"/></svg>
       <span id="bErsTxt">ERS</span>
@@ -501,7 +490,24 @@
       <svg viewBox="0 0 64 40" aria-hidden="true"><circle class="pila" cx="32" cy="20" r="13"/><circle class="carga" cx="32" cy="20" r="6"/><path class="borne" d="M14 20 h-8 M50 20 h8"/></svg>
       <span id="bBBTxt">BB 57</span>
     </button>
-    </div>
+    </div></div>
+    <div class="mr-sec"><b>SESIÓN</b><div class="mr-fila">
+      <button id="bPausa" class="bt mr ancho" data-cierra><span class="ic">❚❚</span><span class="et">Pausa · ajustes · reglaje</span></button>
+    </div></div>
+  </div>
+  <div id="botonesAccion">
+    <button id="bBajar" class="bt marcha-bt">−</button>
+    <button id="bSubir" class="bt marcha-bt">+</button>
+  </div>
+  <div id="botonesEnergia">
+    <button id="bDrs" class="bt energia drs-bt" aria-label="DRS: abre el alerón trasero en las rectas">
+      <svg viewBox="0 0 64 40" aria-hidden="true"><path class="ala-fija" d="M6 26 L58 26 L56 31 L8 31 Z"/><path class="flap" d="M8 20 L56 20 L54 24 L10 24 Z"/><path class="deriva" d="M4 14 L9 14 L9 34 L4 34 Z M55 14 L60 14 L60 34 L55 34 Z"/><path class="aire" d="M14 9 h14 M34 6 h16 M22 3 h10"/></svg>
+      <span>DRS</span>
+    </button>
+    <button id="bOT" class="bt energia ot-bt" aria-label="Overtake: toda la batería para adelantar (cupo por vuelta)">
+      <svg viewBox="0 0 64 40" aria-hidden="true"><path class="flecha" d="M8 28 L26 28 L26 34 L40 20 L26 6 L26 12 L8 12 Z"/><path class="flecha2" d="M40 28 L48 28 L48 34 L60 20 L48 6 L48 12 L40 12"/></svg>
+      <span id="bOTTxt">OT</span>
+    </button>
   </div>
 </div>
 

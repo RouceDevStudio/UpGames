@@ -314,6 +314,7 @@ function actualizarCapaCamara(dt, j) {
 function aplicarHora(hora) {
   if (!escenario || escenario.hora === hora) return;
   ponerHora(escenario, scene, renderer, hora);
+  ponerEtalonado(hora);
   lluviaFx?.forzar();
 }
 
@@ -399,7 +400,7 @@ function crearRenderer() {
   renderer.setPixelRatio(pixelRatio());
   renderer.setSize(innerWidth, innerHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.92;
+  renderer.toneMappingExposure = 0.86;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = calidad >= 2 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
@@ -414,7 +415,7 @@ function pixelRatio() {
 }
 
 function configurarPost() {
-  composer = null; pasoCalor = null; pasoVelocidad = null;
+  composer = null; pasoCalor = null; pasoVelocidad = null; pasoEtalonado = null;
   if (calidad < 1) return;
   const rt = new THREE.WebGLRenderTarget(innerWidth, innerHeight, { type: THREE.HalfFloatType, samples: calidad >= 3 ? 4 : 2 });
   composer = new EffectComposer(renderer, rt);
@@ -424,6 +425,15 @@ function configurarPost() {
   composer.addPass(pasoCalor = new ShaderPass(DISTORSION_CALOR));
   if (calidad >= 2) composer.addPass(pasoVelocidad = new ShaderPass(DESENFOQUE_VELOCIDAD));
   composer.addPass(new OutputPass());
+  composer.addPass(pasoEtalonado = new ShaderPass(ETALONADO));
+  ponerEtalonado(escenario?.hora || 'dia');
+}
+function ponerEtalonado(hora) {
+  if (!pasoEtalonado) return;
+  const u = pasoEtalonado.uniforms;
+  // de noche menos saturación y más viñeta; al atardecer, más calidez
+  const v = { dia: [1.1, 1.16, 0.03, 0.2], atardecer: [1.08, 1.12, 0.06, 0.24], noche: [1.06, 1.0, -0.02, 0.3] }[hora] || [1.1, 1.16, 0.03, 0.2];
+  [u.contraste.value, u.saturacion.value, u.calidez.value, u.vineta.value] = v;
 }
 // Retrovisores de verdad en el coche del jugador: una textura pequeña con dos mitades (izquierda
 // y derecha), cada una con su cámara mirando hacia atrás desde el espejo. Se pinta un lado por
@@ -562,6 +572,31 @@ function actualizarCalor(dt, coches, jugadorCoche) {
 
 // Desenfoque por velocidad: zoom radial suave hacia los bordes (el centro queda nítido)
 let pasoVelocidad = null;
+// Etalonado final (como el de una retransmisión): más contraste en los medios tonos, color más
+// vivo sin quemar la piel ni los cielos (vibrance), sombras algo frías y luces cálidas, y una
+// viñeta suave que lleva la mirada al centro. Va después de la conversión a sRGB.
+const ETALONADO = {
+  uniforms: { tDiffuse: { value: null }, contraste: { value: 1.1 }, saturacion: { value: 1.16 }, calidez: { value: 0.03 }, vineta: { value: 0.22 } },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float contraste, saturacion, calidez, vineta; varying vec2 vUv;
+    void main() {
+      vec4 t = texture2D(tDiffuse, vUv); vec3 c = t.rgb;
+      // curva en S suave alrededor del gris medio
+      c = clamp((c - 0.5) * contraste + 0.5, 0.0, 1.0);
+      c = mix(c, c * c * (3.0 - 2.0 * c), (contraste - 1.0) * 1.2);
+      // vibrance: satura más lo poco saturado (césped, cielo) que lo ya saturado (pinturas)
+      float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+      float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));
+      c = mix(vec3(l), c, 1.0 + (saturacion - 1.0) * (1.0 - sat));
+      // separación de tonos: sombras azuladas, luces cálidas
+      c += calidez * vec3(1.0, 0.35, -0.6) * smoothstep(0.45, 1.0, l) + calidez * vec3(-0.5, -0.1, 0.8) * (1.0 - smoothstep(0.0, 0.4, l));
+      vec2 d = vUv - 0.5;
+      c *= 1.0 - vineta * smoothstep(0.35, 0.85, length(d * vec2(1.25, 1.0)));
+      gl_FragColor = vec4(clamp(c, 0.0, 1.0), t.a);
+    }`,
+};
+let pasoEtalonado = null;
+
 const DESENFOQUE_VELOCIDAD = {
   uniforms: { tDiffuse: { value: null }, fuerza: { value: 0 }, centro: { value: new THREE.Vector2(0.5, 0.55) } },
   vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
@@ -1080,15 +1115,26 @@ entrada.conectarTactil({
   atras: $('#bAtras'), recolocar: $('#bRecolocar'),
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden && jugando && !pausado) pausar(true); });
-// panel MFD (ERS, mezcla, freno motor, reparto de frenada): se abre y se cierra con su botón y se
-// cierra solo a los 6 s sin tocarlo, para no tapar la pista
-{
-  const bt = $('#bMfd'), panel = $('#mfd');
+// Menú rápido: el único botón de utilidad en pantalla. Abre el selector con boxes, cámara, mirar
+// atrás, volver a la pista, los mandos del volante (ERS, mezcla, freno motor, reparto) y la pausa.
+// Las acciones de un toque lo cierran; se cierra solo a los 6 s sin tocarlo y al tocar fuera.
+const menuRapido = (() => {
+  const bt = $('#bMenu'), panel = $('#menuRapido');
   let tCerrar = 0;
-  const abrir = (si) => { panel.classList.toggle('abierto', si); bt.classList.toggle('abierto', si); bt.setAttribute('aria-expanded', si); clearTimeout(tCerrar); if (si) tCerrar = setTimeout(() => abrir(false), 6000); };
-  bt.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); abrir(!panel.classList.contains('abierto')); });
-  panel.addEventListener('pointerdown', () => { clearTimeout(tCerrar); tCerrar = setTimeout(() => abrir(false), 6000); });
-}
+  const abrir = (si) => {
+    panel.classList.toggle('abierto', si); bt.classList.toggle('abierto', si); bt.setAttribute('aria-expanded', si);
+    clearTimeout(tCerrar); if (si) tCerrar = setTimeout(() => abrir(false), 6000);
+    if (si) $('#bCamTxt').textContent = NOMBRES_CAMARA[camara?.modo] || 'Cámara';
+  };
+  bt.addEventListener('touchstart', (e) => { e.preventDefault(); abrir(!panel.classList.contains('abierto')); }, { passive: false });
+  bt.addEventListener('click', () => abrir(!panel.classList.contains('abierto')));
+  panel.addEventListener('touchstart', () => { clearTimeout(tCerrar); tCerrar = setTimeout(() => abrir(false), 6000); }, { passive: true });
+  for (const b of panel.querySelectorAll('[data-cierra]')) b.addEventListener('touchend', () => setTimeout(() => abrir(false), 120));
+  $('#bCam').addEventListener('touchend', () => setTimeout(() => { $('#bCamTxt').textContent = NOMBRES_CAMARA[camara.modo] || 'Cámara'; }, 30));
+  // tocar la pista (pedales, volante) también lo cierra
+  addEventListener('touchstart', (e) => { if (panel.classList.contains('abierto') && !e.target.closest?.('#menuRapido, #bMenu')) abrir(false); }, { capture: true, passive: true });
+  return { abrir };
+})();
 
 // --- Mensajes ---------------------------------------------------------------
 let tMensaje = 0;
@@ -1228,6 +1274,7 @@ function actualizarHud(dt) {
   marcar(3, c.dano.pinchazo.some((x, k) => x && !c.dano.suelta[k]), false);
   marcar(4, c.limitadorPit, false); dn[4].classList.toggle('pit', true);
   $('#bBox').classList.toggle('activo', !!p.solicitudBox);
+  $('#bMenu').classList.toggle('box', !!p.solicitudBox);
   const desg = Math.max(...c.ruedas.map(w => w.neum.desgaste));
   $('#hNeumTxt').textContent = `${c.reglaje.compuesto.toUpperCase()} · ${Math.round((1 - desg) * 100)}%`;
   $('#hComb').textContent = `${c.combustible.toFixed(1)} KG`;

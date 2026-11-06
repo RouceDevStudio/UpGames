@@ -154,6 +154,61 @@ class Terreno {
   }
 }
 
+// Nubes: un techo de cúmulos a 1,6 km de alto que sigue a la cámara (siempre se ve el mismo
+// cielo), con el lado del sol iluminado y la base gris, y que se funde con el horizonte. La forma
+// sale de una textura de ruido (dos capas que derivan con el viento a distinta velocidad).
+function texturaNubes() {
+  const N = 256, cv = document.createElement('canvas'); cv.width = cv.height = N;
+  const x = cv.getContext('2d'), img = x.createImageData(N, N);
+  let sem = 7; const r = () => { sem = (sem * 16807) % 2147483647; return sem / 2147483647; };
+  const capas = [4, 8, 16, 32, 64].map(n => { const g = new Float32Array(n * n); for (let i = 0; i < g.length; i++) g[i] = r(); return { n, g }; });
+  const muestra = ({ n, g }, u, v) => {        // ruido de valor periódico (la textura se repite sin costura)
+    const x0 = Math.floor(u * n), y0 = Math.floor(v * n), fx = u * n - x0, fy = v * n - y0;
+    const a = g[(y0 % n) * n + x0 % n], b = g[(y0 % n) * n + (x0 + 1) % n], c = g[((y0 + 1) % n) * n + x0 % n], d = g[((y0 + 1) % n) * n + (x0 + 1) % n];
+    const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy;
+  };
+  for (let y = 0; y < N; y++) for (let xx = 0; xx < N; xx++) {
+    let v = 0, amp = 0.5;
+    for (const c of capas) { v += muestra(c, xx / N, y / N) * amp; amp *= 0.5; }
+    const i = (y * N + xx) * 4, k = Math.round(Math.min(1, v / 0.97) * 255);
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = k; img.data[i + 3] = 255;
+  }
+  x.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+function nubes(scene, sol, calidad) {
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, fog: false,
+    uniforms: { mapa: { value: texturaNubes() }, tiempo: { value: 0 }, sol: { value: sol.clone() }, color: { value: new THREE.Color(0xffffff) }, opacidad: { value: 0.85 } },
+    vertexShader: `varying vec3 vMundo; varying vec2 vXZ;
+      void main() { vec4 m = modelMatrix * vec4(position, 1.0); vMundo = m.xyz; vXZ = position.xz; gl_Position = projectionMatrix * viewMatrix * m; }`,
+    fragmentShader: `uniform sampler2D mapa; uniform float tiempo; uniform vec3 sol; uniform vec3 color; uniform float opacidad;
+      varying vec3 vMundo; varying vec2 vXZ;
+      void main() {
+        vec2 p = vMundo.xz;
+        float a = texture2D(mapa, p / 5200.0 + vec2(tiempo * 0.0016, tiempo * 0.0006)).r;
+        float b = texture2D(mapa, p / 1700.0 + vec2(tiempo * 0.0035, -tiempo * 0.001)).r;
+        float d = a * 0.72 + b * 0.38;
+        float cob = smoothstep(0.52, 0.78, d);                       // cúmulos sueltos, cielo azul entre ellos
+        // borde: se desvanecen hacia el horizonte para fundirse con la bruma
+        float r = length(vXZ) / 7000.0;
+        cob *= 1.0 - smoothstep(0.55, 1.0, r);
+        // luz: el lado que da al sol, blanco brillante; el resto y la base, gris azulado
+        float luz = clamp(dot(normalize(vec3(p.x, 0.0, p.y) * -0.0001 + sol), sol), 0.0, 1.0);
+        vec3 c = mix(vec3(0.62, 0.68, 0.78), vec3(1.0), smoothstep(0.55, 0.85, d) * 0.6 + 0.35 * luz) * color;
+        gl_FragColor = vec4(c, cob * opacidad);
+        #include <colorspace_fragment>
+      }`,
+  });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(14000, 14000, 1, 1).rotateX(Math.PI / 2), mat);
+  m.position.y = 1600; m.frustumCulled = false; m.renderOrder = -1;
+  m.onBeforeRender = (r, sc, cam) => { m.position.x = cam.position.x; m.position.z = cam.position.z; m.position.y = cam.position.y + 1600; };
+  scene.add(m);
+  return m;
+}
+
 export function construirEscenario(scene, renderer, c, calidad) {
   const res = { luces: [], actualizables: [], deformables: [] };
   res.deformarMuro = (g) => deformarMuro(res, c, g);
@@ -164,7 +219,8 @@ export function construirEscenario(scene, renderer, c, calidad) {
   const cielo = new Sky();
   cielo.scale.setScalar(20000);
   const u = cielo.material.uniforms;
-  u.turbidity.value = 5.5; u.rayleigh.value = 1.4; u.mieCoefficient.value = 0.004; u.mieDirectionalG.value = 0.82;
+  // cielo limpio de día despejado: azul profundo arriba, horizonte claro y halo del sol marcado
+  u.turbidity.value = 3.2; u.rayleigh.value = 1.9; u.mieCoefficient.value = 0.0032; u.mieDirectionalG.value = 0.86;
   const sol = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(90 - SOL_ELEVACION), THREE.MathUtils.degToRad(SOL_AZIMUT));
   u.sunPosition.value.copy(sol);
   scene.add(cielo);
@@ -179,10 +235,11 @@ export function construirEscenario(scene, renderer, c, calidad) {
   const env = pmrem.fromScene(escenaCielo, 0.02).texture;
   scene.environment = env;
   pmrem.dispose();
-  scene.fog = new THREE.Fog(0xb9c8d6, 700, calidad >= 2 ? 5200 : 3200);
+  // bruma del color del horizonte: lo lejano se aclara y azulea (perspectiva aérea), da profundidad
+  scene.fog = new THREE.Fog(0xb4c8de, 420, calidad >= 2 ? 5200 : 3200);
   res.sol = sol;
 
-  const luzSol = new THREE.DirectionalLight(0xfff1dc, 5);
+  const luzSol = new THREE.DirectionalLight(0xffeccc, 4.3);
   luzSol.position.copy(sol).multiplyScalar(300);
   // sombras en todas las calidades: sin ellas los coches flotan y todo parece plano
   {
@@ -195,11 +252,14 @@ export function construirEscenario(scene, renderer, c, calidad) {
   }
   scene.add(luzSol); scene.add(luzSol.target);
   res.luzSol = luzSol;
-  res.hemi = new THREE.HemisphereLight(0xcfe3ff, 0x3a4029, 0.15);
+  // luz del cielo: rellena las sombras de azul (de arriba) y de verde (rebote del césped)
+  res.hemi = new THREE.HemisphereLight(0xb8d4ff, 0x4f5c2e, 0.55);
   scene.add(res.hemi);
   res.cielo = cielo;
-  res.base = { sol: luzSol.intensity, fogColor: scene.fog.color.clone(), fogFar: scene.fog.far, exp: 0.8, hemi: 0.15 };
-  scene.environmentIntensity = 0.5;
+  res.base = { sol: luzSol.intensity, fogColor: scene.fog.color.clone(), fogFar: scene.fog.far, exp: 0.86, hemi: 0.55 };
+  scene.environmentIntensity = 0.75;
+  // nubes altas que se mueven despacio
+  if (calidad >= 1) { res.nubes = nubes(scene, sol, calidad); res.actualizables.push((dt) => { res.nubes.material.uniforms.tiempo.value += dt; }); }
 
   // --- Materiales ---------------------------------------------------------
   const asf = TX.texturasAsfalto(calidad >= 2 ? 512 : 256);
@@ -211,7 +271,7 @@ export function construirEscenario(scene, renderer, c, calidad) {
   const matEscape = matAsfalto.clone(); matEscape.color = new THREE.Color(0x85878d);
   res.matAsfalto = matAsfalto;
   const texH = TX.texturaHierba(calidad >= 2 ? 512 : 256); texH.anisotropy = anis;
-  const matHierba = new THREE.MeshStandardMaterial({ map: texH, roughness: 0.95, color: 0xdde8d0 });
+  const matHierba = new THREE.MeshStandardMaterial({ map: texH, roughness: 0.92, color: 0xd6ecb4 });   // verde vivo de césped cuidado
   const texT = TX.texturaTerreno(256); texT.anisotropy = anis;
   const matTerreno = new THREE.MeshStandardMaterial({ map: texT, roughness: 1, color: 0xd8e0cc });
   const texG = TX.texturaGrava(calidad >= 2 ? 512 : 256); texG.anisotropy = anis;
@@ -620,20 +680,23 @@ export function ponerHora(esc, scene, renderer, hora = 'dia') {
     esc.sol = new THREE.Vector3(0.15, 1, 0.1).normalize();
     esc.luzSol.color.set(0xeaf0ff);
     esc.base = { sol: 2.2, fogColor: new THREE.Color(0x0a1020), fogFar: 2600, exp: 1.0, hemi: 0.75 };
+    esc.nubes?.material.uniforms.color.value.set(0x1a2236); if (esc.nubes) esc.nubes.material.uniforms.opacidad.value = 0.35;
     esc.hemi.color.set(0x5a6a90); esc.hemi.groundColor.set(0x202018);
     scene.environmentIntensity = 0.35;
   } else if (hora === 'atardecer') {
     esc.sol = sol;
     esc.luzSol.color.set(0xff9a50);
-    esc.base = { sol: 3.4, fogColor: new THREE.Color(0xe0a080), fogFar: 4200, exp: 0.92, hemi: 0.32 };
+    esc.base = { sol: 3.4, fogColor: new THREE.Color(0xe0a080), fogFar: 4200, exp: 0.92, hemi: 0.4 };
+    esc.nubes?.material.uniforms.color.value.set(0xffb27a); if (esc.nubes) esc.nubes.material.uniforms.opacidad.value = 0.9;
     esc.hemi.color.set(0xffc8a0); esc.hemi.groundColor.set(0x504030);
     scene.environmentIntensity = 0.7;
   } else {
     esc.sol = sol;
-    esc.luzSol.color.set(0xfff1dc);
-    esc.base = { sol: 5, fogColor: new THREE.Color(0xb9c8d6), fogFar: scene.fog.far > 4000 ? 5200 : 3200, exp: 0.8, hemi: 0.15 };
-    esc.hemi.color.set(0xcfe3ff); esc.hemi.groundColor.set(0x3a4029);
-    scene.environmentIntensity = 0.5;
+    esc.luzSol.color.set(0xffeccc);
+    esc.base = { sol: 4.3, fogColor: new THREE.Color(0xb4c8de), fogFar: scene.fog.far > 4000 ? 5200 : 3200, exp: 0.86, hemi: 0.55 };
+    esc.hemi.color.set(0xb8d4ff); esc.hemi.groundColor.set(0x4f5c2e);
+    scene.environmentIntensity = 0.75;
+    esc.nubes?.material.uniforms.color.value.set(0xffffff); if (esc.nubes) esc.nubes.material.uniforms.opacidad.value = 0.85;
   }
   esc.luzSol.intensity = esc.base.sol; esc.hemi.intensity = esc.base.hemi;
   // al atardecer las sombras son larguísimas: la zona de sombras se agranda para que quepan
@@ -647,6 +710,7 @@ export function ponerHora(esc, scene, renderer, hora = 'dia') {
   }
   scene.fog.color.copy(esc.base.fogColor); scene.fog.far = esc.base.fogFar;
   if (renderer) renderer.toneMappingExposure = esc.base.exp;
+  if (esc.nubes) esc.nubes.material.uniforms.sol.value.copy(sol);
 }
 
 function cuadros() {

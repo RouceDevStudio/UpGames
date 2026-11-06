@@ -836,14 +836,34 @@ body.tactil-on #hudDer { top: calc(42px + var(--sa-t)); }
 #tactil .bt.energia, body.tactil-on #tactil .bt.energia { width: 54px !important; height: 54px !important; border-radius: 50%; padding: 2px; gap: 0; border: 2px solid rgba(255,255,255,.16); background: rgba(7,10,17,.6); box-shadow: none; }
 #tactil .bt.energia svg { width: 30px !important; height: 19px !important; }
 #tactil .bt.energia span { font-size: 8.5px; letter-spacing: .8px; }
-/* MFD: botón pequeño y panel desplegable con ERS, mezcla, freno motor y reparto de frenada */
-#tactil .mfd-bt { width: 42px; height: 26px; border-radius: 13px; display: flex; align-items: center; justify-content: center; gap: 3px; font-size: 9px; letter-spacing: 1px; }
-#tactil .mfd-bt i { width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-bottom: 5px solid currentColor; transition: transform .15s; }
-#tactil .mfd-bt.abierto { background: rgba(47,123,255,.65); }
-#tactil .mfd-bt.abierto i { transform: rotate(180deg); }
-#tactil .mfd { position: absolute; right: -4px; bottom: calc(100% + 6px); display: none; grid-template-columns: repeat(2, auto); gap: 6px; padding: 6px; border-radius: 10px; background: rgba(7,10,17,.72); box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
-#tactil .mfd.abierto { display: grid; }
-#tactil .mfd .bt.energia { width: 52px !important; height: 52px !important; border-radius: 12px; }
+/* Menú rápido: un solo botón arriba a la derecha y el selector que despliega (a la derecha,
+   bajo el minimapa: nunca encima del coche) */
+#tactil .menu-bt { position: absolute; top: calc(6px + var(--sa-t)); right: calc(8px + var(--sa-r)); width: 40px; height: 34px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center; background: rgba(7,10,17,.62); box-shadow: inset 0 0 0 1px rgba(255,255,255,.10); }
+#tactil .menu-bt svg { width: 19px; height: 19px; fill: rgba(255,255,255,.9); transition: transform .2s; }
+#tactil .menu-bt.abierto { background: rgba(225,30,40,.88); }
+#tactil .menu-bt.abierto svg { transform: rotate(45deg); }
+#tactil .menu-bt .aviso { position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; border-radius: 50%; background: #ffd23f; display: none; box-shadow: 0 0 6px #ffd23f; }
+#tactil .menu-bt.box .aviso { display: block; }
+.menu-rapido { position: absolute; top: calc(46px + var(--sa-t)); right: calc(8px + var(--sa-r)); display: flex; flex-direction: column; gap: 8px;
+  padding: 10px; border-radius: 12px; background: rgba(8,11,18,.86); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 10px 30px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.07); border-top: 2px solid var(--rojo);
+  opacity: 0; transform: translateY(-6px) scale(.98); transform-origin: top right; pointer-events: none !important; transition: opacity .14s, transform .14s; max-height: calc(100vh - 56px); overflow-y: auto; }
+.menu-rapido.abierto { opacity: 1; transform: none; pointer-events: auto !important; }
+.mr-sec > b { display: block; font-size: 8.5px; letter-spacing: 2px; color: rgba(255,255,255,.45); margin: 0 0 5px 2px; }
+.mr-fila { display: grid; grid-template-columns: repeat(4, 62px); gap: 6px; }
+#tactil .menu-rapido .bt.mr, #tactil .menu-rapido .bt.energia { width: 62px !important; height: 54px !important; border-radius: 9px !important; border: 0 !important;
+  background: rgba(255,255,255,.06) !important; box-shadow: inset 0 0 0 1px rgba(255,255,255,.06) !important; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 4px 2px !important; font-size: 16px; }
+#tactil .menu-rapido .bt.mr.ancho { grid-column: span 4; width: auto !important; height: 40px !important; flex-direction: row; gap: 10px; }
+#tactil .menu-rapido .bt .ic { font-size: 16px; line-height: 1; font-weight: 900; }
+#tactil .menu-rapido .bt .et, #tactil .menu-rapido .bt.energia span { font-size: 8.5px !important; letter-spacing: .4px !important; font-weight: 700; color: rgba(255,255,255,.75); text-align: center; line-height: 1.1; }
+#tactil .menu-rapido .bt.energia svg { width: 28px !important; height: 18px !important; }
+#tactil .menu-rapido .bt.activo, #tactil .menu-rapido .bt.energia.activo { background: rgba(47,123,255,.55) !important; }
+#tactil .menu-rapido .bt.box .ic { width: 20px; height: 20px; border-radius: 4px; background: #ffd23f; color: #1a1200; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+#tactil .menu-rapido .bt.box.activo { background: rgba(255,210,63,.3) !important; }
+@media (max-height: 360px) { .mr-fila { grid-template-columns: repeat(4, 56px); } #tactil .menu-rapido .bt.mr, #tactil .menu-rapido .bt.energia { width: 56px !important; height: 46px !important; } }
+/* con el menú, el minimapa queda arriba a la derecha bajo su botón */
+body.tactil-on #hudDer { top: calc(46px + var(--sa-t)); }
 @media (max-height: 420px) {
   #hud #volanteHud { transform: translateX(-50%); }
   #hud #minimapa { width: 108px; height: 78px; }
