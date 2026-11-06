@@ -1642,7 +1642,7 @@ function visitarPerfil(usuario) {
 // ── HANDLE MAIL (abuse) ─────────────────────────────────
 function handleMail(e) {
   if(e) e.preventDefault();
-  const email='mr.m0onster@protonmail.com';
+  const email='upgames.games.up@gmail.com';
   const sub=encodeURIComponent('Soporte - UP GAMES');
   const body=encodeURIComponent('Hola, necesito ayuda con...\n\n[Describe tu problema aquí]');
   window.location.href=`mailto:${email}?subject=${sub}&body=${body}`;
