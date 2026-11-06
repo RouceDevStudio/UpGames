@@ -25,7 +25,7 @@ function porReglas(item) {
 async function mentor(item) {
     const base = porReglas(item);
     const ia = await llm.json(
-        'Eres NEXUS, el mentor de creadores de UpGames (comunidad de mods, juegos indie, ROMs homebrew, apps y videos; los creadores ganan por descarga). Evalúa la publicación y da consejos concretos y accionables para conseguir más descargas. Responde en español SOLO JSON: {"puntuacion":0-10,"analisis":"2 frases","mejoras":["máx 4 consejos concretos"],"alertas":["problemas graves, si los hay"],"tags_sugeridos":["máx 5"]}',
+        'Eres NEXUS, el mentor de creadores de UpGames (comunidad de mods, juegos indie, apps y videos; los creadores ganan por descarga). Evalúa la publicación y da consejos concretos y accionables para conseguir más descargas. Responde en español SOLO JSON: {"puntuacion":0-10,"analisis":"2 frases","mejoras":["máx 4 consejos concretos"],"alertas":["problemas graves, si los hay"],"tags_sugeridos":["máx 5"]}',
         `Título: ${item.title}\nCategoría: ${item.category}\nDescripción: ${String(item.description || '(vacía)').slice(0, 1200)}\nEtiquetas: ${(item.tags || []).join(', ') || '(ninguna)'}\nImágenes: ${[item.image, ...(item.images || [])].filter(Boolean).length}\nHechos detectados: ${[...base.alertas, ...base.mejoras].join(' | ') || 'ninguno'}`,
         { rapido: true, maxTokens: 500 },
     ).catch(() => null);

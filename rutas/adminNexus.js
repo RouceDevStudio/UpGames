@@ -150,7 +150,7 @@ function registrar(app, { verificarAdmin, Juego, Usuario, Comentario, Pago, logg
     }
 
     const ROL_TXT = { owner: 'dueño de UpGames' };
-    const sistemaBase = adm => `Eres NEXUS, el asistente de administración de UpGames (plataforma de mods, juegos indie, ROMs homebrew, apps, software y videos con una sola moneda: UpCoins, 1 UC = US$0,02).
+    const sistemaBase = adm => `Eres NEXUS, el asistente de administración de UpGames (plataforma de mods, juegos indie, apps, software y videos con una sola moneda: UpCoins, 1 UC = US$0,02).
 Economía: los usuarios compran UpCoins con tarjeta (Mercado Pago) o PayPal y los gastan en regalos de lives, Premium, mensajes de NEXUS, estilo del perfil y destacar publicaciones (el acceso directo por publicación se retiró: saltar la espera es solo de Premium). Los creadores ganan UpCoins solo por descargas efectivas, nunca por vistas (50 UC por cada 1.000 descargas efectivas, 25 % de regalos) y SOLO lo ganado se retira como dinero; lo comprado nunca. Premium (7, 30 o 365 días) quita anuncios, da NEXUS ilimitado y más visibilidad. El creador recibe como máximo el 30 % de cada venta.
 Hablas con @${adm.usuario}, ${ROL_TXT[adm.rol] || `sub-administrador (${adm.rolNombre || adm.rol})`} con permisos: ${adm.rol === 'owner' ? 'todos' : (adm.permisos || []).join(', ')}.
 Responde SIEMPRE en español, como un analista profesional: directo, con cifras concretas y prioridades claras. Usa viñetas cortas cuando ayuden.

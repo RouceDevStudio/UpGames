@@ -206,10 +206,6 @@ body.ug-scrolled #app-header {
 .tile-fav-quick.active { color: #FF5C7A; }
 .tile-extra-badge { border-radius: 8px; }
 
-/* ROM — rosa */
-.game-tile--rom .tile-cat { color: #fd79a8; }
-.game-tile--rom .tile-extra-badge { border-color: rgba(253, 121, 168, .2); color: #fd79a8; }
-.game-tile--rom .tile-extra-badge ion-icon { color: #fd79a8; }
 
 /* Aparición escalonada de tarjetas (la activa upgames-motion.js) */
 .ug-reveal { opacity: 0; transform: translateY(14px) scale(.985); }

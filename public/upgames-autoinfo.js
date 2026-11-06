@@ -22,7 +22,7 @@
     'n64','gba','gbc','nds','3ds','psp','ps1','ps2','psx','wii','gamecube','dreamcast','sega','emulador',
     'emulator','herramienta','tool','tools','app','juego','game'];
 
-  const PISTA = { Juego:'videojuego', Mod:'videojuego', Optimizacion:'videojuego', ROM:'videojuego',
+  const PISTA = { Juego:'videojuego', Mod:'videojuego', Optimizacion:'videojuego', 
     Apps:'aplicación', Software:'software', Ajustes:'software' };
 
   const cache = new Map();

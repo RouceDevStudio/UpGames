@@ -254,7 +254,7 @@ function consultasPorReglas(q) {
     return [...new Set(out.map(s => s.replace(/\s+/g, ' ').trim()).filter(Boolean))].slice(0, 3);
 }
 async function ampliar(q) {
-    const r = await llm.json(`Eres NEXUS, el buscador de contenido de UpGames (mods, ports de PC a Android, emuladores, juegos indie, ROMs homebrew, apps y herramientas).
+    const r = await llm.json(`Eres NEXUS, el buscador de contenido de UpGames (mods, ports de PC a Android, emuladores, juegos indie, apps y herramientas).
 Convierte el pedido del administrador en búsquedas efectivas para buscadores y redes (YouTube, TikTok, Facebook, Instagram, Reddit).
 Devuelve SOLO JSON: {"consultas": ["...", "...", "..."], "intencion": "una frase"}
 Reglas: máximo 3 consultas, cortas (3 a 7 palabras), sin "site:", sin comillas. La primera en el idioma del pedido; incluye al menos una en inglés si ayuda.
@@ -288,7 +288,7 @@ function tipoPorReglas(it) {
 async function ordenarConIA(consulta, items) {
     if (!llm.disponible() || !items.length) return null;
     const lista = items.slice(0, 50).map((it, i) => ({ i, f: it.fuente, t: it.titulo.slice(0, 120), d: String(it.descripcion || '').slice(0, 160), a: it.autor || '', v: it.vistas || '', fe: it.fecha || '' }));
-    const r = await llm.json(`Eres NEXUS, curador de contenido de UpGames (mods, ports a Android, emuladores, juegos indie, ROMs homebrew, apps).
+    const r = await llm.json(`Eres NEXUS, curador de contenido de UpGames (mods, ports a Android, emuladores, juegos indie, apps).
 Te paso resultados de varias redes para el pedido del administrador. Evalúa cada uno y devuelve SOLO JSON:
 {"resumen":"2-3 frases: qué hay, qué destaca y qué tendencia ves","resultados":[{"i":0,"relevancia":0-100,"tipo":"${TIPOS.join('|')}","nota":"por qué sirve, máx 14 palabras"}],"ideas":["oportunidad concreta para UpGames", "..."]}
 Reglas: relevancia alta solo si responde EXACTAMENTE al pedido. Baja la relevancia a spam, clickbait, estafas ("gratis 100% real", "hack de monedas"), piratería de juegos de pago y contenido viejo o repetido.

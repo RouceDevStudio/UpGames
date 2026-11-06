@@ -16,7 +16,7 @@
 
 const llm = require('./llm');
 
-const CATEGORIAS = ['Juego', 'ROM', 'Mod', 'Apps', 'Software', 'Ajustes', 'Optimizacion', 'Video'];
+const CATEGORIAS = ['Juego', 'Mod', 'Apps', 'Software', 'Ajustes', 'Optimizacion', 'Video'];
 const PLATAFORMAS = ['Android', 'PC', 'iOS', 'PlayStation', 'Xbox', 'Nintendo Switch'];
 const ORDENES = ['relevancia', 'descargas', 'recientes', 'likes'];
 const VISIBLE = { status: 'aprobado', linkStatus: { $in: ['online', 'revision'] } };
@@ -44,7 +44,6 @@ function porReglas(q) {
     const s = norm(q);
     const f = { categoria: null, plataforma: null, terminos: [], ramMaxGB: null, tamanoMaxGB: null, orden: 'relevancia' };
     if (/\bvideos?\b|tutorial|gameplay/.test(s)) f.categoria = 'Video';
-    else if (/\broms?\b|\biso\b|psp|ps2|ps1|psx|nintendo ds|\bnds\b|\bgba\b|snes|\bn64\b|gamecube|\bwii\b/.test(s)) f.categoria = 'ROM';
     else if (/\bmods?\b|modpack/.test(s)) f.categoria = 'Mod';
     else if (/optimiza|mas fps|\blag\b|rendimiento/.test(s) && !/juego/.test(s)) f.categoria = 'Optimizacion';
     else if (/\bapps?\b|aplicacion|emulador/.test(s)) f.categoria = 'Apps';
@@ -94,7 +93,7 @@ async function interpretar(q, { conIA = true } = {}) {
     const reglas = porReglas(consulta);
     let r = { filtros: reglas, fuente: null };
     if (conIA && esFrase(consulta) && llm.disponible()) {
-        const ia = await llm.json(`Eres NEXUS, el buscador de UpGames (juegos, ROMs homebrew, mods, apps, software, herramientas, optimizaciones y videos).
+        const ia = await llm.json(`Eres NEXUS, el buscador de UpGames (juegos, mods, apps, software, herramientas, optimizaciones y videos).
 Convierte lo que escribe el usuario en filtros. Devuelve SOLO JSON:
 {"categoria": ${JSON.stringify(CATEGORIAS)} o null, "plataforma": ${JSON.stringify(PLATAFORMAS)} o null, "terminos": ["..."], "ramMaxGB": número o null, "tamanoMaxGB": número o null, "orden": ${JSON.stringify(ORDENES)}, "explicacion": "frase corta de lo que entendiste"}
 Reglas:
@@ -184,7 +183,7 @@ async function buscar(f, { Juego }) {
 
 /** Texto corto de lo entendido, para la barra ("Juegos · Android · ≤ 3 GB RAM · racing, f1…") */
 function resumen(f) {
-    const CAT = { Juego: 'Juegos', ROM: 'ROMs', Mod: 'Mods', Apps: 'Apps', Software: 'Software', Ajustes: 'Herramientas', Optimizacion: 'Optimización', Video: 'Videos' };
+    const CAT = { Juego: 'Juegos', Mod: 'Mods', Apps: 'Apps', Software: 'Software', Ajustes: 'Herramientas', Optimizacion: 'Optimización', Video: 'Videos' };
     const p = [];
     if (f.categoria) p.push(CAT[f.categoria]);
     if (f.plataforma) p.push(f.plataforma);

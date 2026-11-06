@@ -21,7 +21,7 @@ function slug(t) {
 const archivo = it => `${slug(it.title)}-${it.id}.html`;
 const urlPagina = it => `${SITIO}/p/${archivo(it)}`;
 
-const CAT = { Juego: 'Juego', Mod: 'Mod', Apps: 'App', Software: 'Software', Ajustes: 'Herramienta', Optimizacion: 'Optimización', ROM: 'ROM', Video: 'Video' };
+const CAT = { Juego: 'Juego', Mod: 'Mod', Apps: 'App', Software: 'Software', Ajustes: 'Herramienta', Optimizacion: 'Optimización', Video: 'Video' };
 const esImg = u => /^https:\/\//i.test(u || '') && !/\.(mp4|webm|mov|m4v|avi|3gp|3g2|mkv|ogv|mpe?g|wmv|flv)(\?|$)|\/video\/upload\//i.test(u);
 
 /** HTML completo de la página de una publicación. */
@@ -41,7 +41,7 @@ function pagina(it) {
         interactionStatistic: { '@type': 'InteractionCounter', interactionType: { '@type': 'WatchAction' }, userInteractionCount: vistas },
     } : {
         '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: it.title, description: corta, image: img, url,
-        applicationCategory: ['Juego', 'ROM', 'Mod'].includes(it.category) ? 'GameApplication' : 'UtilitiesApplication',
+        applicationCategory: ['Juego', 'Mod'].includes(it.category) ? 'GameApplication' : 'UtilitiesApplication',
         operatingSystem: 'Windows, Android', offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' }, author: { '@type': 'Person', name: '@' + it.usuario }, datePublished: it.fecha,
     };
     const migas = { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [

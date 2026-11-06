@@ -88,7 +88,7 @@ const ytId = u => (String(u || '').match(/(?:youtu\.be\/|youtube\.com\/(?:watch\
 
 async function opinionIA({ ia, item, hechos }) {
     const contexto = hechos.map(h => `- [${h.tipo.toUpperCase()}] ${h.texto}`).join('\n').slice(0, 3500);
-    const sistema = 'Eres NEXUS, el moderador de UpGames (plataforma de mods, juegos indie, ROMs homebrew, apps y videos). Recomiendas al administrador si APROBAR, REVISAR o RECHAZAR una publicación. Basa tu juicio en los HECHOS verificados que te doy (son fiables) y en el contenido. Rechaza piratería de juegos comerciales, enlaces rotos, spam o engaños. Responde SOLO JSON: {"decision":"aprobar|revisar|rechazar","confianza":0-1,"razones":["..."],"sugerencias":["..."],"riesgo_spam":0-1,"riesgo_malware":0-1,"calidad_estimada":0-10,"resumen":"una frase"}';
+    const sistema = 'Eres NEXUS, el moderador de UpGames (plataforma de mods, juegos indie, apps y videos). Recomiendas al administrador si APROBAR, REVISAR o RECHAZAR una publicación. Basa tu juicio en los HECHOS verificados que te doy (son fiables) y en el contenido. Rechaza piratería de juegos comerciales, enlaces rotos, spam o engaños. Responde SOLO JSON: {"decision":"aprobar|revisar|rechazar","confianza":0-1,"razones":["..."],"sugerencias":["..."],"riesgo_spam":0-1,"riesgo_malware":0-1,"calidad_estimada":0-10,"resumen":"una frase"}';
     const usuario = `PUBLICACIÓN\nTítulo: ${item.title}\nCategoría: ${item.category}\nEtiquetas: ${(item.tags || []).join(', ') || '(ninguna)'}\nDescripción: ${String(item.description || '').slice(0, 1500) || '(vacía)'}\nEnlace: ${item.link}\n\nHECHOS VERIFICADOS\n${contexto}`;
     const a = await ia.json(sistema, usuario, { maxTokens: 700 });
     if (!a || !['aprobar', 'revisar', 'rechazar'].includes(a.decision)) return null;

@@ -370,9 +370,6 @@ function getTileExtras(item) {
   if(cat === 'Juego') {
     if(ex.plataforma) badges.push({ icon:'desktop-outline', text: ex.plataforma });
     if(ex.size)       badges.push({ icon:'archive-outline',  text: ex.size });
-  } else if(cat === 'ROM') {
-    if(ex.consola) badges.push({ icon:'disc-outline', text: ex.consola });
-    if(ex.region)  badges.push({ icon:'globe-outline', text: ex.region.replace(/\s*\(.*\)/,'') });
   } else if(cat === 'Mod') {
     if(ex['juego-base']) badges.push({ icon:'game-controller-outline', text: ex['juego-base'] });
     if(ex.version)       badges.push({ icon:'git-branch-outline', text: 'v' + ex.version });
@@ -402,7 +399,7 @@ function getTileExtras(item) {
 }
 
 // Nombre visible de cada categoría (el valor guardado en la BD no cambia)
-const CAT_LABEL = { Ajustes:'Herramientas', Optimizacion:'Optimización', Juego:'Juego', ROM:'ROM', Mod:'Mod', Apps:'App', Software:'Software', Video:'Video' };
+const CAT_LABEL = { Ajustes:'Herramientas', Optimizacion:'Optimización', Juego:'Juego', Mod:'Mod', Apps:'App', Software:'Software', Video:'Video' };
 const catLabel = c => CAT_LABEL[c] || c || 'General';
 
 // ── SERIES POR PARTES ─────────────────────────────────────
@@ -1003,7 +1000,7 @@ function ugSeo(item) {
     ugMeta('property', 'og:title', `${item.title} | UpGames`); ugMeta('property', 'og:description', desc);
     ugMeta('property', 'og:image', img); ugMeta('property', 'og:url', url); ugMeta('property', 'og:type', 'website');
     ugMeta('name', 'twitter:card', 'summary_large_image');
-    const tipo = item.category === 'Video' ? 'VideoObject' : (['Juego', 'ROMs'].includes(item.category) ? 'VideoGame' : 'SoftwareApplication');
+    const tipo = item.category === 'Video' ? 'VideoObject' : (item.category === 'Juego' ? 'VideoGame' : 'SoftwareApplication');
     const datos = { '@context': 'https://schema.org', '@type': tipo, name: item.title, description: desc, image: img, url,
       author: { '@type': 'Person', name: item.usuario, url: `https://upgames.games/public/perfil-publico.html?usuario=${encodeURIComponent(item.usuario)}` },
       ...(item.createdAt ? { datePublished: item.createdAt } : {}),
@@ -2125,17 +2122,6 @@ const CAT_CONFIG = {
         options:['PC','Android','iOS','PlayStation','Xbox','Nintendo Switch','Multi-plataforma'] },
       { id:'pf-ex-size', label:'Tamaño del archivo', type:'text', placeholder:'Ej: 25 GB' },
       { id:'pf-ex-requisitos', label:'Requisitos mínimos (opcional)', type:'textarea', placeholder:'CPU, RAM, GPU...' },
-    ]
-  },
-  ROM: {
-    icon: 'disc', label: 'SUBIR ROM',
-    extras: [
-      { id:'pf-ex-consola', label:'Consola / Sistema', type:'select',
-        options:['NES','SNES','Nintendo 64','GameCube','Wii','Game Boy / Color','Game Boy Advance','Nintendo DS','Nintendo 3DS',
-          'PlayStation 1','PlayStation 2','PSP','Sega Genesis / Mega Drive','Sega Dreamcast','Arcade (MAME)','Homebrew','Otra'] },
-      { id:'pf-ex-region', label:'Región', type:'select', options:['USA (NTSC-U)','Europa (PAL)','Japón (NTSC-J)','Multi-región'] },
-      { id:'pf-ex-emulador', label:'Emulador recomendado (opcional)', type:'text', placeholder:'Ej: RetroArch, PPSSPP, Dolphin...' },
-      { id:'pf-ex-size', label:'Tamaño', type:'text', placeholder:'Ej: 8 MB' },
     ]
   },
   Mod: {
@@ -3548,7 +3534,7 @@ function ecoRenderLeaderboard(items) {
   const sorted = [...items].sort((a, b) => (b.descargasEfectivas || 0) - (a.descargasEfectivas || 0)).slice(0, 5);
   const maxDl  = sorted[0]?.descargasEfectivas || 1;
   const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
-  const catColor = c => ({ Juego:'var(--g)', Mod:'#ff9800', Apps:'var(--cy)', Video:'#ff4c8b', Software:'#a78bfa', Ajustes:'#ffd700', Optimizacion:'#ff6b6b', ROM:'#fd79a8' }[c] || '#888');
+  const catColor = c => ({ Juego:'var(--g)', Mod:'#ff9800', Apps:'var(--cy)', Video:'#ff4c8b', Software:'#a78bfa', Ajustes:'#ffd700', Optimizacion:'#ff6b6b' }[c] || '#888');
 
   el.innerHTML = sorted.map((item, i) => {
     const dl  = item.descargasEfectivas || 0;
@@ -3614,7 +3600,7 @@ function ecoRenderCategories(items) {
   items.forEach(i => { const c = i.category || i.categoria || 'Otro'; cats[c] = (cats[c] || 0) + 1; });
   const total  = items.length;
   const sorted = Object.entries(cats).sort((a, b) => b[1] - a[1]);
-  const colors = { Juego:'var(--g)', Mod:'#ff9800', Apps:'var(--cy)', Video:'#ff4c8b', Software:'#a78bfa', Ajustes:'#ffd700', Optimizacion:'#ff6b6b', ROM:'#fd79a8' };
+  const colors = { Juego:'var(--g)', Mod:'#ff9800', Apps:'var(--cy)', Video:'#ff4c8b', Software:'#a78bfa', Ajustes:'#ffd700', Optimizacion:'#ff6b6b' };
 
   el.innerHTML = sorted.map(([cat, count]) => {
     const pct = Math.round(count / total * 100);
@@ -3701,8 +3687,8 @@ function ecoRenderContentTable(items) {
 
   const sorted = [...items].sort((a, b) => (b.descargasEfectivas || 0) - (a.descargasEfectivas || 0));
   const maxDl  = sorted[0]?.descargasEfectivas || 1;
-  const colors = { Juego:'var(--g)', Mod:'#ff9800', Apps:'var(--cy)', Video:'#ff4c8b', Software:'#a78bfa', Ajustes:'#ffd700', Optimizacion:'#ff6b6b', ROM:'#fd79a8' };
-  const catShort = c => ({ Juego:'JUG', Mod:'MOD', Apps:'APP', Video:'VID', Software:'SW', Ajustes:'HER', Optimizacion:'OPT', ROM:'ROM' }[c] || ugEsc(String(catLabel(c)).slice(0, 3).toUpperCase()));
+  const colors = { Juego:'var(--g)', Mod:'#ff9800', Apps:'var(--cy)', Video:'#ff4c8b', Software:'#a78bfa', Ajustes:'#ffd700', Optimizacion:'#ff6b6b' };
+  const catShort = c => ({ Juego:'JUG', Mod:'MOD', Apps:'APP', Video:'VID', Software:'SW', Ajustes:'HER', Optimizacion:'OPT' }[c] || ugEsc(String(catLabel(c)).slice(0, 3).toUpperCase()));
 
   el.innerHTML = `
     <div class="eco-table-header">
@@ -4739,7 +4725,7 @@ document.querySelectorAll('.nav-nexus, #nxFab').forEach(b => b.addEventListener(
 // pistas puntuales (upgames-guia.js).
 const TUT_STEPS = [
   { sel: '#buscador', title: '🔍 Busca lo que quieras', body: 'Escribe el nombre de un juego, mod, app o creador: los resultados aparecen mientras escribes.' },
-  { sel: '#category-row', title: '🏷️ Filtra por categoría', body: 'Juegos, ROMs, mods, apps, software y videos. Desliza para ver más.' },
+  { sel: '#category-row', title: '🏷️ Filtra por categoría', body: 'Juegos, mods, apps, software y videos. Desliza para ver más.' },
   { sel: '.game-tile', title: '📦 Abre una publicación', body: 'Toca una tarjeta para ver su detalle: portada, descripción, comentarios y el botón para <strong>descargar</strong>.' },
   { sel: '#hdr-uc, #hdr-entrar', title: '🪙 Tus UpCoins', body: 'La moneda de UpGames. Tócala para recargar y úsala en lives, NEXUS, Premium y el estilo de tu perfil. Si aún no tienes cuenta, aquí entras.' },
   { sel: '#hdr-orb', title: '✨ Menú rápido', body: 'Avisos, lives, subir contenido, Premium y soporte, desplegados en círculo.' },

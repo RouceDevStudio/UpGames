@@ -10,16 +10,16 @@
     </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#0A0B0F">
-<title>UpGames — Descarga juegos, ROMs, mods y apps gratis</title>
-<meta name="description" content="Catálogo gratuito de juegos, ROMs, mods, apps, software y videos compartidos por la comunidad. Mira y descarga sin registrarte; crea una cuenta para comentar, seguir creadores, ver lives y ganar dinero con tus aportes.">
+<title>UpGames — Descarga juegos, mods y apps gratis</title>
+<meta name="description" content="Catálogo gratuito de juegos, mods, apps, software y videos compartidos por la comunidad. Mira y descarga sin registrarte; crea una cuenta para comentar, seguir creadores, ver lives y ganar dinero con tus aportes.">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <link rel="canonical" href="https://upgames.games/public/biblioteca.html">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="UpGames">
 <meta property="og:locale" content="es_LA">
 <meta property="og:url" content="https://upgames.games/public/biblioteca.html">
-<meta property="og:title" content="UpGames — Juegos, ROMs, mods y apps gratis">
-<meta property="og:description" content="Catálogo gratuito de juegos, ROMs, mods, apps y videos compartidos por la comunidad.">
+<meta property="og:title" content="UpGames — Juegos, mods y apps gratis">
+<meta property="og:description" content="Catálogo gratuito de juegos, mods, apps y videos compartidos por la comunidad.">
 <meta property="og:image" content="https://upgames.games/public/og-cover.png">
 <meta name="twitter:card" content="summary_large_image">
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite","name":"UpGames","url":"https://upgames.games/public/biblioteca.html","inLanguage":"es","potentialAction":{"@type":"SearchAction","target":"https://upgames.games/public/biblioteca.html?q={search_term_string}","query-input":"required name=search_term_string"}}</script>
@@ -29,9 +29,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
 <link rel="stylesheet" href="biblioteca.css?v=20261106b">
-<link rel="stylesheet" href="upgames-glass.css?v=20261029i">
+<link rel="stylesheet" href="upgames-glass.css?v=20261107e">
 <link rel="stylesheet" href="upgames-estilo.css?v=20261106d">
-<link rel="stylesheet" href="upgames-cyber.css?v=20261106f">
+<link rel="stylesheet" href="upgames-cyber.css?v=20261107e">
 <link rel="stylesheet" href="upgames-videos.css?v=20261107c">
 <script src="upgames-tema.js?v=20261106d"></script>
 <script src="upgames-musica.js?v=20261106e" defer></script>
@@ -68,7 +68,7 @@
   <div class="hdr-logo"><span class="up">UP</span><span class="gm">GAMES</span></div>
   <div class="search-bar">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-    <input type="text" id="buscador" placeholder="Buscar juegos, ROMs, mods, apps, videos..." autocomplete="off">
+    <input type="text" id="buscador" placeholder="Buscar juegos, mods, apps, videos..." autocomplete="off">
     <div id="autocomplete-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#1a1a28;border:1px solid rgba(50,213,131,.2);border-radius:0 0 12px 12px;z-index:1000;max-height:280px;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.5)"></div>
   </div>
   <div class="hdr-actions">
@@ -117,7 +117,6 @@
   <button class="chip active" data-cat="">Todos</button>
   <button class="chip chip--video" data-cat="Video">▶ Video</button>
   <button class="chip" data-cat="Juego">Juegos</button>
-  <button class="chip" data-cat="ROM">ROMs</button>
   <button class="chip" data-cat="Mod">Mod</button>
   <button class="chip" data-cat="Apps">Apps</button>
   <button class="chip" data-cat="Ajustes">Herramientas</button>
@@ -226,7 +225,7 @@
       <!-- Publicar: botón desplegable con todo el formulario -->
       <button type="button" class="pf2-create" id="pf-create-btn" onclick="pfTogglePublish()" aria-expanded="false" aria-controls="pf-publish-wrap">
         <span class="pf2-create-ico"><ion-icon name="add"></ion-icon></span>
-        <span class="pf2-create-txt"><b>Crear publicación</b><small>Juego, ROM, mod, app, software o video</small></span>
+        <span class="pf2-create-txt"><b>Crear publicación</b><small>Juego, mod, app, software o video</small></span>
         <ion-icon name="chevron-down" class="pf2-chev"></ion-icon>
       </button>
     </div>
@@ -241,10 +240,6 @@
           <button class="pf-cat-btn active" data-cat="Juego" onclick="pfOnCategoryChange('Juego',this)">
             <ion-icon name="game-controller"></ion-icon>
             <span>Juego</span>
-          </button>
-          <button class="pf-cat-btn" data-cat="ROM" onclick="pfOnCategoryChange('ROM',this)">
-            <ion-icon name="disc"></ion-icon>
-            <span>ROM</span>
           </button>
           <button class="pf-cat-btn" data-cat="Mod" onclick="pfOnCategoryChange('Mod',this)">
             <ion-icon name="construct"></ion-icon>
@@ -1219,7 +1214,7 @@
         <div class="pfp-paso-h"><span>1</span><b>Categoría</b></div>
         <div class="pf-cat-grid pfe-cat-grid" id="pf-edit-cat-grid">
           <button type="button" class="pf-cat-btn" data-cat="Juego" onclick="pfEditCategoria('Juego')"><ion-icon name="game-controller"></ion-icon><span>Juego</span></button>
-          <button type="button" class="pf-cat-btn" data-cat="ROM" onclick="pfEditCategoria('ROM')"><ion-icon name="disc"></ion-icon><span>ROM</span></button>
+          
           <button type="button" class="pf-cat-btn" data-cat="Mod" onclick="pfEditCategoria('Mod')"><ion-icon name="construct"></ion-icon><span>Mod</span></button>
           <button type="button" class="pf-cat-btn" data-cat="Apps" onclick="pfEditCategoria('Apps')"><ion-icon name="phone-portrait"></ion-icon><span>Apps</span></button>
           <button type="button" class="pf-cat-btn" data-cat="Software" onclick="pfEditCategoria('Software')"><ion-icon name="code-slash"></ion-icon><span>Software</span></button>
@@ -1375,8 +1370,6 @@
           <p>Juegos completos distribuidos legalmente (código abierto, desarrollador original, dominio público, o con permiso expreso).</p></div>
         <div class="pf-cat-info"><h4><ion-icon name="construct"></ion-icon> MOD</h4>
           <p>Modificaciones de juegos existentes (texturas, gameplay, personajes, etc.)</p></div>
-        <div class="pf-cat-info"><h4><ion-icon name="disc"></ion-icon> ROMS</h4>
-          <p>Juegos retro para emulador (NES, SNES, N64, GBA, PS1, PSP…). Solo homebrew, dominio público, ROMs con licencia libre o con autorización del titular.</p></div>
         <div class="pf-cat-info"><h4><ion-icon name="speedometer"></ion-icon> OPTIMIZACIÓN</h4>
           <p>Mejoras de rendimiento, configuraciones optimizadas, parches de FPS.</p></div>
         <div class="pf-cat-info"><h4><ion-icon name="settings"></ion-icon> AJUSTES</h4>
@@ -1388,7 +1381,6 @@
         <div class="pf-warning-box">
           <h4><ion-icon name="warning"></ion-icon> IMPORTANTE</h4>
           <p><strong>Categoría "Juego":</strong> Solo si eres el desarrollador original o tienes autorización legal. Redistribuir juegos de terceros sin permiso puede violar derechos de autor.</p>
-          <p style="margin-top:6px"><strong>Categoría "ROM":</strong> Indexa solo ROMs homebrew, de dominio público o que tengas derecho a compartir. Las ROMs comerciales con derechos vigentes serán retiradas ante cualquier reclamación (Notice &amp; Takedown).</p>
         </div>
       </div>
     </div>
@@ -1601,7 +1593,7 @@
         <p class="obh-sub">Lo que hoy haces en <b>seis apps distintas</b>, aquí está unido, conectado… <b>y te paga.</b></p>
 
         <div class="obh-fusion" role="list">
-          <div class="obh-app" role="listitem" style="--i:0"><span>📚</span><b>Descargas</b><small>Juegos, mods, ROMs y apps</small></div>
+          <div class="obh-app" role="listitem" style="--i:0"><span>📚</span><b>Descargas</b><small>Juegos, mods y apps</small></div>
           <div class="obh-app" role="listitem" style="--i:1"><span>▶️</span><b>Videos</b><small>De creadores reales</small></div>
           <div class="obh-app" role="listitem" style="--i:2"><span>🔴</span><b>Lives</b><small>Con chat, regalos y Super Chat</small></div>
           <div class="obh-app" role="listitem" style="--i:3"><span>👥</span><b>Red social</b><small>Perfiles, seguidores y chat</small></div>
@@ -1645,7 +1637,7 @@
         <h2 class="ob-title-sm">Lo esencial,<br><span class="ob-accent-g">en 30 segundos.</span></h2>
         <div class="ob-rules">
           <div class="ob-rule"><span class="ob-rule-num" style="background:rgba(90,200,250,.1);border-color:rgba(90,200,250,.3);color:var(--cy)">📚</span>
-            <div><strong>La biblioteca son referencias.</strong> Juegos, ROMs, mods y apps los indexa la comunidad: UpGames no almacena esos archivos. Nada de piratería de juegos de pago ni malware.</div></div>
+            <div><strong>La biblioteca son referencias.</strong> Juegos, mods y apps los indexa la comunidad: UpGames no almacena esos archivos. Nada de piratería de juegos de pago ni malware.</div></div>
           <div class="ob-rule"><span class="ob-rule-num" style="background:rgba(255,200,0,.1);border-color:rgba(255,200,0,.3);color:#ffc800">▶</span>
             <div><strong>Cada creador responde por lo que publica</strong> (enlaces, videos y lives). Puedes reportar lo que incumpla.</div></div>
           <div class="ob-rule"><span class="ob-rule-num" style="background:rgba(50,213,131,.1);border-color:rgba(50,213,131,.3);color:var(--g)">🛡</span>
@@ -1834,11 +1826,11 @@
 <!-- ION ICONS -->
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
-<script src="script.js?v=20261107d"></script>
+<script src="script.js?v=20261107e"></script>
 <script src="upgames-extras.js?v=20261029i"></script>
 <script src="upgames-social.js?v=20261029i"></script>
 <script src="upgames-guia.js?v=20261029i"></script>
-<script src="upgames-autoinfo.js?v=20261029i"></script>
+<script src="upgames-autoinfo.js?v=20261107e"></script>
 <script src="upgames-nexus-plus.js?v=20261106b"></script>
 <script src="upgames-videos.js?v=20261107c"></script>
 <script src="upgames-motion.js?v=20261106d"></script>

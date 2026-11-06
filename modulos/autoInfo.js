@@ -1,6 +1,6 @@
 /**
  * AUTO-INFO — UpGames
- * Reconoce el título que escribe el usuario al publicar (juego, mod, ROM,
+ * Reconoce el título que escribe el usuario al publicar (juego, mod,
  * app, herramienta…) y devuelve una imagen y una descripción breve.
  *
  * Fuentes (en orden):
@@ -30,7 +30,7 @@ const RUIDO = [
 ];
 
 const PISTA_WIKI = {
-  Juego: 'videojuego', Mod: 'videojuego', Optimizacion: 'videojuego', ROM: 'videojuego',
+  Juego: 'videojuego', Mod: 'videojuego', Optimizacion: 'videojuego',
   Apps: 'aplicación', Software: 'software', Ajustes: 'software'
 };
 
@@ -181,7 +181,7 @@ async function lookup(titulo, categoria = 'Juego') {
     }
     if (!info && categoria === 'Apps') info = await buscarApp(q);
     if (!info) info = await buscarWikipedia(q, categoria);
-    // Steam como último recurso para ROMs / herramientas con nombre de juego
+    // Steam como último recurso para herramientas con nombre de juego
     if (!info && !esJuego) info = await buscarSteam(q);
   } catch (err) {
     logger.warn(`[autoInfo] ${err.message}`);

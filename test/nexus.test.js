@@ -48,7 +48,7 @@ async function test(name, fn) {
     });
     await test('máximo 3 acciones y sin duplicados', async () => {
         const c = ctx(); const { ejecutores: e } = H.crear({}, c);
-        for (const v of ['Juego', 'Juego', 'Mod', 'ROM', 'Apps']) await e.proponer_accion({ tipo: 'filtrar_categoria', valor: v });
+        for (const v of ['Juego', 'Juego', 'Mod', 'Software', 'Apps']) await e.proponer_accion({ tipo: 'filtrar_categoria', valor: v });
         assert.strictEqual(c.salida.acciones.length, 3);
     });
     await test('cuenta y publicaciones exigen sesión', async () => {

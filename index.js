@@ -267,6 +267,13 @@ app.use(cors({
 
 app.use(express.json({ limit: '25mb' }));
 // Los listados públicos no llevan el enlace de descarga (solo la página puente lo entrega): modulos/sinEnlace.js
+// La categoría ROMs ya no existe en UpGames: no se puede publicar ni pasar una publicación a ROM
+const esCategoriaRom = c => /^\s*roms?\s*$/i.test(String(c ?? ''));
+app.use((req, res, next) => {
+    if ((req.method === 'POST' || req.method === 'PUT') && /^\/(admin\/)?items(\/|$)/.test(req.path) && req.body && esCategoriaRom(req.body.category))
+        return res.status(400).json({ success: false, error: 'La categoría ROMs ya no existe en UpGames. Elige otra categoría.', code: 'SIN_ROMS' });
+    next();
+});
 app.use(require('./modulos/sinEnlace').middleware({ usuarioOpcional: req => usuarioOpcional(req) }));
 
 // ========== ENLACES DE DESCARGA PROTEGIDOS ==========
@@ -463,6 +470,9 @@ function emailResetTemplate(usuario, link, codigo) {
 }
 
 mongoose.connect(MONGODB_URI, config.MONGODB_OPTIONS)
+// Las publicaciones que quedaban en la categoría ROM se retiran del catálogo (no se borran: su dueño puede pasarlas a otra categoría)
+.then(() => { mongoose.model('Juego').updateMany({ category: { $regex: /^roms?$/i }, status: { $ne: 'rechazado' } }, { $set: { status: 'rechazado', motivoRechazo: 'La categoría ROMs se eliminó de UpGames. Si tu publicación no es una ROM, edítala y elige otra categoría.' } })
+    .then(r => { if (r.modifiedCount) logger.info(`[roms] ${r.modifiedCount} publicaciones ROM retiradas del catálogo`); }).catch(e => logger.warn(`[roms] ${e.message}`)); })
 .then(() => { logger.info('MONGODB CONECTADO EXITOSAMENTE'); require('./modulos/upcoins').migrar(mongoose.model('Usuario'), logger).catch(e => logger.error(`[upcoins] migración: ${e.message}`)); })
 .catch(err => {
     logger.error(`ERROR CONEXIÓN MONGODB: ${err.message}`);
@@ -2270,6 +2280,8 @@ app.put("/items/:id", verificarToken, [
         const item = await Juego.findById(req.params.id);
         if (!item) return res.status(404).json({ success: false, error: "Publicación no encontrada" });
         if (item.usuario !== req.usuario) return res.status(403).json({ success: false, error: "No tienes permiso para editar esta publicación" });
+        if (esCategoriaRom(item.category) && (req.body.category === undefined || esCategoriaRom(req.body.category)))
+            return res.status(400).json({ success: false, error: 'La categoría ROMs ya no existe en UpGames. Para volver a publicarla, elige otra categoría (Juego, Mod, App…).', code: 'SIN_ROMS' });
         const updates = {};
         CAMPOS_PUBLICACION.forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
         if (Object.keys(updates).length === 0) return res.status(400).json({ success: false, error: "No se enviaron campos para actualizar" });
