@@ -5,6 +5,10 @@ Juego de carreras de monoplazas en 3D que corre en el navegador (WebGL con Three
 - Web: `https://upgames.games/games/monoplaza/`
 - Android: el workflow `APK APEX GP` compila el APK (ver más abajo).
 
+## HUD
+
+Pensado primero para Android en horizontal: la información va en franjas finas pegadas a los bordes y el centro queda libre para ver el coche. Arriba, posición y vuelta con la torre de tiempos corta, el crono con delta y sectores, y el minimapa con los botones de utilidad; abajo, un tablero bajo (marcha, velocidad, LED de revoluciones, neumáticos, ERS y DRS). Los pedales son zonas de toque invisibles con una barra fina de presión; DRS y Adelantar quedan junto al pulgar derecho y los mandos que se tocan poco (ERS, mezcla, freno motor y reparto de frenada) van en el panel **MFD**, que se despliega a un lado del coche y se cierra solo. Si se pulsa un teclado o se conecta un mando, los controles táctiles desaparecen; vuelven al tocar la pantalla.
+
 ## Modos
 
 - **Carrera** contra hasta 21 rivales con IA (11 equipos de 2 coches): semáforo de salida, posiciones, rebufo, DRS con detección a 1 s, contactos, estrategia de boxes y abandonos.

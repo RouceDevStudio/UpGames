@@ -49,6 +49,28 @@ const $ = (s) => document.querySelector(s);
 const esTactil = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 const esMovil = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (esTactil && Math.min(screen.width, screen.height) < 820);
 
+// Teclado o mando físico (Android con teclado Bluetooth o USB, tablet con funda, PC con pantalla
+// táctil): en cuanto se pulsa una tecla o se conecta un mando, fuera los controles táctiles; al
+// volver a tocar la pantalla, vuelven.
+let entradaFisica = false;
+const tactilVisible = () => esTactil && !entradaFisica;
+function ponerEntradaFisica(si) {
+  if (si === entradaFisica) return;
+  entradaFisica = si;
+  document.body.classList.toggle('teclado', si);
+  if (!esTactil) return;
+  document.body.classList.toggle('tactil-on', !si && document.body.classList.contains('jugando'));
+  if (document.body.classList.contains('jugando')) $('#tactil').classList.toggle('visible', !si);
+}
+addEventListener('keydown', (e) => {
+  // (las teclas de un teclado en pantalla escribiendo en un campo no cuentan)
+  if (e.target?.closest?.('input, textarea, select, [contenteditable]')) return;
+  if (e.isComposing || e.key === 'Unidentified' || e.key === 'Process' || e.keyCode === 229) return;
+  ponerEntradaFisica(true);
+}, true);
+addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') ponerEntradaFisica(false); }, true);
+addEventListener('gamepadconnected', () => ponerEntradaFisica(true));
+
 // --- Persistencia ---------------------------------------------------------
 const CLAVE = 'apexgp.v1';
 const AJ_DEF = {
@@ -725,7 +747,7 @@ function arrancarSesion(modo) {
   if (camara.modo === 'orbita') camara.modo = ajustes.camara || 'persecucion';
   ocultarTodo();
   $('#hud').classList.add('visible');
-  if (esTactil) { $('#tactil').classList.add('visible'); document.body.classList.add('tactil-on'); }
+  if (tactilVisible()) { $('#tactil').classList.add('visible'); document.body.classList.add('tactil-on'); }
   aplicarModoControl();
   document.body.classList.add('jugando');
   document.body.classList.toggle('cambio-auto', !!ajustes.cambioAuto);
@@ -1058,6 +1080,15 @@ entrada.conectarTactil({
   atras: $('#bAtras'), recolocar: $('#bRecolocar'),
 });
 document.addEventListener('visibilitychange', () => { if (document.hidden && jugando && !pausado) pausar(true); });
+// panel MFD (ERS, mezcla, freno motor, reparto de frenada): se abre y se cierra con su botón y se
+// cierra solo a los 6 s sin tocarlo, para no tapar la pista
+{
+  const bt = $('#bMfd'), panel = $('#mfd');
+  let tCerrar = 0;
+  const abrir = (si) => { panel.classList.toggle('abierto', si); bt.classList.toggle('abierto', si); bt.setAttribute('aria-expanded', si); clearTimeout(tCerrar); if (si) tCerrar = setTimeout(() => abrir(false), 6000); };
+  bt.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); abrir(!panel.classList.contains('abierto')); });
+  panel.addEventListener('pointerdown', () => { clearTimeout(tCerrar); tCerrar = setTimeout(() => abrir(false), 6000); });
+}
 
 // --- Mensajes ---------------------------------------------------------------
 let tMensaje = 0;
@@ -1752,7 +1783,7 @@ function bucle(ahora) {
     }
     // donuts de celebración: gas a fondo, volante girado (antes de la física)
     if (celebracion?.donuts > 0) { j.mandos.acelerador = 1; j.mandos.freno = 0; j.mandos.direccion = 1; if (j.marcha > 2) j.marcha = 2; }
-    j.mandos.drs = entrada.drs || (j.drsPermitido && esTactil && ajustes.cambioAuto && !entrada.usandoMando);
+    j.mandos.drs = entrada.drs || (j.drsPermitido && tactilVisible() && ajustes.cambioAuto && !entrada.usandoMando);
     // el piloto pulsa el botón del DRS (el alerón) en el volante al abrirlo
     if (j.mandos.drs && j.drsPermitido && !drsPulsado) pulsarVolante(1);
     drsPulsado = !!(j.mandos.drs && j.drsPermitido);
@@ -3068,8 +3099,8 @@ function cerrarRepe() {
   }
   else crearModelos();
   if (desde === 'resultados') mostrar('resultados');
-  else if (desde === 'auto') { ocultarTodo(); $('#hud').classList.add('visible'); if (esTactil) $('#tactil').classList.add('visible'); }
-  else { mostrar('pausa'); $('#hud').classList.add('visible'); if (esTactil) $('#tactil').classList.add('visible'); }
+  else if (desde === 'auto') { ocultarTodo(); $('#hud').classList.add('visible'); if (tactilVisible()) $('#tactil').classList.add('visible'); }
+  else { mostrar('pausa'); $('#hud').classList.add('visible'); if (tactilVisible()) $('#tactil').classList.add('visible'); }
 }
 // ─── Resumen automático: los momentos apuntados durante la carrera ───
 function pintarMarcas() {

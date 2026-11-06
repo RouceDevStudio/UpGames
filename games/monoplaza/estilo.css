@@ -643,9 +643,6 @@ body.en-repe #bCocheNuevo { display: none; }
 .entrevista b { font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; color: #ffd23f; }
 .entrevista span { font-size: 15px; font-style: italic; line-height: 1.35; }
 
-/* botones de energía: rejilla de 2 columnas (DRS/ERS/MIX/OT/EB/BB) */
-#botonesEnergia { display: grid !important; grid-template-columns: repeat(2, auto); grid-auto-flow: row; }
-#tactil.tactil #botonesEnergia { grid-template-columns: repeat(3, auto); }
 .ot-bt .flecha, .ot-bt .flecha2 { fill: rgba(255,255,255,.18); stroke: rgba(255,255,255,.8); stroke-width: 2.2; stroke-linejoin: round; }
 .ot-bt.activo, .ot-bt.on { border-color: #ff3df5; box-shadow: 0 0 14px rgba(255,61,245,.6); }
 .ot-bt.on .flecha, .ot-bt.on .flecha2 { fill: rgba(255,61,245,.55); }
@@ -741,3 +738,127 @@ body.en-repe #bCocheNuevo { display: none; }
   .prev-datos { gap: 5px; } .prev-datos span { padding: 3px 7px; }
   .flujo-pie { padding: 5px 0 6px; } .flujo-pie .btn.grande { min-height: 38px; padding: 7px 16px; font-size: 15px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════════════════
+   HUD PROFESIONAL (móvil primero)
+   Todo lo informativo en franjas finas pegadas a los bordes y el centro de la pantalla libre:
+   ahí va el coche. Arriba: posición/vuelta, crono y minimapa. Abajo: un tablero bajo y estrecho
+   que queda por debajo del coche. Los pedales son zonas de toque invisibles (solo una barra fina
+   de presión) y los mandos del volante que se tocan poco van en el panel desplegable MFD.
+   ═══════════════════════════════════════════════════════════════════════════════════════════ */
+#hud { --vidrio: rgba(7, 10, 17, .58); --vidrio2: rgba(7, 10, 17, .74); --linea: rgba(255, 255, 255, .07); --acento: var(--rojo);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; letter-spacing: .2px; }
+#hud .caja { background: var(--vidrio); border: 0; border-radius: 3px; box-shadow: inset 2px 0 0 var(--acento); padding: 2px 8px 3px; }
+#hud .caja small { font-size: 8px; letter-spacing: 1.6px; font-weight: 700; }
+/* posición y vuelta en una sola franja; la torre de tiempos debajo, corta */
+#hudIzq { top: calc(6px + var(--sa-t)); left: calc(8px + var(--sa-l)); flex-direction: row; flex-wrap: wrap; align-items: stretch; gap: 3px; width: 154px; }
+#hudIzq .caja.pos { padding: 0 8px; align-items: center; }
+#hudIzq .caja.pos span { font-size: 21px; font-weight: 900; font-style: italic; }
+#hudIzq .caja.pos small { font-size: 11px; font-weight: 700; }
+#hudIzq .caja:not(.pos) { justify-content: center; min-width: 52px; }
+#hudIzq .caja:not(.pos) span { font-size: 14px; font-weight: 800; }
+#hud .tabla { flex-basis: 100%; gap: 1px; font-size: 10.5px; }
+#hud .tabla div { background: var(--vidrio); border-radius: 2px; padding: 1px 6px; min-width: 0; height: 17px; align-items: center; }
+#hud .tabla div.yo { background: linear-gradient(90deg, rgba(47,123,255,.62), rgba(47,123,255,.32)); box-shadow: inset 2px 0 0 #fff; }
+#hud .tabla div:nth-child(n+7) { display: none; }
+/* crono, delta y sectores: arriba en el centro, compactos */
+#hudCentro { top: calc(6px + var(--sa-t)); gap: 2px; }
+#hud .tiempo { font-size: 17px; font-weight: 800; background: var(--vidrio); border: 0; border-radius: 3px; padding: 1px 10px; box-shadow: inset 0 -2px 0 var(--linea); }
+#hud .delta { font-size: 11.5px; padding: 0 7px; border-radius: 3px; }
+#hud .sectores { gap: 2px; }
+#hud .sectores i { width: 34px; height: 3px; border-radius: 0; }
+#hud .tiempos-mini { font-size: 10px; background: var(--vidrio); border-radius: 3px; padding: 0 7px; }
+/* minimapa y botones de utilidad arriba a la derecha */
+#hudDer { top: calc(6px + var(--sa-t)); right: calc(8px + var(--sa-r)); gap: 4px; }
+#hud #minimapa { width: 124px; height: 90px; opacity: .9; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
+#hud .caja.tiempos span { font-size: 12px; }
+/* tablero inferior: bajo y estrecho, por debajo del coche */
+#hud #volanteHud { bottom: calc(3px + var(--sa-b)); min-width: 0; padding: 3px 12px 4px; border: 0; border-radius: 8px 8px 4px 4px;
+  background: linear-gradient(180deg, rgba(7,10,17,.35), rgba(7,10,17,.78)); box-shadow: inset 0 1px 0 var(--linea); }
+#hud #leds { gap: 2px; margin-bottom: 2px; }
+#hud #leds i { width: 11px; height: 4px; border-radius: 1px; }
+#hud .vh-fila { gap: 10px; }
+#hud .vh-lado { width: 70px; gap: 2px; }
+#hud .vh-centro { min-width: 64px; }
+#hud .marcha { font-size: 30px; line-height: .9; }
+#hud .vel { font-size: 15px; }
+#hud .mini { font-size: 8px; letter-spacing: .8px; }
+#hud .neum { grid-template-columns: 22px 22px; gap: 2px 4px; padding: 0; }
+#hud .neum i { width: 22px; height: 17px; border-radius: 3px; padding: 0 0 1px; }
+#hud .neum i b { font-size: 8.5px; line-height: 1.25; }
+#hud .neum i s { height: 2px; }
+#hud .ers { width: 64px; height: 5px; border-radius: 1px; }
+#hud .drs { font-size: 9.5px; padding: 0 6px; border-radius: 2px; }
+/* avisos: más pequeños y por encima del coche, sin taparlo */
+#hud .mensaje { top: 17%; font-size: clamp(15px, 3.1vw, 24px); }
+#hud .danos { bottom: calc(62px + var(--sa-b)); }
+#hud .danos i { font-size: 8px; padding: 1px 5px; border-radius: 2px; }
+#hud #semaforo { top: 13%; gap: 7px; padding: 6px 10px; border-radius: 6px; }
+#hud #semaforo i { width: 22px; height: 22px; }
+#hud .bandera { margin-top: 64px; font-size: 12px; padding: 2px 10px; border-radius: 3px; }
+#hud .radio { font-size: 12px; border-radius: 3px; max-width: min(340px, 40vw); }
+#hud .clima-hud { left: calc(170px + var(--sa-l)); font-size: 11px; border-radius: 3px; background: var(--vidrio); }
+body.vista-cabina #hud .danos { bottom: calc(8px + var(--sa-b)); }
+
+/* ── Controles táctiles ── */
+/* pedales: zonas de toque grandes e invisibles; solo una barra fina de presión en el borde interior */
+#tactil .pedal, #tactil.tactil .pedal, #tactil.inclinacion .pedal { background: none !important; border: 0 !important; border-radius: 0; padding: 0;
+  align-items: flex-end; justify-content: center; font-size: 9px; letter-spacing: 2px; color: rgba(255,255,255,.22); }
+#tactil .pedal span { margin-bottom: calc(6px + var(--sa-b)); }
+#tactil .pedal::before { content: ''; position: absolute; bottom: calc(14px + var(--sa-b)); width: 5px; border-radius: 3px; height: 42%;
+  background: rgba(255,255,255,.10); }
+#tactil .pedal::after { content: ''; position: absolute; bottom: calc(14px + var(--sa-b)); width: 5px; border-radius: 3px; height: calc(42% * var(--presion, 0)); }
+#tactil .pedal.acel::before, #tactil .pedal.acel::after { left: 6px; }
+#tactil .pedal.freno::before, #tactil .pedal.freno::after { right: 6px; }
+#tactil .pedal.acel::after { background: var(--verde); box-shadow: 0 0 8px rgba(47,224,122,.7); }
+#tactil .pedal.freno::after { background: var(--rojo); box-shadow: 0 0 8px rgba(255,59,59,.7); }
+#tactil.inclinacion .pedal { height: 58vh; width: 27vw; max-width: none; bottom: 0; }
+#tactil.inclinacion .pedal.acel { right: 0; }
+#tactil.inclinacion .pedal.freno { left: 0; }
+#tactil.tactil .pedal { height: 54vh; width: 15vw; max-width: none; bottom: 0; }
+#tactil.tactil .pedal.acel { right: 0; }
+#tactil.tactil .pedal.freno { right: 15vw; }
+#tactil .pista-volante { font-size: 9px; color: rgba(255,255,255,.22); letter-spacing: 2px; }
+/* botones de utilidad: fila pequeña arriba a la derecha, el minimapa debajo */
+body.tactil-on #botonesSup, #botonesSup { top: calc(6px + var(--sa-t)); right: calc(8px + var(--sa-r)); gap: 4px; }
+body.tactil-on #hudDer { top: calc(42px + var(--sa-t)); }
+#tactil .bt, body.tactil-on #tactil .bt { width: 36px; height: 31px; border-radius: 5px; border: 0; background: rgba(7,10,17,.58); box-shadow: inset 0 -2px 0 rgba(255,255,255,.08); font-size: 13px; }
+#tactil .bt.box { width: 44px; font-size: 11px; letter-spacing: 1px; }
+/* marchas (cambio manual): botones redondos junto a cada pulgar */
+#tactil .bt.marcha-bt { width: 46px; height: 46px; border-radius: 50%; font-size: 20px; }
+#tactil.inclinacion #botonesAccion { bottom: calc(58vh + 8px + var(--sa-b)); right: calc(8px + var(--sa-r)); grid-template-columns: 46px; }
+#tactil.inclinacion #botonesAccion .marcha-bt:first-child { left: calc(8px + var(--sa-l)); bottom: calc(58vh + 8px + var(--sa-b)); width: 46px; }
+#tactil.tactil #botonesAccion { bottom: calc(54vh + 8px + var(--sa-b)); right: calc(8px + var(--sa-r)); grid-template-columns: repeat(2, 46px); }
+/* DRS y Adelantar (OT): redondos, apilados junto al pulgar derecho, fuera del coche */
+#tactil #botonesEnergia, #tactil.tactil #botonesEnergia { display: flex; flex-direction: column-reverse; gap: 6px; align-items: center;
+  bottom: calc(10px + var(--sa-b)); right: calc(27vw + 6px + var(--sa-r)); }
+#tactil.tactil #botonesEnergia { right: calc(30vw + 6px + var(--sa-r)); }
+#tactil .bt.energia, body.tactil-on #tactil .bt.energia { width: 54px !important; height: 54px !important; border-radius: 50%; padding: 2px; gap: 0; border: 2px solid rgba(255,255,255,.16); background: rgba(7,10,17,.6); box-shadow: none; }
+#tactil .bt.energia svg { width: 30px !important; height: 19px !important; }
+#tactil .bt.energia span { font-size: 8.5px; letter-spacing: .8px; }
+/* MFD: botón pequeño y panel desplegable con ERS, mezcla, freno motor y reparto de frenada */
+#tactil .mfd-bt { width: 42px; height: 26px; border-radius: 13px; display: flex; align-items: center; justify-content: center; gap: 3px; font-size: 9px; letter-spacing: 1px; }
+#tactil .mfd-bt i { width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-bottom: 5px solid currentColor; transition: transform .15s; }
+#tactil .mfd-bt.abierto { background: rgba(47,123,255,.65); }
+#tactil .mfd-bt.abierto i { transform: rotate(180deg); }
+#tactil .mfd { position: absolute; right: -4px; bottom: calc(100% + 6px); display: none; grid-template-columns: repeat(2, auto); gap: 6px; padding: 6px; border-radius: 10px; background: rgba(7,10,17,.72); box-shadow: inset 0 0 0 1px rgba(255,255,255,.06); }
+#tactil .mfd.abierto { display: grid; }
+#tactil .mfd .bt.energia { width: 52px !important; height: 52px !important; border-radius: 12px; }
+@media (max-height: 420px) {
+  #hud #volanteHud { transform: translateX(-50%); }
+  #hud #minimapa { width: 108px; height: 78px; }
+  #hud .tiempo { font-size: 16px; }
+  #hud .tabla { display: flex; }
+  #hud .tabla div:nth-child(n+5) { display: none; }
+}
+@media (max-height: 340px) { #hud .tabla { display: none; } #hud #minimapa { width: 92px; height: 66px; } }
+/* PC o tablet con teclado: más espacio, letra algo mayor */
+@media (min-height: 600px) and (pointer: fine) {
+  #hud .tiempo { font-size: 20px; }
+  #hud .marcha { font-size: 36px; } #hud .vel { font-size: 18px; }
+  #hud #minimapa { width: 150px; height: 109px; }
+  #hudIzq { width: 172px; }
+  #hud .tabla { font-size: 11.5px; } #hud .tabla div { height: 19px; }
+}
+/* teclado o mando físico conectado: fuera los controles táctiles */
+body.teclado #tactil { display: none !important; }
