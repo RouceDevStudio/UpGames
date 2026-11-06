@@ -54,7 +54,7 @@ const CLAVE = 'apexgp.v1';
 const AJ_DEF = {
   control: esTactil ? 'inclinacion' : 'tactil', sensibilidad: 1, anguloInclinacion: 24, invertir: false, vibracion: true,
   tc: 2, abs: true, cambioAuto: true, direccion: true, estabilidad: false, trazada: true,
-  calidad: 'auto', fps: false, volumen: 0.8, unidades: 'kmh', camara: 'persecucion', radio: true, ambiente: true, averias: true, repeAuto: true, motorSonido: 'v10',
+  calidad: 'auto', fps: false, volumen: 0.8, unidades: 'kmh', camara: 'persecucion', radio: true, ambiente: true, averias: true, repeAuto: true, halo: true, motorSonido: 'v10',
 };
 const OPC_CARRERA_DEF = { vueltas: 5, rivales: 7, dificultad: 'normal', posSalida: 0, compuesto: 'medio', clima: 'seco', hora: 'dia', formacion: 0, duracion: 0 };
 function cargar() {
@@ -635,7 +635,7 @@ function crearModelos() {
     p.coche.id = k;
     const eq = equipadoDe(p, k);
     const imagen = p.jugador ? (eq.propia ? imagenLibrea : null) : (p.idRed && imagenesRed.get(p.idRed)) || null;
-    const m = crearModelo({ equipo: p.equipo, equipado: eq, imagen, compuesto: p.coche.reglaje.compuesto, calidad, cabina: p.jugador });
+    const m = crearModelo({ equipo: p.equipo, equipado: eq, imagen, compuesto: p.coche.reglaje.compuesto, calidad, cabina: p.jugador, halo: ajustes.halo !== false });
     m.luzTrasera = () => escenario?.hora === 'noche' || (sesion?.clima?.lluvia || 0) > 0.05;
     m.aguaPista = () => sesion?.clima?.agua || 0;
     // piezas que se desprenden en los choques
@@ -977,7 +977,10 @@ function pintarAjustes() {
       });
     } else if (el.type === 'checkbox') {
       el.checked = !!ajustes[k];
-      el.onchange = () => { ajustes[k] = el.checked; guardar(); };
+      el.onchange = () => {
+        ajustes[k] = el.checked; guardar();
+        if (k === 'halo') for (const m of modelos) m.ponerHalo?.(el.checked);   // al momento, en todos los coches
+      };
     } else if (el.type === 'range') {
       el.value = ajustes[k];
       const val = el.parentElement.querySelector('.valor');

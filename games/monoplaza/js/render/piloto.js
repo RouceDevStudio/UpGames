@@ -183,6 +183,8 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
     cabezaG: { x: 0, vx: 0, z: 0, vz: 0 },   // inclinación de la cabeza (la usa la cámara de cabina)
     mirada: 0,
     saludo: 0, _saludar: false, glb: null,
+    /** La cámara de cabina va dentro del casco: ahí el casco no se dibuja. */
+    verCabeza(si) { cabeza.visible = si; this.glb?.verCabeza(si); },
     /** Cambia el piloto procedural por el modelo 3D aparejado (se siguen usando sus cálculos). */
     usarGLB(p) {
       if (this.glb) return;
@@ -271,6 +273,8 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
         if (p.tipo === 'leva') despl.set(0.012 * u, 0.01 * u, -lado * 0.012 * u);
         else despl.set(-0.04 * u, 0.012 * u, -lado * 0.03 * u);
         agarre.set(-0.028 + despl.x, despl.y, lado * 0.127 + despl.z).applyAxisAngle(_x, angVol).applyAxisAngle(_z, columna.rotation.z).add(columna.position);
+        // (la columna está en coordenadas de la carrocería; el piloto puede ir desplazado y escalado)
+        agarre.sub(grupo.position).divideScalar(grupo.scale.x);
         // cruzados: cada mano al hombro contrario, una algo por encima de la otra
         pecho.set(0.13 + s * 0.02, 0.63 + s * 0.035, -lado * 0.1);
         T.copy(agarre).lerp(pecho, choque.soltar);

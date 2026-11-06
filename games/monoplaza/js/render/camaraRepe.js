@@ -15,13 +15,13 @@ export const NOMBRES_REPE = {
 const PLANOS_DIRECTOR = [['tv', 6], ['grua', 5], ['cable', 5], ['lateral', 5], ['suelo', 4], ['dron', 6], ['rueda', 4], ['ruedaTras', 4], ['helicoptero', 5], ['persecucion', 5], ['morro', 4], ['trasera', 4], ['cara', 3.5]];
 // cámaras fijadas a la carrocería: posición y punto al que miran en ejes del coche (x adelante, y arriba, z lateral)
 const MONTADAS = {
-  // (coordenadas del coche escaneado: el morro está a 0,51 m en x = 2,55; el pontón, a 0,63 m)
-  morro: { pos: [2.55, 0.58, 0], mira: [40, 0.25, 0], fov: 70 },
+  // (coordenadas de la carrocería: el morro está a 0,35 m en x = 2,55; el pontón, a 0,61 m)
+  morro: { pos: [2.55, 0.44, 0], mira: [40, 0.22, 0], fov: 70 },
   // sobre el pontón mirando hacia delante: la rueda delantera girando y la suspensión
   rueda: { pos: [0.35, 0.74, 0.6], mira: [30, 0.15, 0.75], fov: 62 },
   trasera: { pos: [-2.62, 1.16, 0], mira: [6, 0.55, 0], fov: 58 },
   // en el lateral del pontón mirando hacia atrás: la rueda trasera, el difusor y lo que viene detrás
-  ruedaTras: { pos: [-0.3, 0.72, 0.62], mira: [-30, 0.05, 1.2], fov: 64 },
+  ruedaTras: { pos: [-0.3, 0.6, 0.6], mira: [-30, 0.05, 1.2], fov: 64 },
 };
 const _v = new THREE.Vector3(), _m = new THREE.Vector3(), _up = new THREE.Vector3();
 

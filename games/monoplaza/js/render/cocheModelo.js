@@ -8,8 +8,6 @@ import { texturaCarbono } from './texturas.js';
 import { proyectarUV, dibujarLibrea, materialLibrea } from './librea.js';
 import { normalPliegues } from './personas.js';
 import { crearPiloto } from './piloto.js';
-import { PilotoGLB, cargarPilotoGLB, pilotoGLBListo, VOLANTE_GLB, cargarVolanteGLB, volanteGLBListo } from './pilotoGLB.js';
-import { cargarCocheGLB, cocheGLBListo, materialCocheGLB, RUEDAS_GLB } from './cocheGLB.js';
 import { geoNeumatico, matFlanco, texturaLlanta, mascaraBrilloLlanta, aroLlanta, dibujoBanda, LLANTA, HUNDIDO } from './neumatico3D.js';
 
 const A = COCHE.wheelbase * (1 - COCHE.repartoDel); // eje delantero
@@ -143,7 +141,9 @@ function loftS(secciones, segs = 24) {
       const t = j / anillo * Math.PI * 2;
       const c = Math.cos(t), sn = Math.sin(t);
       const n = sn >= 0 ? s.n : s.nb;
-      pos.push(s.x, yc + h * Math.sign(sn) * Math.pow(Math.abs(sn), 2 / n), s.z + s.w * Math.sign(c) * Math.pow(Math.abs(c), 2 / n));
+      // rebaje (s.cut): la mitad de abajo se mete hacia el centro del coche, más cuanto más abajo
+      const rebaje = sn < 0 && s.cut ? -Math.sign(s.z || 1) * s.cut * Math.pow(-sn, 1.4) : 0;
+      pos.push(s.x, yc + h * Math.sign(sn) * Math.pow(Math.abs(sn), 2 / n), s.z + s.w * Math.sign(c) * Math.pow(Math.abs(c), 2 / n) + rebaje);
     }
   }
   for (let k = 0; k < secciones.length - 1; k++) {
@@ -316,7 +316,8 @@ const texturaBrilloLlanta = () => (_brilloLlanta ||= mascaraBrilloLlanta());
 
 const cacheMat = new Map();
 const CREAR_MAT = {
-  carbono: () => new THREE.MeshStandardMaterial({ map: texturaCarbono(), roughness: 0.38, metalness: 0.3, color: 0x9a9a9a }),
+  // fibra de carbono barnizada: el tejido se ve y la capa de barniz da reflejos
+  carbono: () => new THREE.MeshPhysicalMaterial({ map: texturaCarbono(), roughness: 0.42, metalness: 0.25, color: 0xd2d2d2, clearcoat: 0.9, clearcoatRoughness: 0.12 }),
   negro: () => new THREE.MeshStandardMaterial({ color: 0x0a0a0b, roughness: 0.6 }),
   metal: () => new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.25, metalness: 1 }),
   goma: () => new THREE.MeshStandardMaterial({ color: 0x161616, roughness: 0.88, metalness: 0 }),
@@ -622,159 +623,157 @@ export function crearModelo(opc) {
   let forroCabina = null;
   const piezas = [];
 
-  // ── Carrocería de un monoplaza de efecto suelo (secciones medidas sobre un coche real) ──
-  // Monocasco, morro y cubierta motor: [x, semiancho, alto arriba, alto abajo, forma arriba, forma abajo]
-  const S = (x, w, yt, yb, n = 3, nb = 2.4, z = 0) => ({ x, w, yt, yb, n, nb, z });
-  const morro = [
-    S(3.06, 0.030, 0.245, 0.195, 2, 2), S(3.00, 0.055, 0.262, 0.172, 2.3, 2.2), S(2.86, 0.078, 0.287, 0.160, 2.6, 2.4),
-    S(2.62, 0.098, 0.322, 0.160, 2.8, 2.6), S(2.32, 0.120, 0.368, 0.168, 3.0, 2.8), S(2.02, 0.142, 0.425, 0.180, 3.2, 3.0),
-    S(1.72, 0.168, 0.490, 0.188, 3.4, 3.2), S(1.42, 0.198, 0.555, 0.186, 3.6, 3.4), S(1.12, 0.228, 0.612, 0.176, 3.8, 3.6),
-    S(0.86, 0.254, 0.648, 0.162, 4.0, 3.8), S(0.68, 0.270, 0.655, 0.150, 4.2, 4.0),
-    // habitáculo: el techo baja (asiento) y los lados quedan como bordes
-    S(0.60, 0.278, 0.600, 0.142, 4.4, 4.0), S(0.30, 0.292, 0.600, 0.128, 4.4, 4.0), S(0.02, 0.300, 0.605, 0.122, 4.4, 4.0),
-    S(-0.06, 0.300, 0.700, 0.122, 4.2, 4.0),
-    S(-0.30, 0.282, 0.768, 0.128, 3.6, 3.6), S(-0.62, 0.238, 0.735, 0.142, 3.2, 3.4), S(-0.95, 0.188, 0.655, 0.160, 3.0, 3.0),
-    S(-1.28, 0.145, 0.565, 0.178, 2.8, 2.8), S(-1.60, 0.110, 0.480, 0.192, 2.6, 2.6), S(-1.90, 0.083, 0.412, 0.205, 2.5, 2.5),
-    S(-2.12, 0.064, 0.368, 0.215, 2.4, 2.4), S(-2.26, 0.050, 0.340, 0.225, 2.2, 2.2),
+  // ── Carrocería (modelo propio, medidas de un F1 de 2022-2025) ──────────────────────────────
+  // Batalla 3,6 m, 5,6 m de largo de alerón a alerón, 2,0 m de ancho por fuera de las ruedas y
+  // 0,97 m de alto en la toma de aire. Todo son superficies de sección superelíptica cosidas a
+  // lo largo del coche (loftS): lisas, sin ruido, y con normales suaves.
+  // S(x, semiancho, techo, suelo, forma arriba, forma abajo, centro lateral)
+  const S = (x, w, yt, yb, n = 3, nb = 2.4, z = 0, cut = 0) => ({ x, w, yt, yb, n, nb, z, cut });
+  const segL = fisico ? 44 : 26;
+  // monocasco, morro bajo (llega al plano principal del alerón), habitáculo y tapa del motor
+  const monocasco = [
+    S(2.985, 0.034, 0.196, 0.136, 2.2, 2.2), S(2.93, 0.062, 0.224, 0.128, 2.4, 2.3), S(2.80, 0.088, 0.268, 0.128, 2.6, 2.4),
+    S(2.60, 0.110, 0.332, 0.136, 2.8, 2.6), S(2.36, 0.130, 0.405, 0.148, 3.0, 2.8), S(2.10, 0.150, 0.472, 0.158, 3.2, 3.0),
+    S(1.84, 0.170, 0.530, 0.166, 3.4, 3.2), S(1.55, 0.196, 0.582, 0.170, 3.6, 3.4), S(1.25, 0.224, 0.622, 0.168, 3.8, 3.6),
+    S(1.00, 0.250, 0.646, 0.162, 4.0, 3.8), S(0.84, 0.264, 0.654, 0.156, 4.2, 4.0),
+    // habitáculo: el techo baja (asiento y piernas, tapados por el forro) y los lados son los bordes
+    S(0.76, 0.274, 0.560, 0.150, 4.4, 4.0), S(0.40, 0.288, 0.520, 0.142, 4.4, 4.0), S(0.04, 0.294, 0.520, 0.136, 4.4, 4.0),
+    S(-0.07, 0.294, 0.645, 0.134, 4.2, 4.0), S(-0.22, 0.284, 0.765, 0.136, 3.8, 3.8),
+    S(-0.45, 0.252, 0.792, 0.146, 3.4, 3.4), S(-0.75, 0.208, 0.732, 0.158, 3.0, 3.0), S(-1.05, 0.162, 0.642, 0.172, 2.8, 2.8),
+    S(-1.35, 0.122, 0.542, 0.186, 2.6, 2.6), S(-1.62, 0.092, 0.456, 0.198, 2.5, 2.5), S(-1.90, 0.071, 0.400, 0.210, 2.4, 2.4),
+    S(-2.15, 0.056, 0.364, 0.222, 2.3, 2.3), S(-2.31, 0.042, 0.344, 0.232, 2.2, 2.2),
   ];
-  geo.librea.push(loftS(morro, fisico ? 40 : 26));
-  // bordes del habitáculo y reposacabezas acolchado
+  geo.librea.push(loftS(monocasco, segL));
+  // bordes del habitáculo (más amplio: 0,58 m entre bordes) y reposacabezas acolchado
+  const BORDE = 0.288;
   for (const sg of [-1, 1]) {
-    geo.librea.push(loftS([S(0.72, 0.012, 0.662, 0.60, 2, 2, sg * 0.262), S(0.55, 0.030, 0.705, 0.60, 2.2, 2, sg * 0.262), S(0.20, 0.034, 0.722, 0.60, 2.2, 2, sg * 0.272),
-      S(-0.04, 0.034, 0.735, 0.60, 2.2, 2, sg * 0.278), S(-0.10, 0.020, 0.72, 0.62, 2, 2, sg * 0.278)], 10));
-    geo.negro.push(loftS([S(0.08, 0.05, 0.74, 0.60, 3, 2, sg * 0.20), S(-0.06, 0.06, 0.76, 0.60, 3, 2, sg * 0.20)], 10));
+    geo.librea.push(loftS([S(0.80, 0.010, 0.660, 0.60, 2, 2, sg * BORDE), S(0.62, 0.030, 0.700, 0.58, 2.2, 2, sg * BORDE), S(0.25, 0.036, 0.716, 0.58, 2.2, 2, sg * (BORDE + 0.004)),
+      S(-0.02, 0.036, 0.728, 0.58, 2.2, 2, sg * (BORDE + 0.006)), S(-0.10, 0.020, 0.716, 0.60, 2, 2, sg * (BORDE + 0.006))], 12));
+    geo.negro.push(loftS([S(0.06, 0.055, 0.735, 0.58, 3, 2, sg * 0.215), S(-0.07, 0.065, 0.755, 0.58, 3, 2, sg * 0.215)], 12));
   }
-  // interior: asiento, piso y salpicadero oscuros
+  // interior: tapa sobre las piernas, forro acolchado y salpicadero
   {
-    // tapa del hueco de las piernas (por delante del pecho, sin cortar el cuerpo del piloto)
     const sh = new THREE.Shape();
-    sh.moveTo(0.66, -0.20); sh.quadraticCurveTo(0.72, 0, 0.66, 0.20); sh.lineTo(0.15, 0.25); sh.quadraticCurveTo(0.10, 0, 0.15, -0.25); sh.closePath();
-    const g = new THREE.ShapeGeometry(sh, 12); g.rotateX(-Math.PI / 2); g.translate(0, 0.609, 0);   // mirando hacia arriba (se ve desde la cabina y la cámara de la cara)
-    // es la parte de arriba del monocasco sobre las piernas: va pintada como el resto del coche
+    sh.moveTo(0.74, -0.22); sh.quadraticCurveTo(0.80, 0, 0.74, 0.22); sh.lineTo(0.18, 0.27); sh.quadraticCurveTo(0.12, 0, 0.18, -0.27); sh.closePath();
+    const g = new THREE.ShapeGeometry(sh, 14); g.rotateX(-Math.PI / 2); g.translate(0, 0.585, 0);
     geo.librea.push(g);
-    // bañera: forro acolchado oscuro por dentro del habitáculo (paredes y suelo), para que por
-    // ningún hueco entre el piloto y los bordes se vea la pista
     const forro = [];
     const pared = (x0, x1, y0, y1, z) => { const p = new THREE.PlaneGeometry(x1 - x0, y1 - y0); p.translate((x0 + x1) / 2, (y0 + y1) / 2, z); return p; };
-    for (const sg of [-1, 1]) { const p = pared(-0.08, 0.74, 0.46, 0.70, sg * 0.262); p.rotateY(0); forro.push(p); }
-    { const p = new THREE.PlaneGeometry(0.82, 0.524); p.rotateX(-Math.PI / 2); p.translate(0.33, 0.47, 0); forro.push(p); }          // suelo
-    { const p = new THREE.PlaneGeometry(0.524, 0.24); p.rotateY(Math.PI / 2); p.translate(0.735, 0.58, 0); forro.push(p); }        // frente
-    { const p = new THREE.PlaneGeometry(0.524, 0.28); p.rotateY(Math.PI / 2); p.translate(-0.08, 0.6, 0); forro.push(p); }          // respaldo
+    for (const sg of [-1, 1]) forro.push(pared(-0.08, 0.80, 0.44, 0.70, sg * (BORDE - 0.004)));
+    { const p = new THREE.PlaneGeometry(0.88, 2 * BORDE); p.rotateX(-Math.PI / 2); p.translate(0.36, 0.45, 0); forro.push(p); }
+    { const p = new THREE.PlaneGeometry(2 * BORDE, 0.24); p.rotateY(Math.PI / 2); p.translate(0.80, 0.57, 0); forro.push(p); }
+    { const p = new THREE.PlaneGeometry(2 * BORDE, 0.30); p.rotateY(Math.PI / 2); p.translate(-0.08, 0.60, 0); forro.push(p); }
     const matForro = matComun('forroCabina', () => new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.92, side: THREE.DoubleSide }));
     forroCabina = unir(forro, matForro); forroCabina.receiveShadow = true;
-    geo.negro.push(caja(0.04, 0.10, 0.44, 0.64, 0.64, 0, 0, 0, -0.3));      // salpicadero
+    geo.negro.push(caja(0.04, 0.10, 0.46, 0.70, 0.62, 0, 0, 0, -0.3));
   }
-  // toma de aire sobre la cabeza, arco de seguridad y aleta de tiburón
-  geo.librea.push(loftS([S(0.02, 0.105, 0.98, 0.79, 3.5, 3), S(-0.10, 0.12, 0.985, 0.77, 3.2, 3), S(-0.35, 0.115, 0.95, 0.74, 3, 3),
-    S(-0.70, 0.07, 0.86, 0.70, 2.6, 2.6), S(-1.05, 0.03, 0.76, 0.64, 2.2, 2.2)], 18));
-  geo.negro.push(loftS([S(0.035, 0.085, 0.965, 0.80, 4, 4), S(0.02, 0.09, 0.97, 0.80, 4, 4)], 14));
-  geo.carbono.push(barra([-0.04, 0.99, 0], [-0.08, 1.05, 0], 0.02));
+  // toma de aire del motor sobre la cabeza (estructura antivuelco), con su boca y la T-Cam
+  geo.librea.push(loftS([S(0.02, 0.098, 0.968, 0.80, 3.6, 3), S(-0.08, 0.116, 0.975, 0.78, 3.3, 3), S(-0.30, 0.118, 0.950, 0.76, 3, 3),
+    S(-0.62, 0.085, 0.880, 0.73, 2.7, 2.6), S(-0.95, 0.045, 0.790, 0.68, 2.3, 2.2), S(-1.15, 0.020, 0.720, 0.64, 2, 2)], fisico ? 24 : 16));
+  geo.negro.push(loftS([S(0.034, 0.078, 0.955, 0.815, 4, 4), S(0.022, 0.086, 0.962, 0.808, 4, 4)], 14));
+  geo.carbono.push(caja(0.10, 0.032, 0.05, -0.06, 0.99, 0));                 // T-Cam
+  geo.carbono.push(barra([-0.02, 0.985, 0], [-0.05, 1.04, 0], 0.012));      // antena
+  // aleta de tiburón sobre la tapa del motor
   {
     const sh = new THREE.Shape();
-    sh.moveTo(-0.55, 0.86); sh.quadraticCurveTo(-1.2, 0.86, -1.75, 0.62); sh.lineTo(-1.80, 0.45); sh.lineTo(-0.60, 0.70);
-    const g = new THREE.ExtrudeGeometry(sh, { depth: 0.012, bevelEnabled: false }); g.translate(0, 0, -0.006);
+    sh.moveTo(-0.55, 0.90); sh.quadraticCurveTo(-1.15, 0.90, -1.72, 0.60); sh.lineTo(-1.78, 0.46); sh.lineTo(-1.30, 0.52); sh.quadraticCurveTo(-0.90, 0.70, -0.58, 0.78);
+    const g = new THREE.ExtrudeGeometry(sh, { depth: 0.01, bevelEnabled: true, bevelSize: 0.002, bevelThickness: 0.002, bevelSegments: 1 }); g.translate(0, 0, -0.005);
     geo.librea.push(g);
   }
-  // pontones con boca de entrada, rampa descendente y rebaje inferior (undercut)
+  // pontones de rampa descendente: boca de entrada alta y estrecha, techo que cae hacia atrás,
+  // cintura de botella de Coca-Cola y un rebaje inferior profundo bajo la entrada
   for (const sg of [-1, 1]) {
+    // (forma redondeada arriba; abajo, un rebaje que se mete hasta 0,16 m bajo la boca)
     const pont = [
-      S(0.80, 0.130, 0.52, 0.30, 6, 3, sg * 0.555), S(0.70, 0.175, 0.545, 0.268, 5.5, 2.4, sg * 0.575), S(0.50, 0.205, 0.556, 0.250, 5, 2.2, sg * 0.59),
-      S(0.20, 0.218, 0.548, 0.238, 4.5, 2, sg * 0.585), S(-0.15, 0.212, 0.520, 0.226, 4, 2, sg * 0.56), S(-0.50, 0.190, 0.476, 0.214, 3.4, 2, sg * 0.51),
-      S(-0.85, 0.155, 0.420, 0.204, 3, 2, sg * 0.44), S(-1.18, 0.112, 0.360, 0.196, 2.6, 2, sg * 0.35), S(-1.48, 0.068, 0.300, 0.192, 2.4, 2, sg * 0.26),
-      S(-1.70, 0.035, 0.260, 0.195, 2.2, 2, sg * 0.20),
+      S(0.900, 0.070, 0.606, 0.452, 3.2, 3, sg * 0.505, 0.02), S(0.840, 0.130, 0.628, 0.410, 3.2, 2.6, sg * 0.525, 0.07), S(0.700, 0.176, 0.632, 0.350, 3.0, 2.4, sg * 0.552, 0.14),
+      S(0.450, 0.200, 0.612, 0.290, 2.9, 2.3, sg * 0.566, 0.16), S(0.150, 0.204, 0.570, 0.250, 2.8, 2.2, sg * 0.560, 0.14), S(-0.200, 0.190, 0.505, 0.224, 2.7, 2.2, sg * 0.530, 0.10),
+      S(-0.550, 0.162, 0.432, 0.206, 2.6, 2.2, sg * 0.474, 0.06), S(-0.900, 0.124, 0.360, 0.194, 2.5, 2.2, sg * 0.392, 0.03), S(-1.220, 0.084, 0.300, 0.186, 2.4, 2.2, sg * 0.300),
+      S(-1.480, 0.048, 0.262, 0.184, 2.2, 2.1, sg * 0.232), S(-1.600, 0.026, 0.248, 0.186, 2.1, 2.0, sg * 0.200),
     ];
-    geo.librea.push(loftS(pont, fisico ? 28 : 18));
-    // boca de entrada (oscura y hundida)
-    geo.negro.push(loftS([S(0.805, 0.112, 0.50, 0.318, 6, 6, sg * 0.555), S(0.79, 0.112, 0.50, 0.318, 6, 6, sg * 0.555)], 16));
-    // retrovisores sobre el pontón y deflectores laterales (bargeboards): piezas que se rompen
-    piezas.push({ tipo: 'espejo', sg, lib: [loftS([S(0.80, 0.045, 0.705, 0.665, 3, 3, sg * 0.50), S(0.76, 0.062, 0.712, 0.656, 3, 3, sg * 0.50), S(0.72, 0.062, 0.712, 0.656, 3, 3, sg * 0.50)], 12)],
-      carb: [barra([0.76, 0.55, sg * 0.46], [0.76, 0.665, sg * 0.49], 0.007), barra([0.70, 0.60, sg * 0.30], [0.75, 0.68, sg * 0.45], 0.006)], centro: [0.76, 0.66, sg * 0.48] });
-    piezas.push({ tipo: 'deflector', sg, lib: [], carb: [0, 1, 2].map(k => caja(0.34 - k * 0.06, 0.20 - k * 0.04, 0.008, 1.10 - k * 0.12, 0.17, sg * (0.40 + k * 0.07), 0, sg * 0.10, 0)), centro: [1.0, 0.17, sg * 0.47] });
+    geo.librea.push(loftS(pont, fisico ? 36 : 22));
+    // boca de entrada: oscura y hundida
+    geo.negro.push(loftS([S(0.902, 0.060, 0.596, 0.462, 4, 4, sg * 0.505), S(0.890, 0.060, 0.596, 0.462, 4, 4, sg * 0.505)], 18));
+    // labio superior de la boca, que sobresale por delante
+    geo.librea.push(loftS([S(0.935, 0.004, 0.612, 0.598, 2, 2, sg * 0.505), S(0.915, 0.075, 0.618, 0.596, 2.4, 2, sg * 0.505), S(0.87, 0.10, 0.628, 0.598, 2.6, 2, sg * 0.512)], 14));
+    // salidas de aire caliente en el lomo del pontón (rejilla oscura)
+    for (let k = 0; k < 4; k++) geo.negro.push(caja(0.10, 0.006, 0.12, -0.40 - k * 0.13, 0.468 - k * 0.022, sg * 0.50, 0, 0, 0.12));
+    // retrovisores: carcasa aerodinámica sobre dos brazos, en el borde del pontón
+    piezas.push({ tipo: 'espejo', sg, lib: [loftS([S(0.82, 0.040, 0.716, 0.678, 3, 3, sg * 0.53), S(0.78, 0.060, 0.724, 0.668, 3, 3, sg * 0.53), S(0.73, 0.060, 0.722, 0.670, 3, 3, sg * 0.53), S(0.71, 0.030, 0.712, 0.680, 3, 3, sg * 0.53)], 14)],
+      carb: [barraAero([0.77, 0.61, sg * 0.50], [0.77, 0.675, sg * 0.52], 0.008), barraAero([0.74, 0.64, sg * 0.31], [0.76, 0.69, sg * 0.48], 0.007)], centro: [0.77, 0.68, sg * 0.51] });
+    // deflectores delante de los pontones (se rompen con los golpes laterales)
+    piezas.push({ tipo: 'deflector', sg, lib: [], carb: [0, 1, 2].map(k => caja(0.30 - k * 0.05, 0.18 - k * 0.035, 0.007, 1.12 - k * 0.11, 0.15, sg * (0.42 + k * 0.07), 0, sg * 0.10, 0)), centro: [1.02, 0.15, sg * 0.49] });
   }
-  // fondo plano con bordes curvados, difusor y vigas de soporte
+  // fondo plano: borde curvado, vallas de los túneles, tabla y difusor
   {
     const sh = new THREE.Shape();
-    const borde = [[1.52, 0.26], [1.30, 0.58], [1.05, 0.88], [0.80, 0.95], [-1.20, 0.95], [-1.45, 0.80], [-1.70, 0.62], [-2.05, 0.55], [-2.22, 0.52]];
+    const borde = [[1.55, 0.24], [1.36, 0.52], [1.12, 0.78], [0.88, 0.86], [-1.10, 0.86], [-1.30, 0.72], [-1.45, 0.58], [-1.85, 0.56], [-2.22, 0.52]];
     sh.moveTo(borde[0][0], -borde[0][1]);
     for (const [x, z] of borde.slice(1)) sh.lineTo(x, -z);
     for (const [x, z] of borde.slice().reverse()) sh.lineTo(x, z);
     const g = new THREE.ExtrudeGeometry(sh, { depth: 0.022, bevelEnabled: false });
-    g.rotateX(Math.PI / 2); g.translate(0, 0.074, 0);
+    g.rotateX(Math.PI / 2); g.translate(0, 0.062, 0);
     geo.carbono.push(g);
+    geo.negro.push(caja(2.7, 0.012, 0.30, -0.15, 0.036, 0));                // tabla
     for (const sg of [-1, 1]) {
-      // borde del fondo enrollado hacia arriba
-      geo.carbono.push(loftS([S(0.95, 0.01, 0.10, 0.06, 2, 2, sg * 0.945), S(0.6, 0.03, 0.14, 0.06, 2, 2, sg * 0.96), S(-0.6, 0.03, 0.15, 0.06, 2, 2, sg * 0.96), S(-1.2, 0.015, 0.12, 0.06, 2, 2, sg * 0.95)], 8));
-      // vallas del fondo bajo la entrada de los pontones
-      for (let k = 0; k < 4; k++) geo.carbono.push(caja(0.45, 0.10 - k * 0.012, 0.007, 1.10 - k * 0.04, 0.12, sg * (0.18 + k * 0.08), 0, sg * 0.05, 0));
+      // borde del fondo enrollado hacia arriba y su aleta
+      geo.carbono.push(loftS([S(0.90, 0.010, 0.10, 0.05, 2, 2, sg * 0.855), S(0.55, 0.026, 0.14, 0.05, 2, 2, sg * 0.866), S(-0.70, 0.026, 0.15, 0.05, 2, 2, sg * 0.866), S(-1.12, 0.012, 0.12, 0.05, 2, 2, sg * 0.855)], 10));
+      geo.carbono.push(alaCurva(0.22, 0.06, 0.12, 0.05, 0.10).translate(-0.20, 0.10, sg * 0.90));
+      // vallas de los túneles bajo la entrada de los pontones
+      for (let k = 0; k < 4; k++) geo.carbono.push(caja(0.48, 0.10 - k * 0.012, 0.007, 1.10 - k * 0.05, 0.11, sg * (0.18 + k * 0.08), 0, sg * 0.05, 0));
     }
-    // difusor: canales que suben hacia atrás y paredes
-    for (let k = -3; k <= 3; k++) geo.carbono.push(caja(0.62, 0.24, 0.010, -1.98, 0.17, k * 0.15, 0, 0, -0.33));
-    const dif = new THREE.PlaneGeometry(0.66, 1.0); dif.rotateX(Math.PI / 2);   // mira hacia abajo: se ve desde atrás y desde el suelo
-    dif.rotateZ(-0.33); dif.translate(-1.98, 0.17, 0);
+    // difusor: techo que sube hacia atrás con sus paredes
+    for (let k = -3; k <= 3; k++) geo.carbono.push(caja(0.64, 0.24, 0.010, -1.98, 0.17, k * 0.15, 0, 0, -0.33));
+    const dif = new THREE.PlaneGeometry(0.68, 1.02); dif.rotateX(Math.PI / 2); dif.rotateZ(-0.33); dif.translate(-1.98, 0.17, 0);
     geo.carbono.push(dif);
   }
-  // halo de titanio (elevado para despejar la vista del piloto) con su pilar central
+  // halo de titanio con su pilar central: pieza aparte (se puede quitar en los ajustes)
+  const geoHalo = [];
   {
     const curva = new THREE.CatmullRomCurve3([
-      // patas apoyadas sobre la carrocería tras el habitáculo (y = superficie en x = −0,26) y el
-      // aro a la altura del casco, como en un monoplaza real
-      [-0.27, 0.655, -0.245], [-0.15, 0.80, -0.29], [0.07, 0.885, -0.285], [0.31, 0.93, -0.19], [0.46, 0.94, -0.06],
-      [0.46, 0.94, 0.06], [0.31, 0.93, 0.19], [0.07, 0.885, 0.285], [-0.15, 0.80, 0.29], [-0.27, 0.655, 0.245],
+      [-0.27, 0.70, -0.25], [-0.15, 0.82, -0.295], [0.07, 0.892, -0.29], [0.31, 0.932, -0.19], [0.46, 0.942, -0.06],
+      [0.46, 0.942, 0.06], [0.31, 0.932, 0.19], [0.07, 0.892, 0.29], [-0.15, 0.82, 0.295], [-0.27, 0.70, 0.25],
     ].map(p => new THREE.Vector3(...p)));
-    // como el modelo de referencia: aro de sección ovalada (más ancho que alto), patas traseras
-    // que se ensanchan al unirse a la carrocería, pilar delantero en forma de pala con su base
-    // atornillada sobre el morro
-    geo.librea.push(barridoOval(curva, fisico ? 72 : 40, fisico ? 16 : 10, (t) => {
-      const pie = Math.max(0, 1 - Math.min(t, 1 - t) / 0.12);          // ensanche en las patas
+    geoHalo.push(barridoOval(curva, fisico ? 80 : 40, fisico ? 18 : 10, (t) => {
+      const pie = Math.max(0, 1 - Math.min(t, 1 - t) / 0.12);
       return [0.030 + pie * 0.035, 0.021 + pie * 0.022];
     }));
-    // el pilar entra dentro del aro (antes acababa justo en su borde y se veía el corte en V)
-    const pilar = new THREE.CatmullRomCurve3([[0.82, 0.635, 0], [0.70, 0.77, 0], [0.57, 0.905, 0], [0.48, 0.938, 0], [0.43, 0.945, 0]].map(p => new THREE.Vector3(...p)));
-    geo.librea.push(barridoOval(pilar, fisico ? 24 : 14, fisico ? 14 : 8, (t) => {
+    const pilar = new THREE.CatmullRomCurve3([[0.84, 0.64, 0], [0.71, 0.77, 0], [0.58, 0.905, 0], [0.49, 0.94, 0], [0.43, 0.946, 0]].map(p => new THREE.Vector3(...p)));
+    geoHalo.push(barridoOval(pilar, fisico ? 24 : 14, fisico ? 14 : 8, (t) => {
       const base = Math.max(0, 1 - t / 0.25);
-      return [0.016 + base * 0.02, 0.03 + base * 0.035];               // pala: estrecha de lado, larga de frente
+      return [0.016 + base * 0.02, 0.03 + base * 0.035];
     }));
-    // unión soldada del pilar con el aro: una pieza que tapa el encuentro por arriba y por abajo
-    { const u = new THREE.SphereGeometry(0.036, 16, 10); u.scale(1.25, 0.72, 1.35); u.translate(0.462, 0.939, 0); geo.librea.push(u); }
-    // pies de las patas: carenado que funde el halo con la carrocería
-    for (const sg of [-1, 1]) {
-      const pie = new THREE.SphereGeometry(0.06, 16, 10); pie.scale(1.6, 0.55, 1.0); pie.translate(-0.265, 0.655, sg * 0.245); geo.librea.push(pie);
-    }
-    // placa de anclaje del pilar sobre el morro (con sus tornillos)
-    geo.negro.push(caja(0.12, 0.012, 0.075, 0.84, 0.632, 0, 0, 0, -0.32));
-    for (const [dx, dz] of [[-0.035, -0.025], [-0.035, 0.025], [0.035, -0.025], [0.035, 0.025]]) {
-      const t = new THREE.CylinderGeometry(0.006, 0.006, 0.008, 8); t.translate(0.84 + dx, 0.641 - dx * 0.33, dz); geo.metal.push(t);
-    }
+    { const u = new THREE.SphereGeometry(0.036, 16, 10); u.scale(1.25, 0.72, 1.35); u.translate(0.462, 0.941, 0); geoHalo.push(u); }
+    for (const sg of [-1, 1]) { const pie = new THREE.SphereGeometry(0.06, 16, 10); pie.scale(1.6, 0.55, 1.0); pie.translate(-0.265, 0.70, sg * 0.25); geoHalo.push(pie); }
   }
-  // suspensión: triángulos y bieletas con perfil aerodinámico
+  // suspensión delantera (empuje) y trasera (tracción): brazos con perfil aerodinámico
   const xr = -B;
   for (const sg of [-1, 1]) {
-    const zu = sg * 0.66;
-    // delantera (empuje)
+    const zu = sg * 0.70, zt = sg * 0.65;
     geo.carbono.push(
-      barraAero([A + 0.22, 0.44, sg * 0.15], [A, 0.50, zu]), barraAero([A - 0.20, 0.44, sg * 0.15], [A, 0.50, zu]),
-      barraAero([A + 0.30, 0.25, sg * 0.12], [A - 0.01, 0.22, zu]), barraAero([A - 0.25, 0.25, sg * 0.12], [A - 0.01, 0.22, zu]),
-      barraAero([A - 0.06, 0.22, zu * 0.96], [A - 0.10, 0.50, sg * 0.17], 0.010),
+      barraAero([A + 0.24, 0.44, sg * 0.15], [A, 0.50, zu]), barraAero([A - 0.22, 0.44, sg * 0.15], [A, 0.50, zu]),
+      barraAero([A + 0.30, 0.24, sg * 0.12], [A - 0.01, 0.22, zu]), barraAero([A - 0.26, 0.24, sg * 0.12], [A - 0.01, 0.22, zu]),
+      barraAero([A - 0.06, 0.22, zu * 0.97], [A - 0.10, 0.50, sg * 0.17], 0.010),
       barraAero([A + 0.10, 0.36, sg * 0.15], [A + 0.08, 0.36, zu], 0.008),
+      barraAero([xr + 0.26, 0.40, sg * 0.12], [xr, 0.46, zt]), barraAero([xr - 0.18, 0.42, sg * 0.10], [xr, 0.46, zt]),
+      barraAero([xr + 0.30, 0.22, sg * 0.12], [xr, 0.20, zt]), barraAero([xr - 0.20, 0.22, sg * 0.10], [xr, 0.20, zt]),
+      barraAero([xr - 0.05, 0.46, zt * 0.96], [xr + 0.05, 0.22, sg * 0.14], 0.010),
+      barraAero([xr - 0.12, 0.32, sg * 0.10], [xr - 0.12, 0.32, zt], 0.008),
     );
-    // trasera (tracción)
-    geo.carbono.push(
-      barraAero([xr + 0.26, 0.40, sg * 0.12], [xr, 0.46, zu]), barraAero([xr - 0.18, 0.42, sg * 0.10], [xr, 0.46, zu]),
-      barraAero([xr + 0.30, 0.22, sg * 0.12], [xr, 0.20, zu]), barraAero([xr - 0.20, 0.22, sg * 0.10], [xr, 0.20, zu]),
-      barraAero([xr - 0.05, 0.46, zu * 0.95], [xr + 0.05, 0.22, sg * 0.14], 0.010),
-      barraAero([xr - 0.12, 0.32, sg * 0.10], [xr - 0.12, 0.32, zu], 0.008),
-    );
-    // portamanguetas y conductos de freno
-    geo.negro.push(caja(0.10, 0.30, 0.05, A, 0.36, sg * 0.67), caja(0.10, 0.30, 0.05, xr, 0.34, sg * 0.65));
+    // manguetas con el conducto de freno (dentro de las llantas)
+    geo.negro.push(caja(0.12, 0.30, 0.05, A, 0.36, sg * 0.73), caja(0.12, 0.30, 0.05, xr, 0.34, sg * 0.67));
   }
-  // caja de cambios, escapes y estructura de choque trasera
-  geo.carbono.push(loftS([S(-1.6, 0.11, 0.36, 0.14, 3, 3), S(-2.0, 0.08, 0.34, 0.16, 3, 3), S(-2.30, 0.05, 0.32, 0.20, 2.6, 2.6)], 14));
-  geo.metal.push(loftS([S(-2.25, 0.035, 0.42, 0.37, 2, 2), S(-2.36, 0.04, 0.425, 0.365, 2, 2)], 12));
+  // caja de cambios, estructura de choque trasera y escape
+  geo.carbono.push(loftS([S(-1.6, 0.11, 0.36, 0.14, 3, 3), S(-2.0, 0.08, 0.34, 0.16, 3, 3), S(-2.32, 0.05, 0.32, 0.20, 2.6, 2.6)], 16));
+  geo.metal.push(loftS([S(-2.25, 0.036, 0.43, 0.38, 2, 2), S(-2.37, 0.042, 0.436, 0.374, 2, 2)], 14));
   const carroceria = new THREE.Group();
   if (forroCabina) carroceria.add(forroCabina);
   const cuerpo = unir(geo.librea, pintura, true);
   cuerpo.name = 'cuerpo';
   carroceria.add(cuerpo);
+  // el halo, aparte: se quita en los ajustes (opc.halo === false)
+  const halo = unir(geoHalo, pintura, true); halo.name = 'halo';
+  halo.visible = opc.halo !== false;
+  carroceria.add(halo);
   const mCarbono = unir(geo.carbono, carbono), mNegro = unir(geo.negro, negro);
   carroceria.add(mCarbono); carroceria.add(mNegro);
   const mMetal = geo.metal.length ? unir(geo.metal, metal) : null;
@@ -810,8 +809,9 @@ export function crearModelo(opc) {
     for (const sg of [-1, 1]) {
       // placas laterales curvadas
       const sh = new THREE.Shape();
-      sh.moveTo(3.02, 0.055); sh.lineTo(2.50, 0.05); sh.quadraticCurveTo(2.40, 0.20, 2.46, 0.34); sh.lineTo(2.62, 0.33); sh.quadraticCurveTo(2.90, 0.18, 3.02, 0.055);
-      const g = new THREE.ExtrudeGeometry(sh, { depth: 0.02, bevelEnabled: true, bevelSize: 0.003, bevelThickness: 0.003, bevelSegments: 1 }); g.translate(0, 0, sg * (env / 2) - 0.01);
+      // (bajas y redondeadas, como las de 2022: el último flap se apoya en su borde de arriba)
+      sh.moveTo(3.00, 0.045); sh.lineTo(2.52, 0.04); sh.quadraticCurveTo(2.42, 0.13, 2.47, 0.25); sh.quadraticCurveTo(2.53, 0.30, 2.62, 0.285); sh.quadraticCurveTo(2.88, 0.16, 3.00, 0.045);
+      const g = new THREE.ExtrudeGeometry(sh, { depth: 0.014, bevelEnabled: true, bevelSize: 0.004, bevelThickness: 0.004, bevelSegments: 2, curveSegments: 16 }); g.translate(0, 0, sg * (env / 2) - 0.007);
       lib.push(g);
       // soportes del morro
       carb.push(caja(0.28, 0.10, 0.012, 2.92, 0.15, sg * 0.05));
@@ -830,11 +830,16 @@ export function crearModelo(opc) {
     const envT = 1.0, lib = [], carb = [];
     const cuchara = (x, y, z) => { const f = Math.abs(z) / (envT / 2); return [x, y - 0.035 * (1 - f * f), z]; };
     lib.push(alaCurva(0.34, 0.10, envT, 0.08, 0.16, cuchara).translate(-2.24, 0.88, 0));
-    carb.push(alaCurva(0.20, 0.10, envT * 0.62, 0.07, 0.25).translate(-2.12, 0.40, 0));
+    // ala de la viga (beam wing) de dos elementos, sobre el difusor
+    carb.push(alaCurva(0.20, 0.10, envT * 0.66, 0.07, 0.25).translate(-2.12, 0.40, 0));
+    carb.push(alaCurva(0.14, 0.10, envT * 0.62, 0.07, 0.45).translate(-2.30, 0.47, 0));
     for (const sg of [-1, 1]) {
       const sh = new THREE.Shape();
-      sh.moveTo(-1.95, 0.52); sh.quadraticCurveTo(-1.88, 0.80, -1.96, 1.07); sh.lineTo(-2.46, 1.10); sh.quadraticCurveTo(-2.54, 0.80, -2.42, 0.50); sh.closePath();
-      const g = new THREE.ExtrudeGeometry(sh, { depth: 0.026, bevelEnabled: true, bevelSize: 0.004, bevelThickness: 0.004, bevelSegments: 1 }); g.translate(0, 0, sg * envT / 2 - 0.013);
+      // placa lateral de puntas redondeadas (reglamento 2022): sin esquinas, el borde de arriba
+      // se curva hacia delante y hacia atrás
+      sh.moveTo(-1.97, 0.50); sh.quadraticCurveTo(-1.90, 0.78, -1.98, 0.94); sh.quadraticCurveTo(-2.04, 1.05, -2.18, 1.055);
+      sh.lineTo(-2.34, 1.05); sh.quadraticCurveTo(-2.47, 1.04, -2.50, 0.92); sh.quadraticCurveTo(-2.53, 0.70, -2.43, 0.50); sh.closePath();
+      const g = new THREE.ExtrudeGeometry(sh, { depth: 0.016, bevelEnabled: true, bevelSize: 0.005, bevelThickness: 0.005, bevelSegments: 2, curveSegments: 18 }); g.translate(0, 0, sg * envT / 2 - 0.008);
       lib.push(g);
     }
     // pilón central (cuello de cisne)
@@ -864,8 +869,8 @@ export function crearModelo(opc) {
   // Volante en la columna de dirección
   const volante = crearVolante(cabina);
   const columna = new THREE.Group();
-  columna.position.set(0.47, 0.70, 0);
-  columna.rotation.z = -0.32;          // inclinado hacia el piloto
+  columna.position.set(0.45, 0.665, 0);
+  columna.rotation.z = -0.34;          // inclinado hacia el piloto (bajo, por debajo del borde de la cabina)
   const giroVolante = new THREE.Group();
   giroVolante.add(volante.g);
   columna.add(giroVolante);
@@ -874,7 +879,11 @@ export function crearModelo(opc) {
   // Piloto: modelo aparte (render/piloto.js), sentado en la carrocería
   const piloto = crearPiloto({ traje: new THREE.MeshStandardMaterial({ map: texturaMono(colores), roughness: 0.78, normalMap: calidad >= 1 ? normalPliegues() : null, normalScale: new THREE.Vector2(0.6, 0.6) }), guante: new THREE.MeshStandardMaterial({ color: 0x15161a, roughness: 0.8 }),
     matNegro: matComun('negro'), equipado: eq, colores, columna, calidad });
-  piloto.grupo.position.y = -0.04;          // sentado bajo, como en un monoplaza real
+  // piloto algo más pequeño que antes (holgura en la cabina, casco bajo el arco del halo) y
+  // sentado bajo, como en un monoplaza real: se escala alrededor del asiento
+  const ESC_PILOTO = 0.88, ASIENTO = new THREE.Vector3(0.04, 0.6, 0);
+  piloto.grupo.scale.setScalar(ESC_PILOTO);
+  piloto.grupo.position.copy(ASIENTO).multiplyScalar(1 - ESC_PILOTO).add(new THREE.Vector3(0, -0.045, 0));
   carroceria.add(piloto.grupo);
   const casco = piloto.casco, cuello = piloto.cuello;
 
@@ -882,8 +891,11 @@ export function crearModelo(opc) {
   // llanta de radios con labio y tambor, disco y conducto de freno
   const cmp = COMPUESTOS[compuesto] || COMPUESTOS.medio;
   const ruedas = [];
-  const pos = [[A, -COCHE.viaDel / 2, COCHE.radioDel, 0.305], [A, COCHE.viaDel / 2, COCHE.radioDel, 0.305],
-    [-B, -COCHE.viaTras / 2, COCHE.radioTras, 0.405], [-B, COCHE.viaTras / 2, COCHE.radioTras, 0.405]];
+  // vías de un F1 real: 2,0 m por fuera de las ruedas en los dos ejes (1,69 m delante con
+  // neumáticos de 305 mm y 1,60 m detrás con los de 405 mm)
+  const VIA_DEL = 1.69, VIA_TRAS = 1.60;
+  const pos = [[A, -VIA_DEL / 2, COCHE.radioDel, 0.305], [A, VIA_DEL / 2, COCHE.radioDel, 0.305],
+    [-B, -VIA_TRAS / 2, COCHE.radioTras, 0.405], [-B, VIA_TRAS / 2, COCHE.radioTras, 0.405]];
   const grupo = new THREE.Group();
   // cara de la llanta: entre los radios se ve el disco, que brilla al rojo cuando está caliente
   // (se ve desde fuera y desde cualquier ángulo); una por eje
@@ -948,14 +960,16 @@ export function crearModelo(opc) {
   // mueven toman la normal de su triángulo: el carbono roto se ve arrugado, con aristas.
   // En el coche escaneado, donde el golpe es fuerte salta la pintura y queda el carbono a la vista
   // (se oscurece el color de esos vértices: el material lo convierte en carbono).
-  let nAbol = 0, posOrig = null, nrmOrig = null, colOrig = null;
+  let nAbol = 0, posOrig = null, nrmOrig = null;
   function abollar(lista) {
     if (lista.length === nAbol) return;
     propia(cuerpo);
     const g = cuerpo.geometry, p = g.attributes.position, nr = g.attributes.normal, P = p.array, N = nr.array;
-    const col = cuerpo.userData.glb ? g.attributes.color : null;
-    if (!posOrig) { posOrig = P.slice(); nrmOrig = N.slice(); colOrig = col ? col.array.slice() : null; }
-    if (lista.length < nAbol) { P.set(posOrig); N.set(nrmOrig); if (col && colOrig) col.array.set(colOrig); nAbol = 0; }
+    // pintura saltada: atributo «golpe» (lo lee el material de la librea)
+    if (!g.attributes.golpe) g.setAttribute('golpe', new THREE.BufferAttribute(new Float32Array(p.count), 1));
+    const gol = g.attributes.golpe;
+    if (!posOrig) { posOrig = P.slice(); nrmOrig = N.slice(); }
+    if (lista.length < nAbol) { P.set(posOrig); N.set(nrmOrig); gol.array.fill(0); nAbol = 0; }
     const tocados = new Uint8Array(p.count);
     const e = carroceria.scale.x;        // los golpes vienen en metros del coche real
     for (let k = nAbol; k < lista.length; k++) {
@@ -976,11 +990,8 @@ export function crearModelo(opc) {
         else P[i * 3] -= Math.sign(a.x) * f;
         P[i * 3 + 1] -= f * 0.25 * (ruido - 1);
         tocados[i] = 1;
-        // pintura saltada: a partir de ~1,5 cm de hundimiento, a parches
-        if (col && f > 0.015 && h - Math.floor(h) > 0.25) {
-          const q = Math.max(0.06, 1 - (f - 0.015) * 40);
-          col.setXYZ(i, col.getX(i) * q, col.getY(i) * q, col.getZ(i) * q);
-        }
+        // la pintura empieza a saltar a partir de ~1 cm de hundimiento; del todo a ~4 cm
+        gol.array[i] = Math.min(1, Math.max(gol.array[i], (f - 0.008) / 0.032));
       }
     }
     // normales de cara en los triángulos tocados
@@ -992,7 +1003,7 @@ export function crearModelo(opc) {
       for (let q = 0; q < 3; q++) { N[(t + q) * 3] = v1.x; N[(t + q) * 3 + 1] = v1.y; N[(t + q) * 3 + 2] = v1.z; }
     }
     p.needsUpdate = true; nr.needsUpdate = true;
-    if (col) col.needsUpdate = true;
+    gol.needsUpdate = true;
     g.computeBoundingSphere();
     nAbol = lista.length;
   }
@@ -1003,7 +1014,6 @@ export function crearModelo(opc) {
   let desintegrado = false;
   function partir(modelo3d) {
     const mallas = [cuerpo, mCarbono, mNegro, mMetal].filter(Boolean);
-    if (cuerpoLejos) { cuerpoLejos.visible = false; cuerpoLejos.userData.oculto = true; }
     for (const malla of mallas) {
       propia(malla);
       const g = malla.geometry, p = g.attributes.position, P = p.array;
@@ -1043,7 +1053,6 @@ export function crearModelo(opc) {
     calor.visible = false; pivDrs.visible = false; luzLluvia.visible = false;
   }
   function recomponer() {
-    if (cuerpoLejos) cuerpoLejos.userData.oculto = false;
     for (const malla of [cuerpo, mCarbono, mNegro, mMetal].filter(Boolean)) {
       if (!malla.userData.orig) continue;
       malla.geometry.attributes.position.array.set(malla.userData.orig); malla.geometry.attributes.position.needsUpdate = true;
@@ -1051,67 +1060,24 @@ export function crearModelo(opc) {
     calor.visible = true; pivDrs.visible = true; luzLluvia.visible = true;
     if (posOrig) cuerpo.geometry.attributes.normal.array.set(nrmOrig);
     cuerpo.geometry.attributes.normal.needsUpdate = true;
-    const col = cuerpo.geometry.attributes.color;
-    if (col && colOrig) { col.array.set(colOrig); col.needsUpdate = true; }
-    posOrig = null; nrmOrig = null; colOrig = null; nAbol = 0;          // las abolladuras se vuelven a tomar desde el coche entero
+    const gol = cuerpo.geometry.attributes.golpe;
+    if (gol) { gol.array.fill(0); gol.needsUpdate = true; }
+    posOrig = null; nrmOrig = null; nAbol = 0;          // las abolladuras se vuelven a tomar desde el coche entero
   }
 
-  // ── Coche escaneado (modelo 3D) en lugar de la carrocería procedural ──
-  // Se cambia la geometría de `cuerpo` (así abolladuras y desintegración funcionan igual sobre
-  // el escaneo), los alerones van dentro de sus grupos (se rompen y salen volando como antes) y
-  // las ruedas del juego se colocan donde estaban las del escaneo. Las piezas procedurales que
-  // ya trae el escaneo (suspensión, halo, retrovisores, flap del DRS) se ocultan.
-  let cuerpoLejos = null;
   const propia = (m) => { if (m.geometry.userData.compartida) { m.geometry = m.geometry.clone(); m.geometry.userData.compartida = false; } };
-  function ponerCocheGLB(dat, datLejos) {
-    if (!dat || cuerpo.userData.glb) return;
-    cuerpo.userData.glb = true;
-    const matG = materialCocheGLB(colores, dat, tex);
-    cuerpo.geometry = dat.partes.cuerpo; cuerpo.material = matG;
-    posOrig = null; nrmOrig = null; colOrig = null; nAbol = 0;
-    const ocultar = (o) => { o.visible = false; o.traverse(q => { q.userData.oculto = true; }); };
-    for (const m of [mCarbono, mNegro, mMetal, forroCabina]) if (m) ocultar(m);
-    for (const gp of gruposPieza) {
-      ocultar(gp.g);
-      // los retrovisores del escaneo van aparte: se tuercen y salen volando con los golpes
-      const e = gp.tipo === 'espejo' && dat.partes[gp.sg > 0 ? 'espejoIzq' : 'espejoDer'];
-      if (e) { const m = new THREE.Mesh(e, matG); m.position.copy(e.userData.centro); m.castShadow = true; carroceria.add(m); gp.glb = m; }
-    }
-    for (const [grupo, nombre] of [[alaDel, 'alaDel'], [alaTras, 'alaTras']]) {
-      for (const h of grupo.children) ocultar(h);
-      if (!dat.partes[nombre]) continue;
-      const m = new THREE.Mesh(dat.partes[nombre], matG); m.position.copy(grupo.position).negate(); m.castShadow = true; m.receiveShadow = true;
-      grupo.add(m);
-    }
-    // el escaneo es algo mayor que un F1 real: se lleva a su batalla de 3,6 m (las vías ya
-    // vienen corregidas en el modelo: 2,0 m de ancho por fuera de las ruedas, como manda el
-    // reglamento) y las ruedas quedan con sus medidas reales: 720 mm de diámetro, 305 mm de
-    // ancho delante y 405 mm detrás
-    const esc = COCHE.wheelbase / (RUEDAS_GLB.del - RUEDAS_GLB.tras);
-    carroceria.scale.setScalar(esc);
-    ruedas.forEach((r, k) => {
-      const del = k < 2, x = (del ? RUEDAS_GLB.del : RUEDAS_GLB.tras) * esc, z = Math.sign(r.base.z) * (del ? RUEDAS_GLB.zDel : RUEDAS_GLB.zTras) * esc;
-      r.base.x = x; r.base.z = z; r.base.y = r.radio; r.giro.position.set(x, r.radio, z);
-    });
-    // de lejos, la versión baja (la cambia el nivel de detalle de main.js)
-    if (datLejos) {
-      cuerpoLejos = new THREE.Mesh(datLejos.partes.cuerpo, materialCocheGLB(colores, datLejos, tex));
-      cuerpoLejos.castShadow = true; cuerpoLejos.visible = false; cuerpoLejos.userData.lejos = true;
-      carroceria.add(cuerpoLejos);
-      modelo.cuerpoLejos = cuerpoLejos;
-    }
-    modelo.conGLB = true;
-    // cámaras a bordo (coordenadas del escaneo): la de cabina, en los ojos del piloto, centrada
-    // entre el arco del halo (≈0,95 m) y el borde de la cabina (≈0,74 m); la de la cara, sobre
-    // el arco del halo mirando al casco; la T-Cam, encima de la toma de aire
-    modelo.camaras = { cabina: [0.27, 0.845, 0], mirarCabina: [30, -0.35, 0], cara: [0.58, 1.0, 0], mirarCara: [0.22, 0.87, 0],
-      tcam: [-0.2, 1.36, 0], mirarTcam: [30, 0.45, 0] };
-  }
 
   let tPantalla = 0;
   const estadoDanos = { alaDel: false, alaTras: false };
   const modelo = {
-    raiz, carroceria, ruedas, pivDrs, luzLluvia, pintura, alaDel, alaTras, casco, cuello, piloto, compuesto, espejos, volanteG: giroVolante, columna,
+    raiz, carroceria, ruedas, pivDrs, luzLluvia, pintura, alaDel, alaTras, casco, cuello, piloto, compuesto, espejos, volanteG: giroVolante, columna, halo,
+    // cámaras a bordo (coordenadas de la carrocería): la de cabina en los ojos del piloto, centrada
+    // entre el arco del halo (0,94 m) y el borde de la cabina (0,72 m); la de la cara, sobre el
+    // arco del halo (detrás del pilar) mirando al casco; la T-Cam, sobre la toma de aire
+    camaras: { cabina: [0.17, 0.80, 0], mirarCabina: [30, -0.2, 0], cara: [0.42, 0.9, 0], mirarCara: [0.05, 0.75, 0],
+      tcam: [-0.06, 1.05, 0], mirarTcam: [30, 0.4, 0] },
+    /** Pone o quita el halo (ajustes). */
+    ponerHalo(si) { halo.visible = si; },
     mirada: 0,                     // giro de la cabeza (rad) para la cámara de cabina
     alDesprender: null,            // (tipo, objeto3D) → efectos de escombros
     elevar: 0,                     // gatos de boxes
@@ -1229,30 +1195,6 @@ export function crearModelo(opc) {
       for (const g of gruposPieza) g.rota = false;
     },
   };
-  // el coche y el piloto escaneados (detallados en tu coche, más ligeros en los demás) en cuanto
-  // estén cargados; el piloto escaneado va sentado en la cabina del coche escaneado y la columna
-  // de dirección se pone donde él tiene las manos
-  if (calidad >= 1 && opc.glb !== false) {
-    const nivel = cabina ? 'alto' : 'medio';
-    const poner = ([a, b, p]) => {
-      if (!a) return;
-      ponerCocheGLB(a, b);
-      if (p && !piloto.glb) {
-        piloto.usarGLB(new PilotoGLB(p, { traje: colores.base, casco: colores.acento }));
-        columna.position.set(VOLANTE_GLB.x, VOLANTE_GLB.y, 0); columna.rotation.z = VOLANTE_GLB.caida;
-        // el volante es el escaneado, en las manos del piloto; del procedural solo se usa la
-        // pantalla viva (en tu coche), que va encima de la del escaneo
-        for (const h of [...volante.g.children]) {
-          if (h.name === 'pantalla' && cabina) piloto.glb.ponerPantalla(h);
-          else { h.visible = false; h.userData.oculto = true; }
-        }
-        modelo.volanteEscaneado = true;
-      }
-    };
-    const ya = [cocheGLBListo(nivel), cocheGLBListo('bajo'), pilotoGLBListo(!cabina), volanteGLBListo()];
-    if (ya.every(Boolean)) poner(ya);
-    else Promise.all([cargarCocheGLB(nivel), cargarCocheGLB('bajo'), cargarPilotoGLB(!cabina), cargarVolanteGLB()]).then(poner);
-  }
   return modelo;
 }
 

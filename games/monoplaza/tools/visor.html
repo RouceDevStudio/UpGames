@@ -7,9 +7,8 @@
 // Visor del monoplaza para revisar el modelado: ?gris=1 (como en un editor 3D), ?vista=3q|lado|arriba|frente|cabina|cara
 import * as THREE from 'three';
 import { crearModelo } from '../js/render/cocheModelo.js';
-import { cargarPilotoGLB } from '../js/render/pilotoGLB.js';
-import { cargarCocheGLB } from '../js/render/cocheGLB.js';
-await Promise.all([cargarPilotoGLB(false), cargarPilotoGLB(true), cargarCocheGLB('alto'), cargarCocheGLB('medio'), cargarCocheGLB('bajo'), (await import('../js/render/pilotoGLB.js')).cargarVolanteGLB()]);
+
+
 import { EQUIPOS } from '../js/config.js';
 const q = new URLSearchParams(location.search);
 const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });

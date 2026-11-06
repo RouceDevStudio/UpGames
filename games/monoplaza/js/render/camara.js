@@ -24,7 +24,7 @@ export class Camara {
   }
 
   actualizar(dt, car, modelo) {
-    modelo?.piloto?.glb?.verCabeza(this.modo !== 'cabina');     // desde dentro del casco no se ve el casco
+    modelo?.piloto?.verCabeza?.(this.modo !== 'cabina');     // desde dentro del casco no se ve el casco
     this.tiempo += dt;
     const v = car.velocidad;
     const cam = this.cam;

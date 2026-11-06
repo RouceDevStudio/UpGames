@@ -229,8 +229,16 @@ export const LLUVIA_CARROCERIA = { mojado: { value: 0 }, tiempo: { value: 0 } };
 function conGotas(mat) {
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uMojado = LLUVIA_CARROCERIA.mojado; sh.uniforms.uTiempoG = LLUVIA_CARROCERIA.tiempo;
+    // golpes: atributo por vértice (0 = intacto, 1 = muy golpeado). Donde el golpe es fuerte la
+    // pintura salta a parches y asoma el tejido de carbono de debajo
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float golpe; varying float vGolpe;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGolpe = golpe;');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
-      uniform float uMojado; uniform float uTiempoG;
+      uniform float uMojado; uniform float uTiempoG; varying float vGolpe;
+      float ruidoG(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        float a = fract(sin(dot(i, vec2(127.1, 311.7))) * 43758.55), b = fract(sin(dot(i + vec2(1, 0), vec2(127.1, 311.7))) * 43758.55);
+        float c = fract(sin(dot(i + vec2(0, 1), vec2(127.1, 311.7))) * 43758.55), d = fract(sin(dot(i + vec2(1, 1), vec2(127.1, 311.7))) * 43758.55);
+        return mix(mix(a, b, f.x), mix(c, d, f.x), f.y); }
       float gotasAgua(vec2 uv) {
         if (uMojado < 0.01) return 0.0;
         // en el atlas, u recorre el coche de morro a cola (al revés en el lado izquierdo)
@@ -253,9 +261,21 @@ function conGotas(mat) {
         roughnessFactor = mix(roughnessFactor, 0.0, gG);
         diffuseColor.rgb *= 1.0 - 0.18 * uMojado;
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.7 + 0.22, gG * 0.55);
+        if (vGolpe > 0.01) {
+          vec2 q = vMapUv * vec2(260.0, 520.0);
+          float parche = ruidoG(q * 0.25) * 0.65 + ruidoG(q) * 0.35;
+          float salta = smoothstep(parche - 0.05, parche + 0.05, vGolpe * 0.9);
+          // tejido de carbono (sarga) bajo la pintura
+          vec2 t = fract(vMapUv * vec2(900.0, 1800.0));
+          float tejido = 0.035 + 0.03 * step(0.5, fract(t.x + t.y * 0.5 + step(0.5, t.y) * 0.5));
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(tejido), salta);
+          // borde de la pintura rota, más claro (imprimación)
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.55), (1.0 - abs(salta * 2.0 - 1.0)) * step(0.02, salta) * 0.35);
+          roughnessFactor = mix(roughnessFactor, 0.55, salta);
+        }
       #endif`);
   };
-  mat.customProgramCacheKey = () => 'libreaGotas';
+  mat.customProgramCacheKey = () => 'libreaGotas2';
   return mat;
 }
 
