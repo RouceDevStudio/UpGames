@@ -4844,12 +4844,12 @@ body.nx-open #nxFab {
     linear-gradient(135deg, var(--bg2), var(--bg1));
   background-size: cover; background-position: center;
   overflow: hidden;
+  /* Desvanecido: la portada se funde con el fondo en vez de cortarse con una línea dura */
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 50%, rgba(0,0,0,.55) 75%, transparent 100%);
+          mask-image: linear-gradient(180deg, #000 0%, #000 50%, rgba(0,0,0,.55) 75%, transparent 100%);
 }
-@media (min-width: 720px) { .pf2-cover { border-radius: 0 0 18px 18px; } }
-.pf2-cover::after {
-  content: ''; position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(180deg, transparent 55%, rgba(var(--bg-rgb), .55));
-}
+@media (min-width: 720px) { .pf2-cover { border-radius: 0 0 22px 22px; } }
+.pf2-cover::after { content: none; }
 .pf2-cover-btn {
   position: absolute; right: 12px; top: 12px; z-index: 2;
   display: inline-flex; align-items: center; gap: 6px;
@@ -5420,3 +5420,16 @@ button.pf2-stat { cursor: pointer; }
   .ugr-item,.ugr.open .ugr-item,.ugr-glow,.ugr-core{transition:opacity .15s;transition-delay:0s}
   .ugr-item{transform:none} .ugr-glow{transform:none}
 }
+
+/* ══ Editar publicación: mismo flujo que Publicar ══ */
+.pfe .pfp-paso-h { margin: 6px 0 10px; }
+.pfe .pfe-cat-grid { grid-template-columns: repeat(4, 1fr); }
+.pfe .pfe-medias { grid-template-columns: 1fr 1fr; }
+@media (max-width: 420px) { .pfe .pfe-medias { grid-template-columns: 1fr; } }
+.pfe-estado {
+  margin-bottom: 14px; padding: 10px 12px; border-radius: 12px;
+  font-size: .78rem; line-height: 1.4; color: var(--txt2);
+  background: var(--cy-dim); border: 1px solid rgba(var(--cy-rgb), .25);
+}
+.pfe-estado.mal { background: rgba(255, 67, 67, .1); border-color: rgba(255, 67, 67, .3); color: #ffb4b4; }
+.pfe #pf-edit-extra-fields:not(:empty) { margin-bottom: 6px; }

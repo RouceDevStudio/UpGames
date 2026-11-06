@@ -2056,25 +2056,31 @@ function pfpRender() {
 }
 // Plantillas de descripción por categoría (modulos/plantillas.js) y "Que NEXUS la escriba"
 let _pfpPlantillas = null;
-async function pfpPlantilla() {
-  const ta = document.getElementById('pf-addDescription'); if (!ta) return;
+// modo 'edit' = mismos botones dentro del modal Editar publicación
+const pfpIds = modo => modo === 'edit'
+  ? { desc: 'pf-edit-description', title: 'pf-edit-title', cat: 'pf-edit-category', btn: 'pfe-nexus-desc', extras: 'pf-edit-extra-fields' }
+  : { desc: 'pf-addDescription', title: 'pf-addTitle', cat: 'pf-addCategory', btn: 'pfp-nexus-desc', extras: 'pf-extra-fields' };
+async function pfpPlantilla(modo) {
+  const I = pfpIds(modo);
+  const ta = document.getElementById(I.desc); if (!ta) return;
   try { if (!_pfpPlantillas) _pfpPlantillas = (await (await fetch(`${API_URL}/items/plantillas`)).json()).plantillas || {}; } catch (_) { return toast('⚠️ No se pudo cargar la plantilla'); }
-  const cat = document.getElementById('pf-addCategory')?.value || 'Juego', tpl = _pfpPlantillas[cat] || _pfpPlantillas.Juego || '';
+  const cat = document.getElementById(I.cat)?.value || 'Juego', tpl = _pfpPlantillas[cat] || _pfpPlantillas.Juego || '';
   if (ta.value.trim() && !confirm('¿Reemplazar lo que ya escribiste por la plantilla?')) return;
   ta.value = tpl; ta.dispatchEvent(new Event('input', { bubbles: true })); ta.focus();
   const i = tpl.indexOf('• \n'); if (i >= 0) ta.setSelectionRange(i + 2, i + 2);   // cursor en el primer espacio por llenar
 }
-async function pfpNexusDescribe() {
-  const ta = document.getElementById('pf-addDescription'), b = document.getElementById('pfp-nexus-desc'); if (!ta || !b) return;
-  const title = (document.getElementById('pf-addTitle')?.value || '').trim();
+async function pfpNexusDescribe(modo) {
+  const I = pfpIds(modo);
+  const ta = document.getElementById(I.desc), b = document.getElementById(I.btn); if (!ta || !b) return;
+  const title = (document.getElementById(I.title)?.value || '').trim();
   if (title.length < 3) return toast('✏️ Escribe primero el título');
   const tk = LS.get('token'); if (!tk) return ugPedirSesion('usar NEXUS');
   if (ta.value.trim() && !confirm('NEXUS reemplazará lo que escribiste. ¿Continuar?')) return;
-  const extras = {}; document.querySelectorAll('#pf-extra-fields [id]').forEach(x => { if (x.value) extras[x.id.replace(/^pf-extra-?/, '')] = x.value; });
+  const extras = pfLeerExtras(document.getElementById(I.extras));
   b.disabled = true; const txt = b.textContent; b.textContent = '✦ Escribiendo…';
   try {
     const r = await fetch(`${API_URL}/items/describir`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tk}` },
-      body: JSON.stringify({ title, category: document.getElementById('pf-addCategory')?.value || 'Juego', extras }) });
+      body: JSON.stringify({ title, category: document.getElementById(I.cat)?.value || 'Juego', extras }) });
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !d.success) return toast('⚠️ ' + (d.error || 'NEXUS no pudo escribirla ahora'));
     ta.value = d.descripcion; ta.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2181,7 +2187,7 @@ function pfOnCategoryChange(cat, btnEl) {
   if(catInput) catInput.value = cat;
 
   // Update category button styles
-  document.querySelectorAll('.pf-cat-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#pf-cat-grid .pf-cat-btn').forEach(b => b.classList.remove('active'));
   if(btnEl) btnEl.classList.add('active');
 
   const formStd = document.getElementById('pf-form-standard');
@@ -2206,25 +2212,41 @@ function pfOnCategoryChange(cat, btnEl) {
   if(label) label.textContent = cfg.label;
 
   // Render extra fields
-  const extraZone = document.getElementById('pf-extra-fields');
-  if(!extraZone) return;
-  extraZone.innerHTML = '';
+  pfRenderExtras(document.getElementById('pf-extra-fields'), cat, 'pf-ex-');
+}
+
+// Campos extra de una categoría (plataforma, tamaño, consola…). Los usa Publicar
+// (prefijo pf-ex-) y Editar (prefijo pf-edit-ex-, con los valores que ya tenía).
+const pfExKey = id => id.replace(/^pf-ex-/, '');
+function pfRenderExtras(zone, cat, prefijo, valores) {
+  if(!zone) return;
+  const cfg = CAT_CONFIG[cat] || CAT_CONFIG['Juego'];
+  valores = valores || {};
+  zone.innerHTML = '';
   (cfg.extras || []).forEach(field => {
+    const key = pfExKey(field.id), id = prefijo + key, val = valores[key] != null ? String(valores[key]) : '';
     const group = document.createElement('div');
     group.className = 'pf-form-group';
     let inputHTML = '';
     if(field.type === 'select') {
-      inputHTML = `<select id="${field.id}" class="pf-select">
-        ${field.options.map(o=>`<option value="${o}">${o}</option>`).join('')}
+      const opts = val && !field.options.includes(val) ? [...field.options, val] : field.options;
+      inputHTML = `<select id="${id}" class="pf-select" data-key="${key}">
+        <option value="">— Sin especificar —</option>
+        ${opts.map(o=>`<option value="${ugEsc(o)}"${o === val ? ' selected' : ''}>${ugEsc(o)}</option>`).join('')}
       </select>`;
     } else if(field.type === 'textarea') {
-      inputHTML = `<textarea id="${field.id}" class="pf-textarea" placeholder="${field.placeholder||''}"></textarea>`;
+      inputHTML = `<textarea id="${id}" class="pf-textarea" data-key="${key}" maxlength="600" placeholder="${ugEsc(field.placeholder||'')}">${ugEsc(val)}</textarea>`;
     } else {
-      inputHTML = `<input type="text" id="${field.id}" class="pf-input" placeholder="${field.placeholder||''}">`;
+      inputHTML = `<input type="text" id="${id}" class="pf-input" data-key="${key}" maxlength="120" placeholder="${ugEsc(field.placeholder||'')}" value="${ugEsc(val)}">`;
     }
-    group.innerHTML = `<label class="pf-label">${field.label}</label>${inputHTML}`;
-    extraZone.appendChild(group);
+    group.innerHTML = `<label class="pf-label" for="${id}">${field.label}</label>${inputHTML}`;
+    zone.appendChild(group);
   });
+}
+function pfLeerExtras(zone) {
+  const out = {};
+  zone?.querySelectorAll('[data-key]').forEach(x => { const v = (x.value || '').trim(); if (v) out[x.dataset.key] = v; });
+  return out;
 }
 
 // ── Video type selector ──
@@ -2627,14 +2649,7 @@ async function pfSubirJuego() {
   const imagen = document.getElementById('pf-addImage').value.trim();
   const cat = document.getElementById('pf-addCategory')?.value || pfCurrentCategory;
   // Recoger campos extra dinámicos
-  const extraData = {};
-  const cfg = CAT_CONFIG[cat];
-  if(cfg && cfg.extras) {
-    cfg.extras.forEach(f => {
-      const el = document.getElementById(f.id);
-      if(el && el.value.trim()) extraData[f.id.replace('pf-ex-','')] = el.value.trim();
-    });
-  }
+  const extraData = pfLeerExtras(document.getElementById('pf-extra-fields'));
   // Recoger medias adicionales slots 2-4 (opcionales)
   const imagesExtra = [
     document.getElementById('pf-addImage2')?.value.trim() || '',
@@ -2947,7 +2962,7 @@ async function pfSaveEditVideo() {
       headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
       body: JSON.stringify({
         title, description:desc, image:thumb, videoType:type, category:'Video',
-        extraData: duracion ? { duracion } : {}
+        extraData: { duracion: duracion || '' }
       })
     });
     if(res.ok) { toast('✅ Video actualizado'); pfCloseEditVideoModal(); pfLoadHistorial(); }
@@ -2970,6 +2985,10 @@ async function pfEliminar(id) {
 }
 
 // ── Edit Modal ──
+// Todas las claves de campos extra que existen (para limpiar las de otra categoría al cambiarla)
+const PF_EX_TODAS = [...new Set(Object.values(CAT_CONFIG).flatMap(c => (c.extras || []).map(f => pfExKey(f.id))))];
+let pfEditItem = null;
+
 async function pfOpenEditModal(itemId) {
   pfCurrentEditId = itemId;
   try {
@@ -2978,33 +2997,107 @@ async function pfOpenEditModal(itemId) {
       headers: token ? { Authorization:`Bearer ${token}` } : {}
     });
     const data = await res.json();
-    const item = data.find(i => i._id === itemId);
+    const item = (Array.isArray(data) ? data : []).find(i => i._id === itemId);
     if(!item) { toast('❌ Item no encontrado'); return; }
+    pfEditItem = item;
     document.getElementById('pf-edit-id').value = item._id;
     document.getElementById('pf-edit-title').value = item.title||'';
     document.getElementById('pf-edit-description').value = item.description||'';
     document.getElementById('pf-edit-link').value = item.link||'';
     document.getElementById('pf-edit-image').value = item.image||'';
-    document.getElementById('pf-edit-category').value = item.category||'Juego';
     // Cargar medias adicionales (images[])
     const imgs = item.images || [];
     ['pf-edit-image2','pf-edit-image3','pf-edit-image4'].forEach((id, i) => {
       const el = document.getElementById(id);
       if(el) el.value = imgs[i] || '';
     });
+    pfEditCategoria(CAT_CONFIG[item.category] ? item.category : 'Juego', item.extraData || {});
+    [0,1,2,3].forEach(pfEditPrevSlot);
+    pfValidateEditTitle(); pfValidateEditLink(); pfValidateEditImage(); pfEditContador(); pfEditDetectar();
+    // Estado actual: si está rechazada o en revisión, se explica por qué
+    const est = document.getElementById('pf-edit-estado');
+    if (est) {
+      const rech = item.status === 'rechazado';
+      const msg = rech ? `❌ Rechazada${item.motivoRechazo ? ': ' + item.motivoRechazo : ''}. Corrígela y guarda.`
+        : item.linkStatus === 'caido' ? '⚠️ El enlace está marcado como caído: pega uno nuevo.'
+        : item.linkStatus === 'revision' ? '⏳ En revisión: estamos comprobando el enlace.' : '';
+      est.textContent = msg; est.hidden = !msg; est.className = 'pfe-estado' + (rech || item.linkStatus === 'caido' ? ' mal' : '');
+    }
+    document.getElementById('pf-edit-nexus-res').innerHTML = '';
     document.getElementById('pf-editModal').classList.add('show');
     document.body.style.overflow='hidden';
   } catch(e) { toast('❌ Error al cargar'); }
+}
+// Cambia la categoría en el editor y pinta sus campos extra (conservando lo ya escrito)
+function pfEditCategoria(cat, valores) {
+  const zona = document.getElementById('pf-edit-extra-fields');
+  const previos = valores || { ...(pfEditItem?.extraData || {}), ...pfLeerExtras(zona) };
+  document.getElementById('pf-edit-category').value = cat;
+  document.querySelectorAll('#pf-edit-cat-grid .pf-cat-btn').forEach(b => b.classList.toggle('active', b.dataset.cat === cat));
+  pfRenderExtras(zona, cat, 'pf-edit-ex-', previos);
+}
+function pfEditPrevSlot(i) {
+  const ids = ['pf-edit-image','pf-edit-image2','pf-edit-image3','pf-edit-image4'];
+  const url = (document.getElementById(ids[i])?.value || '').trim();
+  const prev = document.getElementById('pf-edit-prev-' + i); if (!prev) return;
+  if (!url) { prev.classList.remove('show','rota'); return; }
+  const img = prev.querySelector('img');
+  img.onerror = () => { prev.classList.remove('show'); prev.classList.add('rota'); };
+  img.onload = () => prev.classList.remove('rota');
+  img.src = isYouTubeUrl(url) ? getYouTubeThumbnail(url) : url;
+  prev.classList.add('show');
+}
+function pfEditContador() {
+  const ta = document.getElementById('pf-edit-description'), n = document.getElementById('pf-edit-desc-n');
+  if (ta && n) n.textContent = `${ta.value.length} / 1000`;
+}
+let _pfEditDetT = null;
+function pfEditDetectar() {
+  clearTimeout(_pfEditDetT);
+  _pfEditDetT = setTimeout(async () => {
+    const t = (document.getElementById('pf-edit-title')?.value || '').trim();
+    const box = document.getElementById('pf-edit-detectado'); if (!box) return;
+    const pinta = nombre => { box.style.display = nombre ? 'flex' : 'none'; if (nombre) document.getElementById('pf-edit-detectado-n').textContent = '🎮 Detectado: ' + nombre; };
+    const prev = pfEditItem?.extraData?.detectedGame;
+    if (prev && t === (pfEditItem?.title || '')) return pinta(prev.gameName);
+    if (t.length < 3) return pinta('');
+    try {
+      const d = await fetch(`${PF_API}/items/detect-game`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: t }) }).then(x => x.json());
+      if ((document.getElementById('pf-edit-title')?.value || '').trim() === t) pinta(d && d.detected ? d.gameName : '');
+    } catch (_) { pinta(''); }
+  }, 600);
+}
+function pfFormEdicion() {
+  const v = id => (document.getElementById(id)?.value || '').trim();
+  return { title: v('pf-edit-title'), description: v('pf-edit-description'), link: v('pf-edit-link'), image: v('pf-edit-image'),
+    images: ['pf-edit-image2','pf-edit-image3','pf-edit-image4'].map(v).filter(Boolean), category: v('pf-edit-category') || 'Juego' };
+}
+async function pfRevisarEdicionConNexus() {
+  const d = pfFormEdicion(), out = document.getElementById('pf-edit-nexus-res'), btn = document.getElementById('pf-edit-nexus-btn');
+  if (!d.title || !d.link) return toast('✦ Escribe al menos el título y el enlace para que Nexus lo revise');
+  const token = LS.get('token'); if (!token) return;
+  out.innerHTML = `<div class="pf-nx-load"><span class="pf-nx-orb"></span><div><b>Nexus está revisando tus cambios…</b><small>Abriendo tu enlace, comprobando la portada y el texto</small></div></div>`;
+  if (btn) btn.disabled = true;
+  try {
+    const r = await fetch(`${PF_API}/items/precheck`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ ...d, ia: true, editId: pfCurrentEditId }) });
+    const res = await r.json().catch(() => ({}));
+    if (!r.ok || !res.success) { out.innerHTML = `<div class="pf-nx-res warn">${ugEsc(res.error || 'Nexus no pudo revisar ahora. Puedes guardar igualmente.')}</div>`; return; }
+    pfPintarNexus(res, out);
+  } catch (_) { out.innerHTML = '<div class="pf-nx-res warn">Error de conexión</div>'; }
+  finally { if (btn) btn.disabled = false; }
 }
 function pfCloseEditModal() {
   document.getElementById('pf-editModal').classList.remove('show');
   document.body.style.overflow='';
   pfCurrentEditId = null;
+  pfEditItem = null;
   // Reset validation states
-  ['pf-edit-title','pf-edit-link','pf-edit-image','pf-edit-image2','pf-edit-image3','pf-edit-image4'].forEach(id=>{
+  ['pf-edit-title','pf-edit-link','pf-edit-image','pf-edit-image2','pf-edit-image3','pf-edit-image4','pf-edit-description'].forEach(id=>{
     const el=document.getElementById(id);
     if(el) { el.classList.remove('valid','invalid'); el.value=''; }
   });
+  [0,1,2,3].forEach(i => document.getElementById('pf-edit-prev-' + i)?.classList.remove('show','rota'));
+  const zona = document.getElementById('pf-edit-extra-fields'); if (zona) zona.innerHTML = '';
   ['pf-edit-title-hint','pf-edit-link-hint','pf-edit-image-hint'].forEach(id=>{
     const el=document.getElementById(id);
     if(el) el.textContent='';
@@ -3055,18 +3148,12 @@ function pfValidateEditImage() {
 
 async function pfSaveEdit() {
   if(!pfCurrentEditId) return;
-  const upd = {
-    title: document.getElementById('pf-edit-title').value.trim(),
-    description: document.getElementById('pf-edit-description').value.trim(),
-    link: document.getElementById('pf-edit-link').value.trim(),
-    image: document.getElementById('pf-edit-image').value.trim(),
-    images: [
-      document.getElementById('pf-edit-image2')?.value.trim(),
-      document.getElementById('pf-edit-image3')?.value.trim(),
-      document.getElementById('pf-edit-image4')?.value.trim(),
-    ].filter(u => u && u.length > 0),
-    category: document.getElementById('pf-edit-category').value
-  };
+  const upd = pfFormEdicion();
+  // Campos extra: los de la categoría actual; los de otras categorías se borran ('' = quitar)
+  const ex = pfLeerExtras(document.getElementById('pf-edit-extra-fields'));
+  upd.extraData = {};
+  PF_EX_TODAS.forEach(k => { upd.extraData[k] = ex[k] || ''; });
+  if(!upd.image) { toast('⚠️ La portada es obligatoria.'); return; }
   const vl = pfAnalizarLink(upd.link);
   if(vl.ok===false) { toast(vl.msg); return; }
   if(!upd.title||!upd.link) { toast('⚠️ Título y enlace requeridos'); return; }
@@ -3081,7 +3168,11 @@ async function pfSaveEdit() {
       headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},
       body: JSON.stringify(upd)
     });
-    if(res.ok) { toast('✅ Actualizado'); pfCloseEditModal(); pfLoadHistorial(); }
+    if(res.ok) {
+      const cambioLink = pfEditItem && (pfEditItem.link || '').trim() !== upd.link;
+      toast(cambioLink ? '✅ Guardado. El nuevo enlace queda "En revisión" hasta comprobarlo.' : '✅ Cambios guardados');
+      pfCloseEditModal(); pfLoadHistorial();
+    }
     else { const e=await res.json(); toast('❌ '+(e.error||'Error')); }
   } catch(e) { toast('❌ Error de conexión'); }
 }

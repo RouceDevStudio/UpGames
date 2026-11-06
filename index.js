@@ -2051,6 +2051,11 @@ app.post('/items/precheck', verificarToken, async (req, res) => {
             category: String(b.category || 'General').slice(0, 40), extraData: {},
         };
         if (!item.title || !item.link) return res.status(400).json({ success: false, error: 'Escribe al menos el título y el enlace' });
+        // Al editar: se revisa como la publicación existente (no se marca duplicada de sí misma)
+        if (b.editId && mongoose.Types.ObjectId.isValid(b.editId)) {
+            const propia = await Juego.findOne({ _id: b.editId, usuario: req.usuario }).select('_id createdAt').lean();
+            if (propia) { item._id = propia._id; item.createdAt = propia.createdAt || item.createdAt; }
+        }
         const a = await revisionIA.analizar(item, { Juego, Usuario, errorLinkPublicacion, gameDetector, logger, sinIA: b.ia === false });
         // Al creador solo le sirve lo que puede corregir (no su propio historial)
         const hechos = a.hechos.filter(h => ['enlace', 'medios', 'texto', 'derechos', 'duplicado'].includes(h.area));
@@ -2058,7 +2063,7 @@ app.post('/items/precheck', verificarToken, async (req, res) => {
         // ¿Es una parte de una serie?
         const s = series.serieDe(item.title, req.usuario);
         if (s) {
-            const otras = await Juego.find({ 'serie.clave': s.clave }).select('serie.parte').lean();
+            const otras = await Juego.find({ 'serie.clave': s.clave, _id: { $ne: item._id } }).select('serie.parte').lean();
             const nums = [...new Set(otras.map(o => o.serie?.parte).filter(Boolean))].sort((x, y) => x - y);
             if (nums.includes(s.parte)) hechos.push({ tipo: 'warn', area: 'serie', texto: `Ya publicaste la Parte ${s.parte} de "${s.base}": ¿no será la siguiente?`, peso: 0 });
             else if (nums.length) hechos.push({ tipo: 'ok', area: 'serie', texto: `Es la Parte ${s.parte} de "${s.base}": se agrupará en una carpeta con tus partes ${nums.join(', ')}. Cada parte suma sus propias descargas.`, peso: 0 });
@@ -2163,9 +2168,32 @@ app.put("/items/:id", verificarToken, [
         if (!item) return res.status(404).json({ success: false, error: "Publicación no encontrada" });
         if (item.usuario !== req.usuario) return res.status(403).json({ success: false, error: "No tienes permiso para editar esta publicación" });
         const updates = {};
-        ['title', 'description', 'link', 'image', 'images', 'category', 'videoType', 'extraData', 'featuredItemId'].forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
+        CAMPOS_PUBLICACION.forEach(f => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
         if (Object.keys(updates).length === 0) return res.status(400).json({ success: false, error: "No se enviaron campos para actualizar" });
+        if (updates.tags !== undefined) updates.tags = Array.isArray(updates.tags) ? updates.tags.filter(t => typeof t === 'string').map(t => t.trim().slice(0, 40)).filter(Boolean).slice(0, 15) : undefined;
+        if (updates.tags === undefined) delete updates.tags;
         if (updates.title !== undefined) updates.serie = series.serieDe(updates.title, item.usuario);
+        // Campos extra (plataforma, tamaño, consola…): se fusionan con lo que ya había y se
+        // sanean. Los que el servidor calcula (detectedGame, duracion de videos) no los pisa el cliente.
+        if (updates.extraData !== undefined || updates.title !== undefined || updates.description !== undefined) {
+            const previo = (item.extraData && typeof item.extraData === 'object') ? { ...item.extraData } : {};
+            const nuevo = (updates.extraData && typeof updates.extraData === 'object' && !Array.isArray(updates.extraData)) ? updates.extraData : null;
+            const ex = { ...previo };
+            if (nuevo) {
+                Object.entries(nuevo).slice(0, 20).forEach(([k, v]) => {
+                    if (!/^[\w-]{1,40}$/.test(k) || k === 'detectedGame') return;
+                    if (v === '' || v === null) delete ex[k];
+                    else if (typeof v === 'string' || typeof v === 'number') ex[k] = String(v).trim().slice(0, 600);
+                });
+            }
+            const det = gameDetector.detectGame(updates.title ?? item.title, updates.description ?? item.description);
+            if (det) ex.detectedGame = { gameName: det.gameName, gameKey: det.gameKey, platform: det.platform, purchaseLink: det.purchaseLink };
+            else delete ex.detectedGame;
+            updates.extraData = ex;
+        }
+        // Cambiar el enlace de una publicación ya verificada la devuelve a revisión:
+        // evita publicar un enlace bueno y luego cambiarlo por otro distinto sin control.
+        if (updates.link !== undefined && String(updates.link).trim() !== String(item.link || '').trim()) updates.linkStatus = 'revision';
         const modE = Moderacion.reglas(`${updates.title ?? item.title} ${updates.description ?? item.description ?? ''}`, 'publicacion');
         if (modE.bloquear) return res.status(400).json({ success: false, error: `No se puede guardar: ${Moderacion.MENSAJE[modE.categoria] || 'incumple las normas'}.` });
         if (updates.link !== undefined) {
