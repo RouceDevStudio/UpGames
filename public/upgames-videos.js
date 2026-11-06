@@ -6,8 +6,9 @@
    reproducción automática y lista infinita (al llegar al final se vuelve
    a mezclar el catálogo de videos y sigue).
    • Toque: pausa / reproduce · Doble toque: me gusta con corazones.
-   • Barra lateral: autor (+ seguir), me gusta, comentarios, compartir,
-     publicación destacada del video.
+   • Pantalla tipo consola UpGames: autor (+ seguir) junto al título y
+     barra inferior con me gusta, comentarios, compartir, publicación
+     destacada, progreso arrastrable y tiempo.
    • Solo el video visible y sus vecinos tienen el archivo cargado.
    • Atrás del celular, Escape o ✕ cierran el feed.
    Depende de script.js: API_URL, LS, todosLosItems, fav(), registrarVista(),
@@ -41,7 +42,10 @@
     raiz.innerHTML = `
       <div class="ugv-top">
         <button type="button" class="ugv-ic ugv-cerrar" aria-label="Cerrar videos"><ion-icon name="chevron-back"></ion-icon></button>
-        <div class="ugv-tabs" role="tablist"><button type="button" class="on" data-o="parati" role="tab">Para ti</button><button type="button" data-o="populares" role="tab">Populares</button><i class="ugv-tab-bar"></i></div>
+        <div class="ugv-canal">
+          <div class="ugv-tabs" role="tablist"><button type="button" class="on" data-o="parati" role="tab">Para ti</button><button type="button" data-o="populares" role="tab">Top</button></div>
+          <div class="ugv-hud" aria-hidden="true"><i></i>UP//VIDEO <span class="ugv-cnt">#01</span></div>
+        </div>
         <button type="button" class="ugv-ic ugv-son" aria-label="Sonido"><ion-icon name="volume-high"></ion-icon></button>
       </div>
       <div class="ugv-lista" tabindex="0"></div>
@@ -81,7 +85,7 @@
 
   /* ── Datos ── */
   async function cargarVideos() {
-    let todos = (typeof todosLosItems !== 'undefined' ? todosLosItems : []).filter(i => i.category === 'Video');
+    let todos = (typeof todosLosItems !== 'undefined' && Array.isArray(todosLosItems) ? todosLosItems : []).filter(i => i && i.category === 'Video');
     try {
       const r = await fetch(`${API}/items?categoria=Video`);
       if (r.ok) { const d = await r.json(); const m = new Map(todos.map(i => [i._id, i])); (Array.isArray(d) ? d : []).forEach(i => { if (i.category === 'Video' && !m.has(i._id)) m.set(i._id, i); }); todos = [...m.values()]; }
@@ -112,24 +116,30 @@
     const p = poster(it);
     el.innerHTML = `
       <div class="ugv-fondo" style="${p ? `background-image:url('${esc(p)}')` : ''}"></div>
-      <div class="ugv-media"></div>
-      <div class="ugv-velo"></div>
-      <div class="ugv-play" aria-hidden="true"><ion-icon name="play"></ion-icon></div>
-      <aside class="ugv-rail">
-        <button type="button" class="ugv-av" data-a="perfil" aria-label="Perfil de @${esc(autor)}"><span class="ugv-av-hx">${esc(autor[0].toUpperCase())}</span><span class="ugv-seg" data-a="seguir" aria-label="Seguir">+</span></button>
-        <button type="button" class="ugv-btn ugv-like" data-a="like" aria-label="Me gusta"><ion-icon name="heart"></ion-icon><b>${nf(it.likesCount)}</b></button>
-        <button type="button" class="ugv-btn" data-a="com" aria-label="Comentarios"><ion-icon name="chatbubble-ellipses"></ion-icon><b class="ugv-ncom">·</b></button>
-        <button type="button" class="ugv-btn" data-a="compartir" aria-label="Compartir"><ion-icon name="arrow-redo"></ion-icon><b>Compartir</b></button>
-        ${it.featuredItemId ? `<button type="button" class="ugv-btn" data-a="destacada" aria-label="Ver publicación"><ion-icon name="cloud-download"></ion-icon><b>Descargar</b></button>` : ''}
-        <div class="ugv-disco" aria-hidden="true"><span>UP</span></div>
-      </aside>
+      <div class="ugv-pantalla">
+        <div class="ugv-media"></div>
+        <div class="ugv-velo"></div>
+        <i class="ugv-esq" aria-hidden="true"></i>
+      </div>
+      <div class="ugv-play" aria-hidden="true"><ion-icon name="play"></ion-icon><b>Pausa</b></div>
       <div class="ugv-info">
-        <button type="button" class="ugv-autor" data-a="perfil">@${esc(autor)}</button>
+        <div class="ugv-quien">
+          <button type="button" class="ugv-av" data-a="perfil" aria-label="Perfil de @${esc(autor)}"><span class="ugv-av-hx">${esc(autor[0].toUpperCase())}</span></button>
+          <button type="button" class="ugv-autor" data-a="perfil">@${esc(autor)}</button>
+          <button type="button" class="ugv-seg" data-a="seguir">Seguir</button>
+        </div>
         <div class="ugv-tit">${esc(it.title || '')}</div>
         ${it.description ? `<div class="ugv-desc">${esc(it.description)}</div>` : ''}
-        <div class="ugv-meta">${it.videoType ? `<span class="ugv-tag">${esc(it.videoType)}</span>` : ''}<span><ion-icon name="eye"></ion-icon>${nf(vistas(it))} vistas</span></div>
+        <div class="ugv-meta">${it.videoType ? `<span class="ugv-tag">${esc(it.videoType)}</span>` : ''}<span><ion-icon name="eye"></ion-icon>${nf(vistas(it))}</span></div>
       </div>
-      <div class="ugv-prog"><i></i></div>`;
+      <nav class="ugv-dock" aria-label="Acciones del video">
+        <div class="ugv-prog"><i></i></div>
+        <button type="button" class="ugv-btn ugv-like" data-a="like" aria-label="Me gusta"><ion-icon name="heart"></ion-icon><b>${nf(it.likesCount)}</b></button>
+        <button type="button" class="ugv-btn" data-a="com" aria-label="Comentarios"><ion-icon name="chatbubble-ellipses"></ion-icon><b class="ugv-ncom">·</b></button>
+        <button type="button" class="ugv-btn" data-a="compartir" aria-label="Compartir"><ion-icon name="arrow-redo"></ion-icon></button>
+        ${it.featuredItemId ? `<button type="button" class="ugv-btn ugv-bajar" data-a="destacada" aria-label="Ver publicación"><ion-icon name="cloud-download"></ion-icon><b>Obtener</b></button>` : ''}
+        <span class="ugv-t">${esYT(it) ? 'YT' : '0:00'}</span>
+      </nav>`;
     lista.appendChild(el);
     const s = { el, item: it, media: null, video: null, yt: null, cargado: false, pausadoUsuario: false };
     slides.push(s);
@@ -138,7 +148,7 @@
     // toque / doble toque sobre el video
     let ultimo = 0, tmr = null;
     el.addEventListener('pointerup', e => {
-      if (e.target.closest('.ugv-rail, .ugv-info button, .ugv-prog, .ugv-desc')) return;
+      if (e.target.closest('.ugv-dock, .ugv-info button, .ugv-desc')) return;
       const ahora = Date.now();
       if (ahora - ultimo < 280) { clearTimeout(tmr); ultimo = 0; corazones(s, e.clientX, e.clientY); if (!esFav(it._id)) darLike(s); return; }
       ultimo = ahora; tmr = setTimeout(() => alternar(), 280);
@@ -164,7 +174,8 @@
       v.setAttribute('playsinline', ''); v.setAttribute('webkit-playsinline', '');
       const p = poster(it); if (p) v.poster = p;
       v.src = ugVideoSrc(it.link);
-      v.addEventListener('timeupdate', () => { const b = $('.ugv-prog i', s.el); if (b && v.duration) b.style.transform = `scaleX(${v.currentTime / v.duration})`; });
+      const t = $('.ugv-t', s.el), mmss = x => `${Math.floor(x / 60)}:${String(Math.floor(x % 60)).padStart(2, '0')}`;
+      v.addEventListener('timeupdate', () => { const b = $('.ugv-prog i', s.el); if (b && v.duration) { b.style.transform = `scaleX(${v.currentTime / v.duration})`; t.textContent = `${mmss(v.currentTime)} / ${mmss(v.duration)}`; } });
       v.addEventListener('waiting', () => s.el.classList.add('cargando')); v.addEventListener('playing', () => s.el.classList.remove('cargando'));
       m.appendChild(v); s.video = v;
     }
@@ -205,6 +216,7 @@
     slides.forEach((x, k) => { if (Math.abs(k - i) <= 1) cargar(x); else if (Math.abs(k - i) > 2) descargar(x); });
     s.pausadoUsuario = false;
     s.el.classList.add('activo');
+    $('.ugv-cnt', raiz).textContent = '#' + String(i + 1).padStart(2, '0');
     reproducir(s);
     if (typeof registrarVista === 'function') registrarVista(s.item);
     contarComentarios(s); estadoSeguir(s);
@@ -224,7 +236,7 @@
   }
   function avisoSonido(on) { const a = $('.ugv-avisoson', raiz); if (a) a.hidden = !on; }
 
-  /* ── Barra lateral ── */
+  /* ── Acciones ── */
   const esFav = id => (typeof LS !== 'undefined' ? LS.getJSON('favoritos', []) : []).includes(id);
   function pintarLike(s) { const b = $('.ugv-like', s.el); b.classList.toggle('on', esFav(s.item._id)); $('b', b).textContent = nf(s.item.likesCount); }
   async function darLike(s) {
@@ -242,7 +254,7 @@
   }
   function corazones(s, x, y) {
     for (let k = 0; k < 7; k++) {
-      const h = document.createElement('i'); h.className = 'ugv-corazon'; h.innerHTML = '<ion-icon name="heart"></ion-icon>';
+      const h = document.createElement('i'); h.className = 'ugv-corazon' + (k ? ' chispa' : ''); if (!k) h.innerHTML = '<ion-icon name="heart"></ion-icon><span></span>';
       h.style.left = x + 'px'; h.style.top = y + 'px';
       h.style.setProperty('--dx', ((Math.random() - .5) * 220).toFixed(0) + 'px'); h.style.setProperty('--dy', (-120 - Math.random() * 200).toFixed(0) + 'px');
       h.style.setProperty('--r', ((Math.random() - .5) * 60).toFixed(0) + 'deg'); h.style.animationDelay = (k * 40) + 'ms';
@@ -257,7 +269,7 @@
     if (!siguiendo.has(autor)) {
       try { const r = await fetch(`${API}/usuarios/verifica-seguimiento/${encodeURIComponent(yo())}/${encodeURIComponent(autor)}`); siguiendo.set(autor, !!(await r.json()).estaSiguiendo); } catch (_) { siguiendo.set(autor, false); }
     }
-    slides.filter(x => String(x.item.usuario || '').toLowerCase() === autor).forEach(x => { const bb = $('.ugv-seg', x.el); if (bb) { bb.classList.toggle('ok', siguiendo.get(autor)); bb.textContent = siguiendo.get(autor) ? '✓' : '+'; } });
+    slides.filter(x => String(x.item.usuario || '').toLowerCase() === autor).forEach(x => { const bb = $('.ugv-seg', x.el); if (bb) { bb.classList.toggle('ok', siguiendo.get(autor)); bb.textContent = siguiendo.get(autor) ? 'Siguiendo' : 'Seguir'; } });
   }
   async function seguir(s) {
     if (!yo()) { if (typeof ugPedirSesion === 'function') ugPedirSesion('seguir a creadores'); return; }

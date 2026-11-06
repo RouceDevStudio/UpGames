@@ -821,6 +821,7 @@ async function loadContent() {
     }).catch(()=>{});
     const r = await fetchTimeout(`${API_URL}/items`, 12000);
     const data = await r.json();
+    if (!Array.isArray(data)) throw new Error('catálogo no disponible');   // un error del servidor no debe reemplazar el catálogo
     await pUsers;   // las insignias de verificado necesitan el mapa antes de pintar
     cacheSet(CACHE_KEY_ITEMS, data);
 
