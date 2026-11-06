@@ -3,6 +3,7 @@
  * Graba anuncio.html cuadro a cuadro y lo codifica con ffmpeg (H.264, sin audio).
  *   node render.js [salida.mp4] [fps=30] [desde=0] [hasta=fin]
  *   PREVIEW="1,5.5,12" node render.js  → solo esos instantes como PNG (revisión)
+ *   PAGINA=anuncio2.html node render.js …  → graba el segundo anuncio
  */
 'use strict';
 const { chromium } = require('playwright');
@@ -15,7 +16,7 @@ const path = require('path');
   const b = await chromium.launch();
   const p = await b.newPage({ viewport: { width: 1080, height: 1920 }, deviceScaleFactor: 1 });
   p.on('pageerror', e => console.error('ERROR página:', e.message));
-  await p.goto('file://' + path.join(__dirname, 'anuncio.html'));
+  await p.goto('file://' + path.join(__dirname, process.env.PAGINA || 'anuncio.html'));
   await p.evaluate(() => window.listo);
   const dur = await p.evaluate(() => window.DURACION);
   if (process.env.PREVIEW) {
