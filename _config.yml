@@ -1,0 +1,26 @@
+# GitHub Pages (Jekyll): solo se publica el sitio (index.html, public/, admin/, games/, studio/).
+# El código del servidor (Railway), las pruebas, los scripts y los documentos internos NO se
+# publican en upgames.games: antes cualquiera podía leer index.js, rutas/ y modulos/.
+exclude:
+  - index.js
+  - rutas/
+  - modulos/
+  - scripts/
+  - test/
+  - docs/
+  - new/
+  - marketing/
+  - mediamtx/
+  - apps/
+  - node_modules/
+  - package.json
+  - package-lock.json
+  - nixpacks.toml
+  - railway.toml
+  - README.md
+  - games/monoplaza/tools/
+  - games/monoplaza/package.json
+  - games/monoplaza/README.md
+  - games/studio/tools/
+  - games/studio/package.json
+  - games/studio/README.md

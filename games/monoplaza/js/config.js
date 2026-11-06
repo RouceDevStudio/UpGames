@@ -106,7 +106,7 @@ export function compuestoParaAgua(agua, seco = 'medio') {
 
 // Equipos ficticios: 11 escuderías con dos pilotos (22 coches como en la parrilla real)
 export const EQUIPOS = [
-  { nombre: 'UpGames Racing', corto: 'UPG', base: '#0d47ff', acento: '#00e5ff', tercero: '#ffffff', pilotos: ['A. Rouce', 'R. Castro'], patron: 'flecha' },
+  { nombre: 'UpGames Racing', corto: 'UPG', base: '#0d47ff', acento: '#00e5ff', tercero: '#ffffff', pilotos: ['A. Volt', 'R. Nova'], patron: 'flecha' },
   { nombre: 'Rosso Vulcano', corto: 'RSV', base: '#c4061a', acento: '#ffd200', tercero: '#111111', pilotos: ['L. Moretti', 'A. Ferrandi'], patron: 'franjas' },
   { nombre: 'Silver Arrowhead', corto: 'SAH', base: '#b9c2c9', acento: '#00b3a4', tercero: '#111111', pilotos: ['K. Brandt', 'J. Weller'], patron: 'degradado' },
   { nombre: 'Nightbull', corto: 'NBL', base: '#14204a', acento: '#e3001b', tercero: '#ffd200', pilotos: ['M. Varga', 'T. Okafor'], patron: 'rayo' },

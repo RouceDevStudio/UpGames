@@ -49,7 +49,7 @@ async function iniciar(opts = {}) {
             }
             pub = doc.publicKey; priv = doc.privateKey;
         }
-        const contacto = process.env.VAPID_SUBJECT || `mailto:${(process.env.OWNER_EMAIL || 'jhonatandavidcastrogalviz@gmail.com').split(',')[0].trim()}`;
+        const contacto = process.env.VAPID_SUBJECT || 'mailto:upgames.games.up@gmail.com';
         webpush.setVapidDetails(contacto, pub, priv);
         clavePublica = pub;
         logger.info('🔔 Push listo (Web Push / VAPID)');

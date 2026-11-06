@@ -77,6 +77,7 @@ const Limites         = require('./modulos/limites');
 const StatsItems      = require('./modulos/statsItems');
 const Referidos       = require('./modulos/referidos');
 const Seo             = require('./modulos/seo');
+const ContenidoLegal  = require('./modulos/contenidoLegal');
 const Moderacion      = require('./modulos/moderacion');
 
 /**
@@ -2037,7 +2038,7 @@ app.get("/items/user/:usuario", async (req, res) => {
 const LINKS_PERMITIDOS = ['mediafire.com', 'mega.nz', 'mega.co.nz', 'drive.google.com',
     'gofile.io', 'onedrive.live.com', 'icloud.com', 'proton.me', 'pcloud.com',
     'pixeldrain.com', '1fichier.com', 'qiwi.gg', 'krakenfiles.com', 'dropbox.com',
-    'github.com', 'github.io', 'sto.romsfast.com', 'clarodrive.com', 'apkvision.org'];
+    'github.com', 'github.io', 'sto.romsfast.com', 'clarodrive.com'];
 
 // Devuelve null si el enlace es válido o un mensaje de error si no.
 function errorLinkPublicacion(link, category) {
@@ -2109,6 +2110,9 @@ app.post("/items/add", [verificarToken, body('title').notEmpty().trim().isLength
 
         const errLink = errorLinkPublicacion(req.body.link, req.body.category);
         if (errLink) return res.status(400).json({ success: false, error: errLink });
+        // Contenido legal (Términos 02B): piratería evidente se bloquea; títulos comerciales van a revisión humana
+        const legal = ContenidoLegal.revisar(req.body, gameDetector);
+        if (legal.bloquear) return res.status(400).json({ success: false, error: `No se puede publicar: ${legal.bloquear}. Revisa las normas de contenido.` });
         const modP = Moderacion.reglas(`${req.body.title} ${req.body.description || ''}`, 'publicacion');
         if (modP.bloquear) {
             Moderacion.registrar({ tipo: 'publicacion', usuario: req.usuario, categoria: modP.categoria, motivo: modP.motivo, fuente: 'reglas', texto: req.body.title, accion: 'bloqueado-antes' });
@@ -2122,7 +2126,8 @@ app.post("/items/add", [verificarToken, body('title').notEmpty().trim().isLength
         if (datos.extraData && (typeof datos.extraData !== 'object' || Array.isArray(datos.extraData))) datos.extraData = {};
         if (datos.tags !== undefined && !Array.isArray(datos.tags)) delete datos.tags;
         datos.serie = series.serieDe(datos.title, req.usuario);
-        const nuevoJuego = new Juego({ ...datos, usuario: req.usuario, status: "aprobado", linkStatus: "revision" });
+        const nuevoJuego = new Juego({ ...datos, usuario: req.usuario, status: legal.revisionHumana ? "pendiente" : "aprobado", linkStatus: "revision" });
+        if (legal.revisionHumana) logger.info(`[contenido-legal] revisión humana: "${datos.title}" @${req.usuario} — ${legal.revisionHumana}`);
         // Premium: sus publicaciones nuevas también tienen más visibilidad mientras dure
         const premiumHasta = (await Usuario.findOne({ usuario: req.usuario }).select('planHasta').lean())?.planHasta;
         if (premiumHasta && new Date(premiumHasta) > new Date()) nuevoJuego.impulsoHasta = premiumHasta;
@@ -2149,7 +2154,7 @@ app.post("/items/add", [verificarToken, body('title').notEmpty().trim().isLength
         recommendations.invalidateTrending();
 
         try {
-            const autorData = await Usuario.findOne({ usuario: nuevoJuego.usuario }).select('listaSeguidores').lean();
+            const autorData = legal.revisionHumana ? null : await Usuario.findOne({ usuario: nuevoJuego.usuario }).select('listaSeguidores').lean();   // pendiente: aún no es pública
             const seguidores = autorData?.listaSeguidores || [];
             if (seguidores.length > 0) {
                 const notifs = seguidores.map(seg => ({ destinatario: seg, tipo: 'nueva_publicacion', emisor: nuevoJuego.usuario, itemId: nuevoJuego._id.toString(), itemTitle: nuevoJuego.title, itemImage: nuevoJuego.image || '', leida: false, fecha: new Date() }));
@@ -2161,7 +2166,7 @@ app.post("/items/add", [verificarToken, body('title').notEmpty().trim().isLength
         }
 
         logger.info(`Nuevo item agregado: ${nuevoJuego.title} por @${nuevoJuego.usuario}`);
-        res.status(201).json({ success: true, ok: true, item: nuevoJuego, id: nuevoJuego._id });
+        res.status(201).json({ success: true, ok: true, item: nuevoJuego, id: nuevoJuego._id, revisionHumana: legal.revisionHumana || null });
         moderarPublicacion(nuevoJuego._id);   // NEXUS revisa texto y portada; si es sexual la quita sola
 
         // Fire & forget — Nexus revisa la publicación y deja consejos al autor
@@ -2213,6 +2218,9 @@ app.put("/items/:id", verificarToken, [
         // Cambiar el enlace de una publicación ya verificada la devuelve a revisión:
         // evita publicar un enlace bueno y luego cambiarlo por otro distinto sin control.
         if (updates.link !== undefined && String(updates.link).trim() !== String(item.link || '').trim()) updates.linkStatus = 'revision';
+        const legalE = ContenidoLegal.revisar({ title: updates.title ?? item.title, description: updates.description ?? item.description, link: updates.link ?? item.link, category: updates.category ?? item.category }, gameDetector);
+        if (legalE.bloquear) return res.status(400).json({ success: false, error: `No se puede guardar: ${legalE.bloquear}.` });
+        if (legalE.revisionHumana && item.status === 'aprobado' && (updates.title !== undefined || updates.category !== undefined || updates.link !== undefined)) updates.status = 'pendiente';
         const modE = Moderacion.reglas(`${updates.title ?? item.title} ${updates.description ?? item.description ?? ''}`, 'publicacion');
         if (modE.bloquear) return res.status(400).json({ success: false, error: `No se puede guardar: ${Moderacion.MENSAJE[modE.categoria] || 'incumple las normas'}.` });
         if (updates.link !== undefined) {

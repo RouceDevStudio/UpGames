@@ -1991,7 +1991,7 @@ const PF_BANNED_VISUAL = ['crack','cracked','crackeado','crackeo','pirata','pira
   'gratis','free','gratuito','full','completo','complete','premium','pro','descargar','download'];
 const PF_ALLOWED_LINKS = ['mediafire.com','mega.nz','mega.co.nz','drive.google.com',
   'gofile.io','onedrive.live.com','icloud.com','proton.me','pcloud.com',
-  'pixeldrain.com','1fichier.com','qiwi.gg','krakenfiles.com','dropbox.com','github.com','github.io','sto.romsfast.com','clarodrive.com','apkvision.org'];
+  'pixeldrain.com','1fichier.com','qiwi.gg','krakenfiles.com','dropbox.com','github.com','github.io','sto.romsfast.com','clarodrive.com'];
 
 function pfAnalizarLink(url) {
   if(!url) return { ok: null };
@@ -2719,7 +2719,9 @@ async function pfSubirJuego() {
     if(res.ok) {
       LS.set('ultima_publicacion', Date.now().toString());
       window.dispatchEvent(new CustomEvent('ug:guia', { detail: 'publicar' }));
-      toast('✅ Publicado. Aparecerá como "En revisión" hasta verificar el enlace.');
+      const dPub = await res.json().catch(() => ({}));
+      if (dPub.revisionHumana) toast('🛡 Enviado a revisión: ' + dPub.revisionHumana + '.');
+      else toast('✅ Publicado. Aparecerá como "En revisión" hasta verificar el enlace.');
       document.getElementById('pf-addTitle').value='';
       document.getElementById('pf-addDescription').value='';
       document.getElementById('pf-addLink').value='';
@@ -4340,7 +4342,7 @@ function ugAB(evento, modo) {
 
 // ── BIENVENIDA — 3 pantallas + términos ───────────────────
 (function initOnboarding() {
-  const TERMINOS_VERSION = '7.0';   // súbela al cambiar los Términos o la Privacidad
+  const TERMINOS_VERSION = '7.1';   // súbela al cambiar los Términos o la Privacidad
   function avisoTerminosNuevos() {
     const a = document.createElement('div'); a.className = 'ug-terminos-aviso'; a.setAttribute('role', 'status');
     a.innerHTML = `<span>📜 Actualizamos los <a href="./terminos_condiciones.html" target="_blank" rel="noopener">Términos (v${TERMINOS_VERSION})</a> y la <a href="./politica-privacidad.html" target="_blank" rel="noopener">Privacidad</a>: ahora bajo la ley colombiana, a los creadores se les paga solo por descargas efectivas (no por vistas) y saltar la espera es solo con Premium.</span><button type="button">Entendido</button>`;

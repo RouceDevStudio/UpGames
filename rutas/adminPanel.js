@@ -3,7 +3,7 @@
  *  adminPanel.js — Autenticación y gobierno del panel de administración
  *
  *  • Dueño (owner): la(s) cuenta(s) cuyo email está en OWNER_EMAIL
- *    (por defecto jhonatandavidcastrogalviz@gmail.com). Tiene todo,
+ *    (variable OWNER_EMAIL en Railway). Tiene todo,
  *    gestiona el equipo y ve la auditoría. Nadie puede tocar su cuenta.
  *  • Sub-administradores: el dueño les asigna un ROL EXCLUSIVO (plantilla)
  *    o permisos a medida. Cada uno solo ve y solo puede usar su área.
