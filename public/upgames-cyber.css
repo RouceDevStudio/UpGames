@@ -554,3 +554,14 @@ html[data-tema="cyber"] .nxb-orb { background: conic-gradient(var(--g), #fff, #8
 html[data-tema="cyber"] .ds-ask-nexus, html[data-tema="cyber"] .nxb-banner { background: linear-gradient(135deg, rgba(57,255,136,.10), rgba(255,255,255,.03)) !important; border-color: rgba(57,255,136,.4) !important; }
 html[data-tema="cyber"] .nxc-aj { background: rgba(57,255,136,.06) !important; border-color: rgba(57,255,136,.25) !important; }
 html[data-tema="cyber"] .nav-nexus span { color: var(--g) !important; }
+
+/* Marco comprado con UpCoins: es circular, así que el avatar se respeta redondo (es un cosmético pagado) */
+html[data-tema="cyber"] .ugs-marco .avatar, html[data-tema="cyber"] .ugs-marco .pf2-avatar,
+html[data-tema="cyber"] .ugs-marco .avatar img, html[data-tema="cyber"] .ugs-marco .pf2-avatar img { clip-path: circle(50%) !important; }
+html[data-tema="cyber"] .hero-avatar-wrap.ugs-marco, html[data-tema="cyber"] .pf2-avatar-wrap.ugs-marco { filter: none; }
+/* Vitrina de insignias del perfil público */
+html[data-tema="cyber"] .pp-vitrina { border-radius: 0 !important; background: rgba(3,6,12,.78) !important; border: 1px solid rgba(57,255,136,.25) !important;
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px)); }
+html[data-tema="cyber"] .pp-vitrina-h b { font-family: var(--ff-disp); text-transform: uppercase; letter-spacing: .06em; font-size: .82rem; }
+html[data-tema="cyber"] .pp-vitrina-h small { font-family: var(--ff-mono); }
+html[data-tema="cyber"] .pp-ins { border-radius: 0 !important; clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); }
