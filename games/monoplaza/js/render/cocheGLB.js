@@ -109,6 +109,8 @@ export function materialCocheGLB(colores, dat, librea = null) {
     sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vPosO; varying vec3 vNorO;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPosO = position; vNorO = normal;');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+      #define PINT_0 0.014
+      #define PINT_1 0.03
       uniform vec3 cBase; uniform vec3 cAcento; uniform sampler2D mapaLibrea;
       varying vec3 vPosO; varying vec3 vNorO;
       // atlas de librea.js (ATLAS): ${ATLAS.x0} .. ${ATLAS.x1} en x, ±${ATLAS.zMax} en z, ${ATLAS.yMax} de alto
@@ -129,11 +131,18 @@ export function materialCocheGLB(colores, dat, librea = null) {
         ${librea ? 'vec3 eq = librea(vPosO, normalize(vNorO));' : 'vec3 eq = mix(cBase, cAcento, smoothstep(0.78, 0.95, l) * 0.6);'}
         // claro -> pintura (con el sombreado del escaneo), oscuro -> carbono
         // el fondo plano y la tabla son de carbono sin pintar, como en los coches de verdad
-        float pintado = smoothstep(0.03, 0.3, l) * smoothstep(0.1, 0.17, vPosO.y);
-        diffuseColor.rgb = mix(vec3(0.028, 0.03, 0.034), eq, pintado) * (0.85 + 0.6 * l);
+        // (el color del escaneo viene ya promediado: solo separa pintura de carbono; la pintura va
+        // uniforme, sin las sombras horneadas que la hacían ver a manchas)
+        float pintado = smoothstep(PINT_0, PINT_1, l) * smoothstep(0.1, 0.17, vPosO.y);
+        // brazos de suspensión, manguetas y conductos de freno: carbono, como en los F1 reales
+        float az = abs(vPosO.z);
+        float suspD = step(1.5, vPosO.x) * step(vPosO.x, 2.45) * smoothstep(0.3, 0.36, az);
+        float suspT = step(-2.05, vPosO.x) * step(vPosO.x, -1.38) * smoothstep(0.34, 0.4, az);
+        pintado *= 1.0 - max(suspD, suspT);
+        diffuseColor.rgb = mix(vec3(0.028, 0.03, 0.034), eq, pintado);
       }`);
   };
-  m.customProgramCacheKey = () => 'cocheGLB4' + (dat.mapa ? 'm' : 'v') + (librea ? 'L' : '');
+  m.customProgramCacheKey = () => 'cocheGLB5' + (dat.mapa ? 'm' : 'v') + (librea ? 'L' : '');
   cacheMat.set(clave, m);
   return m;
 }

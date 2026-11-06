@@ -100,8 +100,8 @@ export class Camara {
       const cara = this.modo === 'cara';
       // (el coche escaneado trae sus propios puntos: cabina tras el halo y cara sobre el pilar)
       const cm = modelo.camaras || {};
-      const local = this.modo === 'tcam' ? new THREE.Vector3(-0.32, 1.13, 0) : cara ? new THREE.Vector3(...(cm.cara || [0.60, 0.90, 0])) : new THREE.Vector3(...(cm.cabina || [0.16, 0.86, 0]));
-      const mirar = this.modo === 'tcam' ? new THREE.Vector3(30, 0.4, 0) : cara ? new THREE.Vector3(...(cm.mirarCara || [0.0, 0.79, 0])) : new THREE.Vector3(...(cm.mirarCabina || [30, -0.24, 0]));
+      const local = this.modo === 'tcam' ? new THREE.Vector3(...(cm.tcam || [-0.32, 1.13, 0])) : cara ? new THREE.Vector3(...(cm.cara || [0.60, 0.90, 0])) : new THREE.Vector3(...(cm.cabina || [0.16, 0.86, 0]));
+      const mirar = this.modo === 'tcam' ? new THREE.Vector3(...(cm.mirarTcam || [30, 0.4, 0])) : cara ? new THREE.Vector3(...(cm.mirarCara || [0.0, 0.79, 0])) : new THREE.Vector3(...(cm.mirarCabina || [30, -0.24, 0]));
       // en la cabina la vista acompaña el giro de la cabeza del piloto hacia la curva
       if (this.modo === 'cabina' && modelo.mirada) mirar.applyAxisAngle(new THREE.Vector3(0, 1, 0), modelo.mirada * 0.85);
       if (this.mirarAtras) { mirar.x = -30; local.x = this.modo === 'tcam' ? -0.6 : -0.1; local.y += 0.1; }

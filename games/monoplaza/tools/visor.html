@@ -57,8 +57,13 @@ const vistas = {
   cabina: [[0.22, 1.0, 0], [30, -1.0, 0]], volante: [[0.28, 0.98, 0.02], [0.73, 0.73, 0]], cara: [[0.78, 1.18, 0.1], [0.14, 0.98, 0]],
 };
 let [p, t] = vistas[q.get('vista') || '3q'];
+// en el coche escaneado, las cámaras a bordo del propio modelo (las mismas que en el juego)
+const cmv = m.camaras, vv = q.get('vista');
+if (cmv && vv === 'cabina') { p = cmv.cabina; t = cmv.mirarCabina; m.piloto?.glb?.verCabeza(false); }
+if (cmv && vv === 'cara') { p = cmv.cara; t = cmv.mirarCara; }
+if (cmv && vv === 'tcam') { p = cmv.tcam; t = cmv.mirarTcam; }
 if (q.get('cam')) { const c = q.get('cam').split(',').map(Number); p = c.slice(0, 3); t = c.slice(3, 6); }
-if (['cabina', 'cara', 'volante'].includes(q.get('vista'))) { m.raiz.updateMatrixWorld(true); cam.position.set(...p).applyMatrix4(m.carroceria.matrixWorld); cam.lookAt(new THREE.Vector3(...t).applyMatrix4(m.carroceria.matrixWorld)); cam.fov = q.get('vista') === 'cabina' ? 75 : 55; cam.near = 0.02; }
+if (['cabina', 'cara', 'volante', 'tcam'].includes(q.get('vista'))) { m.raiz.updateMatrixWorld(true); cam.position.set(...p).applyMatrix4(m.carroceria.matrixWorld); cam.lookAt(new THREE.Vector3(...t).applyMatrix4(m.carroceria.matrixWorld)); cam.fov = q.get('vista') === 'cabina' ? 75 : 55; cam.near = 0.02; }
 else { cam.position.set(...p); cam.lookAt(...t); }
 cam.updateProjectionMatrix();
 r.render(scene, cam);

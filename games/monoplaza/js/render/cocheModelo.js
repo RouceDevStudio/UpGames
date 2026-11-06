@@ -1101,7 +1101,11 @@ export function crearModelo(opc) {
       modelo.cuerpoLejos = cuerpoLejos;
     }
     modelo.conGLB = true;
-    modelo.camaras = { cabina: [0.22, 1.0, 0], mirarCabina: [30, -1.0, 0], cara: [0.78, 1.18, 0.1], mirarCara: [0.14, 0.98, 0] };
+    // cámaras a bordo (coordenadas del escaneo): la de cabina, en los ojos del piloto, centrada
+    // entre el arco del halo (≈0,95 m) y el borde de la cabina (≈0,74 m); la de la cara, sobre
+    // el arco del halo mirando al casco; la T-Cam, encima de la toma de aire
+    modelo.camaras = { cabina: [0.27, 0.845, 0], mirarCabina: [30, -0.35, 0], cara: [0.58, 1.0, 0], mirarCara: [0.22, 0.87, 0],
+      tcam: [-0.2, 1.36, 0], mirarTcam: [30, 0.45, 0] };
   }
 
   let tPantalla = 0;

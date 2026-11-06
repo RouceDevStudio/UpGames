@@ -8,6 +8,9 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { texturaCasco } from './librea.js';
 
+/** Cuánto más abajo va el piloto escaneado que en el escaneo original (m del escaneo). */
+export const BAJAR_PILOTO_GLB = 0.09;
+
 const BRAZO = 0.27, ANTEBRAZO = 0.25;          // m
 const _x = new THREE.Vector3(1, 0, 0), _z = new THREE.Vector3(0, 0, 1);
 
@@ -187,7 +190,9 @@ export function crearPiloto({ traje, guante, matNegro, equipado = {}, colores = 
       // el modelo viene en coordenadas de la carrocería (el grupo va 4 cm más abajo); del
       // procedural no queda nada a la vista (marcado como oculto para el nivel de detalle)
       for (const o of grupo.children) { o.visible = false; o.traverse(q => { q.userData.oculto = true; }); }
-      p.raiz.position.y = -grupo.position.y;
+      // y 9 cm más abajo que en el escaneo: sentado casi tumbado, con el casco a la altura del
+      // arco del halo como en un F1 real (el volante va en sus manos y baja con él)
+      p.raiz.position.y = -grupo.position.y - BAJAR_PILOTO_GLB;
       grupo.add(p.raiz);
     },
     /** Saluda al público con la mano izquierda fuera de la cabina (vuelta de enfriamiento). */
