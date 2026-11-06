@@ -383,6 +383,34 @@ body:not(.is-owner) .owner-only{display:none!important}
 .dash-nx{display:flex;gap:14px;align-items:flex-start;margin-bottom:14px;background:linear-gradient(135deg,rgba(124,92,255,.14),rgba(90,200,250,.06));border-color:rgba(167,139,250,.32)}
 .dash-nx p{margin:4px 0 8px;font-size:.88rem;line-height:1.5}
 @media (max-width:900px){ .nx-fab{bottom:calc(86px + var(--safe-b));right:14px;padding:10px}.nx-fab .nx-lbl{display:none} .nx-dock{width:100vw;border-left:none} .dash-nx .nx-av{display:none} }
+/* ── Buscador avanzado de Nexus ── */
+.nb-box{display:flex;gap:8px;align-items:stretch}
+.nb-box .in{font-size:1rem;padding:13px 15px}
+.nb-opts{display:flex;flex-wrap:wrap;gap:10px 18px;margin-top:12px;align-items:center}
+.nb-opts .chips{flex-wrap:wrap}
+.nb-ej{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.nb-ej button{border:1px dashed var(--line2);background:transparent;color:var(--tx2);border-radius:999px;padding:5px 11px;font-size:.75rem}
+.nb-ej button:hover{color:var(--tx);border-color:var(--vio)}
+.nb-sum{border-color:rgba(167,139,250,.35);background:linear-gradient(135deg,rgba(167,139,250,.10),rgba(90,200,250,.05))}
+.nb-sum p{margin:6px 0 0;color:var(--tx)}
+.nb-ideas{margin:10px 0 0;padding-left:18px;color:var(--tx2)}
+.nb-qs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.nb-src{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+.nb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+.nb-it{display:flex;flex-direction:column;overflow:hidden;padding:0}
+.nb-th{position:relative;aspect-ratio:16/9;background:linear-gradient(135deg,rgba(255,255,255,.05),rgba(255,255,255,.02));display:grid;place-items:center;font-size:2rem}
+.nb-th img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.nb-th .nb-dur{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.75);color:#fff;font-size:.7rem;font-weight:700;padding:1px 6px;border-radius:6px}
+.nb-th .nb-fu{position:absolute;left:6px;top:6px}
+.nb-bd{padding:12px;display:flex;flex-direction:column;gap:6px;flex:1}
+.nb-bd b{font-size:.88rem;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.nb-bd .nb-d{font-size:.76rem;color:var(--tx2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.nb-bd .nb-nota{font-size:.75rem;color:#c4b5fd}
+.nb-meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.72rem;color:var(--tx3)}
+.nb-acts{display:flex;gap:6px;margin-top:auto;padding-top:6px}
+.nb-rel{height:4px;border-radius:4px;background:rgba(255,255,255,.07);overflow:hidden}
+.nb-rel i{display:block;height:100%;background:var(--grad)}
+.nb-load{display:flex;gap:12px;align-items:center;padding:18px}
 </style>
 <script src="../public/upgames-errores.js?v=20261029i"></script>
 </head>
@@ -620,6 +648,23 @@ body:not(.is-owner) .owner-only{display:none!important}
         <button class="chip" data-f="amex">Amex</button><button class="chip" data-f="cobros">↓ Cobros</button><button class="chip" data-f="pagos">↑ Pagos</button><button class="chip" data-f="principal">⭐ Principales</button>
       </div>
       <div class="cards3" id="tList"></div>
+    </section>
+
+    <!-- BUSCADOR NEXUS -->
+    <section class="view" id="v-nxbus">
+      <div class="vh"><div><h2>✦ Buscador Nexus</h2><p>Dile a Nexus qué buscar: busca en la web, YouTube, TikTok, Facebook, Instagram y Reddit, ordena por relevancia y marca lo que ya está en UpGames.</p></div></div>
+      <div class="card" style="margin-bottom:14px">
+        <form class="nb-box" id="nbForm"><input class="in" id="nbQ" maxlength="200" placeholder='Ej: "juegos port o emuladores para Android"' autocomplete="off">
+          <button class="btn pri" id="nbBtn" style="padding:0 18px"><ion-icon name="search"></ion-icon> Buscar</button></form>
+        <div class="nb-opts">
+          <div><div class="lbl">Dónde buscar</div><div class="chips" id="nbFu"></div></div>
+          <div><div class="lbl">Publicado</div><div class="chips" id="nbPer"><button class="chip" data-f="semana">Esta semana</button><button class="chip on" data-f="mes">Este mes</button><button class="chip" data-f="año">Este año</button><button class="chip" data-f="todo">Siempre</button></div></div>
+          <div><div class="lbl">Idioma</div><div class="chips" id="nbIdi"><button class="chip on" data-f="todos">Todos</button><button class="chip" data-f="es">Español</button><button class="chip" data-f="en">Inglés</button></div></div>
+        </div>
+        <div class="nb-ej" id="nbEj"></div>
+        <div class="small muted" id="nbEst" style="margin-top:10px"></div>
+      </div>
+      <div id="nbOut"></div>
     </section>
 
     <!-- API TEST -->
@@ -931,6 +976,7 @@ const NAV = [
   { id: 'reportes', ic: 'flag-outline', t: 'Reportes', perm: ['revision', 'contenido'], b: () => D.items.filter(i => i.reportes > 0).length, hot: true },
   { id: 'comt', ic: 'chatbubbles-outline', t: 'Comentarios', perm: 'comentarios', b: () => D.comments.length },
   { id: 'moder', ic: 'shield-half-outline', t: 'Moderación IA', perm: ['comentarios', 'contenido', 'sanciones'] },
+  { id: 'nxbus', ic: 'telescope-outline', t: 'Buscador Nexus', perm: ['revision', 'contenido', 'estadisticas'] },
   { g: 'Comunidad' },
   { id: 'usrs', ic: 'people-outline', t: 'Usuarios', perm: ['usuarios', 'sanciones', 'finanzas'], b: () => D.users.length },
   { id: 'anun', ic: 'megaphone-outline', t: 'Anuncios', perm: 'anuncios' },
@@ -981,6 +1027,7 @@ function go(v) {
   if (v === 'econ') loadEcon(true);
   if (v === 'extras') loadExtras();
   if (v === 'moder') loadModer();
+  if (v === 'nxbus') nbIniciar();
   if (v === 'anun') emailEstado();
   else if (v === 'audit') loadAudit();
   else if (v === 'api' && !$('diag').innerHTML) { runDiag(); runEndpoints(); loadErrores(); }
@@ -1819,6 +1866,79 @@ async function emergencia() {
 async function quitarMiembro(u) { if (!confirm(`¿Quitar a @${u} del equipo? Perderá el acceso al panel al instante.`)) return;
   try { const { d } = await api(`/admin/equipo/${encodeURIComponent(u)}`, { method: 'DELETE' }); if (d.success) { toast(`@${u} ya no es parte del equipo`); loadEquipo(); } else toast(d.error || 'Error', 'err'); } catch (_) {} }
 
+
+// ─────────── Buscador avanzado de Nexus ───────────
+const NB_FU = { web: ['🌐', 'Web'], youtube: ['▶️', 'YouTube'], tiktok: ['🎵', 'TikTok'], facebook: ['📘', 'Facebook'], instagram: ['📸', 'Instagram'], reddit: ['👽', 'Reddit'] };
+const NB_TIPO = { port: ['Port', 't-info'], emulador: ['Emulador', 't-vio'], mod: ['Mod', 't-ok'], juego: ['Juego', 't-ok'], app: ['App', 't-info'], tutorial: ['Tutorial', 't-warn'], noticia: ['Noticia', 't-org'], otro: ['Otro', 't-mut'] };
+const NB_EJ = ['juegos port o emuladores para Android', 'mods de GTA San Andreas para Android', 'Winlator configuración juegos PC', 'emuladores PS2 Android rendimiento', 'juegos indie gratis para Android'];
+let nbFuentes = new Set(['web', 'youtube', 'tiktok', 'facebook', 'instagram', 'reddit']), nbPer = 'mes', nbIdi = 'todos', nbUlt = null, nbFiltro = 'todo', nbListo = false;
+function nbIniciar() {
+  if (nbListo) return; nbListo = true;
+  $('nbFu').innerHTML = Object.entries(NB_FU).map(([k, [ic, n]]) => `<button class="chip on" data-f="${k}">${ic} ${n}</button>`).join('');
+  $('nbFu').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; const k = b.dataset.f;
+    if (nbFuentes.has(k) && nbFuentes.size === 1) return toast('Deja al menos una red'); nbFuentes.has(k) ? nbFuentes.delete(k) : nbFuentes.add(k); b.classList.toggle('on', nbFuentes.has(k)); });
+  chips('nbPer', f => nbPer = f); chips('nbIdi', f => nbIdi = f);
+  let rec = []; try { rec = JSON.parse(localStorage.getItem('nb_recientes') || '[]'); } catch (_) {}
+  $('nbEj').innerHTML = [...new Set([...rec, ...NB_EJ])].slice(0, 7).map(q => `<button type="button" data-q="${esc(q)}">${esc(q)}</button>`).join('');
+  $('nbEj').addEventListener('click', e => { const b = e.target.closest('[data-q]'); if (b) { $('nbQ').value = b.dataset.q; nbBuscar(); } });
+  $('nbForm').addEventListener('submit', e => { e.preventDefault(); nbBuscar(); });
+  api('/admin/nexus/buscador/estado').then(({ d }) => { if (d?.success) $('nbEst').innerHTML = `Motores: ${esc(d.web.join(' → '))} · ${esc(d.youtube)} · IA ${d.ia ? '✅' : '⚪ (orden por reglas)'}${d.sugerencia ? `<br>💡 ${esc(d.sugerencia)}` : ''}`; }).catch(() => {});
+}
+async function nbBuscar(forzar) {
+  const q = $('nbQ').value.trim(); if (q.length < 3) return toast('Escribe qué buscar');
+  const btn = $('nbBtn'); btn.disabled = true;
+  const pasos = ['Nexus está entendiendo tu pedido…', 'Buscando en la web…', 'Revisando YouTube y TikTok…', 'Mirando Facebook, Instagram y Reddit…', 'Ordenando por relevancia…', 'Comprobando qué ya está en UpGames…'];
+  let i = 0; $('nbOut').innerHTML = `<div class="card nb-load"><span class="nx-typing"><span></span><span></span><span></span></span><span id="nbPaso">${pasos[0]}</span></div>`;
+  const tm = setInterval(() => { const el = $('nbPaso'); if (el) el.textContent = pasos[Math.min(++i, pasos.length - 1)]; }, 1800);
+  try {
+    const { ok, d } = await api('/admin/nexus/buscar', { method: 'POST', body: { consulta: q, fuentes: [...nbFuentes], periodo: nbPer, idioma: nbIdi, forzar: !!forzar } });
+    if (!ok || !d.success) { $('nbOut').innerHTML = `<div class="card"><p class="ct">⚠️ ${esc(d?.error || 'No se pudo buscar')}</p></div>`; return; }
+    nbUlt = d; nbFiltro = 'todo';
+    try { const rec = JSON.parse(localStorage.getItem('nb_recientes') || '[]').filter(x => x !== q); rec.unshift(q); localStorage.setItem('nb_recientes', JSON.stringify(rec.slice(0, 4))); } catch (_) {}
+    nbPintar();
+  } catch (e) { if (e.message !== '401') $('nbOut').innerHTML = '<div class="card"><p class="ct">⚠️ Error de conexión</p></div>'; }
+  finally { clearInterval(tm); btn.disabled = false; }
+}
+function nbPintar() {
+  const d = nbUlt; if (!d) return;
+  const todos = d.resultados || [];
+  const cuenta = k => k === 'todo' ? todos.length : k === 'nuevos' ? todos.filter(r => !r.enUpGames).length : todos.filter(r => r.fuente === k).length;
+  const lista = nbFiltro === 'todo' ? todos : nbFiltro === 'nuevos' ? todos.filter(r => !r.enUpGames) : todos.filter(r => r.fuente === nbFiltro);
+  const estadoFu = Object.entries(d.porFuente || {}).map(([k, v]) => `<span class="tag ${v.ok ? 't-mut' : 't-bad'}" title="${esc(v.motor || v.error || '')}">${NB_FU[k]?.[0] || ''} ${NB_FU[k]?.[1] || k}: ${v.ok ? v.n : 'sin respuesta'}</span>`).join('');
+  $('nbOut').innerHTML = `
+    <div class="card nb-sum" style="margin-bottom:12px">
+      <div class="row" style="justify-content:space-between;gap:8px"><div class="small" style="color:#c4b5fd;font-weight:700">✦ Lo que encontró Nexus${d.cache ? ' · guardado hace poco' : ''}</div>
+        <div class="row" style="gap:6px"><button class="btn sm" onclick="nbCopiar()"><ion-icon name="copy-outline"></ion-icon> Copiar lista</button><button class="btn sm" onclick="nbBuscar(true)"><ion-icon name="refresh-outline"></ion-icon> Repetir</button></div></div>
+      <p>${esc(d.resumen)}</p>
+      ${(d.ideas || []).length ? `<ul class="nb-ideas">${d.ideas.map(x => `<li>💡 ${esc(x)}</li>`).join('')}</ul>` : ''}
+      <div class="nb-qs"><span class="small muted">Búsquedas:</span>${(d.consultas || []).map(x => `<span class="tag t-vio">${esc(x)}</span>`).join('')}</div>
+      <div class="nb-qs">${estadoFu}<span class="small muted">${(d.ms / 1000).toFixed(1)} s${d.fuenteIA ? ' · ' + esc(d.fuenteIA) : ' · orden por reglas'}</span></div>
+    </div>
+    <div class="chips nb-src" id="nbF">${[['todo', 'Todo'], ['nuevos', '✨ No están en UpGames'], ...Object.keys(NB_FU).map(k => [k, NB_FU[k].join(' ')])].filter(([k]) => cuenta(k) > 0 || k === 'todo').map(([k, t]) => `<button class="chip${k === nbFiltro ? ' on' : ''}" data-f="${k}">${esc(t)} · ${cuenta(k)}</button>`).join('')}</div>
+    ${lista.length ? `<div class="nb-grid">${lista.map(nbTarjeta).join('')}</div>` : '<div class="empty"><ion-icon name="telescope-outline"></ion-icon>Sin resultados con estos filtros. Prueba "Siempre" o menos palabras.</div>'}`;
+  chips('nbF', f => { nbFiltro = f; nbPintar(); });
+}
+function nbTarjeta(r) {
+  const [ic, fu] = NB_FU[r.fuente] || ['🌐', 'Web'], [tt, tc] = NB_TIPO[r.tipo] || NB_TIPO.otro;
+  const img = /^https:\/\//.test(r.miniatura || '') ? `<img src="${esc(r.miniatura)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : '';
+  return `<div class="card nb-it">
+    <a class="nb-th" href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">${ic}${img}<span class="nb-fu tag t-mut" style="background:rgba(0,0,0,.6)">${ic} ${fu}</span>${r.duracion ? `<span class="nb-dur">${esc(r.duracion)}</span>` : ''}</a>
+    <div class="nb-bd">
+      <div class="nb-meta"><span class="tag ${tc}">${tt}</span>${r.enUpGames ? `<span class="tag t-ok" title="${esc(r.enUpGames.titulo)}">✓ Ya en UpGames</span>` : '<span class="tag t-oro">✨ Nuevo</span>'}<span>${r.relevancia}% relevante</span></div>
+      <div class="nb-rel"><i style="width:${Math.max(4, Math.min(100, r.relevancia))}%"></i></div>
+      <b>${esc(r.titulo)}</b>
+      ${r.nota ? `<div class="nb-nota">✦ ${esc(r.nota)}</div>` : r.descripcion ? `<div class="nb-d">${esc(r.descripcion)}</div>` : ''}
+      <div class="nb-meta">${r.autor ? `<span>👤 ${esc(r.autor)}</span>` : ''}${r.vistas ? `<span>👁 ${esc(r.vistas)}</span>` : ''}${r.fecha ? `<span>🕒 ${esc(/^\d{4}-\d\d-\d\dT/.test(r.fecha) ? new Date(r.fecha).toLocaleDateString('es') : r.fecha)}</span>` : ''}</div>
+      <div class="nb-acts"><a class="btn sm" href="${esc(r.url)}" target="_blank" rel="noopener noreferrer"><ion-icon name="open-outline"></ion-icon> Abrir</a>
+        <button class="btn sm ghost" onclick="nbCopiarUno(this)" data-u="${esc(r.url)}"><ion-icon name="link-outline"></ion-icon> Copiar</button></div>
+    </div></div>`;
+}
+function nbCopiarUno(b) { navigator.clipboard?.writeText(b.dataset.u).then(() => toast('🔗 Enlace copiado', 'ok')).catch(() => toast('No se pudo copiar')); }
+function nbCopiar() {
+  const d = nbUlt; if (!d) return;
+  const t = `Nexus · "${d.consulta}"\n${d.resumen}\n\n` + (d.resultados || []).slice(0, 40).map((r, i) => `${i + 1}. [${NB_FU[r.fuente]?.[1] || r.fuente}] ${r.titulo}${r.enUpGames ? ' (ya en UpGames)' : ''}\n   ${r.url}`).join('\n');
+  navigator.clipboard?.writeText(t).then(() => toast('📋 Lista copiada', 'ok')).catch(() => toast('No se pudo copiar'));
+}
 
 // ─────────── Nexus: asistente de administración ───────────
 let nxHist = [], nxBrief = null, nxBusy = false;

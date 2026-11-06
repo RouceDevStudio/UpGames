@@ -15,6 +15,8 @@
 
 const mongoose = require('mongoose');
 const llm = require('../modulos/nexus/llm');
+const buscador = require('../modulos/nexus/buscador');
+const Limites = require('../modulos/limites');
 
 const H = 3600e3, D = 24 * H;
 const SECCIONES = 'Inicio, Revisión, Entradas, Videos, Reportes, Comentarios, Usuarios, Anuncios, Economía, Pagos, Tarjetas, API Test, Equipo y Auditoría';
@@ -224,6 +226,26 @@ Las decisiones finales son del administrador: recomienda, no ordenes.`;
         } catch (e) {
             logger.error(`[nexus chat] ${e.message}`);
             res.status(500).json({ success: false, error: 'Nexus no pudo responder' });
+        }
+    });
+
+    // ── Buscador avanzado: web, YouTube, TikTok, Facebook, Instagram y Reddit ──
+    app.get('/admin/nexus/buscador/estado', verificarAdmin, (req, res) => {
+        res.json({ success: true, ...buscador.estado(), fuentes: buscador.FUENTES, periodos: buscador.PERIODOS });
+    });
+    app.post('/admin/nexus/buscar', verificarAdmin, async (req, res) => {
+        try {
+            const adm = req.admin, b = req.body || {};
+            if (!(await Limites.permitir(`nxbuscar:${adm.usuario}`, [[Limites.MIN, 6], [Limites.HORA, 80]])))
+                return res.status(429).json({ success: false, error: 'Demasiadas búsquedas seguidas: espera un minuto' });
+            const r = await buscador.buscar({ consulta: b.consulta, fuentes: b.fuentes, periodo: b.periodo, idioma: b.idioma, porFuente: b.porFuente, forzar: !!b.forzar },
+                { Juego, logger });
+            logger.info(`[nexus buscador] @${adm.usuario} "${r.consulta}" → ${r.resultados.length} resultados en ${r.ms} ms${r.cache ? ' (caché)' : ''}`);
+            res.json({ success: true, ...r });
+        } catch (e) {
+            if (e.status === 400) return res.status(400).json({ success: false, error: e.message });
+            logger.error(`[nexus buscador] ${e.message}`);
+            res.status(500).json({ success: false, error: 'Nexus no pudo completar la búsqueda' });
         }
     });
 

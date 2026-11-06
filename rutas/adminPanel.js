@@ -77,6 +77,7 @@ function permisoRequerido(method, path) {
     if (/^\/admin\/(equipo|auditoria)/.test(path)) return 'owner';
     if (/^\/admin\/auth/.test(path)) return null;
     if (/^\/admin\/nexus\/(briefing|chat)/.test(path)) return null;   // cada admin ve solo sus áreas
+    if (/^\/admin\/nexus\/(buscar|buscador)/.test(path)) return ['revision', 'contenido', 'estadisticas'];   // descubrir contenido para la comunidad
     if (/^\/admin\/sistema\/anuncio/.test(path)) return ['anuncios'];
     if (/^\/admin\/(sistema|cache)/.test(path)) return ['sistema'];
     if (/^\/(admin\/stats|analytics\/admin)/.test(path)) return ['estadisticas'];
