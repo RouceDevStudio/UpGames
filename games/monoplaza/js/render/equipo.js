@@ -435,16 +435,22 @@ export class Escombros {
   /** Quita todos los restos (al reiniciar o al recibir un coche nuevo). */
   vaciar() { for (const p of this.lista) this.scene.remove(p.obj); this.lista.length = 0; }
 
-  // trozos de fibra de carbono
-  esquirlas(pos, vel, n = 8) {
-    const geo = new THREE.BoxGeometry(0.25, 0.02, 0.15);
-    const mat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5 });
-    for (let k = 0; k < n; k++) {
-      const m = new THREE.Mesh(geo, mat); m.position.copy(pos); m.castShadow = true;
-      m.scale.setScalar(0.5 + Math.random());
+  // trozos de fibra de carbono: láminas finas de borde astillado, unas con la pintura del equipo
+  // por fuera y otras de carbono desnudo; las pequeñas planean y caen despacio
+  esquirlas(pos, vel, n = 8, color = null) {
+    const geos = geosEsquirla(), carb = matCarbonoRoto();
+    const pint = color ? matPinturaRota(color) : carb;
+    for (let k = 0; k < n * 2; k++) {
+      const tam = Math.random() < 0.7 ? 0.25 + Math.random() * 0.5 : 0.8 + Math.random() * 1.0;
+      const m = new THREE.Mesh(geos[k % geos.length], [Math.random() < 0.6 ? pint : carb, carb]);
+      m.position.copy(pos); m.position.y += 0.2 + Math.random() * 0.3; m.castShadow = tam > 0.7;
+      m.scale.setScalar(tam); m.rotation.set(Math.random() * 6, Math.random() * 6, Math.random() * 6);
       this.scene.add(m);
-      this.lista.push({ obj: m, v: new THREE.Vector3(vel.x * 0.6 + (Math.random() - 0.5) * 10, 2 + Math.random() * 5, vel.z * 0.6 + (Math.random() - 0.5) * 10), w: new THREE.Vector3(Math.random() * 20, Math.random() * 20, 0), radio: 0.03, vida: 20, t: this.reloj ?? 0 });
+      const lig = tam < 0.7;
+      this.lista.push({ obj: m, v: new THREE.Vector3(vel.x * (0.4 + Math.random() * 0.4) + (Math.random() - 0.5) * 10, 1.5 + Math.random() * 5, vel.z * (0.4 + Math.random() * 0.4) + (Math.random() - 0.5) * 10),
+        w: new THREE.Vector3((Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30), radio: 0.006, vida: 25, t: this.reloj ?? 0, arrastre: lig ? 2.2 : 0.6 });
     }
+    if (this.lista.length > 140) for (const v of this.lista.splice(0, this.lista.length - 140)) this.scene.remove(v.obj);
   }
 
   actualizar(dt) {
@@ -454,6 +460,8 @@ export class Escombros {
       if (p.vida <= 0) { this.scene.remove(p.obj); return false; }
       const o = p.obj;
       p.v.y -= 9.81 * dt;
+      // las láminas de carbono frenan en el aire (caen planeando)
+      if (p.arrastre) p.v.multiplyScalar(Math.max(0, 1 - p.arrastre * dt));
       o.position.addScaledVector(p.v, dt);
       const suelo = this.sueloY(o.position.x, o.position.z) + p.radio;
       if (o.position.y < suelo) {
@@ -466,4 +474,45 @@ export class Escombros {
       return true;
     });
   }
+}
+
+// ─── Esquirlas de carbono ─────────────────────────────────────────────────────
+let _geosEsq = null, _carbRoto = null;
+const _pintRota = new Map();
+function geosEsquirla() {
+  if (_geosEsq) return _geosEsq;
+  _geosEsq = [];
+  for (let k = 0; k < 6; k++) {
+    // polígono irregular de 5-8 puntas (unos 12 × 8 cm), con lados dentados
+    const sh = new THREE.Shape(), n = 5 + (k % 4);
+    for (let i = 0; i < n; i++) {
+      const a = i / n * Math.PI * 2 + Math.sin(k * 7 + i) * 0.3;
+      const r = 0.035 + 0.035 * Math.abs(Math.sin(k * 3.1 + i * 2.3)) + (i % 2) * 0.012;
+      const x = Math.cos(a) * r * 1.5, y = Math.sin(a) * r;
+      if (i === 0) sh.moveTo(x, y); else sh.lineTo(x, y);
+    }
+    sh.closePath();
+    const g = new THREE.ExtrudeGeometry(sh, { depth: 0.004, bevelEnabled: false });
+    g.translate(0, 0, -0.002);
+    _geosEsq.push(g);
+  }
+  return _geosEsq;
+}
+function texturaTejido() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const x = cv.getContext('2d');
+  for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) {
+    const g = x.createLinearGradient(i * 8, j * 8, i * 8 + ((i + j) % 2 ? 8 : 0), j * 8 + ((i + j) % 2 ? 0 : 8));
+    g.addColorStop(0, '#0c0c0e'); g.addColorStop(0.5, '#2c2d31'); g.addColorStop(1, '#0c0c0e');
+    x.fillStyle = g; x.fillRect(i * 8, j * 8, 8, 8);
+  }
+  const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 4); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+function matCarbonoRoto() {
+  return (_carbRoto ||= new THREE.MeshStandardMaterial({ map: texturaTejido(), roughness: 0.35, metalness: 0.3, side: THREE.DoubleSide }));
+}
+function matPinturaRota(color) {
+  if (!_pintRota.has(color)) _pintRota.set(color, new THREE.MeshPhysicalMaterial({ color, roughness: 0.3, clearcoat: 0.8, side: THREE.DoubleSide }));
+  return _pintRota.get(color);
 }

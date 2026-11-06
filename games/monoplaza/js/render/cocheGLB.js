@@ -9,7 +9,7 @@
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { proyectarUV } from './librea.js';
+import { ATLAS } from './librea.js';
 
 /** Dónde quedan las ruedas en el escaneo (x del eje delantero y trasero, semivía). */
 export const RUEDAS_GLB = { del: 1.852, tras: -1.528, zDel: 0.924, zTras: 0.709, radio: 0.36 };   // (el modelo trae los suyos)
@@ -35,7 +35,18 @@ function preparar(gltf) {
     mat = mat || o.material;
     // sin índice: las abolladuras y la desintegración trabajan triángulo a triángulo
     const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
-    if (o.name === 'cuerpo') quitarTuercas(g);
+    if (o.name === 'cuerpo') {
+      separar(g, esTuerca);
+      // cada retrovisor, centrado en sí mismo (gira sobre su centro al romperse y volar)
+      for (const [nombre, sg] of [['espejoIzq', 1], ['espejoDer', -1]]) {
+        const e = separar(g, esEspejo(sg));
+        if (!e) continue;
+        e.computeBoundingBox(); const c = e.boundingBox.getCenter(new THREE.Vector3());
+        e.translate(-c.x, -c.y, -c.z); e.computeBoundingSphere();
+        e.userData = { compartida: true, centro: c };
+        partes[nombre] = e;
+      }
+    }
     g.computeBoundingSphere();
     g.userData.compartida = true;
     partes[o.name] = g;
@@ -46,54 +57,83 @@ function preparar(gltf) {
   return { partes, mapa, normal, colores: !!partes.cuerpo.attributes.color };
 }
 
-// El escaneo trae las tuercas de sus ruedas delanteras, que asoman por fuera de la llanta de
-// las ruedas del juego: se quitan los triángulos que sobresalen de los bujes delanteros.
-function quitarTuercas(g) {
-  const p = g.attributes.position, n = p.count / 3, quedan = [];
+// Separa de la geometría (sin índice) los triángulos cuyo centro cumple `dentro(x, y, z)`:
+// devuelve una geometría nueva con ellos (o null) y los quita de la original.
+function separar(g, dentro) {
+  const p = g.attributes.position, n = p.count / 3, quedan = [], salen = [];
   for (let t = 0; t < n; t++) {
-    let fuera = false;
-    for (let v = t * 3; v < t * 3 + 3 && !fuera; v++) {
-      const x = p.getX(v), y = p.getY(v), z = Math.abs(p.getZ(v));
-      fuera = z > RUEDAS_GLB.zDel + 0.09 && x > RUEDAS_GLB.del - 0.3 && x < RUEDAS_GLB.del + 0.3 && y > 0.1 && y < 0.7;
-    }
-    if (!fuera) quedan.push(t);
+    const v = t * 3;
+    const x = (p.getX(v) + p.getX(v + 1) + p.getX(v + 2)) / 3, y = (p.getY(v) + p.getY(v + 1) + p.getY(v + 2)) / 3, z = (p.getZ(v) + p.getZ(v + 1) + p.getZ(v + 2)) / 3;
+    (dentro(x, y, z) ? salen : quedan).push(t);
   }
-  if (quedan.length === n) return;
+  if (!salen.length) return null;
+  const fuera = new THREE.BufferGeometry();
   for (const nombre of Object.keys(g.attributes)) {
-    const a = g.attributes[nombre], tam = a.itemSize, nuevo = new a.array.constructor(quedan.length * 3 * tam);
-    quedan.forEach((t, k) => nuevo.set(a.array.subarray(t * 3 * tam, (t + 1) * 3 * tam), k * 3 * tam));
-    g.setAttribute(nombre, new THREE.BufferAttribute(nuevo, tam, a.normalized));
+    const a = g.attributes[nombre], tam = a.itemSize;
+    const copia = (lista) => { const nuevo = new a.array.constructor(lista.length * 3 * tam); lista.forEach((t, k) => nuevo.set(a.array.subarray(t * 3 * tam, (t + 1) * 3 * tam), k * 3 * tam)); return new THREE.BufferAttribute(nuevo, tam, a.normalized); };
+    fuera.setAttribute(nombre, copia(salen));
+    g.setAttribute(nombre, copia(quedan));
   }
+  return fuera;
 }
+
+// El escaneo trae las tuercas de sus ruedas delanteras, que asoman por fuera de la llanta de
+// las ruedas del juego: se quitan.
+const esTuerca = (x, y, z) => Math.abs(z) > RUEDAS_GLB.zDel + 0.09 && Math.abs(x - RUEDAS_GLB.del) < 0.3 && y > 0.1 && y < 0.7;
+
+/** Retrovisores del escaneo (carcasa y brazo), a cada lado del habitáculo: se rompen aparte. */
+export const ESPEJOS_GLB = { x0: 0.66, x1: 0.98, y0: 0.665, y1: 0.86, z0: 0.36, z1: 0.68 };
+const esEspejo = (sg) => (x, y, z) => x > ESPEJOS_GLB.x0 && x < ESPEJOS_GLB.x1 && y > ESPEJOS_GLB.y0 && y < ESPEJOS_GLB.y1 && z * sg > ESPEJOS_GLB.z0 && z * sg < ESPEJOS_GLB.z1;
 
 const cacheMat = new Map();
 /**
- * Material del coche: la textura en alta definición del propio modelo (o, en los rivales, su
- * color grabado en los vértices) teñida con el color del equipo: las zonas claras del modelo
- * toman el color, las oscuras quedan de carbono. Sin proyecciones, así nada se estira.
+ * Material del coche: el color grabado en los vértices del escaneo decide qué es pintura (claro)
+ * y qué es carbono (oscuro: fondo, suspensión, interior de los alerones). La pintura toma la
+ * librea del equipo (franjas, colores, dorsal, logotipos o la imagen propia del jugador),
+ * proyectada en el shader desde el atlas de librea.js: vista de arriba para las caras que miran
+ * arriba y laterales para las de los lados, mezcladas suave según la normal (así no se estira
+ * en las curvas). El relieve y las sombras del escaneo se conservan.
  */
-export function materialCocheGLB(colores, dat) {
-  const clave = (colores.base || '') + '|' + (colores.acento || '') + '|' + (dat.mapa ? dat.mapa.uuid : 'v');
+export function materialCocheGLB(colores, dat, librea = null) {
+  const clave = (colores.base || '') + '|' + (colores.acento || '') + '|' + (dat.mapa ? dat.mapa.uuid : 'v') + '|' + (librea ? librea.uuid : '-');
   if (cacheMat.has(clave)) return cacheMat.get(clave);
   const m = new THREE.MeshPhysicalMaterial({
     map: dat.mapa, normalMap: dat.normal, vertexColors: !dat.mapa && dat.colores,
-    roughness: 0.32, metalness: 0.25, clearcoat: 0.8, clearcoatRoughness: 0.12,
+    roughness: 0.3, metalness: 0.2, clearcoat: 1, clearcoatRoughness: 0.08,
   });
   if (dat.normal) m.normalScale = new THREE.Vector2(1, 1);
   const cBase = new THREE.Color(colores.base || '#c8102e'), cAcento = new THREE.Color(colores.acento || '#ffffff');
   m.onBeforeCompile = (sh) => {
     sh.uniforms.cBase = { value: cBase }; sh.uniforms.cAcento = { value: cAcento };
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform vec3 cBase; uniform vec3 cAcento;')
+    sh.uniforms.mapaLibrea = { value: librea };
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vPosO; varying vec3 vNorO;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPosO = position; vNorO = normal;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+      uniform vec3 cBase; uniform vec3 cAcento; uniform sampler2D mapaLibrea;
+      varying vec3 vPosO; varying vec3 vNorO;
+      // atlas de librea.js (ATLAS): ${ATLAS.x0} .. ${ATLAS.x1} en x, ±${ATLAS.zMax} en z, ${ATLAS.yMax} de alto
+      vec3 librea(vec3 p, vec3 n) {
+        float u = clamp((p.x - (${ATLAS.x0.toFixed(4)})) / ${(ATLAS.x1 - ATLAS.x0).toFixed(4)}, 0.002, 0.998);
+        vec2 uvA = vec2(u, 1.0 - clamp((p.z + ${ATLAS.zMax.toFixed(4)}) / ${(2 * ATLAS.zMax).toFixed(4)}, 0.004, 0.996) * 0.5);
+        float v = (1.0 - clamp(p.y / ${ATLAS.yMax.toFixed(4)}, 0.004, 0.996)) * 0.25;
+        vec2 uvL = n.z >= 0.0 ? vec2(u, 1.0 - (0.5 + v)) : vec2(1.0 - u, 1.0 - (0.75 + v));
+        float wa = smoothstep(0.48, 0.66, abs(n.y));
+        vec3 c = mix(texture2D(mapaLibrea, uvL).rgb, texture2D(mapaLibrea, uvA).rgb, wa);
+        // caras que miran adelante o atrás (bocas de los pontones, cantos de los alerones): ahí
+        // la proyección se estiraría; van del color base del equipo
+        return mix(c, cBase, smoothstep(0.62, 0.85, abs(n.x)) * (1.0 - wa));
+      }`)
       .replace('#include <color_fragment>', `#include <color_fragment>
       {
-        // luminancia del modelo: claro -> color del equipo (con toques del acento en lo más
-        // claro), oscuro -> carbono; el relieve y el detalle del modelo se conservan
         float l = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
-        vec3 eq = mix(cBase, cAcento, smoothstep(0.78, 0.95, l) * 0.6);
-        diffuseColor.rgb = mix(vec3(0.03, 0.032, 0.036), eq, smoothstep(0.03, 0.3, l)) * (0.85 + 0.6 * l);
+        ${librea ? 'vec3 eq = librea(vPosO, normalize(vNorO));' : 'vec3 eq = mix(cBase, cAcento, smoothstep(0.78, 0.95, l) * 0.6);'}
+        // claro -> pintura (con el sombreado del escaneo), oscuro -> carbono
+        // el fondo plano y la tabla son de carbono sin pintar, como en los coches de verdad
+        float pintado = smoothstep(0.03, 0.3, l) * smoothstep(0.1, 0.17, vPosO.y);
+        diffuseColor.rgb = mix(vec3(0.028, 0.03, 0.034), eq, pintado) * (0.85 + 0.6 * l);
       }`);
   };
-  m.customProgramCacheKey = () => 'cocheGLB3' + (dat.mapa ? 'm' : 'v');
+  m.customProgramCacheKey = () => 'cocheGLB4' + (dat.mapa ? 'm' : 'v') + (librea ? 'L' : '');
   cacheMat.set(clave, m);
   return m;
 }

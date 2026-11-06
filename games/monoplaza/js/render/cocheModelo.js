@@ -14,8 +14,6 @@ import { geoNeumatico, matFlanco, texturaLlanta, mascaraBrilloLlanta, aroLlanta,
 
 const A = COCHE.wheelbase * (1 - COCHE.repartoDel); // eje delantero
 const B = COCHE.wheelbase * COCHE.repartoDel;       // eje trasero
-// radio de las ruedas sobre el coche escaneado (es algo mayor que el de la física): 18" de 0,75 m
-const RADIO_RUEDA_GLB = 0.375;
 
 // Las caras tienen que mirar hacia fuera: si las secciones van del morro hacia atrás el giro de
 // los triángulos queda al revés y se ve el interior de la pieza (el coche parecía transparente,
@@ -948,16 +946,21 @@ export function crearModelo(opc) {
 
   // Abolladuras: hunde la carrocería donde ha pegado cada golpe (se acumulan). Las caras que se
   // mueven toman la normal de su triángulo: el carbono roto se ve arrugado, con aristas.
-  let nAbol = 0, posOrig = null, nrmOrig = null;
+  // En el coche escaneado, donde el golpe es fuerte salta la pintura y queda el carbono a la vista
+  // (se oscurece el color de esos vértices: el material lo convierte en carbono).
+  let nAbol = 0, posOrig = null, nrmOrig = null, colOrig = null;
   function abollar(lista) {
     if (lista.length === nAbol) return;
     propia(cuerpo);
     const g = cuerpo.geometry, p = g.attributes.position, nr = g.attributes.normal, P = p.array, N = nr.array;
-    if (!posOrig) { posOrig = P.slice(); nrmOrig = N.slice(); }
-    if (lista.length < nAbol) { P.set(posOrig); N.set(nrmOrig); nAbol = 0; }
+    const col = cuerpo.userData.glb ? g.attributes.color : null;
+    if (!posOrig) { posOrig = P.slice(); nrmOrig = N.slice(); colOrig = col ? col.array.slice() : null; }
+    if (lista.length < nAbol) { P.set(posOrig); N.set(nrmOrig); if (col && colOrig) col.array.set(colOrig); nAbol = 0; }
     const tocados = new Uint8Array(p.count);
+    const e = carroceria.scale.x;        // los golpes vienen en metros del coche real
     for (let k = nAbol; k < lista.length; k++) {
-      const a = lista[k];
+      const a0 = lista[k];
+      const a = { x: a0.x / e, z: a0.z / e, r: a0.r / e, prof: a0.prof / e, sem: a0.sem };
       const lateral = Math.abs(a.z) > 0.3 && a.x > -2.0 && a.x < 2.6;
       for (let i = 0; i < p.count; i++) {
         const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2];
@@ -973,6 +976,11 @@ export function crearModelo(opc) {
         else P[i * 3] -= Math.sign(a.x) * f;
         P[i * 3 + 1] -= f * 0.25 * (ruido - 1);
         tocados[i] = 1;
+        // pintura saltada: a partir de ~1,5 cm de hundimiento, a parches
+        if (col && f > 0.015 && h - Math.floor(h) > 0.25) {
+          const q = Math.max(0.06, 1 - (f - 0.015) * 40);
+          col.setXYZ(i, col.getX(i) * q, col.getY(i) * q, col.getZ(i) * q);
+        }
       }
     }
     // normales de cara en los triángulos tocados
@@ -984,6 +992,7 @@ export function crearModelo(opc) {
       for (let q = 0; q < 3; q++) { N[(t + q) * 3] = v1.x; N[(t + q) * 3 + 1] = v1.y; N[(t + q) * 3 + 2] = v1.z; }
     }
     p.needsUpdate = true; nr.needsUpdate = true;
+    if (col) col.needsUpdate = true;
     g.computeBoundingSphere();
     nAbol = lista.length;
   }
@@ -1011,15 +1020,14 @@ export function crearModelo(opc) {
       }
       for (const lista of trozos) {
         if (!lista.length) continue;
-        const pos = new Float32Array(lista.length * 9), nrm = new Float32Array(lista.length * 9), uv = new Float32Array(lista.length * 6);
-        const N = g.attributes.normal.array, U = g.attributes.uv?.array;
-        lista.forEach((t, j) => {
-          pos.set(P.subarray(t * 3, t * 3 + 9), j * 9); nrm.set(N.subarray(t * 3, t * 3 + 9), j * 9);
-          if (U) uv.set(U.subarray(t * 2, t * 2 + 6), j * 6);
-          for (let q = 0; q < 9; q++) P[t * 3 + q] = 0;           // fuera de la célula: triángulo vacío
-        });
+        // el trozo se lleva todos los datos de sus triángulos (también el color del escaneo)
         const gg = new THREE.BufferGeometry();
-        gg.setAttribute('position', new THREE.BufferAttribute(pos, 3)); gg.setAttribute('normal', new THREE.BufferAttribute(nrm, 3)); gg.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+        for (const [nombre, at] of Object.entries(g.attributes)) {
+          const n = at.itemSize, dst = new at.array.constructor(lista.length * 3 * n);
+          lista.forEach((t, j) => dst.set(at.array.subarray(t * n, (t + 3) * n), j * 3 * n));
+          gg.setAttribute(nombre, new THREE.BufferAttribute(dst, n, at.normalized));
+        }
+        for (const t of lista) for (let q = 0; q < 9; q++) P[t * 3 + q] = 0;   // fuera de la célula: triángulo vacío
         gg.computeBoundingSphere();
         // centrado en su propio centro para que gire sobre sí mismo al volar
         const c = gg.boundingSphere.center.clone(); gg.translate(-c.x, -c.y, -c.z);
@@ -1031,7 +1039,7 @@ export function crearModelo(opc) {
       p.needsUpdate = true; g.computeBoundingSphere();
     }
     alaTras.visible = false; estadoDanos.alaTras = true;
-    for (const gp of gruposPieza) gp.g.visible = false;
+    for (const gp of gruposPieza) { gp.g.visible = false; if (gp.glb) gp.glb.visible = false; }
     calor.visible = false; pivDrs.visible = false; luzLluvia.visible = false;
   }
   function recomponer() {
@@ -1043,7 +1051,9 @@ export function crearModelo(opc) {
     calor.visible = true; pivDrs.visible = true; luzLluvia.visible = true;
     if (posOrig) cuerpo.geometry.attributes.normal.array.set(nrmOrig);
     cuerpo.geometry.attributes.normal.needsUpdate = true;
-    posOrig = null; nrmOrig = null; nAbol = 0;          // las abolladuras se vuelven a tomar desde el coche entero
+    const col = cuerpo.geometry.attributes.color;
+    if (col && colOrig) { col.array.set(colOrig); col.needsUpdate = true; }
+    posOrig = null; nrmOrig = null; colOrig = null; nAbol = 0;          // las abolladuras se vuelven a tomar desde el coche entero
   }
 
   // ── Coche escaneado (modelo 3D) en lugar de la carrocería procedural ──
@@ -1056,29 +1066,36 @@ export function crearModelo(opc) {
   function ponerCocheGLB(dat, datLejos) {
     if (!dat || cuerpo.userData.glb) return;
     cuerpo.userData.glb = true;
-    const matG = materialCocheGLB(colores, dat);
+    const matG = materialCocheGLB(colores, dat, tex);
     cuerpo.geometry = dat.partes.cuerpo; cuerpo.material = matG;
-    posOrig = null; nrmOrig = null; nAbol = 0;
+    posOrig = null; nrmOrig = null; colOrig = null; nAbol = 0;
     const ocultar = (o) => { o.visible = false; o.traverse(q => { q.userData.oculto = true; }); };
     for (const m of [mCarbono, mNegro, mMetal, forroCabina]) if (m) ocultar(m);
-    for (const gp of gruposPieza) ocultar(gp.g);
+    for (const gp of gruposPieza) {
+      ocultar(gp.g);
+      // los retrovisores del escaneo van aparte: se tuercen y salen volando con los golpes
+      const e = gp.tipo === 'espejo' && dat.partes[gp.sg > 0 ? 'espejoIzq' : 'espejoDer'];
+      if (e) { const m = new THREE.Mesh(e, matG); m.position.copy(e.userData.centro); m.castShadow = true; carroceria.add(m); gp.glb = m; }
+    }
     for (const [grupo, nombre] of [[alaDel, 'alaDel'], [alaTras, 'alaTras']]) {
       for (const h of grupo.children) ocultar(h);
       if (!dat.partes[nombre]) continue;
       const m = new THREE.Mesh(dat.partes[nombre], matG); m.position.copy(grupo.position).negate(); m.castShadow = true; m.receiveShadow = true;
       grupo.add(m);
     }
-    // las ruedas, en los bujes del escaneo y a escala del coche (el escaneo es algo mayor que
-    // el coche de la física): 18" de 0,75 m de diámetro, 0,32 m de ancho delante y 0,42 detrás
+    // el escaneo es algo mayor que un F1 real: se lleva a su batalla de 3,6 m (las vías ya
+    // vienen corregidas en el modelo: 2,0 m de ancho por fuera de las ruedas, como manda el
+    // reglamento) y las ruedas quedan con sus medidas reales: 720 mm de diámetro, 305 mm de
+    // ancho delante y 405 mm detrás
+    const esc = COCHE.wheelbase / (RUEDAS_GLB.del - RUEDAS_GLB.tras);
+    carroceria.scale.setScalar(esc);
     ruedas.forEach((r, k) => {
-      const del = k < 2, x = del ? RUEDAS_GLB.del : RUEDAS_GLB.tras, z = Math.sign(r.base.z) * (del ? RUEDAS_GLB.zDel : RUEDAS_GLB.zTras);
-      const esc = RADIO_RUEDA_GLB / r.radio;
-      r.giro.scale.setScalar(esc); r.radio = RADIO_RUEDA_GLB;
-      r.base.x = x; r.base.z = z; r.base.y = RADIO_RUEDA_GLB; r.giro.position.set(x, RADIO_RUEDA_GLB, z);
+      const del = k < 2, x = (del ? RUEDAS_GLB.del : RUEDAS_GLB.tras) * esc, z = Math.sign(r.base.z) * (del ? RUEDAS_GLB.zDel : RUEDAS_GLB.zTras) * esc;
+      r.base.x = x; r.base.z = z; r.base.y = r.radio; r.giro.position.set(x, r.radio, z);
     });
     // de lejos, la versión baja (la cambia el nivel de detalle de main.js)
     if (datLejos) {
-      cuerpoLejos = new THREE.Mesh(datLejos.partes.cuerpo, materialCocheGLB(colores, datLejos));
+      cuerpoLejos = new THREE.Mesh(datLejos.partes.cuerpo, materialCocheGLB(colores, datLejos, tex));
       cuerpoLejos.castShadow = true; cuerpoLejos.visible = false; cuerpoLejos.userData.lejos = true;
       carroceria.add(cuerpoLejos);
       modelo.cuerpoLejos = cuerpoLejos;
@@ -1144,11 +1161,12 @@ export function crearModelo(opc) {
       gruposPieza.forEach((g) => {
         const lado = zn ? (g.sg > 0 ? zn.izq : zn.der) + (g.tipo === 'deflector' ? zn.del * 0.35 : 0) : (d?.piezas || 0);
         const umbral = g.tipo === 'espejo' ? 0.45 : 0.8;
-        if (lado >= umbral && !g.rota) { g.rota = true; this.alDesprender?.(g.tipo, g.g); }
         if (lado < 0.05 && (d?.piezas || 0) < 0.05 && g.rota) g.rota = false;
-        g.g.visible = !g.rota;
+        const o = g.glb || g.g;
+        if (lado >= umbral && !g.rota) { g.rota = true; this.alDesprender?.(g.tipo, o); }
+        o.visible = !g.rota;
         // antes de romperse se tuerce
-        if (!g.rota) g.g.rotation.set(lado * 0.25 * g.sg, 0, -lado * 0.3);
+        if (!g.rota) o.rotation.set(lado * 0.25 * g.sg, 0, -lado * 0.3);
       });
       if (d?.desintegrado && !desintegrado) { desintegrado = true; partir(this); }
       else if (!d?.desintegrado && desintegrado) { desintegrado = false; recomponer(); }

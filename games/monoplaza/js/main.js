@@ -644,7 +644,7 @@ function crearModelos() {
       const vel = new THREE.Vector3(Math.cos(c.psi) * c.vx - Math.sin(c.psi) * c.vy, 0, Math.sin(c.psi) * c.vx + Math.cos(c.psi) * c.vy);
       escombros.lanzar(obj, vel, { radio: tipo === 'rueda' ? 0.36 : 0.08, alto: tipo === 'rueda' ? 4 : 1 });
       obj.updateMatrixWorld(true);
-      escombros.esquirlas(new THREE.Vector3().setFromMatrixPosition(obj.matrixWorld), vel, tipo === 'rueda' ? 4 : 10);
+      escombros.esquirlas(new THREE.Vector3().setFromMatrixPosition(obj.matrixWorld), vel, tipo === 'rueda' ? 4 : tipo === 'espejo' ? 4 : 10, eq.colores?.base || p.equipo.base);
     };
     scene.add(m.raiz);
     modelos.push(m);
