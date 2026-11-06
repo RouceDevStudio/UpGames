@@ -1939,9 +1939,10 @@ async function pfChatBadge() {
   const token = LS.get('token');
   if (!el || !token) return;
   try {
-    const r = await fetch(`${PF_API}/chat/no-leidos`, { headers: { Authorization: `Bearer ${token}` } });
-    const d = r.ok ? await r.json() : null;
-    const n = d && d.noLeidos || 0;
+    // Chats privados + grupos (si el servidor aún no tiene grupos, cuenta 0)
+    const h = { headers: { Authorization: `Bearer ${token}` } };
+    const [d, g] = await Promise.all([fetch(`${PF_API}/chat/no-leidos`, h), fetch(`${PF_API}/grupos/no-leidos`, h)].map(p => p.then(r => r.ok ? r.json() : null).catch(() => null)));
+    const n = (d && d.noLeidos || 0) + (g && g.noLeidos || 0);
     el.textContent = n > 99 ? '99+' : n; el.hidden = !n;
   } catch (_) {}
 }
@@ -4341,7 +4342,7 @@ function ugAB(evento, modo) {
 
 // ── BIENVENIDA — 3 pantallas + términos ───────────────────
 (function initOnboarding() {
-  const TERMINOS_VERSION = '7.1';   // súbela al cambiar los Términos o la Privacidad
+  const TERMINOS_VERSION = '7.2';   // súbela al cambiar los Términos o la Privacidad
   function avisoTerminosNuevos() {
     const a = document.createElement('div'); a.className = 'ug-terminos-aviso'; a.setAttribute('role', 'status');
     a.innerHTML = `<span>📜 Actualizamos los <a href="./terminos_condiciones.html" target="_blank" rel="noopener">Términos (v${TERMINOS_VERSION})</a> y la <a href="./politica-privacidad.html" target="_blank" rel="noopener">Privacidad</a>: ahora bajo la ley colombiana, a los creadores se les paga solo por descargas efectivas (no por vistas) y saltar la espera es solo con Premium.</span><button type="button">Entendido</button>`;

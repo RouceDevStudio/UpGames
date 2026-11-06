@@ -624,6 +624,13 @@ body:not(.is-owner) .owner-only{display:none!important}
     <section class="view" id="v-moder">
       <div class="vh"><div><h2>Moderación IA</h2><p>Lo que las reglas y NEXUS quitaron solos: contenido sexual, odio, acoso, insultos y spam en comentarios, chat de lives, publicaciones y lives</p></div>
         <button class="btn sm" onclick="loadModer()"><ion-icon name="refresh-outline"></ion-icon> Recargar</button></div>
+      <div class="card" id="segCard" style="margin-bottom:14px;border-color:rgba(255,77,109,.45);overflow:auto">
+        <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><div><p class="ct">🚨 Incidentes de seguridad · cero tolerancia</p>
+          <p class="cs" style="margin:0">Menores, animales, abuso o gore real detectados por NEXUS o reportados por usuarios en chats, grupos, comentarios, publicaciones, historias y lives. El contenido ya se bloqueó; aquí está la evidencia y el expediente (correo, IPs, cobros, pagos e historial) para entregarlo a las autoridades.</p></div>
+          <div class="chips" id="segF"><button class="chip on" data-f="abierto">Abiertos</button><button class="chip" data-f="reportado">Reportados</button><button class="chip" data-f="descartado">Descartados</button><button class="chip" data-f="">Todos</button></div></div>
+        <div id="segLista" style="margin-top:10px"><div class="skel"></div></div>
+        <p class="small muted" style="margin:10px 0 0">Dónde denunciar en Colombia: <a href="https://www.teprotejo.org" target="_blank" rel="noopener">Te Protejo</a> (abuso infantil en internet) · <a href="https://caivirtual.policia.gov.co" target="_blank" rel="noopener">CAI Virtual de la Policía</a> · <a href="https://www.fiscalia.gov.co/colombia/servicios-de-informacion-al-ciudadano/donde-y-como-denunciar/" target="_blank" rel="noopener">Fiscalía</a>. Internacional: <a href="https://report.cybertip.org" target="_blank" rel="noopener">NCMEC CyberTipline</a>. No descargues ni reenvíes el material: entrega el expediente y deja que la autoridad lo pida a UpGames.</p>
+      </div>
       <div class="kpis" id="mdKpis"><div class="skel"></div><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
       <div class="chips" id="mdF" style="margin:12px 0"><button class="chip on" data-f="">Todo</button><button class="chip" data-f="comentario">💬 Comentarios</button><button class="chip" data-f="chat">🔴 Chat de lives</button><button class="chip" data-f="publicacion">📦 Publicaciones</button><button class="chip" data-f="live">📡 Lives</button></div>
       <div class="grid2">
@@ -1595,7 +1602,50 @@ let XT = null;   // { config, tiposMision, stats }
 const X_FUN = { cosmeticos: ['✨', 'Estilo del perfil'], packs: ['🎁', 'Packs de estilo con descuento'], superchat: ['💬', 'Super Chat en lives'], apoyar: ['🪙', 'Apoyar publicaciones'], prioridad: ['⚡', 'Revisión prioritaria'], regalarPremium: ['🎁', 'Regalar Premium'], nombre: ['✏️', 'Cambio de nombre inmediato'], misiones: ['🎯', 'Misiones semanales'], referidos: ['🤝', 'Referidos (invita y gana)'], promoLive: ['🚀', 'Promover lives con UpCoins'] };
 const X_VENTA = { cosmetico: 'Estilo', pack: 'Packs de estilo', superchat: 'Super Chat', apoyo: 'Apoyos', prioridad: 'Prioridad', regalo_premium: 'Premium regalado', nombre: 'Nombre', mision: 'Misiones y referidos (regalo)', promolive: 'Promoción de lives' };
 let MD = null, mdF = '';
+// ─────────── Incidentes de seguridad (cero tolerancia) ───────────
+let segF = 'abierto', SEG = [];
+const SEG_CAT = { menores: '🧒 Menores de edad', zoofilia: '🐾 Animales', abuso: '⛔ Abuso / sin consentimiento', gore: '🩸 Gore real' };
+async function loadSeg() {
+  try {
+    const { ok, d } = await api('/admin/seguridad/incidentes' + (segF ? '?estado=' + segF : ''));
+    if (!ok || !d.success) { $('segLista').innerHTML = `<div class="empty" style="padding:14px">${esc(d.error || 'Sin acceso (requiere el permiso Sanciones)')}</div>`; return; }
+    SEG = d.lista;
+    const nav = document.querySelector('[data-v="moder"]'); if (nav) nav.dataset.badge = d.abiertos || '';
+    $('segLista').innerHTML = SEG.length ? `<table class="tbl"><tr><th>Cuándo</th><th>Cuenta</th><th>Categoría</th><th>Dónde · fuente</th><th>Evidencia</th><th>Estado</th><th></th></tr>${SEG.map((x, i) => `<tr>
+      <td class="small muted">${fdate(x.fecha)}<div>${new Date(x.fecha).toLocaleTimeString('es')}</div></td>
+      <td><b>@${esc(x.usuario)}</b><div class="small muted">${esc(x.email)}</div><div class="small muted mono">${esc(x.conexion?.ip || '')}</div>${x.restringida ? '<span class="tag t-bad">restringida</span>' : ''}</td>
+      <td><b>${esc(SEG_CAT[x.categoria] || x.categoria)}</b><div class="small muted">${esc(x.motivo)}</div></td>
+      <td class="small">${esc(x.donde)}<div class="muted">${esc(x.fuente)}${x.confianza != null ? ` · ${Math.round(x.confianza * 100)} %` : ''}</div></td>
+      <td class="small" style="max-width:260px">${esc((x.evidencia?.texto || '').slice(0, 220))}${x.evidencia?.imagen ? `<div><a href="${esc(x.evidencia.imagen)}" target="_blank" rel="noopener noreferrer" onclick="return confirm('Vas a abrir una imagen marcada como contenido ilegal. Ábrela solo si es imprescindible para el reporte. ¿Continuar?')">⚠️ imagen (no reenviar)</a></div>` : ''}</td>
+      <td><span class="tag ${x.estado === 'abierto' ? 't-bad' : x.estado === 'reportado' ? 't-warn' : ''}">${esc(x.estado)}</span>${x.reportadoEn ? `<div class="small muted">${fdate(x.reportadoEn)}</div>` : ''}</td>
+      <td style="white-space:nowrap"><button class="btn sm" onclick="segExpediente(${i})">📄 Expediente</button>
+        ${x.estado !== 'reportado' ? `<button class="btn sm" onclick="segEstado(${i},'reportado')">✅ Reportado</button>` : ''}
+        ${x.estado !== 'descartado' ? `<button class="btn sm" onclick="segEstado(${i},'descartado')">Descartar</button>` : ''}
+        ${x.restringida ? `<button class="btn sm" onclick="segEstado(${i},null,true)">Quitar restricción</button>` : ''}</td></tr>`).join('')}</table>`
+      : `<div class="empty" style="padding:18px">${segF === 'abierto' ? 'Ningún incidente abierto ✨' : 'Nada en esta lista'}</div>`;
+  } catch (_) {}
+}
+async function segExpediente(i) {
+  const x = SEG[i]; toast('Generando expediente…');
+  const { ok, d } = await api(`/admin/seguridad/incidentes/${x.id}/expediente`);
+  if (!ok || !d.success) return toast(d.error || 'No se pudo generar', 'err');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' }));
+  a.download = `expediente-${x.usuario}-${x.categoria}-${new Date(x.fecha).toISOString().slice(0, 10)}.json`;
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  toast('📄 Expediente descargado. Guárdalo en un lugar seguro.', 'ok');
+}
+async function segEstado(i, estado, quitarRestriccion) {
+  const x = SEG[i];
+  if (estado === 'descartado' && !confirm('¿Descartar? Úsalo solo si NEXUS se equivocó (falso positivo).')) return;
+  const notas = estado === 'reportado' ? (prompt('Número de radicado o a quién se reportó (opcional):') || '') : undefined;
+  const { ok, d } = await api(`/admin/seguridad/incidentes/${x.id}`, { method: 'POST', body: { ...(estado ? { estado } : {}), ...(notas !== undefined ? { notas } : {}), ...(quitarRestriccion || estado === 'descartado' ? { quitarRestriccion: true } : {}) } });
+  if (!ok || !d.success) return toast(d.error || 'No se pudo guardar', 'err');
+  toast('Guardado', 'ok'); loadSeg();
+}
+document.addEventListener('click', e => { const b = e.target.closest('#segF .chip'); if (!b) return; document.querySelectorAll('#segF .chip').forEach(c => c.classList.toggle('on', c === b)); segF = b.dataset.f; loadSeg(); });
 async function loadModer() {
+  loadSeg();
   try { const { ok, d } = await api('/admin/moderacion' + (mdF ? '?tipo=' + mdF : '')); if (!ok || !d.success) return toast(d.error || 'No se pudo cargar', 'err'); MD = d; rModer(); } catch (_) {}
 }
 function rModer() {

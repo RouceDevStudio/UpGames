@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#0A0B0F">
+  <meta name="theme-color" content="#050A14">
   <title>Mensajes · UpGames</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <style>
 /* ══════════════════════════════════════════════════════════════════
    UpGames · Mensajes — Liquid Glass
@@ -284,6 +284,242 @@ ion-icon { pointer-events: none; }
 .hidden { display: none !important; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
   </style>
+  <style id="ug-cyber">
+/* ══════════════════════════════════════════════════════════════════
+   UpGames · Mensajes — tema CYBER (verde neón, blanco, gris y negro
+   sobre azul noche). Va encima del estilo base: mismas piezas, otra piel.
+   ══════════════════════════════════════════════════════════════════ */
+:root {
+  --g: #39FF88; --g-rgb: 57,255,136;
+  --cy: #9BFFCB; --cy-rgb: 155,255,203;
+  --bg: #050A14; --bg-rgb: 5,10,20;
+  --bg1: #08101D; --bg2: #0C1626; --bg3: #122036;
+  --glass: rgba(9,17,31,.74); --glass-2: rgba(14,25,43,.82);
+  --bd: rgba(var(--g-rgb),.13); --bd-2: rgba(var(--g-rgb),.28);
+  --txt: #F2F8F5; --txt2: #9AA9B6; --txt3: #5D6B79;
+  --ff: 'Rajdhani', 'Manrope', system-ui, sans-serif;
+  --fh: 'Orbitron', 'Rajdhani', sans-serif;
+  --fm: 'Share Tech Mono', ui-monospace, monospace;
+  --ease: cubic-bezier(.16,1,.3,1);
+  --cut: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+body { font-size: 16.5px; background: radial-gradient(120% 70% at 10% -10%, rgba(var(--g-rgb),.08), transparent 55%), radial-gradient(90% 60% at 110% 110%, rgba(40,90,180,.14), transparent 60%), var(--bg); }
+body::before { width: auto; height: auto; inset: 0; border-radius: 0; filter: none; top: 0; left: 0;
+  background: linear-gradient(rgba(var(--g-rgb),.045) 1px, transparent 1px) 0 0/100% 38px, linear-gradient(90deg, rgba(var(--g-rgb),.035) 1px, transparent 1px) 0 0/38px 100%;
+  -webkit-mask: radial-gradient(ellipse at 50% 40%, #000 20%, transparent 75%); mask: radial-gradient(ellipse at 50% 40%, #000 20%, transparent 75%); animation: ugGrid 26s linear infinite; }
+body::after { width: auto; height: auto; inset: 0; border-radius: 0; filter: none; bottom: 0; right: 0; z-index: 100;
+  background: repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 3px); }
+@keyframes ugGrid { to { background-position: 0 38px, 38px 0; } }
+.glass { backdrop-filter: blur(18px) saturate(1.3); -webkit-backdrop-filter: blur(18px) saturate(1.3); }
+
+/* Barra lateral */
+.side { background: linear-gradient(180deg, rgba(8,16,29,.86), rgba(5,10,20,.92)); border-right: 1px solid var(--bd); }
+.brand-mark { border-radius: 0; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); background: linear-gradient(160deg, #6BFFAA, #1FAF5E); box-shadow: none; animation: ugPulse 3.2s ease-in-out infinite; }
+@keyframes ugPulse { 50% { filter: drop-shadow(0 0 10px rgba(var(--g-rgb),.8)); } }
+.brand-txt b { font-family: var(--fh); font-size: 1rem; letter-spacing: .08em; text-transform: uppercase; }
+.brand-txt small { font-family: var(--fm); letter-spacing: .2em; }
+.ico-btn { border-radius: 0; clip-path: var(--cut); }
+.ico-btn:hover { background: rgba(var(--g-rgb),.1); color: var(--g); }
+.ico-btn.on { color: var(--g); background: rgba(var(--g-rgb),.1); }
+.tabs { position: relative; display: flex; margin: 0 12px 10px; padding: 3px; background: rgba(4,9,17,.7); border: 1px solid var(--bd); clip-path: var(--cut); }
+.tab { position: relative; z-index: 1; flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; height: 38px; font-family: var(--fh); font-size: .64rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--txt2); transition: color .6s var(--ease); }
+.tab ion-icon { font-size: 1rem; }
+.tab.on { color: #02140A; }
+.tb-n { min-width: 18px; height: 18px; padding: 0 5px; display: none; align-items: center; justify-content: center; font-family: var(--fm); font-size: .66rem; background: var(--g); color: #02140A; clip-path: polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%); }
+.tb-n.on { display: inline-flex; }
+.tab.on .tb-n { background: #02140A; color: var(--g); }
+.tab-ink { position: absolute; z-index: 0; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / 3); background: var(--g); box-shadow: 0 0 18px rgba(var(--g-rgb),.55); clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px); transition: transform .8s var(--ease); }
+.search { border-radius: 0; clip-path: var(--cut); background: rgba(4,9,17,.7); }
+.search input { font-family: var(--ff); font-size: .98rem; }
+.chip { border-radius: 0; clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%); font-family: var(--fm); font-weight: 400; font-size: .78rem; letter-spacing: .04em; padding: 6px 14px; }
+.chip.on { box-shadow: 0 0 14px rgba(var(--g-rgb),.45); }
+.sec { font-family: var(--fh); letter-spacing: .18em; color: var(--g); opacity: .75; }
+.conv { border-radius: 0; clip-path: var(--cut); padding: 11px 10px; animation: ugIn .7s var(--ease) both; animation-delay: calc(var(--i, 0) * 45ms); }
+.conv::before { content: ''; position: absolute; left: 0; top: 18%; bottom: 18%; width: 2px; background: var(--g); box-shadow: 0 0 10px var(--g); transform: scaleY(0); transition: transform .6s var(--ease); }
+.conv:hover { background: rgba(var(--g-rgb),.06); }
+.conv.on { background: linear-gradient(90deg, rgba(var(--g-rgb),.16), rgba(var(--g-rgb),.03)); }
+.conv.on::before, .conv.unread::before { transform: none; }
+@keyframes ugIn { from { opacity: 0; transform: translateX(-14px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+.conv-name { font-family: var(--ff); font-weight: 700; font-size: 1.02rem; }
+.conv-prev { font-size: .9rem; }
+.conv-time { font-family: var(--fm); font-size: .7rem; }
+.unread-n { border-radius: 0; clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%); font-family: var(--fm); box-shadow: 0 0 10px rgba(var(--g-rgb),.6); }
+.skel { border-radius: 0; clip-path: var(--cut); background: linear-gradient(90deg, rgba(var(--g-rgb),.03), rgba(var(--g-rgb),.09), rgba(var(--g-rgb),.03)); background-size: 200% 100%; }
+
+/* Avatares: círculo con anillo; grupos en hexágono */
+.av { background: linear-gradient(160deg, #6BFFAA, #1FAF5E); color: #02140A; font-family: var(--fh); box-shadow: 0 0 0 1.5px rgba(var(--g-rgb),.35); }
+.av.hex { border-radius: 0; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); box-shadow: none; }
+.av.hex img { border-radius: 0; }
+.av.hex.adult { background: linear-gradient(160deg, #FF8FA3, #E23B5C); }
+.side, .list { min-width: 0; }
+.av .on-dot { border-color: var(--bg); }
+.vbadge { color: var(--g); }
+
+/* Panel de chat */
+.main { background: radial-gradient(80% 50% at 50% 0, rgba(var(--g-rgb),.05), transparent 70%); }
+#chat:not(.hidden) { animation: ugPanel .8s var(--ease) both; }
+@keyframes ugPanel { from { opacity: 0; transform: translateY(10px) scale(.99); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+@media (max-width: 760px) { .main { transition: transform .6s var(--ease); } }
+.chat-hdr { position: relative; background: rgba(5,10,20,.82); border-bottom: 1px solid transparent; }
+.chat-hdr::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; background: linear-gradient(90deg, transparent, var(--g), transparent); background-size: 200% 100%; animation: ugLine 4s linear infinite; opacity: .7; }
+@keyframes ugLine { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.chat-who { border-radius: 0; clip-path: var(--cut); }
+.who-name { font-family: var(--fh); font-size: .86rem; letter-spacing: .05em; }
+.who-sub { font-family: var(--fm); font-size: .74rem; }
+.who-sub.live { color: var(--g); text-shadow: 0 0 8px rgba(var(--g-rgb),.6); }
+.pin-bar { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 12px; text-align: left; background: linear-gradient(90deg, rgba(var(--g-rgb),.14), rgba(var(--g-rgb),.03)); border-bottom: 1px solid var(--bd); animation: ugDrop .6s var(--ease); }
+.pin-bar > ion-icon { color: var(--g); font-size: 1.1rem; flex-shrink: 0; }
+.pin-body { flex: 1; min-width: 0; font-size: .86rem; }
+.pin-body b { display: block; font-family: var(--fm); font-weight: 400; font-size: .68rem; color: var(--g); letter-spacing: .1em; text-transform: uppercase; }
+.pin-body span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--txt); }
+@keyframes ugDrop { from { opacity: 0; transform: translateY(-8px); } }
+.day { border-radius: 0; clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 8px 100%, 0 50%); font-family: var(--fm); font-weight: 400; letter-spacing: .08em; background: rgba(var(--g-rgb),.08); color: var(--g); border: 0; padding: 4px 16px; }
+.load-older { border-radius: 0; clip-path: var(--cut); font-family: var(--fm); font-weight: 400; }
+
+/* Burbujas */
+.bubble { font-size: 1.02rem; line-height: 1.38; border-radius: 4px 16px 16px 16px; background: var(--glass-2); border: 1px solid var(--bd); box-shadow: inset 2px 0 0 rgba(var(--g-rgb),.55); }
+.row:not(.mine) .bubble { border-bottom-left-radius: 16px; }
+.row:not(.mine).cont .bubble { border-top-left-radius: 4px; }
+.row.mine .bubble { border-radius: 16px 4px 16px 16px; background: linear-gradient(135deg, #46FF94, #19C46A); color: #02140A; box-shadow: 0 6px 22px rgba(var(--g-rgb),.22); font-weight: 600; }
+.row.mine.cont .bubble { border-top-right-radius: 4px; }
+.row:not(.mine) .bubble a { color: var(--g); }
+.meta { font-family: var(--fm); font-size: .66rem; }
+.meta .seen { color: #0B3B8C; }
+.quote { border-radius: 0; border-left-color: var(--g); background: rgba(0,0,0,.25); }
+.reacts { border-radius: 0; clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%); background: var(--bg2); border-color: var(--bd-2); }
+.more-btn { border-radius: 0; clip-path: var(--cut); }
+.mention { color: var(--g); font-weight: 700; }
+.row.mine .mention { color: #02140A; text-decoration: underline; }
+.mention.me { background: rgba(var(--g-rgb),.18); padding: 0 3px; }
+.sender { display: block; margin: 0 0 3px 4px; padding: 0; font-family: var(--fm); font-size: .76rem; letter-spacing: .03em; color: hsl(var(--hue, 145) 95% 68%); text-align: left; }
+.sys { align-self: center; max-width: 86%; margin: 10px 0 4px; padding: 5px 14px; font-family: var(--fm); font-size: .74rem; color: var(--txt2); text-align: center; background: rgba(var(--g-rgb),.05); border: 1px dashed rgba(var(--g-rgb),.2); animation: ugIn .7s var(--ease) both; }
+/* Entrada de mensajes nuevos: deslizan desde su lado con un destello verde */
+.new-row .bubble { animation: ugBubOther .7s var(--ease) both; }
+.row.mine.new-row .bubble { animation-name: ugBubMine; }
+@keyframes ugBubOther { 0% { opacity: 0; transform: translateX(-22px) scale(.96); filter: brightness(1.8) drop-shadow(0 0 12px rgba(var(--g-rgb),.9)); } 60% { filter: brightness(1.1); } 100% { opacity: 1; transform: none; filter: none; } }
+@keyframes ugBubMine { 0% { opacity: 0; transform: translateX(22px) scale(.96); filter: brightness(1.4) drop-shadow(0 0 14px rgba(var(--g-rgb),1)); } 100% { opacity: 1; transform: none; filter: none; } }
+.bubble.hl { box-shadow: 0 0 0 2px var(--g), 0 0 22px rgba(var(--g-rgb),.6); }
+.typing { border-radius: 4px 16px 16px 16px; background: var(--glass-2); border-color: var(--bd-2); align-items: center; }
+.typing i { background: var(--g); box-shadow: 0 0 8px var(--g); }
+.typing small { font-family: var(--fm); font-size: .7rem; color: var(--g); margin-left: 6px; }
+.to-bottom { border-radius: 0; clip-path: var(--cut); color: var(--g); }
+
+/* Compositor */
+.composer { background: rgba(5,10,20,.88); border-top: 1px solid var(--bd); }
+.input-wrap { border-radius: 0; clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); background: rgba(10,19,34,.85); }
+.input-wrap textarea { font-family: var(--ff); font-size: 1.02rem; }
+.input-wrap:focus-within { border-color: var(--g); box-shadow: inset 0 0 0 1px rgba(var(--g-rgb),.4); }
+.send { border-radius: 0; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); width: 50px; height: 54px; background: linear-gradient(160deg, #6BFFAA, #19C46A); color: #02140A; box-shadow: none; transition: transform .35s var(--ease), filter .4s, opacity .3s; }
+.send:not(:disabled) { filter: drop-shadow(0 0 10px rgba(var(--g-rgb),.65)); animation: ugReady 2.4s ease-in-out infinite; }
+.send:not(:disabled):active { transform: scale(.86) rotate(-8deg); }
+.send.fire { animation: ugFire .6s var(--ease); }
+@keyframes ugReady { 50% { filter: drop-shadow(0 0 18px rgba(var(--g-rgb),.95)); } }
+@keyframes ugFire { 0% { transform: scale(1); } 30% { transform: scale(.8) rotate(-12deg); } 70% { transform: scale(1.12) translateX(4px); } 100% { transform: none; } }
+.ctx-bar { border-radius: 0; clip-path: var(--cut); border-left-color: var(--g); }
+.ctx-bar b { color: var(--g); font-family: var(--fm); font-weight: 400; }
+.locked { border-radius: 0; clip-path: var(--cut); font-size: .92rem; }
+.locked ion-icon { color: var(--g); }
+.btn { border-radius: 0; clip-path: var(--cut); font-family: var(--fh); font-size: .66rem; letter-spacing: .1em; text-transform: uppercase; padding: 11px 16px; border: 1px solid var(--bd-2); background: rgba(10,19,34,.8); transition: background .4s, box-shadow .4s, transform .3s var(--ease); }
+.btn:hover { background: rgba(var(--g-rgb),.12); }
+.btn:active { transform: scale(.96); }
+.btn.pri { background: var(--g); color: #02140A; border-color: var(--g); box-shadow: 0 0 18px rgba(var(--g-rgb),.4); }
+.btn.danger { color: #FF5A78; border-color: rgba(255,90,120,.4); }
+.emoji-pop { border-radius: 0; clip-path: var(--cut); }
+.e-tab { border-radius: 0; }
+
+/* Bienvenida */
+.welcome .orb { border-radius: 0; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); width: 96px; height: 106px; background: linear-gradient(160deg, #6BFFAA, #1FAF5E); box-shadow: none; animation: ugFloat 5s ease-in-out infinite; }
+@keyframes ugFloat { 50% { transform: translateY(-8px); filter: drop-shadow(0 12px 26px rgba(var(--g-rgb),.55)); } }
+.welcome h2 { font-family: var(--fh); letter-spacing: .1em; text-transform: uppercase; font-size: 1.1rem; }
+.welcome p { font-size: .98rem; }
+.w-acts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 8px; }
+.w-legal { display: flex; gap: 8px; align-items: flex-start; max-width: 380px !important; margin-top: 14px; padding: 10px 12px; font-size: .82rem !important; color: var(--txt3); border: 1px dashed var(--bd-2); text-align: left; }
+.w-legal ion-icon { color: var(--g); font-size: 1.1rem; flex-shrink: 0; }
+
+/* Hojas y modales */
+.ov { background: rgba(2,5,10,.66); backdrop-filter: blur(3px); transition: opacity .45s var(--ease); }
+.sheet { border-radius: 0; clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 0 100%); border-top: 2px solid var(--g); background: linear-gradient(180deg, rgba(12,22,38,.97), rgba(5,10,20,.98)); transition: transform .7s var(--ease); transform: translateY(60px); }
+@media (min-width: 761px) { .sheet { clip-path: var(--cut); } }
+.sheet.tall { max-height: 92dvh; max-width: 480px; }
+.sheet-scroll { overflow-y: auto; overscroll-behavior: contain; padding: 0 0 6px; }
+.sheet h3, .modal h3 { font-family: var(--fh); font-size: .86rem; letter-spacing: .08em; text-transform: uppercase; }
+.grab { border-radius: 0; background: var(--g); opacity: .5; }
+.menu-item { font-family: var(--ff); font-size: 1rem; transition: background .3s, padding-left .4s var(--ease); }
+.menu-item:hover { background: rgba(var(--g-rgb),.08); padding-left: 24px; }
+.menu-item ion-icon { color: var(--g); }
+.menu-item.danger, .menu-item.danger ion-icon { color: #FF5A78; }
+.react-bar button { border-radius: 0; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
+.react-bar button.me { background: rgba(var(--g-rgb),.25); }
+.modal { border-radius: 0; clip-path: var(--cut); background: linear-gradient(180deg, rgba(12,22,38,.98), rgba(5,10,20,.98)); border: 1px solid var(--bd-2); }
+.toast { border-radius: 0; clip-path: var(--cut); border: 1px solid var(--bd-2); font-family: var(--ff); font-size: .95rem; animation: ugToast .6s var(--ease); }
+@keyframes ugToast { from { opacity: 0; transform: translateY(-14px) scale(.96); } }
+
+/* Grupos: formularios, explorar, información */
+.fld { display: block; padding: 0 18px 12px; }
+.fld > span { display: block; margin-bottom: 6px; font-family: var(--fm); font-size: .74rem; letter-spacing: .1em; text-transform: uppercase; color: var(--g); }
+.fld input[type=text], .fld textarea { width: 100%; padding: 11px 12px; background: rgba(10,19,34,.85); border: 1px solid var(--bd-2); color: var(--txt); font-family: var(--ff); font-size: 1rem; outline: 0; resize: vertical; clip-path: var(--cut); }
+.fld input:focus, .fld textarea:focus { border-color: var(--g); }
+.fld small { display: block; margin-top: 5px; font-size: .8rem; color: var(--txt3); line-height: 1.35; }
+.seg { display: flex; gap: 6px; }
+.seg button { flex: 1; padding: 10px 8px; text-align: left; border: 1px solid var(--bd-2); background: rgba(10,19,34,.7); clip-path: var(--cut); transition: background .4s, border-color .4s; }
+.seg button b { display: block; font-family: var(--fh); font-size: .64rem; letter-spacing: .08em; text-transform: uppercase; }
+.seg button small { font-size: .78rem; color: var(--txt2); margin: 2px 0 0; }
+.seg button.on { border-color: var(--g); background: rgba(var(--g-rgb),.14); }
+.seg button.on b { color: var(--g); }
+.sw { display: flex; align-items: center; gap: 12px; padding: 10px 18px; cursor: pointer; }
+.sw div { flex: 1; } .sw b { display: block; font-size: 1rem; } .sw small { color: var(--txt2); font-size: .82rem; line-height: 1.35; }
+.sw input { appearance: none; -webkit-appearance: none; width: 46px; height: 24px; flex-shrink: 0; background: var(--bg3); border: 1px solid var(--bd-2); position: relative; cursor: pointer; transition: background .4s; clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%); }
+.sw input::after { content: ''; position: absolute; top: 3px; left: 4px; width: 16px; height: 16px; background: var(--txt2); transition: transform .5s var(--ease), background .4s; }
+.sw input:checked { background: rgba(var(--g-rgb),.3); border-color: var(--g); }
+.sw input:checked::after { transform: translateX(21px); background: var(--g); box-shadow: 0 0 10px var(--g); }
+.sw.adult input:checked { background: rgba(255,77,109,.3); border-color: #FF4D6D; }
+.sw.adult input:checked::after { background: #FF4D6D; box-shadow: 0 0 10px #FF4D6D; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag-c { flex-shrink: 0; white-space: nowrap; padding: 5px 11px; font-family: var(--fm); font-size: .76rem; border: 1px solid var(--bd-2); background: rgba(10,19,34,.7); color: var(--txt2); clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%); transition: all .4s; }
+.tag-c.on { background: var(--g); color: #02140A; border-color: var(--g); }
+.av-pick { display: flex; align-items: center; gap: 14px; padding: 4px 18px 14px; }
+.av-pick .av { width: 70px; height: 76px; font-size: 1.6rem; }
+.g-acts { display: flex; gap: 8px; padding: 6px 18px 14px; }
+.g-acts .btn { flex: 1; }
+.ex-filtros { max-width: 100%; display: flex; gap: 6px; padding: 0 12px 10px; overflow-x: auto; scrollbar-width: none; align-items: center; }
+.ex-filtros .sw { padding: 0 0 0 6px; flex-shrink: 0; gap: 6px; font-family: var(--fm); font-size: .76rem; color: var(--txt2); }
+.gcard { position: relative; display: flex; gap: 12px; width: 100%; padding: 12px; margin: 0 0 8px; text-align: left; border: 1px solid var(--bd); background: linear-gradient(135deg, rgba(14,25,43,.8), rgba(6,12,22,.8)); clip-path: var(--cut); animation: ugIn .7s var(--ease) both; animation-delay: calc(var(--i, 0) * 55ms); transition: border-color .4s, transform .5s var(--ease); }
+.gcard:hover { border-color: var(--bd-2); transform: translateX(3px); }
+.gcard .av { width: 54px; height: 60px; }
+.gcard-b { flex: 1; min-width: 0; }
+.gcard-b b { display: block; font-size: 1.04rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gcard-b p { margin: 3px 0 6px; font-size: .86rem; color: var(--txt2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.gmeta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-family: var(--fm); font-size: .72rem; color: var(--txt3); }
+.gmeta .t { color: var(--g); }
+.gmeta .a18 { color: #FF4D6D; border: 1px solid rgba(255,77,109,.5); padding: 0 4px; }
+.gmeta .live { color: var(--g); } .gmeta .live::before { content: '● '; }
+.gcard .btn { align-self: center; padding: 9px 12px; }
+.gi-top { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 4px 18px 14px; }
+.gi-top .av { width: 92px; height: 102px; font-size: 2rem; }
+.gi-top h3 { padding: 6px 0 0; font-size: 1rem; text-transform: none; letter-spacing: .04em; }
+.gi-top p { font-size: .94rem; color: var(--txt2); line-height: 1.45; white-space: pre-line; }
+.gi-box { margin: 0 18px 12px; padding: 12px; border: 1px solid var(--bd); background: rgba(10,19,34,.6); clip-path: var(--cut); }
+.gi-box h4 { margin: 0 0 8px; font-family: var(--fm); font-weight: 400; font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--g); }
+.gi-box p { font-size: .9rem; color: var(--txt2); white-space: pre-line; line-height: 1.45; }
+.inv { display: flex; gap: 6px; align-items: center; }
+.inv code { flex: 1; min-width: 0; padding: 9px 10px; font-family: var(--fm); font-size: .78rem; background: var(--bg); border: 1px dashed var(--bd-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mem { display: flex; align-items: center; gap: 10px; padding: 8px 18px; width: 100%; text-align: left; }
+.mem:hover { background: rgba(var(--g-rgb),.05); }
+.mem .av { width: 38px; height: 38px; font-size: .9rem; }
+.mem-b { flex: 1; min-width: 0; font-size: .98rem; }
+.rol { font-family: var(--fm); font-size: .68rem; padding: 2px 7px; border: 1px solid var(--bd-2); color: var(--txt2); }
+.rol.dueno { color: #02140A; background: var(--g); border-color: var(--g); }
+.rol.admin { color: var(--g); border-color: var(--g); }
+.rep-op { display: flex; gap: 12px; align-items: flex-start; width: 100%; padding: 12px 18px; text-align: left; }
+.rep-op:hover { background: rgba(var(--g-rgb),.06); }
+.rep-op ion-icon { font-size: 1.2rem; color: var(--g); flex-shrink: 0; margin-top: 2px; }
+.rep-op.grave ion-icon { color: #FF5A78; }
+.rep-op b { display: block; font-size: 1rem; } .rep-op small { color: var(--txt2); font-size: .82rem; }
+.join-chk { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; padding: 10px; text-align: left; font-size: .88rem; color: var(--txt2); border: 1px solid rgba(255,77,109,.45); background: rgba(255,77,109,.06); cursor: pointer; }
+.join-chk input { width: 20px; height: 20px; accent-color: #FF4D6D; flex-shrink: 0; }
+@media (prefers-reduced-motion: reduce) { body::before { animation: none; } }
+@media (max-width: 380px) { .tab span { display: none; } }
+  </style>
 <link rel="manifest" href="./manifest.json?v=3">
 <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png?v=2">
 <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png?v=2">
@@ -305,13 +541,19 @@ ion-icon { pointer-events: none; }
         <span class="brand-txt"><b>Mensajes</b><small>UP<em>GAMES</em></small></span>
       </div>
       <button class="ico-btn" id="btn-sound" onclick="toggleSound()" aria-label="Sonido de mensajes"><ion-icon name="volume-high-outline"></ion-icon></button>
-      <button class="ico-btn on" onclick="openNewChat()" aria-label="Nuevo mensaje"><ion-icon name="create-outline"></ion-icon></button>
+      <button class="ico-btn on" id="btn-new" onclick="nuevo()" aria-label="Nuevo mensaje o grupo"><ion-icon name="create-outline"></ion-icon></button>
     </div>
+    <nav class="tabs" role="tablist" aria-label="Secciones">
+      <button class="tab on" data-t="chats" role="tab" onclick="setTab('chats')"><ion-icon name="chatbubbles-outline"></ion-icon><span>Chats</span><b class="tb-n" id="tn-chats"></b></button>
+      <button class="tab" data-t="grupos" role="tab" onclick="setTab('grupos')"><ion-icon name="people-outline"></ion-icon><span>Grupos</span><b class="tb-n" id="tn-grupos"></b></button>
+      <button class="tab" data-t="explorar" role="tab" onclick="setTab('explorar')"><ion-icon name="planet-outline"></ion-icon><span>Explorar</span></button>
+      <i class="tab-ink" id="tab-ink"></i>
+    </nav>
     <label class="search glass">
       <ion-icon name="search-outline"></ion-icon>
       <input id="q" type="search" placeholder="Buscar chats o usuarios" autocomplete="off" oninput="onSearch(this.value)">
     </label>
-    <div class="chips" role="tablist">
+    <div class="chips" id="chips" role="tablist">
       <button class="chip on" data-f="todos" onclick="setFilter('todos')">Todos</button>
       <button class="chip" data-f="noleidos" onclick="setFilter('noleidos')">No leídos<span class="n" id="n-unread"></span></button>
       <button class="chip" data-f="fijados" onclick="setFilter('fijados')">Fijados</button>
@@ -327,8 +569,9 @@ ion-icon { pointer-events: none; }
     <div class="welcome" id="welcome">
       <div class="orb"><ion-icon name="chatbubbles"></ion-icon></div>
       <h2>Tus mensajes</h2>
-      <p>Chatea en privado con los creadores que sigues y que te siguen. Comparte publicaciones, imágenes y reacciones.</p>
-      <button class="btn pri" onclick="openNewChat()"><ion-icon name="create-outline"></ion-icon> Nuevo mensaje</button>
+      <p>Chatea en privado con los creadores que sigues, crea grupos con tus amigos o únete a comunidades de toda la red UpGames.</p>
+      <div class="w-acts"><button class="btn pri" onclick="openNewChat()"><ion-icon name="create-outline"></ion-icon> Nuevo mensaje</button><button class="btn" onclick="openCreateGroup()"><ion-icon name="people-outline"></ion-icon> Crear grupo</button><button class="btn" onclick="setTab('explorar')"><ion-icon name="planet-outline"></ion-icon> Explorar</button></div>
+      <p class="w-legal"><ion-icon name="shield-checkmark-outline"></ion-icon> NEXUS protege la comunidad: el contenido con menores, animales, abuso o gore real se bloquea y se reporta a las autoridades.</p>
     </div>
 
     <div id="chat" class="hidden" style="display:flex;flex-direction:column;flex:1;min-height:0;position:relative">
@@ -352,6 +595,7 @@ ion-icon { pointer-events: none; }
         <button class="ico-btn" onclick="toggleInSearch(false)" aria-label="Cerrar búsqueda"><ion-icon name="close"></ion-icon></button>
       </div>
 
+      <button class="pin-bar hidden" id="pin-bar" onclick="S.fijado && jumpTo(S.fijado.id)"><ion-icon name="pin"></ion-icon><span class="pin-body"><b>Mensaje fijado</b><span id="pin-txt"></span></span><span class="ico-btn hidden" id="pin-x" role="button" aria-label="Quitar fijado" onclick="event.stopPropagation();desfijar()"><ion-icon name="close"></ion-icon></span></button>
       <div class="msgs" id="msgs" aria-live="polite"></div>
       <div class="typing" id="typing" aria-label="Escribiendo"><i></i><i></i><i></i></div>
       <button class="to-bottom glass" id="to-bottom" onclick="scrollBottom(true)" aria-label="Ir al último mensaje"><ion-icon name="arrow-down"></ion-icon><span class="dot-badge hidden" id="tb-n"></span></button>
@@ -408,6 +652,22 @@ ion-icon { pointer-events: none; }
     <div class="acts"><button class="btn" onclick="closeOv('ov-modal')">Cancelar</button><button class="btn pri" id="m-ok"></button></div>
   </div>
 </div>
+<!-- Crear / editar grupo -->
+<div class="ov" id="ov-group" onclick="if(event.target===this)closeOv('ov-group')">
+  <div class="sheet glass" role="dialog" aria-modal="true" aria-label="Grupo"><div class="grab"></div><div class="sheet-scroll" id="group-form"></div></div>
+</div>
+<!-- Información del grupo -->
+<div class="ov" id="ov-ginfo" onclick="if(event.target===this)closeOv('ov-ginfo')">
+  <div class="sheet glass tall" role="dialog" aria-modal="true" aria-label="Información del grupo"><div class="grab"></div><div class="sheet-scroll" id="ginfo"></div></div>
+</div>
+<!-- Invitación / unirse -->
+<div class="ov" id="ov-join" onclick="if(event.target===this)closeOv('ov-join')">
+  <div class="modal glass" role="dialog" aria-modal="true" aria-label="Unirse" id="join-body"></div>
+</div>
+<!-- Reportar -->
+<div class="ov" id="ov-report" onclick="if(event.target===this)closeOv('ov-report')">
+  <div class="sheet glass" role="dialog" aria-modal="true" aria-label="Reportar"><div class="grab"></div><div id="report-body"></div></div>
+</div>
 <div class="lb" id="lb" onclick="if(event.target===this)closeLB()">
   <a class="ico-btn dl" id="lb-dl" target="_blank" rel="noopener" aria-label="Abrir original"><ion-icon name="open-outline"></ion-icon></a>
   <button class="ico-btn x" onclick="closeLB()" aria-label="Cerrar"><ion-icon name="close"></ion-icon></button>
@@ -436,6 +696,18 @@ const S = {
   reply: null, edit: null, pendingImg: null,
   unseenBelow: 0, poll: null, listPoll: null, typingSent: 0,
   hits: [], hitIdx: -1, contactos: null,
+  kind: null,                        // 'dm' (chat privado) | 'g' (grupo o comunidad)
+  group: null, autores: {}, fijado: null,
+  tab: 'chats', grupos: [], gLoaded: false,
+  ex: { q: '', etiqueta: '', adultos: false, lista: null, etiquetas: [] },
+};
+const isG = () => S.kind === 'g';
+// Rutas de la API según el tipo de conversación abierta
+const EP = {
+  msgs: (q = '') => isG() ? `/grupos/${S.contact}/mensajes${q}` : `/chat/mensajes/${encodeURIComponent(S.contact)}${q}`,
+  msg: id => isG() ? `/grupos/${S.contact}/mensajes/${id}` : `/chat/mensaje/${id}`,
+  react: id => isG() ? `/grupos/${S.contact}/mensajes/${id}/reaccion` : `/chat/mensaje/${id}/reaccion`,
+  typing: () => isG() ? `/grupos/${S.contact}/escribiendo` : `/chat/escribiendo/${encodeURIComponent(S.contact)}`,
 };
 const LS = {
   get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (_) { return d; } },
@@ -512,8 +784,10 @@ function confirmar(ico, title, body, okTxt, cb, danger) {
 /* Texto → HTML seguro con enlaces */
 const URL_RE = /\bhttps?:\/\/[^\s<]+[^\s<.,;:!?)\]'"]/gi;
 function linkify(text) {
-  return esc(text).replace(URL_RE, u => `<a href="${u}" target="_blank" rel="noopener noreferrer">${u.length > 60 ? u.slice(0, 57) + '…' : u}</a>`);
+  return esc(text).replace(URL_RE, u => `<a href="${u}" target="_blank" rel="noopener noreferrer">${u.length > 60 ? u.slice(0, 57) + '…' : u}</a>`)
+    .replace(/(^|[\s(])@([a-z0-9_.]{3,20})/gi, (_, a, u) => `${a}<span class="mention${u.toLowerCase() === ME ? ' me' : ''}">@${u}</span>`);
 }
+const hue = u => 80 + [...String(u)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 110, 7);   // verdes, menta y turquesa
 const soloEmoji = t => /^(\p{Extended_Pictographic}|\p{Emoji_Component}|‍|️|\s){1,12}$/u.test(t) && !/\d/.test(t) && t.trim().length <= 12;
 
 /* Sonido corto al recibir (Web Audio, sin archivos) */
@@ -539,7 +813,7 @@ async function loadConvs() {
   try {
     const d = await api('/chat/conversaciones');
     const antes = new Map(S.convs.map(c => [c.contacto, c]));
-    S.convs = d.conversaciones || [];
+    S.convs = d.conversaciones || []; S.cLoaded = true;
     // Sonido si llega algo nuevo a un chat que no está abierto (ni silenciado)
     S.convs.forEach(c => {
       const prev = antes.get(c.contacto);
@@ -556,8 +830,10 @@ function setFilter(f) {
 function renderConvs() {
   const total = S.convs.reduce((n, c) => n + (muted.has(c.contacto) ? 0 : c.noLeidos || 0), 0);
   $('n-unread').textContent = total ? total : '';
-  document.title = (total ? `(${total}) ` : '') + 'Mensajes · UpGames';
   lastUnreadTotal = total;
+  paintTotals();
+  if (S.tab !== 'chats') return;
+  if (!S.cLoaded) { $('list').innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>'; return; }
   const q = S.q.toLowerCase();
   let rows = S.convs.filter(c => !q || c.contacto.includes(q));
   if (S.filter === 'noleidos') rows = rows.filter(c => c.noLeidos > 0);
@@ -572,7 +848,7 @@ function renderConvs() {
       ? 'Aún no tienes conversaciones.<br>Escríbele a alguien que siga tu contenido.<div><button class="btn pri" onclick="openNewChat()">Nuevo mensaje</button></div>'
       : 'No hay chats en este filtro.'}</div>`;
   }
-  html += rows.map(c => {
+  html += rows.map((c, i) => {
     const u = c.ultimoMensaje || {};
     const mine = u.de === ME;
     let prev = u.borrado ? '<ion-icon name="ban-outline"></ion-icon><span>Mensaje eliminado</span>'
@@ -580,7 +856,7 @@ function renderConvs() {
       : `<span>${esc(u.texto || '')}</span>`;
     if (mine && !u.borrado) prev = `<ion-icon name="${u.leido ? 'checkmark-done' : 'checkmark'}" style="color:${u.leido ? 'var(--cy)' : 'var(--txt3)'}"></ion-icon>` + prev;
     const unread = c.noLeidos > 0 && !mine;
-    return `<button class="conv${unread ? ' unread' : ''}${c.contacto === S.contact ? ' on' : ''}" onclick="openChat('${esc(c.contacto)}')">
+    return `<button class="conv${unread ? ' unread' : ''}${c.contacto === S.contact && S.kind === 'dm' ? ' on' : ''}" style="--i:${Math.min(i, 12)}" onclick="openChat('${esc(c.contacto)}')">
       ${avatarHTML(c.contacto, c.avatar, c.online)}
       <span class="conv-body">
         <span class="conv-top"><span class="conv-name">@${esc(c.contacto)}</span>${badgeHTML(c.verificadoNivel)}<span class="conv-time">${u.fecha ? fmtList(u.fecha) : ''}</span></span>
@@ -598,6 +874,8 @@ function renderConvs() {
 let searchTmr = null;
 function onSearch(v) {
   S.q = v.trim().toLowerCase().replace(/^@/, '');
+  if (S.tab === 'grupos') return renderGroups();
+  if (S.tab === 'explorar') { clearTimeout(searchTmr); searchTmr = setTimeout(() => { S.ex.q = S.q; loadExplore(); }, 350); return; }
   renderConvs();
   clearTimeout(searchTmr);
   $('search-extra')?.remove();
@@ -654,8 +932,9 @@ function renderContacts(q) {
 async function openChat(user) {
   user = String(user || '').toLowerCase();
   if (!user || user === ME) return;
-  if (S.contact === user && !$('chat').classList.contains('hidden')) return;
+  if (S.kind === 'dm' && S.contact === user && !$('chat').classList.contains('hidden')) return;
   stopPoll(); clearCtx(); closeEmoji(); toggleInSearch(false);
+  S.kind = 'dm'; S.group = null; S.autores = {}; paintPin(null);
   S.contact = user; S.info = null; S.msgs.clear(); S.order = []; S.cursor = 0; S.hayMas = false; S.unseenBelow = 0;
   $('welcome').classList.add('hidden'); $('chat').classList.remove('hidden');
   const c = S.convs.find(x => x.contacto === user) || {};
@@ -685,11 +964,11 @@ async function openChat(user) {
   }
 }
 function closeChat() {
-  stopPoll(); S.contact = null; S.info = null;
+  stopPoll(); S.contact = null; S.info = null; S.kind = null; S.group = null; paintPin(null);
   $('app').classList.remove('chat-open');
   $('chat').classList.add('hidden'); $('welcome').classList.remove('hidden');
   if (location.search) history.replaceState(null, '', location.pathname);
-  renderConvs(); loadConvs();
+  renderConvs(); loadConvs(); loadGroups();
 }
 window.addEventListener('popstate', () => { if (S.contact && (!history.state || !history.state.chat)) closeChat(); });
 function paintHeader(u) {
@@ -701,6 +980,13 @@ function paintHeader(u) {
 }
 function paintStatus(typing) {
   const sub = $('h-sub'), i = S.info;
+  if (isG()) {
+    const g = S.group || {}, quien = Array.isArray(typing) ? typing : [];
+    if (quien.length) { sub.textContent = `${quien.map(u => '@' + u).join(', ')} ${quien.length > 1 ? 'escriben' : 'escribe'}…`; sub.className = 'who-sub live'; return; }
+    sub.className = 'who-sub';
+    sub.textContent = `${g.nMiembros || 0} miembro${g.nMiembros === 1 ? '' : 's'} · ${g.tipo === 'comunidad' ? 'comunidad pública' : 'grupo privado'}${g.adultos ? ' · +18' : ''}${g.soloAdmins ? ' · anuncios' : ''}`;
+    return;
+  }
   if (typing) { sub.textContent = 'escribiendo…'; sub.className = 'who-sub live'; return; }
   if (!i) { sub.textContent = 'Cargando…'; sub.className = 'who-sub'; return; }
   sub.className = 'who-sub' + (i.online ? ' live' : '');
@@ -727,7 +1013,7 @@ async function follow() {
     const info = await api(`/chat/contacto/${encodeURIComponent(S.contact)}`); S.info = info.contacto; setLocked(S.info);
   } catch (e) { toast('❌ ' + e.message); }
 }
-function goProfile() { if (S.contact) location.href = `./perfil-publico.html?usuario=${encodeURIComponent(S.contact)}`; }
+function goProfile() { if (isG()) return openGroupInfo(); if (S.contact) location.href = `./perfil-publico.html?usuario=${encodeURIComponent(S.contact)}`; }
 
 /* ── Mensajes: datos ─────────────────────────────────── */
 function mergeMsgs(list) {
@@ -767,7 +1053,8 @@ function renderAll(toBottom, keepFrom) {
   }
   if (!S.order.length) {
     const e = document.createElement('div'); e.className = 'chat-empty';
-    e.innerHTML = `<div class="big">👋</div>Saluda a <b>@${esc(S.contact)}</b><br><small style="color:var(--txt3)">Los mensajes se guardan 90 días.</small>`;
+    e.innerHTML = isG() ? `<div class="big">🛰️</div>Sé el primero en escribir en <b>${esc(S.group?.nombre || 'el grupo')}</b><br><small style="color:var(--txt3)">Los mensajes de los grupos se guardan 180 días.</small>`
+      : `<div class="big">👋</div>Saluda a <b>@${esc(S.contact)}</b><br><small style="color:var(--txt3)">Los mensajes se guardan 90 días.</small>`;
     frag.appendChild(e);
   }
   let lastDay = '', prev = null;
@@ -776,11 +1063,14 @@ function renderAll(toBottom, keepFrom) {
     const m = S.msgs.get(id);
     const day = new Date(m.fecha).toDateString();
     if (day !== lastDay) { lastDay = day; prev = null; const d = document.createElement('div'); d.className = 'day'; d.textContent = fmtDia(m.fecha); frag.appendChild(d); }
+    if (m.tipo === 'sistema') { const d = document.createElement('div'); d.className = 'sys' + (S.nuevos?.has(String(m.id)) ? ' new-row' : ''); d.textContent = m.texto; frag.appendChild(d); prev = null; return; }
     const cont = prev && prev.de === m.de && (new Date(m.fecha) - new Date(prev.fecha)) < 5 * 60e3;
-    frag.appendChild(rowEl(m, cont, lastMine && lastMine.id === m.id));
+    const el = rowEl(m, cont, lastMine && lastMine.id === m.id);
+    if (S.nuevos?.has(String(m.id))) el.classList.add('new-row');
+    frag.appendChild(el);
     prev = m;
   });
-  box.innerHTML = ''; box.appendChild(frag);
+  box.innerHTML = ''; box.appendChild(frag); S.nuevos = null;
   if (toBottom) box.scrollTop = box.scrollHeight;
   else if (keepFrom === 'top') box.scrollTop = box.scrollHeight - prevH + prevTop;
   else box.scrollTop = prevTop;
@@ -793,12 +1083,14 @@ function rowEl(m, cont, isLastMine) {
   const row = document.createElement('div');
   row.className = `row${mine ? ' mine' : ''}${cont ? ' cont' : ' first'}`;
   row.dataset.id = m.id;
-  const slot = mine ? '' : `<span class="av-slot">${cont ? '' : avatarHTML(m.de, S.info?.avatar, false, 'xs')}</span>`;
+  const slot = mine ? '' : `<span class="av-slot">${cont ? '' : avatarHTML(m.de, isG() ? S.autores[m.de]?.avatar : S.info?.avatar, false, 'xs')}</span>`;
   const time = `${m.editado && !m.borrado ? 'editado · ' : ''}${fmtHora(m.fecha)}`;
-  const tick = mine && !m.borrado ? `<ion-icon name="${m.leido ? 'checkmark-done' : 'checkmark'}" class="${m.leido ? 'seen' : ''}"></ion-icon>` : '';
+  const tick = mine && !m.borrado && !isG() ? `<ion-icon name="${m.leido ? 'checkmark-done' : 'checkmark'}" class="${m.leido ? 'seen' : ''}"></ion-icon>` : '';
+  const sender = isG() && !mine && !cont ? `<button class="sender" style="--hue:${hue(m.de)}" onclick="verPerfil('${esc(m.de)}')">@${esc(m.de)}</button>` : '';
   let inner;
   if (m.borrado) {
-    inner = `<div class="bubble deleted"><ion-icon name="ban-outline" style="vertical-align:-2px"></ion-icon> ${mine ? 'Eliminaste este mensaje' : 'Mensaje eliminado'}<span class="meta">${fmtHora(m.fecha)}</span></div>`;
+    const por = m.borradoPor === 'NEXUS' ? 'Eliminado por NEXUS (contenido prohibido)' : m.borradoPor ? `Eliminado por @${esc(m.borradoPor)} (admin)` : mine ? 'Eliminaste este mensaje' : 'Mensaje eliminado';
+    inner = `<div class="bubble deleted"><ion-icon name="ban-outline" style="vertical-align:-2px"></ion-icon> ${por}<span class="meta">${fmtHora(m.fecha)}</span></div>`;
   } else {
     const onlyImg = m.imagen && !m.texto && !m.replyTo;
     const jumbo = !m.imagen && !m.replyTo && m.texto && soloEmoji(m.texto);
@@ -814,7 +1106,7 @@ function rowEl(m, cont, isLastMine) {
     const mineE = (rx.find(r => r.u === ME) || {}).e;
     reacts = `<button class="reacts" onclick="openMsgMenu('${m.id}')">${Object.keys(count).map(e => `<span class="${e === mineE ? 'me' : ''}">${e}</span>`).join('')}${rx.length > 1 ? `<small>${rx.length}</small>` : ''}</button>`;
   }
-  row.innerHTML = `${slot}<div class="bwrap">${inner}${reacts}${m.borrado ? '' : `<button class="more-btn" onclick="openMsgMenu('${m.id}')" aria-label="Opciones del mensaje"><ion-icon name="ellipsis-horizontal"></ion-icon></button>`}</div>`;
+  row.innerHTML = `${slot}<div class="bwrap">${sender}${inner}${reacts}${m.borrado ? '' : `<button class="more-btn" onclick="openMsgMenu('${m.id}')" aria-label="Opciones del mensaje"><ion-icon name="ellipsis-horizontal"></ion-icon></button>`}</div>`;
   if (!m.borrado) bindPress(row.querySelector('.bubble'), m.id);
   return row;
 }
@@ -853,8 +1145,8 @@ async function loadOlder() {
   S.loadingOlder = true;
   const first = S.msgs.get(S.order[0]);
   try {
-    const d = await api(`/chat/mensajes/${encodeURIComponent(S.contact)}?antes=${new Date(first.fecha).getTime()}`);
-    S.hayMas = d.hayMas; mergeMsgs(d.mensajes);
+    const d = await api(EP.msgs(`?antes=${new Date(first.fecha).getTime()}`));
+    S.hayMas = d.hayMas; mergeMsgs(d.mensajes); if (d.autores) Object.assign(S.autores, d.autores);
   } catch (_) { toast('No se pudieron cargar más mensajes'); }
   S.loadingOlder = false;
   renderAll(false, 'top');
@@ -870,11 +1162,14 @@ async function pollMsgs() {
   const user = S.contact;
   if (!user || document.hidden) return;
   try {
-    const d = await api(`/chat/mensajes/${encodeURIComponent(user)}?desde=${S.cursor}`);
+    const d = await api(EP.msgs(`?desde=${S.cursor}`));
     if (S.contact !== user) return;
     S.cursor = d.cursor;
+    if (d.autores) Object.assign(S.autores, d.autores);
+    if (isG() && JSON.stringify(d.fijado || null) !== JSON.stringify(S.fijado || null)) paintPin(d.fijado);
     const abajo = nearBottom();
     const recibidos = (d.mensajes || []).filter(m => m.de !== ME && !S.msgs.has(String(m.id)));
+    S.nuevos = new Set((d.mensajes || []).filter(m => !S.msgs.has(String(m.id))).map(m => String(m.id)));
     const { nuevos, cambios } = mergeMsgs(d.mensajes);
     if (nuevos || cambios) {
       renderAll(abajo && nuevos > 0);
@@ -884,19 +1179,22 @@ async function pollMsgs() {
         if (!abajo) paintToBottom();
       }
     }
-    $('typing').classList.toggle('show', !!d.escribiendo);
-    paintStatus(!!d.escribiendo);
-    if (d.escribiendo && abajo) $('msgs').scrollTop = $('msgs').scrollHeight;
+    const esc2 = isG() ? (d.escribiendo || []) : !!d.escribiendo, hay = isG() ? esc2.length > 0 : esc2;
+    $('typing').classList.toggle('show', hay);
+    $('typing').innerHTML = '<i></i><i></i><i></i>' + (isG() && hay ? `<small>@${esc(esc2[0])}</small>` : '');
+    paintStatus(esc2);
+    if (hay && abajo) $('msgs').scrollTop = $('msgs').scrollHeight;
   } catch (_) {}
 }
 async function refreshInfo() {
   if (!S.contact || document.hidden) return;
+  if (isG()) { try { const id = S.contact, d = await api(`/grupos/${id}`); if (S.contact === id) { S.group = d.grupo; paintGroupHeader(d.grupo); setLockedG(d.grupo); } } catch (_) {} return; }
   try { const i = await api(`/chat/contacto/${encodeURIComponent(S.contact)}`); if (S.info && i.contacto.usuario === S.contact) { S.info = i.contacto; paintStatus($('typing').classList.contains('show')); setLocked(S.info); } } catch (_) {}
 }
 let infoTick = 0;
 function startPoll() { stopPoll(); S.poll = setInterval(() => { pollMsgs(); if (++infoTick % 10 === 0) refreshInfo(); }, 2500); }
 function stopPoll() { if (S.poll) clearInterval(S.poll); S.poll = null; }
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { pollMsgs(); loadConvs(); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { pollMsgs(); loadConvs(); loadGroups(); } });
 
 /* ── Enviar / editar ─────────────────────────────────── */
 function onInput() {
@@ -905,7 +1203,7 @@ function onInput() {
   $('send').disabled = !el.value.trim() && !S.pendingImg;
   if (el.value.trim() && S.contact && Date.now() - S.typingSent > 3000) {
     S.typingSent = Date.now();
-    fetch(`${API}/chat/escribiendo/${encodeURIComponent(S.contact)}`, { method: 'POST', headers: H() }).catch(() => {});
+    fetch(API + EP.typing(), { method: 'POST', headers: H() }).catch(() => {});
   }
   try { sessionStorage.setItem('ugc_draft_' + S.contact, el.value); } catch (_) {}
 }
@@ -922,7 +1220,7 @@ async function send() {
   // Editar
   if (S.edit) {
     const id = S.edit.id;
-    try { const d = await api(`/chat/mensaje/${id}`, { method: 'PATCH', body: JSON.stringify({ texto }) }); mergeMsgs([d.mensaje]); renderAll(false); clearCtx(); el.value = ''; onInput(); }
+    try { const d = await api(EP.msg(id), { method: 'PATCH', body: JSON.stringify({ texto }) }); mergeMsgs([d.mensaje]); renderAll(false); clearCtx(); el.value = ''; onInput(); }
     catch (e) { toast('❌ ' + e.message); btn.disabled = false; }
     return;
   }
@@ -933,20 +1231,24 @@ async function send() {
   }
   const replyTo = S.reply ? S.reply.id : undefined;
   const tmpId = 'tmp' + Date.now();
+  btn.classList.remove('fire'); void btn.offsetWidth; btn.classList.add('fire');
+  S.nuevos = new Set([tmpId]);
   mergeMsgs([{ id: tmpId, de: ME, para: S.contact, texto, imagen, leido: false, fecha: new Date().toISOString(), replyTo: S.reply ? { id: S.reply.id, de: S.reply.de, texto: S.reply.texto, imagen: !!S.reply.imagen } : null, reacciones: [] }]);
   renderAll(true);
   el.value = ''; clearCtx(); onInput();
   try { sessionStorage.removeItem('ugc_draft_' + S.contact); } catch (_) {}
   try {
-    const d = await api('/chat/enviar', { method: 'POST', body: JSON.stringify({ para: S.contact, texto, imagen, replyTo }) });
+    const d = isG() ? await api(`/grupos/${S.contact}/mensajes`, { method: 'POST', body: JSON.stringify({ texto, imagen, replyTo }) })
+      : await api('/chat/enviar', { method: 'POST', body: JSON.stringify({ para: S.contact, texto, imagen, replyTo }) });
     S.msgs.delete(tmpId); S.order = S.order.filter(x => x !== tmpId);
     mergeMsgs([d.mensaje]); renderAll(true);
-    upsertConvPreview(d.mensaje);
+    if (isG()) { const g = S.grupos.find(x => x.id === S.contact); if (g) { g.ultimo = { de: ME, texto, imagen: !!imagen, fecha: d.mensaje.fecha }; g.actividad = d.mensaje.fecha; } }
+    else upsertConvPreview(d.mensaje);
   } catch (e) {
     S.msgs.delete(tmpId); S.order = S.order.filter(x => x !== tmpId); renderAll(false);
     el.value = texto; onInput();
     toast('❌ ' + e.message);
-    if (['NO_MUTUO', 'BLOQUEADO', 'YO_BLOQUEO'].includes(e.code)) refreshInfo();
+    if (['NO_MUTUO', 'BLOQUEADO', 'YO_BLOQUEO', 'SOLO_ADMINS', 'NO_MIEMBRO', 'RESTRINGIDO'].includes(e.code)) refreshInfo();
   }
   btn.disabled = !el.value.trim();
 }
@@ -986,7 +1288,8 @@ function clearCtx() {
 /* ── Menú de un mensaje ──────────────────────────────── */
 function openMsgMenu(id) {
   const m = S.msgs.get(String(id)); if (!m || m.borrado || String(id).startsWith('tmp')) return;
-  const mine = m.de === ME;
+  if (m.tipo === 'sistema') return;
+  const mine = m.de === ME, gAdmin = isG() && ['dueno', 'admin'].includes(S.group?.miRol);
   const myR = ((m.reacciones || []).find(r => r.u === ME) || {}).e;
   const edad = Date.now() - new Date(m.fecha).getTime();
   const who = (m.reacciones || []).length ? `<div class="sec" style="padding:4px 18px 8px">${m.reacciones.map(r => `${r.e} ${r.u === ME ? 'Tú' : '@' + esc(r.u)}`).join(' · ')}</div>` : '';
@@ -996,13 +1299,17 @@ function openMsgMenu(id) {
     ${m.texto ? `<button class="menu-item" onclick="closeOv('ov-menu');copiar('${m.id}')"><ion-icon name="copy-outline"></ion-icon>Copiar texto</button>` : ''}
     ${m.imagen ? `<button class="menu-item" onclick="closeOv('ov-menu');openLB('${esc(m.imagen)}')"><ion-icon name="expand-outline"></ion-icon>Ver imagen</button>` : ''}
     ${mine && m.texto && edad < 15 * 60e3 ? `<button class="menu-item" onclick="closeOv('ov-menu');startEdit('${m.id}')"><ion-icon name="create-outline"></ion-icon>Editar</button>` : ''}
-    <button class="menu-item danger" onclick="closeOv('ov-menu');borrar('${m.id}','mi')"><ion-icon name="trash-outline"></ion-icon>Eliminar para mí</button>
-    ${mine && edad < 864e5 ? `<button class="menu-item danger" onclick="closeOv('ov-menu');borrar('${m.id}','todos')"><ion-icon name="trash-bin-outline"></ion-icon>Eliminar para todos</button>` : ''}`;
+    ${gAdmin ? `<button class="menu-item" onclick="closeOv('ov-menu');fijar('${m.id}')"><ion-icon name="pin-outline"></ion-icon>Fijar en el grupo</button>` : ''}
+    ${isG() && !mine ? `<button class="menu-item" onclick="closeOv('ov-menu');verPerfil('${esc(m.de)}')"><ion-icon name="person-circle-outline"></ion-icon>Ver perfil de @${esc(m.de)}</button>` : ''}
+    ${!mine ? `<button class="menu-item danger" onclick="closeOv('ov-menu');openReport('${m.id}')"><ion-icon name="flag-outline"></ion-icon>Reportar</button>` : ''}
+    ${isG() ? (mine || gAdmin ? `<button class="menu-item danger" onclick="closeOv('ov-menu');borrar('${m.id}','todos')"><ion-icon name="trash-bin-outline"></ion-icon>Eliminar${!mine ? ' (admin)' : ''}</button>` : '')
+      : `<button class="menu-item danger" onclick="closeOv('ov-menu');borrar('${m.id}','mi')"><ion-icon name="trash-outline"></ion-icon>Eliminar para mí</button>
+    ${mine && edad < 864e5 ? `<button class="menu-item danger" onclick="closeOv('ov-menu');borrar('${m.id}','todos')"><ion-icon name="trash-bin-outline"></ion-icon>Eliminar para todos</button>` : ''}`}`;
   openOv('ov-menu');
 }
 async function react(id, e) {
   const m = S.msgs.get(String(id)); if (!m || m.borrado || String(id).startsWith('tmp')) return;
-  try { const d = await api(`/chat/mensaje/${id}/reaccion`, { method: 'POST', body: JSON.stringify({ emoji: e }) }); mergeMsgs([d.mensaje]); renderAll(false); }
+  try { const d = await api(EP.react(id), { method: 'POST', body: JSON.stringify({ emoji: e }) }); mergeMsgs([d.mensaje]); renderAll(false); }
   catch (err) { toast('❌ ' + err.message); }
 }
 async function copiar(id) {
@@ -1010,11 +1317,11 @@ async function copiar(id) {
   try { await navigator.clipboard.writeText(m.texto); toast('Texto copiado'); } catch (_) { toast('No se pudo copiar'); }
 }
 function borrar(id, modo) {
-  confirmar('🗑️', modo === 'todos' ? '¿Eliminar para todos?' : '¿Eliminar para ti?',
-    modo === 'todos' ? 'El mensaje desaparecerá también para la otra persona.' : 'Solo se borrará en tu chat; la otra persona lo seguirá viendo.',
+  confirmar('🗑️', isG() ? '¿Eliminar el mensaje?' : modo === 'todos' ? '¿Eliminar para todos?' : '¿Eliminar para ti?',
+    isG() ? 'Desaparecerá para todos los miembros del grupo.' : modo === 'todos' ? 'El mensaje desaparecerá también para la otra persona.' : 'Solo se borrará en tu chat; la otra persona lo seguirá viendo.',
     'Eliminar', async () => {
       try {
-        const d = await api(`/chat/mensaje/${id}?modo=${modo}`, { method: 'DELETE' });
+        const d = await api(isG() ? EP.msg(id) : `/chat/mensaje/${id}?modo=${modo}`, { method: 'DELETE' });
         if (modo === 'todos' && d.mensaje) mergeMsgs([d.mensaje]);
         else { S.msgs.delete(String(id)); S.order = S.order.filter(x => x !== String(id)); }
         renderAll(false);
@@ -1024,6 +1331,7 @@ function borrar(id, modo) {
 
 /* ── Menú del chat ───────────────────────────────────── */
 function openChatMenu() {
+  if (isG()) return openGroupInfo();
   const u = S.contact; if (!u) return;
   const i = S.info || {};
   $('menu-body').innerHTML = `
@@ -1146,7 +1454,359 @@ function insertEmoji(e) { const el = $('inp'); const s = el.selectionStart ?? el
 function toggleEmoji() { $('emoji').classList.toggle('show'); }
 function closeEmoji() { $('emoji').classList.remove('show'); }
 document.addEventListener('click', e => { if (!e.target.closest('#emoji') && !e.target.closest('[aria-label="Emojis"]')) closeEmoji(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeEmoji(); ['ov-menu', 'ov-new', 'ov-modal'].forEach(closeOv); closeLB(); } });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeEmoji(); ['ov-menu', 'ov-new', 'ov-modal', 'ov-group', 'ov-ginfo', 'ov-join', 'ov-report'].forEach(closeOv); closeLB(); } });
+
+/* ══════════════════════════════════════════════════════════════════
+   GRUPOS Y COMUNIDADES
+   ══════════════════════════════════════════════════════════════════ */
+const ETQ = { juegos: '🎮', mods: '🧩', emuladores: '🕹️', android: '🤖', pc: '💻', consolas: '🎛️', creadores: '🎬', arte: '🎨', musica: '🎧', memes: '😂', noticias: '📰', ayuda: '🆘', competitivo: '🏆', anime: '🌸', tecnologia: '🛰️', social: '💬' };
+const gAvatar = (g, cls = '') => avatarHTML(g.nombre || '?', g.avatar, false, `hex${g.adultos ? ' adult' : ''} ${cls}`);
+const soyAdminG = () => ['dueno', 'admin'].includes(S.group?.miRol);
+const linkInv = c => `${location.origin}${location.pathname}?g=${encodeURIComponent(c)}`;
+function verPerfil(u) { location.href = `./perfil-publico.html?usuario=${encodeURIComponent(u)}`; }
+
+/* Pestañas */
+function setTab(t) {
+  S.tab = t;
+  document.querySelectorAll('.tab').forEach((b, i) => { const on = b.dataset.t === t; b.classList.toggle('on', on); if (on) $('tab-ink').style.transform = `translateX(${i * 100}%)`; });
+  $('chips').classList.toggle('hidden', t !== 'chats');
+  $('q').placeholder = t === 'chats' ? 'Buscar chats o usuarios' : t === 'grupos' ? 'Buscar en mis grupos' : 'Buscar comunidades';
+  $('q').value = ''; S.q = ''; $('search-extra')?.remove();
+  $('btn-new').setAttribute('aria-label', t === 'chats' ? 'Nuevo mensaje' : 'Crear grupo o comunidad');
+  $('btn-new').innerHTML = `<ion-icon name="${t === 'chats' ? 'create-outline' : 'add-circle-outline'}"></ion-icon>`;
+  if (t === 'chats') renderConvs();
+  else if (t === 'grupos') { renderGroups(); loadGroups(); }
+  else { S.ex.q = ''; loadExplore(); }
+  try { sessionStorage.setItem('ugc_tab', t); } catch (_) {}
+}
+function nuevo() { S.tab === 'chats' ? openNewChat() : openCreateGroup(); }
+function paintTotals() {
+  const dm = lastUnreadTotal > 0 ? lastUnreadTotal : 0;
+  const gr = S.grupos.reduce((n, g) => n + (muted.has('g:' + g.id) ? 0 : g.noLeidos || 0), 0);
+  const a = $('tn-chats'), b = $('tn-grupos');
+  a.textContent = dm > 99 ? '99+' : dm; a.classList.toggle('on', dm > 0);
+  b.textContent = gr > 99 ? '99+' : gr; b.classList.toggle('on', gr > 0);
+  document.title = (dm + gr ? `(${dm + gr}) ` : '') + 'Mensajes · UpGames';
+}
+
+/* Mis grupos */
+async function loadGroups() {
+  try {
+    const d = await api('/grupos/mios');
+    const antes = new Map(S.grupos.map(g => [g.id, g]));
+    S.grupos = d.grupos || []; S.gLoaded = true;
+    S.grupos.forEach(g => { const p = antes.get(g.id); if (p && g.noLeidos > p.noLeidos && !(isG() && S.contact === g.id) && !muted.has('g:' + g.id)) ping(); });
+    paintTotals();
+    if (S.tab === 'grupos') renderGroups();
+  } catch (e) { if (S.tab === 'grupos' && !S.gLoaded && e.message !== '401') $('list').innerHTML = `<div class="empty-list"><div class="big">📡</div>No se pudieron cargar tus grupos.<br><button class="btn" onclick="loadGroups()">Reintentar</button></div>`; }
+}
+function renderGroups() {
+  if (S.tab !== 'grupos') return;
+  if (!S.gLoaded) { $('list').innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>'; return; }
+  const q = S.q;
+  const rows = S.grupos.filter(g => !q || g.nombre.toLowerCase().includes(q)).sort((a, b) => (pinned.has('g:' + b.id) - pinned.has('g:' + a.id)) || (new Date(b.actividad) - new Date(a.actividad)));
+  if (!rows.length) {
+    $('list').innerHTML = `<div class="empty-list"><div class="big">🛰️</div>${q ? 'Ningún grupo con ese nombre.' : 'Aún no estás en ningún grupo.<br>Crea uno con tus amigos o únete a una comunidad.'}<div class="w-acts"><button class="btn pri" onclick="openCreateGroup()">Crear grupo</button><button class="btn" onclick="setTab('explorar')">Explorar</button></div></div>`;
+    return;
+  }
+  $('list').innerHTML = rows.map((g, i) => {
+    const u = g.ultimo || {};
+    const prev = u.tipo === 'sistema' ? `<span>${esc(u.texto || '')}</span>` : u.imagen && !u.texto ? `<span>${u.de === ME ? 'Tú' : '@' + esc(u.de)}: 📷 Imagen</span>` : u.texto ? `<span>${u.de === ME ? 'Tú' : '@' + esc(u.de)}: ${esc(u.texto)}</span>` : '<span>Sin mensajes aún</span>';
+    const unread = g.noLeidos > 0, mu = muted.has('g:' + g.id);
+    return `<button class="conv${unread ? ' unread' : ''}${isG() && S.contact === g.id ? ' on' : ''}" style="--i:${Math.min(i, 12)}" onclick="openGroup('${g.id}')">
+      ${gAvatar(g)}
+      <span class="conv-body">
+        <span class="conv-top"><span class="conv-name">${esc(g.nombre)}</span>${g.tipo === 'comunidad' ? '<ion-icon name="planet-outline" style="color:var(--g);flex-shrink:0"></ion-icon>' : ''}<span class="conv-time">${g.actividad ? fmtList(g.actividad) : ''}</span></span>
+        <span class="conv-prev">${prev}</span>
+      </span>
+      <span class="conv-meta">
+        <span class="conv-flags">${pinned.has('g:' + g.id) ? '<ion-icon name="pin"></ion-icon>' : ''}${mu ? '<ion-icon name="notifications-off"></ion-icon>' : ''}</span>
+        ${unread ? `<span class="unread-n" style="${mu ? 'background:var(--txt3)' : ''}">${g.noLeidos > 99 ? '99+' : g.noLeidos}</span>` : ''}
+      </span>
+    </button>`;
+  }).join('');
+}
+
+/* Explorar comunidades */
+async function loadExplore() {
+  if (S.tab !== 'explorar') return;
+  if (!S.ex.lista) $('list').innerHTML = '<div class="skel"></div><div class="skel"></div><div class="skel"></div>';
+  try {
+    const p = new URLSearchParams({ q: S.ex.q || '', ...(S.ex.etiqueta ? { etiqueta: S.ex.etiqueta } : {}), ...(S.ex.adultos ? { adultos: '1' } : {}) });
+    const d = await api(`/grupos/explorar?${p}`);
+    if (S.tab !== 'explorar') return;
+    S.ex.lista = d.comunidades || []; S.ex.etiquetas = d.etiquetas || [];
+    renderExplore();
+  } catch (e) { if (e.message !== '401') $('list').innerHTML = `<div class="empty-list"><div class="big">📡</div>No se pudo cargar Explorar.<br><button class="btn" onclick="loadExplore()">Reintentar</button></div>`; }
+}
+function renderExplore() {
+  if (S.tab !== 'explorar') return;
+  const f = `<div class="ex-filtros">
+      <button class="tag-c${!S.ex.etiqueta ? ' on' : ''}" onclick="filtroEx('')">Todas</button>
+      ${S.ex.etiquetas.map(t => `<button class="tag-c${S.ex.etiqueta === t ? ' on' : ''}" onclick="filtroEx('${t}')">${ETQ[t] || ''} ${t}</button>`).join('')}
+      <label class="sw adult"><input type="checkbox" ${S.ex.adultos ? 'checked' : ''} onchange="S.ex.adultos=this.checked;loadExplore()">+18</label>
+    </div>`;
+  const l = S.ex.lista || [];
+  $('list').innerHTML = f + (l.length ? l.map((c, i) => `<div class="gcard" style="--i:${Math.min(i, 12)}">
+      ${gAvatar(c)}
+      <div class="gcard-b"><b>${esc(c.nombre)}</b><p>${esc(c.descripcion || 'Sin descripción')}</p>
+        <div class="gmeta"><span>${c.nMiembros} miembro${c.nMiembros === 1 ? '' : 's'}</span>${c.activa ? '<span class="live">activa hoy</span>' : ''}${c.adultos ? '<span class="a18">+18</span>' : ''}${(c.etiquetas || []).map(t => `<span class="t">#${esc(t)}</span>`).join('')}</div></div>
+      ${c.soyMiembro ? `<button class="btn" onclick="openGroup('${c.id}')">Abrir</button>` : `<button class="btn pri" onclick="previewUnirse({ ...S.ex.lista[${i}], tipo: 'comunidad' })">Unirse</button>`}
+    </div>`).join('') : `<div class="empty-list"><div class="big">🪐</div>${S.ex.q || S.ex.etiqueta ? 'No hay comunidades con ese filtro.' : 'Todavía no hay comunidades públicas.'}<br>¡Crea la primera!<div><button class="btn pri" onclick="openCreateGroup('comunidad')">Crear comunidad</button></div></div>`);
+}
+function filtroEx(t) { S.ex.etiqueta = t; loadExplore(); }
+
+/* Abrir un grupo en el panel */
+async function openGroup(id) {
+  if (!id) return;
+  if (isG() && S.contact === id && !$('chat').classList.contains('hidden')) return;
+  stopPoll(); clearCtx(); closeEmoji(); toggleInSearch(false);
+  ['ov-join', 'ov-ginfo'].forEach(closeOv);
+  S.kind = 'g'; S.contact = id; S.info = null; S.group = S.grupos.find(g => g.id === id) || null; S.autores = {};
+  S.msgs.clear(); S.order = []; S.cursor = 0; S.hayMas = false; S.unseenBelow = 0;
+  $('welcome').classList.add('hidden'); $('chat').classList.remove('hidden');
+  if (S.group) paintGroupHeader(S.group);
+  paintPin(null);
+  $('msgs').innerHTML = '<div class="chat-empty"><div class="skel" style="width:220px;height:40px"></div></div>';
+  $('typing').classList.remove('show');
+  setLockedG(null);
+  if (S.tab === 'grupos') renderGroups(); else if (S.tab === 'chats') renderConvs();
+  if (isMobile()) {
+    $('app').classList.add('chat-open');
+    if (!history.state || history.state.chat !== 'g:' + id) history.pushState({ chat: 'g:' + id }, '', `?grupo=${encodeURIComponent(id)}`);
+  }
+  try {
+    const info = await api(`/grupos/${id}`);
+    if (S.contact !== id) return;
+    S.group = info.grupo; paintGroupHeader(S.group); setLockedG(S.group);
+    if (!S.group.soyMiembro) { $('msgs').innerHTML = `<div class="chat-empty"><div class="big">🛰️</div>Aún no eres miembro de <b>${esc(S.group.nombre)}</b>.</div>`; return; }
+    const d = await api(EP.msgs());
+    if (S.contact !== id) return;
+    S.cursor = d.cursor; S.hayMas = d.hayMas; Object.assign(S.autores, d.autores || {}); paintPin(d.fijado);
+    mergeMsgs(d.mensajes); renderAll(true);
+    const g = S.grupos.find(x => x.id === id); if (g) { g.noLeidos = 0; paintTotals(); renderGroups(); }
+    startPoll();
+    if (!isMobile()) $('inp').focus();
+  } catch (e) {
+    if (S.contact !== id) return;
+    $('msgs').innerHTML = `<div class="chat-empty"><div class="big">${e.status === 404 ? '🫥' : e.code === 'PRIVADO' ? '🔒' : '📡'}</div>${esc(e.message)}<br><br><button class="btn" onclick="S.contact=null;openGroup('${id}')">Reintentar</button></div>`;
+    setLockedG({ soyMiembro: false, error: true });
+  }
+}
+function paintGroupHeader(g) {
+  $('h-av').outerHTML = gAvatar(g, 'sm').replace(/class="av ([^"]*)"/, 'class="av $1" id="h-av"');
+  $('h-name').textContent = g.nombre;
+  $('h-badge').className = 'vbadge hidden';
+  paintStatus(false);
+}
+function setLockedG(g) {
+  const lk = $('locked'), comp = $('comp'), btn = $('locked-btn');
+  let txt = '', label = '', fn = null;
+  if (g && g.error) txt = 'No se pudo abrir este grupo.';
+  else if (g && !g.soyMiembro) { txt = g.tipo === 'comunidad' ? `Únete a <b>${esc(g.nombre)}</b> para escribir.` : 'Este grupo es privado: necesitas una invitación.'; if (g.tipo === 'comunidad' && !g.baneado) { label = 'Unirme'; fn = () => previewUnirse(g); } }
+  else if (g && g.soloAdmins && g.miRol === 'miembro') txt = 'Modo anuncios: solo los administradores pueden escribir.';
+  lk.classList.toggle('show', !!txt); comp.classList.toggle('hidden', !!txt);
+  $('locked-txt').innerHTML = txt; btn.classList.toggle('hidden', !label); btn.textContent = label; btn.onclick = fn;
+}
+function paintPin(f) {
+  S.fijado = f && f.id ? f : null;
+  const b = $('pin-bar'); b.classList.toggle('hidden', !S.fijado);
+  if (!S.fijado) return;
+  $('pin-txt').textContent = `@${f.de}: ${f.texto || (f.imagen ? '📷 Imagen' : '')}`;
+  $('pin-x').classList.toggle('hidden', !soyAdminG());
+}
+async function fijar(id) {
+  try { const d = await api(`/grupos/${S.contact}/mensajes/${id}/fijar`, { method: 'POST', body: '{}' }); paintPin(d.fijado); toast('📌 Mensaje fijado'); pollMsgs(); } catch (e) { toast('❌ ' + e.message); }
+}
+async function desfijar() {
+  if (!S.fijado) return;
+  try { await api(`/grupos/${S.contact}/mensajes/${S.fijado.id}/fijar`, { method: 'POST', body: JSON.stringify({ quitar: true }) }); paintPin(null); } catch (e) { toast('❌ ' + e.message); }
+}
+
+/* Crear / editar */
+let GF = null;   // borrador del formulario
+function openCreateGroup(tipo, editar) {
+  const g = editar ? S.group : null;
+  GF = { id: g?.id || null, nombre: g?.nombre || '', descripcion: g?.descripcion || '', reglas: g?.reglas || '', tipo: g?.tipo || (tipo === 'comunidad' ? 'comunidad' : 'grupo'), adultos: !!g?.adultos, soloAdmins: !!g?.soloAdmins, etiquetas: [...(g?.etiquetas || [])], avatar: g?.avatar || '', avatarNuevo: null };
+  paintGroupForm(); openOv('ov-group');
+  setTimeout(() => $('gf-nombre')?.focus(), 300);
+}
+function paintGroupForm() {
+  const f = GF;
+  $('group-form').innerHTML = `
+    <h3 style="padding:0 18px 12px">${f.id ? 'Editar grupo' : 'Nuevo grupo o comunidad'}</h3>
+    <div class="av-pick">${avatarHTML(f.nombre || '?', f.avatarNuevo || f.avatar, false, `hex${f.adultos ? ' adult' : ''}`)}
+      <div><button class="btn" onclick="document.getElementById('gf-file').click()"><ion-icon name="image-outline"></ion-icon> Foto</button><input type="file" id="gf-file" accept="image/*" hidden onchange="gfFoto(this)"></div></div>
+    <label class="fld"><span>Nombre</span><input type="text" id="gf-nombre" maxlength="50" value="${esc(f.nombre)}" oninput="GF.nombre=this.value" placeholder="Ej. Speedrunners de Android"></label>
+    <label class="fld"><span>Descripción</span><textarea id="gf-desc" rows="2" maxlength="500" oninput="GF.descripcion=this.value" placeholder="¿De qué trata?">${esc(f.descripcion)}</textarea></label>
+    <div class="fld"><span>Tipo</span><div class="seg">
+      <button class="${f.tipo === 'grupo' ? 'on' : ''}" onclick="GF.tipo='grupo';paintGroupForm()"><b>🔒 Grupo</b><small>Privado. Se entra con tu enlace de invitación.</small></button>
+      <button class="${f.tipo === 'comunidad' ? 'on' : ''}" onclick="GF.tipo='comunidad';paintGroupForm()"><b>🪐 Comunidad</b><small>Pública. Aparece en Explorar y cualquiera entra.</small></button></div></div>
+    <div class="fld"><span>Temas (hasta 4)</span><div class="tags">${Object.keys(ETQ).map(t => `<button class="tag-c${f.etiquetas.includes(t) ? ' on' : ''}" onclick="gfTag('${t}')">${ETQ[t]} ${t}</button>`).join('')}</div></div>
+    <label class="fld"><span>Reglas del grupo</span><textarea rows="3" maxlength="1500" oninput="GF.reglas=this.value" placeholder="Respeto, sin spam…">${esc(f.reglas)}</textarea>
+      <small>Las normas de UpGames aplican siempre: NEXUS bloquea y reporta a las autoridades cualquier contenido con menores, animales, abuso o gore real.</small></label>
+    <label class="sw adult"><div><b>🔞 Solo adultos (+18)</b><small>Para contenido adulto entre adultos que consienten. Se pide confirmar la edad al entrar y no sale en Explorar salvo que la persona active +18.</small></div><input type="checkbox" ${f.adultos ? 'checked' : ''} onchange="GF.adultos=this.checked;paintGroupForm()"></label>
+    ${f.id ? `<label class="sw"><div><b>📢 Modo anuncios</b><small>Solo los administradores pueden escribir.</small></div><input type="checkbox" ${f.soloAdmins ? 'checked' : ''} onchange="GF.soloAdmins=this.checked"></label>` : ''}
+    <div class="g-acts"><button class="btn" onclick="closeOv('ov-group')">Cancelar</button><button class="btn pri" id="gf-ok" onclick="saveGroup()">${f.id ? 'Guardar' : 'Crear'}</button></div>`;
+}
+function gfTag(t) { const a = GF.etiquetas; const i = a.indexOf(t); if (i >= 0) a.splice(i, 1); else if (a.length < 4) a.push(t); else toast('Máximo 4 temas'); paintGroupForm(); }
+async function gfFoto(inp) {
+  const f = inp.files[0]; inp.value = ''; if (!f) return;
+  try { GF.avatarNuevo = await comprimir(f, 512, .86); paintGroupForm(); } catch (_) { toast('❌ No se pudo leer la imagen'); }
+}
+async function saveGroup() {
+  const f = GF, b = $('gf-ok');
+  if ((f.nombre || '').trim().length < 3) { toast('El nombre necesita al menos 3 caracteres'); $('gf-nombre').focus(); return; }
+  b.disabled = true; b.textContent = f.id ? 'Guardando…' : 'Creando…';
+  const body = { nombre: f.nombre, descripcion: f.descripcion, reglas: f.reglas, tipo: f.tipo, adultos: f.adultos, etiquetas: f.etiquetas, ...(f.id ? { soloAdmins: f.soloAdmins } : {}), ...(f.avatarNuevo ? { avatar: f.avatarNuevo } : {}) };
+  try {
+    const d = await api(f.id ? `/grupos/${f.id}` : '/grupos', { method: f.id ? 'PUT' : 'POST', body: JSON.stringify(body) });
+    closeOv('ov-group');
+    toast(f.id ? '✅ Cambios guardados' : `🚀 ${f.tipo === 'comunidad' ? 'Comunidad' : 'Grupo'} creado`);
+    await loadGroups();
+    if (f.id) { S.group = { ...S.group, ...d.grupo }; paintGroupHeader(S.group); setLockedG(S.group); pollMsgs(); }
+    else { if (S.tab !== 'grupos') setTab('grupos'); openGroup(String(d.grupo.id)); if (f.tipo === 'grupo') setTimeout(() => openGroupInfo(), 900); }
+  } catch (e) { toast('❌ ' + e.message); b.disabled = false; b.textContent = f.id ? 'Guardar' : 'Crear'; }
+}
+
+/* Información del grupo */
+async function openGroupInfo() {
+  const g = S.group; if (!g) return;
+  const admin = soyAdminG(), dueno = g.miRol === 'dueno', key = 'g:' + g.id;
+  $('ginfo').innerHTML = `
+    <div class="gi-top">${gAvatar(g)}<h3>${esc(g.nombre)}</h3>
+      <div class="gmeta"><span>${g.tipo === 'comunidad' ? '🪐 Comunidad pública' : '🔒 Grupo privado'}</span><span>${g.nMiembros} miembro${g.nMiembros === 1 ? '' : 's'}</span>${g.adultos ? '<span class="a18">+18</span>' : ''}${g.soloAdmins ? '<span class="t">📢 anuncios</span>' : ''}</div>
+      ${g.descripcion ? `<p>${esc(g.descripcion)}</p>` : ''}</div>
+    ${g.codigo ? `<div class="gi-box"><h4>Enlace de invitación</h4><div class="inv"><code>${esc(linkInv(g.codigo))}</code><button class="ico-btn" onclick="copiarInv()" aria-label="Copiar"><ion-icon name="copy-outline"></ion-icon></button><button class="ico-btn" onclick="compartirInv()" aria-label="Compartir"><ion-icon name="share-social-outline"></ion-icon></button>${admin ? '<button class="ico-btn" onclick="nuevoCodigo()" aria-label="Nuevo enlace"><ion-icon name="refresh-outline"></ion-icon></button>' : ''}</div>
+      <p style="margin-top:6px;font-size:.8rem">Quien tenga el enlace puede entrar${g.adultos ? ' (confirmando que es mayor de 18)' : ''}.${admin ? ' Genera uno nuevo para anular el anterior.' : ''}</p></div>` : ''}
+    ${g.reglas ? `<div class="gi-box"><h4>Reglas</h4><p>${esc(g.reglas)}</p></div>` : ''}
+    ${admin ? `<button class="menu-item" onclick="closeOv('ov-ginfo');openCreateGroup(null,true)"><ion-icon name="create-outline"></ion-icon>Editar grupo</button>` : ''}
+    <button class="menu-item" onclick="togglePinG()"><ion-icon name="${pinned.has(key) ? 'pin' : 'pin-outline'}"></ion-icon>${pinned.has(key) ? 'Desfijar de la lista' : 'Fijar en la lista'}</button>
+    <button class="menu-item" onclick="toggleMuteG()"><ion-icon name="${muted.has(key) ? 'notifications-outline' : 'notifications-off-outline'}"></ion-icon>${muted.has(key) ? 'Activar sonido' : 'Silenciar'}</button>
+    <button class="menu-item" onclick="closeOv('ov-ginfo');toggleInSearch(true)"><ion-icon name="search-outline"></ion-icon>Buscar en el grupo</button>
+    <div class="sec" style="padding:14px 18px 6px">Miembros</div>
+    <div id="gi-mem"><div class="skel" style="margin:4px 18px"></div></div>
+    ${g.soyMiembro ? `<button class="menu-item danger" onclick="salirGrupo()"><ion-icon name="exit-outline"></ion-icon>Salir del grupo</button>` : ''}
+    ${dueno ? `<button class="menu-item danger" onclick="eliminarGrupo()"><ion-icon name="trash-outline"></ion-icon>Eliminar el grupo</button>` : ''}`;
+  openOv('ov-ginfo');
+  if (!g.soyMiembro) { $('gi-mem').innerHTML = '<div class="empty-list" style="padding:14px">Únete para ver a los miembros.</div>'; return; }
+  try {
+    const d = await api(`/grupos/${g.id}/miembros`);
+    $('gi-mem').innerHTML = d.miembros.map(m => `<button class="mem" onclick="${m.usuario === ME ? '' : `memMenu('${esc(m.usuario)}','${m.rol}')`}">
+        ${avatarHTML(m.usuario, m.avatar, m.online)}<span class="mem-b">@${esc(m.usuario)}${m.usuario === ME ? ' <small style="color:var(--txt3)">(tú)</small>' : ''}</span>
+        ${m.rol !== 'miembro' ? `<span class="rol ${m.rol}">${m.rol === 'dueno' ? 'DUEÑO' : 'ADMIN'}</span>` : ''}</button>`).join('')
+      + (d.baneados?.length ? `<div class="sec" style="padding:12px 18px 4px">Baneados</div>${d.baneados.map(u => `<button class="mem" onclick="accionMiembro('${esc(u)}','desbanear')">${avatarHTML(u, '', false)}<span class="mem-b">@${esc(u)}</span><span class="rol">Quitar ban</span></button>`).join('')}` : '');
+  } catch (_) { $('gi-mem').innerHTML = '<div class="empty-list" style="padding:14px">No se pudieron cargar los miembros.</div>'; }
+}
+function memMenu(u, rol) {
+  const g = S.group, dueno = g.miRol === 'dueno', admin = soyAdminG();
+  const puede = admin && rol !== 'dueno' && (rol === 'miembro' || dueno);
+  $('menu-body').innerHTML = `<h3 style="padding:0 18px 6px">@${esc(u)}</h3>
+    <button class="menu-item" onclick="closeOv('ov-menu');verPerfil('${esc(u)}')"><ion-icon name="person-circle-outline"></ion-icon>Ver perfil</button>
+    <button class="menu-item" onclick="closeOv('ov-menu');closeOv('ov-ginfo');openChat('${esc(u)}')"><ion-icon name="chatbubble-outline"></ion-icon>Mensaje privado</button>
+    ${dueno && rol === 'miembro' ? `<button class="menu-item" onclick="closeOv('ov-menu');accionMiembro('${esc(u)}','admin')"><ion-icon name="shield-outline"></ion-icon>Hacer administrador</button>` : ''}
+    ${dueno && rol === 'admin' ? `<button class="menu-item" onclick="closeOv('ov-menu');accionMiembro('${esc(u)}','miembro')"><ion-icon name="shield-half-outline"></ion-icon>Quitar administrador</button>` : ''}
+    ${dueno ? `<button class="menu-item" onclick="closeOv('ov-menu');accionMiembro('${esc(u)}','dueno')"><ion-icon name="key-outline"></ion-icon>Pasarle el grupo</button>` : ''}
+    ${puede ? `<button class="menu-item danger" onclick="closeOv('ov-menu');accionMiembro('${esc(u)}','expulsar')"><ion-icon name="person-remove-outline"></ion-icon>Sacar del grupo</button>
+    <button class="menu-item danger" onclick="closeOv('ov-menu');accionMiembro('${esc(u)}','banear')"><ion-icon name="ban-outline"></ion-icon>Banear (no podrá volver)</button>` : ''}`;
+  openOv('ov-menu');
+}
+function accionMiembro(u, accion) {
+  const txt = { admin: ['🛡️', `¿Hacer administrador a @${u}?`, 'Podrá sacar gente, fijar y borrar mensajes y editar el grupo.'], miembro: ['🛡️', `¿Quitar admin a @${u}?`, 'Volverá a ser un miembro normal.'],
+    dueno: ['🔑', `¿Pasarle el grupo a @${u}?`, 'Será el nuevo dueño y tú quedarás como administrador.'], expulsar: ['👋', `¿Sacar a @${u}?`, 'Podrá volver a entrar con el enlace o desde Explorar.'],
+    banear: ['🚫', `¿Banear a @${u}?`, 'Sale del grupo y no podrá volver a entrar.'], desbanear: ['✅', `¿Quitar el ban a @${u}?`, 'Podrá volver a entrar.'] }[accion];
+  confirmar(txt[0], txt[1], txt[2], 'Confirmar', async () => {
+    try { await api(`/grupos/${S.group.id}/miembros/${encodeURIComponent(u)}`, { method: 'POST', body: JSON.stringify({ accion }) }); toast('✅ Listo'); await refreshInfo(); openGroupInfo(); pollMsgs(); }
+    catch (e) { toast('❌ ' + e.message); }
+  }, ['expulsar', 'banear'].includes(accion));
+}
+async function copiarInv() { try { await navigator.clipboard.writeText(linkInv(S.group.codigo)); toast('🔗 Enlace copiado'); } catch (_) { prompt('Copia el enlace:', linkInv(S.group.codigo)); } }
+async function compartirInv() {
+  const url = linkInv(S.group.codigo);
+  try { if (navigator.share) { await navigator.share({ title: S.group.nombre, text: `Únete a «${S.group.nombre}» en UpGames`, url }); return; } } catch (e) { if (e?.name === 'AbortError') return; }
+  copiarInv();
+}
+function nuevoCodigo() {
+  confirmar('🔁', '¿Generar un enlace nuevo?', 'El enlace anterior dejará de funcionar.', 'Generar', async () => {
+    try { const d = await api(`/grupos/${S.group.id}/codigo`, { method: 'POST', body: '{}' }); S.group.codigo = d.codigo; openGroupInfo(); toast('🔗 Enlace nuevo listo'); } catch (e) { toast('❌ ' + e.message); }
+  });
+}
+function togglePinG() { const k = 'g:' + S.group.id; pinned.has(k) ? pinned.delete(k) : pinned.add(k); LS.set('ugc_pinned', [...pinned]); renderGroups(); openGroupInfo(); }
+function toggleMuteG() { const k = 'g:' + S.group.id; muted.has(k) ? muted.delete(k) : muted.add(k); LS.set('ugc_muted', [...muted]); paintTotals(); renderGroups(); openGroupInfo(); toast(muted.has(k) ? '🔕 Grupo silenciado' : '🔔 Sonido activado'); }
+function salirGrupo() {
+  const g = S.group;
+  confirmar('👋', `¿Salir de «${esc(g.nombre)}»?`, g.miRol === 'dueno' ? 'El grupo pasará al administrador más antiguo (o al miembro más antiguo).' : 'Podrás volver si tienes el enlace o si es una comunidad.', 'Salir', async () => {
+    try { await api(`/grupos/${g.id}/salir`, { method: 'POST', body: '{}' }); closeOv('ov-ginfo'); S.grupos = S.grupos.filter(x => x.id !== g.id); closeChat(); toast('Saliste del grupo'); }
+    catch (e) { toast('❌ ' + e.message); }
+  }, true);
+}
+function eliminarGrupo() {
+  const g = S.group;
+  confirmar('🗑️', `¿Eliminar «${esc(g.nombre)}»?`, 'Se borran el grupo y todos sus mensajes para todos. No se puede deshacer.', 'Eliminar', async () => {
+    try { await api(`/grupos/${g.id}`, { method: 'DELETE' }); closeOv('ov-ginfo'); S.grupos = S.grupos.filter(x => x.id !== g.id); closeChat(); toast('Grupo eliminado'); }
+    catch (e) { toast('❌ ' + e.message); }
+  }, true);
+}
+
+/* Unirse (Explorar o invitación) */
+let JOIN = null;
+function previewUnirse(g, codigo) {
+  JOIN = { ...g, codigo };
+  $('join-body').innerHTML = `${gAvatar(g)}<h3 style="margin-top:10px">${esc(g.nombre)}</h3>
+    <p>${esc(g.descripcion || '')}</p><p style="margin-top:6px;font-family:var(--fm);font-size:.78rem">${g.nMiembros || 0} miembro${g.nMiembros === 1 ? '' : 's'} · ${g.tipo === 'comunidad' ? 'comunidad pública' : 'grupo privado'}</p>
+    ${g.reglas ? `<div class="gi-box" style="margin:12px 0 0;text-align:left"><h4>Reglas</h4><p>${esc(g.reglas)}</p></div>` : ''}
+    ${g.adultos ? `<label class="join-chk"><input type="checkbox" id="join-edad"><span><b>Soy mayor de 18 años.</b> Este espacio es solo para adultos. Mentir sobre tu edad incumple los términos de UpGames.</span></label>` : ''}
+    ${g.baneado ? '<p style="margin-top:12px;color:#FF5A78">Los administradores te sacaron de este grupo.</p>' : ''}
+    <div class="acts"><button class="btn" onclick="closeOv('ov-join')">Ahora no</button>${g.baneado ? '' : '<button class="btn pri" id="join-ok" onclick="unirse()">Unirme</button>'}</div>`;
+  $('join-body').querySelector('.av').style.cssText = 'width:84px;height:92px;margin:0 auto;font-size:1.8rem';
+  openOv('ov-join');
+}
+async function unirse() {
+  const g = JOIN; if (!g) return;
+  if (g.adultos && !$('join-edad').checked) { toast('Confirma que eres mayor de 18 años'); return; }
+  const b = $('join-ok'); b.disabled = true;
+  try {
+    await api(`/grupos/${g.id}/unirse`, { method: 'POST', body: JSON.stringify({ codigo: g.codigo, confirmoEdad: g.adultos ? true : undefined }) });
+    closeOv('ov-join'); toast(`🚀 Entraste a ${g.nombre}`);
+    await loadGroups(); if (S.tab !== 'grupos') setTab('grupos');
+    S.contact = null; openGroup(String(g.id));
+  } catch (e) { toast('❌ ' + e.message); b.disabled = false; }
+}
+async function abrirInvitacion(codigo) {
+  try { const d = await api(`/grupos/invitacion/${encodeURIComponent(codigo)}`); if (d.grupo.soyMiembro) return openGroup(String(d.grupo.id)); previewUnirse(d.grupo, codigo); }
+  catch (e) { toast('❌ ' + e.message); }
+}
+
+/* Reportar */
+const REPORTES = [
+  ['menores', 'alert-circle', 'Menores de edad', 'Contenido sexual o sexualizado con menores. Se reporta a las autoridades.', true],
+  ['zoofilia', 'alert-circle', 'Animales', 'Contenido sexual con animales. Se reporta a las autoridades.', true],
+  ['abuso', 'alert-circle', 'Abuso o violencia sexual', 'Violación, abuso, tortura o actos sin consentimiento.', true],
+  ['gore', 'alert-circle', 'Gore o violencia real', 'Muertes, mutilaciones o violencia real extrema.', true],
+  ['acoso', 'hand-left-outline', 'Acoso o amenazas', 'Me molesta, amenaza o intimida.'],
+  ['odio', 'megaphone-outline', 'Odio', 'Ataques por raza, origen, religión, género u orientación.'],
+  ['estafa', 'card-outline', 'Estafa', 'Pide dinero, datos o cuentas con engaños.'],
+  ['spam', 'mail-unread-outline', 'Spam', 'Publicidad o mensajes repetidos.'],
+  ['otro', 'flag-outline', 'Otra cosa', 'Algo que incumple las normas.'],
+];
+function openReport(id) {
+  const m = S.msgs.get(String(id)); if (!m) return;
+  $('report-body').innerHTML = `<h3 style="padding:0 18px 4px">Reportar mensaje de @${esc(m.de)}</h3><p style="padding:0 18px 10px;font-size:.86rem;color:var(--txt2)">Tu reporte es anónimo para @${esc(m.de)}. Lo grave llega al instante al equipo de seguridad de UpGames con la evidencia guardada.</p>
+    ${REPORTES.map(([k, ic, t, d, grave]) => `<button class="rep-op${grave ? ' grave' : ''}" onclick="enviarReporte('${id}','${k}')"><ion-icon name="${ic}"></ion-icon><span><b>${t}</b><small>${d}</small></span></button>`).join('')}`;
+  openOv('ov-report');
+}
+async function enviarReporte(id, motivo) {
+  closeOv('ov-report');
+  try {
+    const d = await api(isG() ? `/grupos/${S.contact}/mensajes/${id}/reportar` : `/chat/mensaje/${id}/reportar`, { method: 'POST', body: JSON.stringify({ motivo }) });
+    toast('🛡️ ' + (d.mensaje || 'Reporte enviado'), 4000);
+    if (!isG() && ['menores', 'zoofilia', 'abuso', 'gore'].includes(motivo) && !S.info?.yoBloqueo)
+      confirmar('🚫', `¿Bloquear también a @${esc(S.contact)}?`, 'Así no podrá volver a escribirte.', 'Bloquear', toggleBlockSilent, true);
+  } catch (e) { toast('❌ ' + e.message); }
+}
+async function toggleBlockSilent() {
+  try { await api(`/chat/bloqueo/${encodeURIComponent(S.contact)}`, { method: 'POST' }); toast(`@${S.contact} bloqueado`); S.contactos = null; await refreshInfo(); loadConvs(); } catch (e) { toast('❌ ' + e.message); }
+}
 
 /* ── Notificaciones del sistema (si el usuario las permite) ─ */
 function notificar(c) {
@@ -1162,10 +1822,17 @@ function notificar(c) {
    ══════════════════════════════════════════════════════════════════ */
 async function init() {
   paintSound(); buildEmoji();
-  await loadConvs();
-  S.listPoll = setInterval(() => { if (!document.hidden) loadConvs(); }, 9000);
-  const u = new URLSearchParams(location.search).get('usuario');
-  if (u) { history.replaceState(isMobile() ? null : history.state, '', location.pathname); openChat(u); }
+  const qs = new URLSearchParams(location.search);
+  let tab0 = 'chats'; try { tab0 = sessionStorage.getItem('ugc_tab') || 'chats'; } catch (_) {}
+  if (qs.get('g') || qs.get('grupo')) tab0 = 'grupos';
+  setTab(['chats', 'grupos', 'explorar'].includes(tab0) ? tab0 : 'chats');
+  await Promise.all([loadConvs(), loadGroups()]);
+  S.listPoll = setInterval(() => { if (!document.hidden) { loadConvs(); loadGroups(); } }, 9000);
+  const u = qs.get('usuario'), gi = qs.get('grupo'), inv = qs.get('g');
+  if (u || gi || inv) history.replaceState(isMobile() ? null : history.state, '', location.pathname);
+  if (u) openChat(u);
+  else if (gi && /^[a-f\d]{24}$/i.test(gi)) openGroup(gi);
+  else if (inv) abrirInvitacion(inv);
   // Pedir permiso de notificaciones tras la primera interacción (no al cargar)
   document.addEventListener('click', function pedir() {
     document.removeEventListener('click', pedir);

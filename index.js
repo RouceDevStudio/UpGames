@@ -79,6 +79,7 @@ const Referidos       = require('./modulos/referidos');
 const Seo             = require('./modulos/seo');
 const ContenidoLegal  = require('./modulos/contenidoLegal');
 const Moderacion      = require('./modulos/moderacion');
+const CeroTolerancia  = require('./modulos/ceroTolerancia');
 
 /**
  * Moderación de una publicación en segundo plano: texto (IA) + portada (visión).
@@ -93,14 +94,21 @@ async function moderarPublicacion(id) {
         if (Moderacion.debeQuitar(textoV) && ['sexual', 'odio', 'acoso'].includes(textoV.categoria)) motivo = Moderacion.MENSAJE[textoV.categoria];
         if (!motivo) {
             for (const img of [j.image, ...(j.images || [])].filter(u => /^https:\/\//.test(u || '') && !/\.(mp4|webm|mov|m4v|avi|3gp|3g2|mkv|ogv|mpe?g|wmv|flv)(\?|$)|\/video\/upload\//i.test(u)).slice(0, 2)) {
-                const v = await Moderacion.imagen(img.replace('/upload/', '/upload/w_640,q_auto,f_jpg/'));
+                const url = img.replace('/upload/', '/upload/w_640,q_auto,f_jpg/');
+                const c = await CeroTolerancia.revisarImagen(url).catch(() => null);   // menores, zoofilia, abuso, gore real
+                if (c && c.categoria !== 'ok' && c.confianza >= CeroTolerancia.UMBRAL_IMAGEN) {
+                    motivo = Moderacion.MENSAJE[c.categoria]; fuente = 'NEXUS visión'; categoria = c.categoria;
+                    CeroTolerancia.incidente({ usuario: j.usuario, categoria: c.categoria, motivo: c.motivo, fuente: `NEXUS visión (${c.modelo || 'IA'})`, confianza: c.confianza, donde: 'publicacion', ref: id, texto: j.title, imagen: img, restringir: c.confianza >= CeroTolerancia.UMBRAL_RESTRINGIR });
+                    break;
+                }
+                const v = await Moderacion.imagen(url);
                 if (v?.sexual && v.confianza >= 0.75) { motivo = 'su imagen tiene contenido sexual'; fuente = 'NEXUS visión'; categoria = 'sexual'; break; }
             }
         }
         if (!motivo) return;
         await Juego.updateOne({ _id: id }, { $set: { status: 'rechazado', motivoRechazo: `Moderación automática: ${motivo}` } });
         crearNotif({ destinatario: j.usuario, tipo: 'sistema', emisor: 'UpGames', itemId: String(id), itemTitle: 'Revisión', itemImage: '', mensaje: `🚫 Quitamos "${String(j.title).slice(0, 60)}" porque ${motivo}. Revisa las normas de la comunidad.` });
-        Moderacion.registrar({ tipo: 'publicacion', usuario: j.usuario, categoria, motivo, fuente, texto: j.title, ref: id, accion: 'rechazada' });
+        Moderacion.registrar({ tipo: 'publicacion', usuario: j.usuario, categoria, motivo, fuente, texto: j.title, ref: id, accion: 'rechazada', sinIncidente: fuente === 'NEXUS visión' });
         recommendations.invalidateTrending?.();
         logger.warn(`[moderacion] publicación ${id} de @${j.usuario} rechazada: ${motivo}`);
     } catch (e) { logger.warn(`[moderacion] publicación ${id}: ${e.message}`); }
@@ -610,6 +618,12 @@ const UsuarioSchema = new mongoose.Schema({
     bio:      { type: String, maxlength: 200, default: '' },
     fecha:    { type: Date, default: Date.now },
     registrationIP:  { type: String, default: '' },
+    // Seguridad (modulos/ceroTolerancia.js): IPs recientes para reportes a las autoridades y restricción preventiva
+    ultimaIp:        { type: String, default: '', select: false },
+    ipsVistas:       { type: [String], default: [], select: false },
+    restriccionSeguridad: { type: Boolean, default: false, index: true },
+    restriccionMotivo:    { type: String, default: '' },
+    restriccionFecha:     { type: Date, default: null },
     listaNegraAdmin: { type: Boolean, default: false, index: true },
     notasAdmin:      { type: String, default: '', maxlength: 500 },
     fechaListaNegra: { type: Date, default: null },
@@ -805,7 +819,10 @@ const verificarToken = (req, res, next) => {
         if ((presenciaEscrita.get(decoded.usuario) || 0) < ahoraMs - 60000) {
             presenciaEscrita.set(decoded.usuario, ahoraMs);
             if (presenciaEscrita.size > 50000) presenciaEscrita.clear();
-            Usuario.updateOne({ usuario: decoded.usuario }, { $set: { ultimoLogin: new Date() } }).catch(() => {});
+            const ip = CeroTolerancia.ipDe(req);
+            Usuario.updateOne({ usuario: decoded.usuario }, ip
+                ? [{ $set: { ultimoLogin: '$$NOW', ultimaIp: ip, ipsVistas: { $slice: [{ $setUnion: [[ip], { $ifNull: ['$ipsVistas', []] }] }, 40] } } }]
+                : { $set: { ultimoLogin: new Date() } }).catch(() => {});
         }
 
         // Sesión revocada (cambió la contraseña en otro dispositivo) o cuenta eliminada
@@ -989,6 +1006,68 @@ const adminPanel = require('./rutas/adminPanel').registrar(app, {
     Usuario, Juego, Comentario, Notificacion, Pago, JWT_SECRET, logger, twoFactor, authLimiter,
 });
 const verificarAdmin = adminPanel.verificarAdmin;
+
+// ── Cero tolerancia: aviso inmediato al equipo (app + push + correo) y panel de incidentes ──
+const escH = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+CeroTolerancia.configurar({
+    logger,
+    avisar: async inc => {
+        const dueños = (process.env.OWNER_EMAIL || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean);
+        const dest = (await Usuario.find({ $or: [{ email: { $in: dueños } }, { adminRol: { $nin: ['', null] }, adminPausado: { $ne: true } }] }).select('usuario').lean()).map(u => u.usuario);
+        const cat = CeroTolerancia.MOTIVO[inc.categoria] || inc.categoria;
+        const txt = `🚨 NEXUS · Incidente de seguridad: @${inc.usuario} · ${cat} (${inc.donde}). Revísalo en el panel admin → Moderación → Incidentes.`;
+        if (dest.length) {
+            await Notificacion.insertMany(dest.map(d => ({ destinatario: d, tipo: 'sistema', emisor: 'NEXUS', itemTitle: 'Seguridad', mensaje: escH(txt), leida: false, fecha: new Date() })));
+            push.alCrear(dest.map(d => ({ destinatario: d, emisor: 'NEXUS', tipo: 'sistema', itemTitle: '🚨 Incidente de seguridad', mensaje: `@${inc.usuario} · ${cat}` })));
+        }
+        const para = (process.env.ALERTAS_EMAIL || process.env.OWNER_EMAIL || '').split(',')[0].trim();
+        if (para) Promise.resolve(sendEmail({ to: para, subject: `🚨 UpGames · Incidente de seguridad: ${cat}`,
+            html: `<div style="font-family:system-ui,sans-serif;max-width:600px"><h2>🚨 Incidente de seguridad</h2><p><b>Usuario:</b> @${escH(inc.usuario)}<br><b>Categoría:</b> ${escH(cat)}<br><b>Dónde:</b> ${escH(inc.donde)}<br><b>Detectado por:</b> ${escH(inc.fuente)}${inc.confianza != null ? ` (${Math.round(inc.confianza * 100)} %)` : ''}<br><b>Cuenta restringida:</b> ${inc.restringida ? 'sí' : 'no'}</p><p>El contenido ya se bloqueó. La evidencia y el expediente completo (correo, IPs, cobros y pagos) están en el panel admin → Moderación → Incidentes, listos para entregarlos a las autoridades.</p></div>` })).catch(() => {});
+    },
+});
+const incidenteVista = (x, completo) => ({
+    id: x._id, fecha: x.fecha, estado: x.estado, usuario: x.usuario, categoria: x.categoria, motivo: x.motivo, fuente: x.fuente, confianza: x.confianza,
+    donde: x.donde, ref: x.ref, restringida: !!x.restringida, notas: x.notas || '', reportadoEn: x.reportadoEn || null,
+    evidencia: x.evidencia, conexion: x.conexion, ...(completo ? { expediente: x.expediente } : { email: x.expediente?.email || '' }),
+});
+app.get('/admin/seguridad/incidentes', verificarAdmin, async (req, res) => {
+    try {
+        const lista = await CeroTolerancia.listar({ limite: parseInt(req.query.limit, 10) || 150, estado: ['abierto', 'reportado', 'descartado'].includes(req.query.estado) ? req.query.estado : undefined });
+        const abiertos = await CeroTolerancia.col().countDocuments({ estado: 'abierto' });
+        res.json({ success: true, abiertos, lista: lista.map(x => incidenteVista(x, false)) });
+    } catch (e) { logger.error(`admin/seguridad: ${e.message}`); res.status(500).json({ success: false, error: 'No se pudo cargar' }); }
+});
+// Expediente completo para las autoridades (incluye los datos de cobro descifrados y el historial reciente)
+app.get('/admin/seguridad/incidentes/:id/expediente', verificarAdmin, async (req, res) => {
+    try {
+        if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ success: false, error: 'ID inválido' });
+        const x = await CeroTolerancia.col().findOne({ _id: new mongoose.Types.ObjectId(req.params.id) });
+        if (!x) return res.status(404).json({ success: false, error: 'No existe' });
+        const u = await Usuario.findOne({ usuario: x.usuario }).select('cobro').lean();
+        const cobro = u?.cobro?.cifrado ? require('./rutas/cobros').descifrar(u.cobro.cifrado) : null;
+        const [actual, otros, mensajes, publicaciones] = await Promise.all([
+            CeroTolerancia.expediente(x.usuario),
+            CeroTolerancia.col().find({ usuario: x.usuario }).project({ fecha: 1, categoria: 1, donde: 1, estado: 1 }).sort({ fecha: -1 }).limit(50).toArray(),
+            Mensaje.find({ $or: [{ de: x.usuario }, { para: x.usuario }] }).select('de para texto imagen fecha').sort({ fecha: -1 }).limit(200).lean(),
+            Juego.find({ usuario: x.usuario }).select('title link category status createdAt').sort({ createdAt: -1 }).limit(100).lean(),
+        ]);
+        logger.warn(`[cero-tolerancia] expediente de @${x.usuario} generado por @${req.admin?.usuario || '?'}`);
+        res.json({ success: true, generado: new Date(), plataforma: 'UPGAMES · upgames.games · upgames.games.up@gmail.com', incidente: incidenteVista(x, true),
+            cuentaActual: { ...actual, datosCobroCompletos: cobro }, otrosIncidentes: otros, historial: { mensajesPrivados: mensajes, publicaciones } });
+    } catch (e) { logger.error(`admin/seguridad expediente: ${e.message}`); res.status(500).json({ success: false, error: 'No se pudo generar' }); }
+});
+app.post('/admin/seguridad/incidentes/:id', verificarAdmin, async (req, res) => {
+    try {
+        if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ success: false, error: 'ID inválido' });
+        const estado = ['abierto', 'reportado', 'descartado'].includes(req.body.estado) ? req.body.estado : null;
+        const set = { ...(estado ? { estado } : {}), ...(typeof req.body.notas === 'string' ? { notas: req.body.notas.slice(0, 1000) } : {}), ...(estado === 'reportado' ? { reportadoEn: new Date() } : {}), revisadoPor: req.admin?.usuario || '' };
+        const x = await CeroTolerancia.col().findOneAndUpdate({ _id: new mongoose.Types.ObjectId(req.params.id) }, { $set: set }, { returnDocument: 'after' });
+        const doc = x?.value !== undefined ? x.value : x;
+        if (!doc) return res.status(404).json({ success: false, error: 'No existe' });
+        if (req.body.quitarRestriccion) await Usuario.updateOne({ usuario: doc.usuario }, { $set: { restriccionSeguridad: false, restriccionMotivo: '' } });
+        res.json({ success: true, incidente: incidenteVista(doc, false) });
+    } catch (e) { res.status(500).json({ success: false, error: 'No se pudo guardar' }); }
+});
 // Nexus como asistente del panel: briefing priorizado + chat con los datos del admin
 require('./rutas/adminNexus').registrar(app, { verificarAdmin, Juego, Usuario, Comentario, Pago, logger });
 
@@ -2113,6 +2192,7 @@ app.post("/items/add", [verificarToken, body('title').notEmpty().trim().isLength
         // Filtro automático por palabras clave: si el título o la descripción declaran piratería, no se publica
         const legal = ContenidoLegal.revisar(req.body);
         if (legal.bloquear) return res.status(400).json({ success: false, error: `No se puede publicar: ${legal.bloquear}. Revisa las normas de contenido.` });
+        if (await CeroTolerancia.restringido(req.usuario)) return res.status(403).json({ success: false, error: 'Tu cuenta está restringida mientras el equipo de seguridad revisa un reporte.', code: 'RESTRINGIDO' });
         const modP = Moderacion.reglas(`${req.body.title} ${req.body.description || ''}`, 'publicacion');
         if (modP.bloquear) {
             Moderacion.registrar({ tipo: 'publicacion', usuario: req.usuario, categoria: modP.categoria, motivo: modP.motivo, fuente: 'reglas', texto: req.body.title, accion: 'bloqueado-antes' });
@@ -2865,6 +2945,7 @@ app.post('/comentarios', [verificarToken, body('itemId').notEmpty(), body('texto
         if (!errors.isEmpty()) return res.status(400).json({ success: false, error: 'Datos inválidos' });
         const textoLimpio = (req.body.texto || '').replace(/<[^>]*>/g, '').trim();
         if (!textoLimpio) return res.status(400).json({ success: false, error: 'El comentario está vacío' });
+        if (await CeroTolerancia.restringido(req.usuario)) return res.status(403).json({ success: false, error: 'Tu cuenta está restringida mientras el equipo de seguridad revisa un reporte.', code: 'RESTRINGIDO' });
         const modC = Moderacion.reglas(textoLimpio, 'comentario');
         if (modC.bloquear) {
             Moderacion.registrar({ tipo: 'comentario', usuario: req.usuario, categoria: modC.categoria, motivo: modC.motivo, fuente: 'reglas', texto: textoLimpio, ref: req.body.itemId, accion: 'bloqueado-antes' });
@@ -3208,6 +3289,8 @@ app.post('/chat/enviar', verificarToken, async (req, res) => {
         if (texto.length > 2000) return res.status(400).json({ success: false, error: 'Mensaje demasiado largo (máx 2000 caracteres)' });
         const imagen = imagenRaw ? urlImagenSegura(imagenRaw) : '';
         if (imagenRaw && !imagen) return res.status(400).json({ success: false, error: 'Imagen inválida' });
+        const cero = await CeroTolerancia.frenarTexto({ texto, usuario: de, donde: `chat privado con @${para}`, ref: para, req });
+        if (cero) return res.status(cero.status).json({ success: false, error: cero.error, code: cero.code });
 
         const rel = await chatRelacion(de, para);
         if (!rel.existe) return res.status(404).json({ success: false, error: 'Ese usuario no existe' });
@@ -3223,6 +3306,9 @@ app.post('/chat/enviar', verificarToken, async (req, res) => {
         const ahora = new Date();
         const msg = await new Mensaje({ de, para, texto, imagen, replyTo, actualizado: ahora, fecha: ahora }).save();
         chatEscribiendo.delete(`${de}->${para}`);
+        // NEXUS visión revisa la imagen en segundo plano: si es contenido prohibido se oculta y se abre un incidente
+        CeroTolerancia.vigilarImagen({ imagen, usuario: de, donde: `chat privado con @${para}`, ref: String(msg._id), texto, req,
+            ocultar: () => Mensaje.updateOne({ _id: msg._id }, { $set: { borrado: true, texto: '', imagen: '', actualizado: new Date() } }) });
 
         // Una sola notificación por conversación sin leer (antes: una por mensaje)
         Notificacion.findOneAndUpdate(
@@ -3376,6 +3462,8 @@ app.patch('/chat/mensaje/:id', verificarToken, async (req, res) => {
         if (!chatEsId(req.params.id)) return res.status(400).json({ success: false, error: 'ID inválido' });
         const texto = typeof req.body.texto === 'string' ? req.body.texto.trim() : '';
         if (!texto || texto.length > 2000) return res.status(400).json({ success: false, error: 'Texto inválido (1-2000 caracteres)' });
+        const cero = await CeroTolerancia.frenarTexto({ texto, usuario: req.usuario, donde: 'chat privado (edición)', ref: req.params.id, req });
+        if (cero) return res.status(cero.status).json({ success: false, error: cero.error, code: cero.code });
         const m = await Mensaje.findById(req.params.id);
         if (!m || m.de !== req.usuario) return res.status(404).json({ success: false, error: 'Mensaje no encontrado' });
         if (m.borrado) return res.status(400).json({ success: false, error: 'El mensaje fue eliminado' });
@@ -3423,6 +3511,26 @@ app.post('/chat/mensaje/:id/reaccion', verificarToken, async (req, res) => {
         await m.save();
         res.json({ success: true, mensaje: chatSerializar(m.toObject()) });
     } catch (err) { res.status(500).json({ success: false, error: 'Error interno' }); }
+});
+
+// POST /chat/mensaje/:id/reportar { motivo } — reportar un mensaje recibido
+// menores/zoofilia/abuso/gore → incidente de cero tolerancia con la evidencia (aunque luego lo borren) y aviso al admin
+app.post('/chat/mensaje/:id/reportar', verificarToken, async (req, res) => {
+    try {
+        if (!chatEsId(req.params.id)) return res.status(400).json({ success: false, error: 'ID inválido' });
+        if (!(await Limites.permitir(`chat-report:${req.usuario}`, [[Limites.HORA, 20]]))) return res.status(429).json({ success: false, error: 'Ya enviaste muchos reportes. Gracias, los estamos revisando.' });
+        const m = await Mensaje.findById(req.params.id).lean();
+        if (!m || m.para !== req.usuario) return res.status(404).json({ success: false, error: 'Mensaje no encontrado' });
+        const motivo = String(req.body.motivo || 'otro');
+        if (CeroTolerancia.MOTIVO[motivo]) {
+            CeroTolerancia.incidente({ usuario: m.de, categoria: motivo, motivo: `Reportado por @${req.usuario}: ${CeroTolerancia.MOTIVO[motivo]}`, fuente: 'reporte de usuario', donde: `chat privado con @${req.usuario}`, ref: String(m._id), texto: m.texto, imagen: m.imagen });
+            if (m.imagen) CeroTolerancia.vigilarImagen({ imagen: m.imagen, usuario: m.de, donde: 'chat privado (reportado)', ref: String(m._id), texto: m.texto,
+                ocultar: () => Mensaje.updateOne({ _id: m._id }, { $set: { borrado: true, texto: '', imagen: '', actualizado: new Date() } }) });
+        } else {
+            Moderacion.registrar({ tipo: 'chat', usuario: m.de, categoria: ['sexual', 'odio', 'acoso', 'spam', 'estafa'].includes(motivo) ? motivo : 'otro', motivo: `Reporte de @${req.usuario} en chat privado`, fuente: 'reporte', texto: m.texto, ref: String(m._id), accion: 'reportado' });
+        }
+        res.json({ success: true, mensaje: 'Gracias. El reporte llegó al equipo de UpGames.' });
+    } catch (err) { res.status(500).json({ success: false, error: 'No se pudo reportar' }); }
 });
 
 // DELETE /chat/conversacion/:otro — vaciar el chat SOLO para mí
@@ -3542,6 +3650,8 @@ app.post('/stories/crear', verificarToken, async (req, res) => {
     try {
         const { imagen, texto } = req.body;
         if (!imagen && !texto?.trim()) return res.status(400).json({ success: false, error: 'Imagen o texto requerido' });
+        const cero = await CeroTolerancia.frenarTexto({ texto: String(texto || ''), usuario: req.usuario, donde: 'historia', req });
+        if (cero) return res.status(cero.status).json({ success: false, error: cero.error, code: cero.code });
         let imgUrl = '';
         if (imagen) {
             if (typeof imagen !== 'string' || !/^data:image\/(png|jpe?g|webp|gif|heic|heif);base64,/i.test(imagen)) return res.status(400).json({ success: false, error: 'Formato de imagen no válido' });
@@ -3549,6 +3659,7 @@ app.post('/stories/crear', verificarToken, async (req, res) => {
         }
         const story = new Story({ usuario: req.usuario, imagen: imgUrl, texto: texto?.trim() || '' });
         await story.save();
+        CeroTolerancia.vigilarImagen({ imagen: imgUrl, usuario: req.usuario, donde: 'historia', ref: String(story._id), texto: story.texto, req, ocultar: () => Story.deleteOne({ _id: story._id }) });
         res.json({ success: true, story: { id: story._id, usuario: story.usuario, imagen: story.imagen, texto: story.texto, fecha: story.fecha } });
     } catch (err) {
         logger.error(`Error creando story: ${err.message}`);
@@ -3957,6 +4068,8 @@ live.alRevertir((captureId, sancionar) => tienda.revertir(captureId, 'PayPal', s
 require('./rutas/extrasUC').registrar(app, { verificarToken, verificarAdmin, Usuario, Juego, LiveTx: live.LiveTx, Notificacion, logger, olvidarPerfil: live.olvidarPerfil });
 // Reseñas con estrellas y colecciones de publicaciones
 require('./rutas/social').registrar(app, { verificarToken, verificarAdmin, usuarioOpcional, Usuario, Juego, Moderacion, Limites, crearNotif, logger });
+// Grupos y comunidades del chat (rutas/grupos.js): cero tolerancia y +18 incluidos
+require('./rutas/grupos').registrar(app, { verificarToken, Usuario, Notificacion, push, imagenes, urlImagenSegura, Moderacion, CeroTolerancia, Limites, logger });
 // Panel admin → Economía (UpCoins, ventas, Premium, NEXUS, destacadas)
 require('./rutas/adminEconomia').registrar(app, { verificarAdmin, Usuario, Juego, LiveTx: live.LiveTx, Pago, Notificacion, logger, olvidarPerfil: live.olvidarPerfil });
 // Estado del correo y envío de prueba (panel admin → Sistema)

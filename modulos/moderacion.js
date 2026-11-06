@@ -17,6 +17,7 @@
 
 const mongoose = require('mongoose');
 const llm = require('./nexus/llm');
+const Cero = require('./ceroTolerancia');   // menores, zoofilia, abuso y gore real: se reportan
 
 // Fronteras de palabra que entienden acentos y ñ (\b de JS solo conoce ASCII)
 const P = s => new RegExp(`(?<![\\p{L}\\p{N}])(?:${s})(?![\\p{L}\\p{N}])`, 'iu');
@@ -50,6 +51,8 @@ function reglas(texto, tipo = 'comentario') {
     // Se prueba el texto normalizado (p0rn0, s.e.x.o) y el original en minúsculas (f4f, sub4sub)
     const t = normal(texto).replace(JERGA, ' ') + ' \n ' + String(texto || '').toLowerCase().replace(JERGA, ' ');
     if (!t.trim()) return { bloquear: false, categoria: 'ok' };
+    const cero = Cero.revisarTexto(texto);
+    if (cero.grave) return { bloquear: true, categoria: cero.categoria, grave: true, cero: true, motivo: cero.motivo };
     if (REGLAS.menores.test(t)) return { bloquear: true, categoria: 'sexual', grave: true, motivo: 'Contenido sexual con menores' };
     if (REGLAS.sexual.test(t)) return { bloquear: true, categoria: 'sexual', motivo: 'Contenido sexual' };
     if (REGLAS.odio.test(t)) return { bloquear: true, categoria: 'odio', motivo: 'Discurso de odio' };
@@ -107,11 +110,13 @@ async function imagen(img) {
 const log = () => mongoose.connection.collection('moderacion_log');
 let indice = false;
 /** Guarda la acción (se borra sola a los 180 días) y suma un strike al autor. */
-async function registrar({ tipo, usuario, categoria, motivo, fuente, texto = '', ref = '', accion }) {
+async function registrar({ tipo, usuario, categoria, motivo, fuente, texto = '', ref = '', accion, sinIncidente = false }) {
     try {
         if (!indice) { indice = true; log().createIndex({ fecha: 1 }, { expireAfterSeconds: 180 * 86400 }).catch(() => {}); }
         await log().insertOne({ fecha: new Date(), tipo, usuario: usuario || '', categoria, motivo: motivo || '', fuente, texto: String(texto).slice(0, 300), ref: String(ref), accion });
-        if (usuario && accion !== 'bloqueado-antes') await mongoose.models.Usuario?.updateOne({ usuario }, { $inc: { strikesModeracion: 1 }, $set: { ultimoStrike: new Date() } }).catch(() => {});
+        // Cero tolerancia: además del registro, incidente con expediente y aviso inmediato al admin
+        if (usuario && Cero.MOTIVO[categoria] && !sinIncidente) Cero.incidente({ usuario, categoria, motivo, fuente: fuente === 'reglas' ? 'NEXUS reglas' : fuente, donde: tipo, ref, texto });
+        if (usuario && accion !== 'bloqueado-antes' && accion !== 'reportado') await mongoose.models.Usuario?.updateOne({ usuario }, { $inc: { strikesModeracion: 1 }, $set: { ultimoStrike: new Date() } }).catch(() => {});
     } catch (_) {}
 }
 async function recientes(limite = 100, filtro = {}) {
@@ -123,6 +128,6 @@ async function resumen(dias = 7) {
     return r.map(x => ({ tipo: x._id.t, categoria: x._id.c, n: x.n }));
 }
 
-const MENSAJE = { sexual: 'contiene contenido sexual', odio: 'contiene discurso de odio', acoso: 'contiene acoso o amenazas', insulto: 'contiene insultos', spam: 'parece spam o publicidad' };
+const MENSAJE = { menores: 'contiene contenido sexual con menores de edad (se reporta a las autoridades)', zoofilia: 'contiene contenido sexual con animales (se reporta a las autoridades)', abuso: 'contiene abuso o violencia sexual (se reporta a las autoridades)', gore: 'contiene gore o violencia real (se reporta a las autoridades)', sexual: 'contiene contenido sexual', odio: 'contiene discurso de odio', acoso: 'contiene acoso o amenazas', insulto: 'contiene insultos', spam: 'parece spam o publicidad' };
 
 module.exports = { reglas, ia, debeQuitar, imagen, registrar, recientes, resumen, MENSAJE, normal, QUITAR };
