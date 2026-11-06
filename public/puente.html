@@ -176,6 +176,19 @@
         let enlaceFinal = null;
         let validacionRealizada = false;
         let tieneAdBlocker = false; // Se detecta al cargar
+        // Ticket firmado por el servidor al abrir la página: sin él (o antes de la espera) no hay enlace
+        let ticketPuente = null;
+        async function pedirTicket() {
+            if (!juegoIdTicket()) return null;
+            try {
+                const r = await fetch(`${API_URL}/economia/ticket`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ juegoId: juegoIdTicket() }) });
+                const d = await r.json().catch(() => ({}));
+                if (d.success && d.ticket) ticketPuente = d.ticket;
+            } catch (_) {}
+            return ticketPuente;
+        }
+        function juegoIdTicket() { try { return new URLSearchParams(location.search).get('id'); } catch (_) { return null; } }
+        const ticketListo = pedirTicket();
 
         // ⭐ DETECCIÓN DE AD BLOCKER
         // Crea un elemento "cebo" con clases típicas de anuncios.
@@ -332,7 +345,9 @@
             log(`Enviando petición al backend - Juego ID: ${juegoId}`);
             
             try {
-                const requestBody = { juegoId, tieneAdBlocker };
+                if (!ticketPuente) await ticketListo;
+                if (!ticketPuente) await pedirTicket();
+                const requestBody = { juegoId, tieneAdBlocker, ticket: ticketPuente };
                 log(`Body de la petición: ${JSON.stringify(requestBody)}`);
                 
                 // ⭐ AVISO VISUAL si hay ad blocker (no bloquea, solo informa)
@@ -350,6 +365,25 @@
                 });
 
                 log(`Respuesta recibida - Status: ${response.status}`);
+
+                // El servidor pide esperar un poco más (reloj del teléfono adelantado, pestaña en segundo plano…)
+                if (response.status === 425) {
+                    const d = await response.json().catch(() => ({}));
+                    const s = Math.max(1, Math.min(30, +d.esperaRestante || 3));
+                    btnEl.innerText = `⏳ Un momento… ${s} s`;
+                    validacionRealizada = false;
+                    setTimeout(() => validarDescarga(juegoId), s * 1000 + 300);
+                    return;
+                }
+                // Ticket vencido o inválido (página abierta hace mucho): se pide otro y se espera de nuevo
+                if (response.status === 428) {
+                    ticketPuente = null; await pedirTicket();
+                    validacionRealizada = false;
+                    showWarning('⏳ La página llevaba mucho tiempo abierta: preparando tu enlace de nuevo…');
+                    btnEl.innerText = '⏳ Preparando enlace…';
+                    setTimeout(() => validarDescarga(juegoId), 26000);
+                    return;
+                }
 
                 // ⭐ MANEJAR ERRORES HTTP
                 if (!response.ok) {

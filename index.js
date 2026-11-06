@@ -995,6 +995,14 @@ require('./rutas/adminNexus').registrar(app, { verificarAdmin, Juego, Usuario, C
 // ⭐ RUTAS DE ECONOMÍA
 // ==========================================
 
+// Ticket de la página puente (modulos/ticketPuente.js): la espera se comprueba en el servidor
+const TicketPuente = require('./modulos/ticketPuente');
+app.post('/economia/ticket', [body('juegoId').isMongoId()], async (req, res) => {
+    if (!validationResult(req).isEmpty()) return res.status(400).json({ success: false, error: 'ID inválido' });
+    if (!(await Limites.permitir(`ticket:${req.ip}`, [[Limites.MIN, 20]]))) return res.status(429).json({ success: false, error: 'Demasiadas peticiones' });
+    res.json({ success: true, ...TicketPuente.emitir(JWT_SECRET, req.body.juegoId, req.ip) });
+});
+
 app.post('/economia/validar-descarga', [body('juegoId').isMongoId()], async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -1008,6 +1016,15 @@ app.post('/economia/validar-descarga', [body('juegoId').isMongoId()], async (req
         const juego = await Juego.findById(juegoId);
         if (!juego) return res.status(404).json({ success: false, error: "Juego no encontrado" });
         if (juego.status !== 'aprobado') return res.status(403).json({ success: false, error: "El juego no está aprobado para descargas" });
+
+        const tk = TicketPuente.verificar(JWT_SECRET, req.body.ticket, juegoId, ip);
+        if (!tk.ok) {
+            if (tk.motivo === 'pronto') return res.status(425).json({ success: false, esperaRestante: tk.esperaRestante, error: `Espera ${tk.esperaRestante} s más` });
+            if (tk.motivo !== 'falta' || TicketPuente.obligatorio()) return res.status(428).json({ success: false, renovarTicket: true, error: 'Recarga la página para obtener el enlace' });
+            // Transición: puente viejo sin ticket → enlace sí, pero la descarga no cuenta
+            logger.warn(`[puente] validar-descarga sin ticket — Juego: ${juegoId}, IP: ${ip}`);
+            return res.json({ success: true, descargaContada: false, sinTicket: true, link: juego.link, mensaje: 'Descarga permitida (página antigua: no cuenta para el autor)' });
+        }
 
         if (tieneAdBlocker === true) {
             logger.info(`Ad Blocker detectado — Juego: ${juegoId}, IP: ${ip}`);
@@ -2020,7 +2037,7 @@ app.get("/items/user/:usuario", async (req, res) => {
 const LINKS_PERMITIDOS = ['mediafire.com', 'mega.nz', 'mega.co.nz', 'drive.google.com',
     'gofile.io', 'onedrive.live.com', 'icloud.com', 'proton.me', 'pcloud.com',
     'pixeldrain.com', '1fichier.com', 'qiwi.gg', 'krakenfiles.com', 'dropbox.com',
-    'github.com', 'github.io', 'sto.romsfast.com', 'clarodrive.com'];
+    'github.com', 'github.io', 'sto.romsfast.com', 'clarodrive.com', 'apkvision.org'];
 
 // Devuelve null si el enlace es válido o un mensaje de error si no.
 function errorLinkPublicacion(link, category) {
@@ -3969,7 +3986,8 @@ app.get('/seo/sitemap.xml', async (req, res) => {
                 url(`${SITIO}/live.html`, null, 'hourly', '0.8'),
                 // Publicaciones: su página estática (public/p/…), ya generada si tiene más de un día
                 ...items.map(j => url(new Date(j.createdAt || 0) < hace36h ? Seo.urlPagina({ id: String(j._id), title: j.title }) : `${SITIO}/biblioteca.html?id=${j._id}`, dia(j.updatedAt || j.createdAt), 'weekly', '0.7')),
-                ...[...autores].map(([u, f]) => url(`${SITIO}/perfil-publico.html?usuario=${encodeURIComponent(u)}`, dia(f), 'weekly', '0.5')),
+                // Perfiles: su página estática (public/u/…), generada en la misma acción diaria
+                ...[...autores].map(([u, f]) => url(Seo.usuarioValido(u) ? Seo.urlPerfil(u) : `${SITIO}/perfil-publico.html?usuario=${encodeURIComponent(u)}`, dia(f), 'weekly', '0.5')),
                 url(`${SITIO}/terminos_condiciones.html`, null, 'monthly', '0.2'),
                 url(`${SITIO}/politica-privacidad.html`, null, 'monthly', '0.2'),
             ].join('\n') + '\n</urlset>\n';
@@ -3989,6 +4007,28 @@ app.get('/seo/paginas.json', async (req, res) => {
         });
         res.set('Cache-Control', 'public, max-age=3600').json({ success: true, total: data.length, items: data });
     } catch (e) { logger.error(`[seo] paginas: ${e.message}`); res.status(500).json({ success: false }); }
+});
+
+// Datos para las páginas estáticas de perfiles (creadores con publicaciones aprobadas)
+app.get('/seo/perfiles.json', async (req, res) => {
+    try {
+        const data = await cacheado('seo:perfiles', 3600, async () => {
+            const grupos = await Juego.aggregate([
+                { $match: { status: 'aprobado', linkStatus: { $in: ['online', 'revision'] } } },
+                { $sort: { descargasEfectivas: -1 } },
+                { $group: { _id: '$usuario', publicaciones: { $sum: 1 }, descargas: { $sum: '$descargasEfectivas' },
+                    items: { $push: { id: { $toString: '$_id' }, title: '$title', image: '$image' } } } },
+                { $project: { publicaciones: 1, descargas: 1, items: { $slice: ['$items', 12] } } },
+                { $limit: 5000 },
+            ]);
+            const us = await Usuario.find({ usuario: { $in: grupos.map(g => g._id) } }).select('usuario bio avatar banner listaSeguidores suspendido').lean();
+            const m = new Map(us.map(u => [u.usuario, u]));
+            return grupos.filter(g => m.has(g._id) && !m.get(g._id).suspendido).map(g => { const u = m.get(g._id);
+                return { usuario: u.usuario, bio: String(u.bio || '').slice(0, 600), avatar: u.avatar || '', banner: u.banner || '', seguidores: (u.listaSeguidores || []).length,
+                    publicaciones: g.publicaciones, descargas: g.descargas || 0, items: g.items }; });
+        });
+        res.set('Cache-Control', 'public, max-age=3600').json({ success: true, total: data.length, perfiles: data });
+    } catch (e) { logger.error(`[seo] perfiles: ${e.message}`); res.status(500).json({ success: false }); }
 });
 
 // ========== MANEJO DE ERRORES ==========

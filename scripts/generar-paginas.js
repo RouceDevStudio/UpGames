@@ -26,4 +26,23 @@ const Seo = require('../modulos/seo');
     let borradas = 0;
     for (const f of fs.readdirSync(dir)) if (f.endsWith('.html') && !quedan.has(f)) { fs.unlinkSync(path.join(dir, f)); borradas++; }
     console.log(`Páginas: ${quedan.size} · borradas: ${borradas}`);
+
+    // Perfiles de creadores → public/u/<usuario>.html
+    const fuenteP = process.argv[3] || fuente.replace(/paginas\.json$/, 'perfiles.json');
+    let dp = null;
+    try { dp = /^https?:/.test(fuenteP) ? await (await fetch(fuenteP)).json() : JSON.parse(fs.readFileSync(fuenteP, 'utf8')); } catch (e) { console.warn('Perfiles: ' + e.message); }
+    if (dp?.success && Array.isArray(dp.perfiles)) {
+        const dirU = process.env.SEO_DIR_U || path.join(dir, '..', 'u');
+        fs.mkdirSync(dirU, { recursive: true });
+        const quedanU = new Set();
+        for (const p of dp.perfiles) {
+            if (!Seo.usuarioValido(p.usuario)) continue;
+            const f = `${p.usuario}.html`; quedanU.add(f);
+            const html = Seo.paginaPerfil(p), ruta = path.join(dirU, f);
+            if (!fs.existsSync(ruta) || fs.readFileSync(ruta, 'utf8') !== html) fs.writeFileSync(ruta, html);
+        }
+        let bu = 0;
+        for (const f of fs.readdirSync(dirU)) if (f.endsWith('.html') && !quedanU.has(f)) { fs.unlinkSync(path.join(dirU, f)); bu++; }
+        console.log(`Perfiles: ${quedanU.size} · borrados: ${bu}`);
+    }
 })().catch(e => { console.error(e.message); process.exit(1); });

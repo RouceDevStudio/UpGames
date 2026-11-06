@@ -88,4 +88,59 @@ ${esImg(it.image) ? `<img src="${esc(it.image.replace('/upload/', '/upload/w_960
 `;
 }
 
-module.exports = { SITIO, slug, archivo, urlPagina, pagina };
+// ── Perfiles de creadores: public/u/<usuario>.html ───────────────
+// perfil-publico.html arma todo en el navegador: WhatsApp, Facebook y Google veían
+// "Perfil de Usuario — UpGames". Esta página trae nombre, bio, foto y sus publicaciones.
+const usuarioValido = u => /^[a-z0-9_]{3,20}$/.test(String(u || ''));
+const urlPerfil = u => `${SITIO}/u/${u}.html`;
+const fmt = n => Number(n || 0).toLocaleString('es-CO');
+function paginaPerfil(p) {
+    const url = urlPerfil(p.usuario), app = `${SITIO}/perfil-publico.html?usuario=${encodeURIComponent(p.usuario)}`;
+    const bio = String(p.bio || '').replace(/\s+/g, ' ').trim();
+    const desc = (bio ? bio.slice(0, 120) + ' · ' : '') + `${fmt(p.publicaciones)} publicaciones y ${fmt(p.descargas)} descargas en UpGames. Juegos, mods y apps de @${p.usuario}.`;
+    const corta = desc.slice(0, 158) + (desc.length > 158 ? '…' : '');
+    const avatar = esImg(p.avatar) ? p.avatar.replace('/upload/', '/upload/w_400,h_400,c_fill,g_face,q_auto,f_jpg/') : '';
+    const og = esImg(p.banner) ? p.banner.replace('/upload/', '/upload/w_1200,h_630,c_fill,q_auto,f_jpg/') : avatar || `${SITIO}/og-cover.png`;
+    const ld = { '@context': 'https://schema.org', '@type': 'ProfilePage', url, mainEntity: { '@type': 'Person', name: '@' + p.usuario, alternateName: p.usuario, description: bio || undefined, image: avatar || undefined,
+        interactionStatistic: [{ '@type': 'InteractionCounter', interactionType: 'https://schema.org/FollowAction', userInteractionCount: p.seguidores || 0 }] } };
+    const json = o => JSON.stringify(o).replace(/</g, '\\u003c');
+    const items = (p.items || []).slice(0, 12);
+    return `<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>@${esc(p.usuario)} — Juegos, mods y apps | UpGames</title>
+<meta name="description" content="${esc(corta)}">
+<link rel="canonical" href="${esc(url)}">
+<meta property="og:type" content="profile"><meta property="og:site_name" content="UpGames"><meta property="profile:username" content="${esc(p.usuario)}">
+<meta property="og:title" content="@${esc(p.usuario)} en UpGames"><meta property="og:description" content="${esc(corta)}">
+<meta property="og:url" content="${esc(url)}"><meta property="og:image" content="${esc(og)}">
+<meta name="twitter:card" content="summary_large_image"><meta name="twitter:title" content="@${esc(p.usuario)} en UpGames"><meta name="twitter:image" content="${esc(og)}">
+<meta name="theme-color" content="#07080c"><link rel="icon" href="../icons/icon-96.png?v=2">
+<script type="application/ld+json">${json(ld)}</script>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#07080c;color:#e8eaf0;line-height:1.5}
+a{color:#32D583}.w{max-width:760px;margin:0 auto;padding:16px}.top{display:flex;justify-content:space-between;padding:6px 0 14px}
+.logo{font-weight:900;letter-spacing:2px;font-size:1.2rem;text-decoration:none;color:#fff}.logo span{color:#32D583}
+.cv{aspect-ratio:3/1;border-radius:18px;background:#141821 center/cover;-webkit-mask-image:linear-gradient(#000 50%,transparent);mask-image:linear-gradient(#000 50%,transparent)}
+.hd{display:flex;gap:14px;align-items:flex-end;margin-top:-46px;padding:0 12px}.av{width:92px;height:92px;border-radius:50%;border:4px solid #07080c;background:linear-gradient(135deg,#32D583,#5AC8FA);object-fit:cover}
+h1{margin:12px 0 4px;font-size:1.4rem}.st{display:flex;gap:18px;color:#c9ced8;font-size:.9rem;margin:8px 0}.bio{white-space:pre-line;color:#c9ced8}
+.btn{display:block;text-align:center;margin:16px 0;padding:14px;border-radius:14px;background:linear-gradient(135deg,#32D583,#5AC8FA);color:#06210f;font-weight:900;text-decoration:none}
+.g{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}.g a{position:relative;aspect-ratio:1;background:#141821;border-radius:8px;overflow:hidden;color:#fff;text-decoration:none;font-size:.72rem}
+.g img{width:100%;height:100%;object-fit:cover}.g span{position:absolute;inset:auto 0 0;padding:16px 6px 5px;background:linear-gradient(transparent,rgba(0,0,0,.8))}
+.pie{margin:26px 0 10px;color:#6c7180;font-size:.8rem;text-align:center}
+</style></head>
+<body><div class="w">
+<div class="top"><a class="logo" href="../biblioteca.html"><span>UP</span>GAMES</a><a href="../biblioteca.html">Explorar</a></div>
+<div class="cv"${esImg(p.banner) ? ` style="background-image:url('${esc(p.banner.replace('/upload/', '/upload/w_1200,q_auto,f_auto/'))}')"` : ''}></div>
+<div class="hd">${avatar ? `<img class="av" src="${esc(avatar)}" alt="@${esc(p.usuario)}" width="92" height="92">` : '<div class="av"></div>'}</div>
+<h1>@${esc(p.usuario)}</h1>
+<div class="st"><span><b>${fmt(p.publicaciones)}</b> publicaciones</span><span><b>${fmt(p.seguidores)}</b> seguidores</span><span><b>${fmt(p.descargas)}</b> descargas</span></div>
+${bio ? `<p class="bio">${esc(bio.slice(0, 600))}</p>` : ''}
+<a class="btn" href="${esc(app)}">Ver el perfil completo en UpGames</a>
+${items.length ? `<div class="g">${items.map(it => `<a href="${esc(urlPagina(it))}">${esImg(it.image) ? `<img src="${esc(it.image.replace('/upload/', '/upload/w_300,h_300,c_fill,q_auto,f_auto/'))}" alt="" loading="lazy">` : ''}<span>${esc(it.title)}</span></a>`).join('')}</div>` : ''}
+<p class="pie">UpGames · descargas, videos, lives, red social e IA en un solo lugar</p>
+</div></body></html>
+`;
+}
+
+module.exports = { SITIO, slug, archivo, urlPagina, pagina, usuarioValido, urlPerfil, paginaPerfil };

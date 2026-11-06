@@ -1258,11 +1258,11 @@ function openDetail(item) {
     const _puenteMediaEnc = encodeURIComponent(_puenteMedia);
     dlBtn.href = `puente.html?id=${item._id}&media=${_puenteMediaEnc}&title=${_puenteTitle}`;
     dlBtn.innerHTML = '<ion-icon name="cloud-download-outline"></ion-icon> OBTENER LINK';
-    dlBtn.onclick = function(e) {
+    dlBtn.onclick = async function(e) {
       marcarDescargada(item._id);
       if(ls === 'caido') {
         e.preventDefault();
-        if(confirm('⚠️ Este link está reportado como caído.\n¿Deseas intentar acceder de todas formas?')) {
+        if(await customConfirm({ icon: '⚠️', title: 'Enlace reportado como caído', msg: 'Otros usuarios dicen que este enlace ya no funciona. ¿Quieres intentarlo de todas formas?', okText: 'Intentar' })) {
           window.open(`puente.html?id=${item._id}&media=${_puenteMediaEnc}&title=${_puenteTitle}`, '_blank');
         }
       }
@@ -1986,7 +1986,7 @@ const PF_BANNED_VISUAL = ['crack','cracked','crackeado','crackeo','pirata','pira
   'gratis','free','gratuito','full','completo','complete','premium','pro','descargar','download'];
 const PF_ALLOWED_LINKS = ['mediafire.com','mega.nz','mega.co.nz','drive.google.com',
   'gofile.io','onedrive.live.com','icloud.com','proton.me','pcloud.com',
-  'pixeldrain.com','1fichier.com','qiwi.gg','krakenfiles.com','dropbox.com','github.com','github.io','sto.romsfast.com','clarodrive.com'];
+  'pixeldrain.com','1fichier.com','qiwi.gg','krakenfiles.com','dropbox.com','github.com','github.io','sto.romsfast.com','clarodrive.com','apkvision.org'];
 
 function pfAnalizarLink(url) {
   if(!url) return { ok: null };
@@ -2065,7 +2065,7 @@ async function pfpPlantilla(modo) {
   const ta = document.getElementById(I.desc); if (!ta) return;
   try { if (!_pfpPlantillas) _pfpPlantillas = (await (await fetch(`${API_URL}/items/plantillas`)).json()).plantillas || {}; } catch (_) { return toast('⚠️ No se pudo cargar la plantilla'); }
   const cat = document.getElementById(I.cat)?.value || 'Juego', tpl = _pfpPlantillas[cat] || _pfpPlantillas.Juego || '';
-  if (ta.value.trim() && !confirm('¿Reemplazar lo que ya escribiste por la plantilla?')) return;
+  if (ta.value.trim() && !(await customConfirm({ icon: '📋', title: '¿Usar la plantilla?', msg: 'Reemplazará lo que ya escribiste en la descripción.', okText: 'Reemplazar' }))) return;
   ta.value = tpl; ta.dispatchEvent(new Event('input', { bubbles: true })); ta.focus();
   const i = tpl.indexOf('• \n'); if (i >= 0) ta.setSelectionRange(i + 2, i + 2);   // cursor en el primer espacio por llenar
 }
@@ -2075,7 +2075,7 @@ async function pfpNexusDescribe(modo) {
   const title = (document.getElementById(I.title)?.value || '').trim();
   if (title.length < 3) return toast('✏️ Escribe primero el título');
   const tk = LS.get('token'); if (!tk) return ugPedirSesion('usar NEXUS');
-  if (ta.value.trim() && !confirm('NEXUS reemplazará lo que escribiste. ¿Continuar?')) return;
+  if (ta.value.trim() && !(await customConfirm({ icon: '✦', title: '¿Que NEXUS la escriba?', msg: 'NEXUS reemplazará lo que escribiste en la descripción.', okText: 'Continuar' }))) return;
   const extras = pfLeerExtras(document.getElementById(I.extras));
   b.disabled = true; const txt = b.textContent; b.textContent = '✦ Escribiendo…';
   try {
@@ -2550,7 +2550,7 @@ async function pfSubirVideo() {
   const thumbFinal = thumb || ugVideoThumb(vidUrl) || (ugEsVideoArchivo(vidUrl) ? '' : vidUrl);
 
   const token = LS.get('token');
-  if(!token) { alert('⚠️ Sesión expirada.'); location.href='./index.html'; return; }
+  if(!token) { toast('⚠️ Tu sesión expiró. Vuelve a entrar.'); setTimeout(() => { location.href='../index.html'; }, 1200); return; }
 
   const btn = document.getElementById('pf-subirVideoBtn');
   btn.textContent = 'Publicando...'; btn.disabled = true;
@@ -2636,7 +2636,7 @@ function pfPintarNexus(r, out) {
 }
 
 async function pfSubirJuego() {
-  if(!pfUser) return alert('Debes iniciar sesión.');
+  if(!pfUser) return toast('🔒 Debes iniciar sesión para publicar.');
   const ahora = Date.now();
   const ult = LS.get('ultima_publicacion');
   if(ult && ahora - parseInt(ult) < 30000) {
@@ -2689,7 +2689,7 @@ async function pfSubirJuego() {
   if(imagen && !esMediaValida(imagen)) return toast('⚠️ El enlace de imagen no parece válido. Usa una URL directa de imagen o video.');
 
   const token = LS.get('token');
-  if(!token) { alert('⚠️ Sesión expirada.'); location.href='./index.html'; return; }
+  if(!token) { toast('⚠️ Tu sesión expiró. Vuelve a entrar.'); setTimeout(() => { location.href='../index.html'; }, 1200); return; }
 
   const btn = document.getElementById('pf-subirBtn');
   // Nexus revisa rápido (sin IA) antes de enviar, salvo que ya lo hayas revisado con estos datos
@@ -2702,7 +2702,7 @@ async function pfSubirJuego() {
   }
   if(rev && rev.problemas > 0) {
     const lista = rev.hechos.filter(h => h.tipo === 'bad').map(h => '• ' + h.texto).join('\n');
-    if(!confirm(`Nexus encontró ${rev.problemas} problema(s) que harían que rechacen tu publicación:\n\n${lista}\n\n¿Publicar igualmente?`)) return;
+    if(!(await customConfirm({ icon: '✦', title: `Nexus encontró ${rev.problemas} problema(s)`, msg: `Podrían hacer que rechacen tu publicación:\n\n${lista}\n\n¿Publicar igualmente?`, okText: 'Publicar igual', okDanger: true }))) return;
   }
   btn.textContent = 'Enviando...'; btn.disabled = true;
   try {
@@ -2894,7 +2894,7 @@ async function pfEliminarVideo(id) {
   });
   if(!ok) return;
   const token = LS.get('token');
-  if(!token) { toast('⚠️ Sesión expirada'); location.href='./index.html'; return; }
+  if(!token) { toast('⚠️ Sesión expirada'); location.href='../index.html'; return; }
   try {
     const res = await fetch(`${PF_API}/items/${id}/video`, {
       method: 'DELETE',
@@ -2974,7 +2974,7 @@ async function pfSaveEditVideo() {
 async function pfEliminar(id) {
   if(!confirm('¿Eliminar este archivo de la nube?')) return;
   const token = LS.get('token');
-  if(!token) { alert('Sesión expirada'); location.href='./index.html'; return; }
+  if(!token) { toast('⚠️ Sesión expirada'); location.href='../index.html'; return; }
   try {
     const res = await fetch(`${PF_API}/items/${id}`,{
       method:'DELETE', headers:{'Authorization':`Bearer ${token}`}
