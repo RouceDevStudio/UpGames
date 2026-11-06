@@ -2110,7 +2110,7 @@ app.post("/items/add", [verificarToken, body('title').notEmpty().trim().isLength
 
         const errLink = errorLinkPublicacion(req.body.link, req.body.category);
         if (errLink) return res.status(400).json({ success: false, error: errLink });
-        // Contenido legal (Términos 02B): piratería evidente se bloquea; títulos comerciales van a revisión humana
+        // Filtro automático por palabras clave: piratería evidente se bloquea; títulos comerciales van a revisión humana
         const legal = ContenidoLegal.revisar(req.body, gameDetector);
         if (legal.bloquear) return res.status(400).json({ success: false, error: `No se puede publicar: ${legal.bloquear}. Revisa las normas de contenido.` });
         const modP = Moderacion.reglas(`${req.body.title} ${req.body.description || ''}`, 'publicacion');

@@ -1,6 +1,7 @@
 /**
  * Reglas de contenido legal en el SERVIDOR (antes solo existían en el navegador y se
- * podían saltar llamando a la API directamente). Ver Términos, sección 02B.
+ * podían saltar llamando a la API directamente). Es un filtro por palabras clave: no revisa
+ * el contenido de los archivos enlazados.
  *
  *  revisar(pub, { detectGame }) →
  *    { bloquear: 'motivo' }            no se publica (piratería evidente)
