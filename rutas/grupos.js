@@ -58,6 +58,7 @@ const MiembroSchema = new mongoose.Schema({
     rol:    { type: String, enum: ['dueno', 'admin', 'miembro'], default: 'miembro' },
     desde:  { type: Date, default: Date.now },
     leido:  { type: Date, default: Date.now },
+    mayor:  { type: Date, default: null },   // cuándo confirmó ser mayor de 18 (espacios +18)
 }, { _id: false });
 const GrupoSchema = new mongoose.Schema({
     nombre:      { type: String, required: true, maxlength: 50 },
@@ -215,7 +216,7 @@ function registrar(app, deps) {
             const etiquetas = (Array.isArray(req.body.etiquetas) ? req.body.etiquetas : []).filter(e => ETIQUETAS.includes(e)).slice(0, 4);
             const ahora = new Date();
             const g = await new Grupo({ nombre, descripcion, reglas: limpio(req.body.reglas, 1500), avatar, tipo, adultos, etiquetas, dueno: req.usuario,
-                miembros: [{ u: req.usuario, rol: 'dueno', desde: ahora, leido: ahora }], nMiembros: 1, codigo: nuevoCodigo(), creado: ahora, actividad: ahora }).save();
+                miembros: [{ u: req.usuario, rol: 'dueno', desde: ahora, leido: ahora, mayor: adultos ? ahora : null }], nMiembros: 1, codigo: nuevoCodigo(), creado: ahora, actividad: ahora }).save();
             await sistema(g, `@${req.usuario} creó ${tipo === 'comunidad' ? 'la comunidad' : 'el grupo'} «${nombre}»`);
             CeroTolerancia.vigilarImagen({ imagen: avatar, usuario: req.usuario, donde: `foto del grupo «${nombre}»`, ref: String(g._id), req, ocultar: () => Grupo.updateOne({ _id: g._id }, { $set: { avatar: '' } }) });
             ok(res, { grupo: vistaGrupo(g.toObject(), req.usuario) });
@@ -272,7 +273,7 @@ function registrar(app, deps) {
             if (await CeroTolerancia.restringido(req.usuario)) return err(res, 403, 'Tu cuenta está restringida mientras el equipo de seguridad revisa un reporte.');
             if ((await Grupo.countDocuments({ 'miembros.u': req.usuario })) >= MAX_GRUPOS_POR_USUARIO) return err(res, 400, `Puedes estar en ${MAX_GRUPOS_POR_USUARIO} grupos como máximo`);
             const ahora = new Date();
-            const r = await Grupo.updateOne({ _id: g._id, 'miembros.u': { $ne: req.usuario } }, { $push: { miembros: { u: req.usuario, rol: 'miembro', desde: ahora, leido: new Date(ahora - 1) } }, $inc: { nMiembros: 1 } });
+            const r = await Grupo.updateOne({ _id: g._id, 'miembros.u': { $ne: req.usuario } }, { $push: { miembros: { u: req.usuario, rol: 'miembro', desde: ahora, leido: new Date(ahora - 1), ...(g.adultos ? { mayor: ahora } : {}) } }, $inc: { nMiembros: 1 } });
             if (r.modifiedCount) await sistema(g, `@${req.usuario} se unió`);
             const g2 = await Grupo.findById(g._id).lean();
             ok(res, { grupo: vistaGrupo(g2, req.usuario) });
