@@ -77,8 +77,7 @@ html[data-tema="cyber"] body::after {
 /* Líneas de escaneo (capa superior, sutil) */
 html[data-tema="cyber"] .cb-scan {
   position: fixed; inset: 0; z-index: 9990; pointer-events: none;
-  background: repeating-linear-gradient(0deg, rgba(255,255,255,.028) 0 1px, transparent 1px 3px);
-  mix-blend-mode: overlay;
+  background: repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 3px);
 }
 html[data-tema="cyber"] .cb-scan::after {
   content: ''; position: absolute; left: 0; right: 0; height: 22vh; top: -22vh;

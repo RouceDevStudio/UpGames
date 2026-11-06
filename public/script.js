@@ -881,7 +881,7 @@ document.getElementById('buscador').addEventListener('input', function(e) {
     // Nexus ya respondió a esta misma frase (upgames-nexus-plus.js): no pisar sus resultados
     if (q && window.UG_NEXUS_Q === q) return;
     if(q) {
-      filteredItems = todosLosItems.filter(i=>
+      const res = todosLosItems.filter(i=>
         i.title.toLowerCase().includes(q) ||
         (i.description&&i.description.toLowerCase().includes(q)) ||
         i.usuario.toLowerCase().includes(q) ||
@@ -889,7 +889,8 @@ document.getElementById('buscador').addEventListener('input', function(e) {
         (i.tags&&i.tags.some(t=>t.toLowerCase().includes(q)))
       );
       // Frase sin coincidencias literales: Nexus la está interpretando, no mostrar "Sin resultados" mientras tanto
-      if (!filteredItems.length && q.split(/\s+/).length >= 3) return;
+      if (!res.length && q.split(/\s+/).length >= 3) return;
+      filteredItems = res;
     } else {
       filteredItems = activeCategory
         ? todosLosItems.filter(i=>i.category===activeCategory)

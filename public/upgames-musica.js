@@ -71,14 +71,22 @@
       (function paso(ts) { const k = Math.min(1, (ts - t0) / (seg * 1000)); audio.volume = ini + (v - ini) * k; if (k < 1) requestAnimationFrame(paso); })(t0);
     }
   }
-  async function play(seg = FUNDIDO_ENTRADA) {
-    if (silencio || document.hidden) return false;
+  // iOS/Safari exige que play() y resume() se llamen en el mismo instante del toque:
+  // por eso se llaman sin esperar nada antes.
+  function play(seg = FUNDIDO_ENTRADA) {
+    if (silencio || document.hidden) return Promise.resolve(false);
+    if (!audio.src) cargar(ses.t || 0);
+    audio.preload = 'auto';
     grafo();
-    try { if (ctx && ctx.state === 'suspended') await ctx.resume(); } catch (_) {}
     if (!gain) audio.volume = 0;
-    try { await audio.play(); } catch (_) { return false; }
-    sonando = true; rampa(objetivo(), seg); pintar();
-    return true;
+    let pr; try { pr = audio.play(); } catch (e) { return Promise.resolve(false); }
+    const rs = ctx && ctx.state !== 'running' ? ctx.resume().catch(() => {}) : null;
+    return Promise.all([pr, rs]).then(() => {
+      // Si el contexto de audio sigue suspendido (no hubo toque), sonaría en silencio: se espera al toque
+      if (ctx && ctx.state !== 'running') { audio.pause(); return false; }
+      sonando = true; rampa(objetivo(), seg); pintar();
+      return true;
+    }).catch(() => false);
   }
   function pausar(seg = FUNDIDO_SALIDA) {
     if (!sonando) return;
@@ -107,8 +115,8 @@
     ['pointerdown', 'keydown', 'touchend'].forEach(ev => addEventListener(ev, go, true));
   }
   function iniciar() {
+    if (silencio) { audio.preload = 'none'; pintar(); return; }   // silenciada: no se descarga nada
     cargar(ses.t || 0);
-    if (silencio) return;
     play().then(ok => { intentoHecho = true; if (!ok) alPrimerGesto(); });
   }
 
