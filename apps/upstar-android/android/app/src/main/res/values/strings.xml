@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">UPSTAR</string>
+    <string name="title_activity_main">UPSTAR</string>
+    <string name="package_name">games.upgames.upstar</string>
+    <string name="custom_url_scheme">games.upgames.upstar</string>
+</resources>

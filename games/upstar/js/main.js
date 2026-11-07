@@ -12,6 +12,7 @@ import { Controles } from './controles.js';
 const $ = (s) => document.querySelector(s);
 const q = new URLSearchParams(location.search);
 const movil = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+if (window.Capacitor) document.body.classList.add('app');   // dentro de la app no hace falta el enlace a la APK
 
 // ─── Render ──────────────────────────────────────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ canvas: $('#lienzo'), antialias: !movil, logarithmicDepthBuffer: true, powerPreference: 'high-performance' });

@@ -55,3 +55,6 @@ body.teclado #tactil { display: none !important; }
 #carga { position: fixed; inset: 0; z-index: 50; background: #07040f; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; transition: opacity .6s; }
 #carga.oculta { opacity: 0; pointer-events: none; }
 #carga small { color: var(--tenue); letter-spacing: 2px; }
+
+.apk { pointer-events: auto; color: var(--neon); font-size: 11px; font-weight: 800; text-decoration: none; border: 1px solid rgba(0,240,255,.4); padding: 3px 8px; align-self: flex-end; }
+body.app .apk { display: none; }

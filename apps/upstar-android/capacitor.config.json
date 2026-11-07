@@ -1,0 +1,11 @@
+{
+  "appId": "games.upgames.upstar",
+  "appName": "UPSTAR",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#07040f",
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  }
+}
