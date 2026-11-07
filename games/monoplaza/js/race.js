@@ -411,16 +411,27 @@ export class Sesion {
     const L = this.c.largo;
     for (const p of this.participantes) {
       const c = p.coche;
-      let rebufo = 0, sucio = 0;
+      // Estela de cada coche de delante: se abre con la distancia (≈1 m de semiancho junto al
+      // difusor, ≈4 m a 80 m) y se debilita. El rebufo (menos resistencia) llega lejos, con el
+      // máximo a unos 8-15 m; el aire sucio (menos carga) es fuerte de cerca y se va hacia los
+      // 40 m. Varios coches en fila suman su rebufo (trenes de DRS).
+      let sinRebufo = 1, sucio = 0;
       for (const o of this.participantes) {
-        if (o === p) continue;
+        if (o === p || o.coche.abandono && o.coche.velocidad < 5) continue;
         let ds = o.coche.proj.s - c.proj.s;
         if (ds < -L / 2) ds += L; else if (ds > L / 2) ds -= L;
-        if (ds <= 2 || ds > 70) continue;
+        if (ds <= 1.5 || ds > 90) continue;
         const dd = Math.abs(o.coche.proj.d - c.proj.d);
-        if (dd < 2.6) rebufo = Math.max(rebufo, (1 - ds / 70) * (1 - dd / 2.6));
-        if (dd < 3.5 && ds < 35) sucio = Math.max(sucio, (1 - ds / 35) * (1 - dd / 3.5));
+        const ancho = 1.0 + ds * 0.038;
+        const lat = Math.exp(-((dd / ancho) ** 2));
+        if (lat < 0.02) continue;
+        // la estela es proporcional a la presión dinámica del que va delante (lento = poca estela)
+        const fuerza = Math.min(1, (o.coche.velocidad / 60) ** 2);
+        const r = (ds < 8 ? 0.55 + 0.45 * ds / 8 : Math.exp(-(ds - 8) / 34)) * lat * fuerza;
+        sinRebufo *= 1 - r;
+        sucio = Math.max(sucio, Math.exp(-ds / 16) * lat * fuerza);
       }
+      const rebufo = Math.min(0.9, 1 - sinRebufo);
       c.rebufo = rebufo; c.aireSucio = sucio;
       // DRS
       let enZona = false;

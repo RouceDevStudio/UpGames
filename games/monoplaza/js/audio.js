@@ -279,6 +279,10 @@ export class Sonido {
     this.chirrido = lazo('bandpass', 1100, 7);
     this.bloqueo = lazo('bandpass', 1650, 9);
     this.viento = lazo('lowpass', 400, 0.5);
+    // aire: siseo suave y agudo que crece con la velocidad (el flujo sobre el casco y el halo) y
+    // golpeteo grave de la estela cuando vas detrás de otro coche
+    this.aireSuave = lazo('bandpass', 2400, 0.6);
+    this.estela = lazo('lowpass', 140, 1.2);
     this.grava = lazo('lowpass', 900, 0.7);
     this.rodadura = lazo('lowpass', 160, 0.8);
     this.raspado = lazo('bandpass', 3800, 1.5);        // fondo contra el asfalto (chispas)
@@ -496,7 +500,7 @@ export class Sonido {
   modoRepe(on) {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    for (const g of [this.chirrido.g, this.bloqueo.g, this.grava.g, this.gBord, this.raspado.g, this.gTurbo, this.gCaja, this.viento.g, this.rodadura.g, this.chirReal?.g].filter(Boolean))
+    for (const g of [this.chirrido.g, this.bloqueo.g, this.grava.g, this.gBord, this.raspado.g, this.gTurbo, this.gCaja, this.viento.g, this.aireSuave?.g, this.estela?.g, this.rodadura.g, this.chirReal?.g].filter(Boolean))
       g.gain.setTargetAtTime(0, t, 0.05);
     this.motor.salida.gain.setTargetAtTime(0, t, 0.05);
     for (const r of this.rivales) r.voz.salida.gain.setTargetAtTime(0, t, 0.05);
@@ -693,6 +697,15 @@ export class Sonido {
     this.raspado.g.gain.setTargetAtTime(clamp(car.fondoToca || 0, 0, 1) * clamp(v / 50, 0, 1) * 0.2, t, 0.02);
     this.viento.g.gain.setTargetAtTime(Math.min(0.32, (v / 95) ** 2 * 0.32) * (aBordo ? 1.2 : 0.7), t, 0.1);
     this.viento.f.frequency.setTargetAtTime(250 + v * 14, t, 0.1);
+    {
+      const aire = clamp((v / 90) ** 2, 0, 1), turb = clamp(car.turbulencia || 0, 0, 1);
+      this.aireSuave.g.gain.setTargetAtTime(aire * (aBordo ? 0.07 : 0.035) * (car.drsAbierto ? 1.3 : 1), t, 0.15);
+      this.aireSuave.f.frequency.setTargetAtTime(1600 + v * 18 + (car.drsAbierto ? 500 : 0), t, 0.2);
+      // en la estela el aire golpea a ráfagas irregulares
+      const rafaga = 0.55 + 0.45 * Math.sin(t * 13.1) * Math.sin(t * 5.7 + 2);
+      this.estela.g.gain.setTargetAtTime(turb * clamp(v / 50, 0, 1) * rafaga * (aBordo ? 0.28 : 0.12), t, 0.04);
+      this.estela.f.frequency.setTargetAtTime(90 + turb * 120, t, 0.1);
+    }
     this.rodadura.g.gain.setTargetAtTime(Math.min(0.2, v / 90 * 0.2), t, 0.1);
     // rivales cercanos situados en 3D
     const vCam = { x: Math.cos(car.psi) * v, z: Math.sin(car.psi) * v };

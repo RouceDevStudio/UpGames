@@ -57,6 +57,12 @@ Pensado primero para Android en horizontal: la información va en franjas finas 
 - **Radio con voz siempre**: todos los avisos del ingeniero tienen voz y subtítulo. En la app de Android usa el motor de voz del sistema (el WebView no trae síntesis de voz); en Ajustes hay un botón para probarla.
 - Rendimiento: coches lejanos sin piezas pequeñas y sombras solo de los cercanos.
 
+## Rendimiento
+
+- **Resolución dinámica**: con la calidad elegida, si los FPS bajan de 50 la resolución interna baja poco a poco (hasta el 70 %) y vuelve a subir cuando sobra margen; sombras, efectos y detalle se mantienen.
+- **Nivel de detalle más fino**: las piezas pequeñas de los rivales (tornillos, cintas del arnés, retrovisores…) se dejan de dibujar a más de 35 m, donde ocupan un par de píxeles, y no proyectan sombra; el piloto tampoco (va dentro de la cabina). Un rival a media distancia pasa de ~240 a ~110 llamadas de dibujo.
+- El desenfoque de velocidad y la distorsión por calor solo se calculan cuando se ven.
+
 ## Física (`js/physics/`)
 
 Todo corre a 300 Hz con paso fijo, independiente de los FPS.
@@ -66,7 +72,7 @@ Todo corre a 300 Hz con paso fijo, independiente de los FPS.
 | Neumáticos | Pacejka "Magic Formula" con deslizamiento combinado normalizado, sensibilidad a la carga, longitud de relajación, temperatura de superficie y carcasa, ventana térmica por compuesto, desgaste y presión |
 | Ruedas | Integración semi-implícita del giro de cada rueda (bloqueos y patinaje estables), inercia del motor reflejada según la marcha |
 | Chasis | Dinámica plana de 3 grados de libertad, transferencia de carga longitudinal y lateral (centros de balanceo, reparto de rigidez de las barras), cabeceo y balanceo amortiguados |
-| Aerodinámica | Carga y resistencia ∝ v², efecto suelo sensible a la altura y al cabeceo, contacto del fondo (chispas), DRS, rebufo, aire sucio y daño del alerón |
+| Aerodinámica | Carga y resistencia ∝ ½·ρ·v², con la densidad del aire según la temperatura y la altitud; efecto suelo sensible a la altura y al cabeceo, contacto del fondo (chispas), DRS y daño del alerón. Estela de cada coche que se abre con la distancia: rebufo (hasta −32 % de resistencia, máximo a 8-15 m, alcance de ~90 m y acumulable en trenes de DRS) y aire sucio (pierden carga sobre todo los alerones, el delantero más: subviraje; el fondo apenas, como en los coches de efecto suelo), con la carga temblando en la turbulencia |
 | Motor | V6 turbo con curva de par, limitador, freno motor, embrague automático de salida |
 | ERS | MGU-K de 120 kW, 4 MJ de batería, límites de despliegue y recuperación por vuelta, modos Normal, Adelantar y Recarga |
 | Transmisión | 8 marchas, tiempos de cambio, protección contra reducciones peligrosas, diferencial autoblocante con rampas de tracción y retención |

@@ -83,6 +83,8 @@ export class Monoplaza {
     this.mandos = { direccion: 0, acelerador: 0, freno: 0, drs: false, ersModo: 1, mezcla: 1, bb: 0, fm: 1, overtake: false };   // mezcla: 0 ahorro, 1 normal, 2 rica
     this.rebufo = 0;
     this.aireSucio = 0;
+    this.turbulencia = 0;      // estela de otro coche: la carga tiembla (sacudidas en el morro)
+    this.altitud = opciones.altitud ?? 0;   // m sobre el nivel del mar (aire menos denso en altura)
     this.drsPermitido = false;
     this.danoAleron = 0;
     this.eventos = [];
@@ -281,8 +283,17 @@ export class Monoplaza {
   get velocidad() { return Math.hypot(this.vx, this.vy); }
 
   // --- Aerodinámica ---------------------------------------------------------
+  /** Densidad del aire (kg/m³) con la temperatura y la altitud: un día de 40 °C o un circuito
+   *  a 2.200 m dan bastante menos carga y menos resistencia que uno fresco a nivel del mar. */
+  get densidadAire() {
+    const T = 273.15 + (this.tAmb ?? 20);
+    const p = 101325 * Math.pow(1 - 2.25577e-5 * (this.altitud || 0), 5.25588);
+    return p / (287.05 * T);
+  }
+
   _aero() {
     const rg = this.reglaje;
+    const RHO = this.densidadAire;
     let clDel = 1.50 + 0.07 * rg.aleronDel;
     let clTras = 2.15 + 0.10 * rg.aleronTras;
     let cdA = 0.80 + 0.03 * rg.aleronTras + 0.012 * rg.aleronDel;
@@ -299,9 +310,18 @@ export class Monoplaza {
     // fondo y pontones rotos: hasta un 30 % menos de carga y más resistencia
     clDel *= 1 - 0.22 * (this.dano.fondo || 0); clTras *= 1 - 0.30 * (this.dano.fondo || 0);
     cdA = cdA * this.ef.cd + 0.06 * this.dano.aleronTras + 0.03 * this.danoAleron + 0.05 * (this.dano.fondo || 0);
-    // aire sucio y rebufo
-    clDel *= 1 - 0.24 * this.aireSucio; clTras *= 1 - 0.14 * this.aireSucio;
-    cdA *= 1 - 0.28 * this.rebufo;
+    // aire sucio (estela de otro coche): con el efecto suelo la mayor parte de la carga la da el
+    // fondo, que la estela apenas toca; la sufren sobre todo los alerones (el delantero más, de
+    // ahí el subviraje al seguir a otro en curva). Además la estela es turbulenta: la carga
+    // tiembla y el morro da pequeñas sacudidas.
+    if (this.aireSucio > 0.001) {
+      const s = this.aireSucio;
+      const tiembla = 1 + 0.07 * s * Math.sin(this.reloj * 23.7) * Math.sin(this.reloj * 7.3 + 1.3);
+      clDel *= (1 - 0.30 * s) * tiembla; clTras *= 1 - 0.12 * s;
+    }
+    this.turbulencia = this.aireSucio;
+    // rebufo: dentro del cono de baja presión de detrás del otro coche hay menos resistencia
+    cdA *= 1 - 0.32 * this.rebufo;
     // viento: la aerodinámica trabaja con la velocidad del aire, no con la del coche
     const cs = Math.cos(this.psi), sn = Math.sin(this.psi), wv = this.viento;
     const vaL = this.vx - (wv ? wv.x * cs + wv.z * sn : 0);          // de cara: más carga y más resistencia
@@ -314,8 +334,8 @@ export class Monoplaza {
     const rebote = 1 + Math.sin(this.reloj * 2 * Math.PI * 3.2) * 0.06 * bajo * Math.max(0, Math.min(1, (vaL - 70) / 20));
     this.porpoising = (rebote - 1) * 10;
     const v = Math.max(0, vaL);
-    const q = 0.5 * RHO_AIRE * v * v;
-    this.carga.del = q * clDel * perdida * rebote; this.carga.tras = q * clTras * perdida * rebote; this.carga.drag = 0.5 * RHO_AIRE * cdA * vaL * Math.abs(vaL);
+    const q = 0.5 * RHO * v * v;
+    this.carga.del = q * clDel * perdida * rebote; this.carga.tras = q * clTras * perdida * rebote; this.carga.drag = 0.5 * RHO * cdA * vaL * Math.abs(vaL);
     this.carga.balance = clDel / (clDel + clTras);
   }
 
@@ -688,7 +708,7 @@ export class Monoplaza {
     fxT -= this.carga.drag;
     fxT -= m * G * pendCoche;
     // viento lateral: empuja el coche y lo gira (el centro de presión va detrás del de gravedad)
-    if (this.viento) { const fv = -0.5 * RHO_AIRE * 1.9 * this.vientoLat * Math.abs(this.vientoLat); fyT += fv; mzT += fv * -0.35; }
+    if (this.viento) { const fv = -0.5 * this.densidadAire * 1.9 * this.vientoLat * Math.abs(this.vientoLat); fyT += fv; mzT += fv * -0.35; }
     if (rozFondo > 0) fxT -= Math.sign(this.vx) * rozFondo;
     // --- Integración ------------------------------------------------------
     const axc = fxT / m, ayc = fyT / m;

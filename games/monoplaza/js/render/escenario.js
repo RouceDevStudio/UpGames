@@ -640,7 +640,7 @@ function focos(scene, c, calidad) {
   // mancha de luz: un círculo aditivo sobre la pista
   const cv = document.createElement('canvas'); cv.width = cv.height = 128;
   const x = cv.getContext('2d'); const gr = x.createRadialGradient(64, 64, 0, 64, 64, 64);
-  gr.addColorStop(0, 'rgba(255,244,220,0.55)'); gr.addColorStop(1, 'rgba(255,244,220,0)'); x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
+  gr.addColorStop(0, 'rgba(255,244,220,0.32)'); gr.addColorStop(1, 'rgba(255,244,220,0)'); x.fillStyle = gr; x.fillRect(0, 0, 128, 128);
   const texM = new THREE.CanvasTexture(cv);
   const geoM = new THREE.PlaneGeometry(1, 1); geoM.rotateX(-Math.PI / 2);
   const manchas = new THREE.InstancedMesh(geoM, new THREE.MeshBasicMaterial({ map: texM, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -6 }), n);
@@ -679,7 +679,8 @@ export function ponerHora(esc, scene, renderer, hora = 'dia') {
     // de noche la "luz del sol" son los focos: desde arriba, blanca y fuerte
     esc.sol = new THREE.Vector3(0.15, 1, 0.1).normalize();
     esc.luzSol.color.set(0xeaf0ff);
-    esc.base = { sol: 2.2, fogColor: new THREE.Color(0x0a1020), fogFar: 2600, exp: 1.0, hemi: 0.75 };
+    // (asfalto oscuro con charcos de luz de los focos, como en un GP nocturno de verdad)
+    esc.base = { sol: 1.45, fogColor: new THREE.Color(0x0a1020), fogFar: 2600, exp: 0.95, hemi: 0.38 };
     esc.nubes?.material.uniforms.color.value.set(0x1a2236); if (esc.nubes) esc.nubes.material.uniforms.opacidad.value = 0.35;
     esc.hemi.color.set(0x5a6a90); esc.hemi.groundColor.set(0x202018);
     scene.environmentIntensity = 0.35;

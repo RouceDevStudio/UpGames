@@ -161,6 +161,17 @@ let sesion = null, modelos = [], modeloFantasma = null, lineaIdeal = null;
 // para pruebas automáticas (?depurar): acceso a la sesión desde la consola
 if (new URLSearchParams(location.search).has("depurar")) window.apex = { get sesion() { return sesion; }, empezar: (...a) => empezar(...a), get escenario() { return escenario; }, scene: () => scene, THREE, get renderer() { return renderer; }, get camara() { return camara; }, get modelos() { return modelos; }, get gruas() { return gruas; }, get repe() { return repe; }, get grabadora() { return grabadora; } };
 let gruas = null, gestorBoxes = null, escombros = null, lluviaFx = null, camarasTV = null, barreras = null, comisarios = null, cocheSeg = null;
+// Modo tráiler (?trailer): el vídeo promocional se rueda con el propio juego (tools/trailer.js)
+if (new URLSearchParams(location.search).has('trailer')) {
+  window.apexTrailer = {
+    get sesion() { return sesion; }, get modelos() { return modelos; }, get escenario() { return escenario; }, get circuito() { return circuito; },
+    get camara() { return camara; }, get renderer() { return renderer; }, scene: () => scene, THREE, get efectos() { return efectos; },
+    cargarCircuito: (id) => cargarCircuito(id, true), aplicarHora: (h) => aplicarHora(h),
+    /** Carrera de exhibición: todos los coches los lleva la IA y no hay HUD. */
+    carrera(opc) { sesion = new Sesion(circuito, { modo: 'carrera', reglaje, ayudas: ayudasDe(), ...opc }); crearModelos(); ocultarTodo(); },
+  };
+  import('../tools/trailer.js').catch(e => console.error('tráiler', e));
+}
 let pilotosFuera = null, salidasPendientes = [], tAturdido = 0;
 let capaCamara = null;
 const _vSol = new THREE.Vector3();
@@ -411,7 +422,24 @@ function crearRenderer() {
 
 function pixelRatio() {
   const dpr = devicePixelRatio || 1;
-  return [Math.min(dpr, 1), Math.min(dpr, 1.3), Math.min(dpr, 1.6), Math.min(dpr, 2)][calidad];
+  return [Math.min(dpr, 1), Math.min(dpr, 1.3), Math.min(dpr, 1.6), Math.min(dpr, 2)][calidad] * escalaRes;
+}
+// Resolución dinámica (como en las consolas): con la calidad elegida, si los FPS caen por debajo
+// de 50 la resolución interna baja un poco (hasta el 70 %) y sube sola cuando sobra margen. Se
+// mantienen sombras, efectos y detalle; en pantallas de móvil de alta densidad apenas se nota.
+let escalaRes = 1, tResLento = 0, tResRapido = 0;
+function resolucionDinamica(fps) {
+  if (ajustes.resDinamica === false) return;
+  tResLento = fps < 50 ? tResLento + 1 : 0;
+  tResRapido = fps > 58 ? tResRapido + 1 : 0;
+  let nueva = escalaRes;
+  if (tResLento >= 2 && escalaRes > 0.7) { nueva = Math.max(0.7, escalaRes - 0.1); tResLento = 0; }
+  else if (tResRapido >= 5 && escalaRes < 1) { nueva = Math.min(1, escalaRes + 0.1); tResRapido = 0; }
+  if (nueva === escalaRes) return;
+  escalaRes = nueva;
+  renderer.setPixelRatio(pixelRatio());
+  composer?.setPixelRatio(pixelRatio());
+  redimensionar();
 }
 
 function configurarPost() {
@@ -618,6 +646,7 @@ function actualizarDesenfoque(v, dt) {
   const obj = activo ? Math.max(0, Math.min(1, (v * 3.6 - 180) / 150)) * 0.035 : 0;
   const u = pasoVelocidad.uniforms.fuerza;
   u.value += (obj - u.value) * Math.min(1, dt * 4);
+  pasoVelocidad.enabled = u.value > 0.0015;      // a pantalla completa cuesta: fuera cuando no se nota
 }
 
 function redimensionar() {
@@ -2004,6 +2033,7 @@ function bucle(ahora) {
   fpsAcum += dt; fpsN++;
   if (fpsAcum >= 1) {
     fpsMostrar = fpsN / fpsAcum;
+    if (jugando && !pausado) resolucionDinamica(fpsMostrar);
     if (ajustes.fps) $('#hFps').textContent = `${fpsMostrar.toFixed(0)} FPS · calidad ${['baja', 'media', 'alta', 'ultra'][calidad]}`;
     else $('#hFps').textContent = '';
     if (ajustes.calidad === 'auto' && jugando && !pausado) {
@@ -2969,7 +2999,8 @@ function prepararLod(m) {
     // detalle: piezas pequeñas; medio: piloto, bujes, discos y tapacubos (lejos solo quedan
     // carrocería, alerones y neumáticos: de ~104 mallas por coche a ~20)
     let piloto = false; for (let q = o; q && q !== m.raiz; q = q.parent) if (q.name === 'piloto') piloto = true;
-    if (r < 0.16) m._detalle.push(o);
+    if (r < 0.16) { m._detalle.push(o); o.userData.sinSombra = true; o.castShadow = false; }
+    else if (piloto) { o.userData.sinSombra = true; o.castShadow = false; }   // el piloto va dentro de la cabina, a la sombra
     else if (piloto || r < 0.36) m._medio.push(o);
   });
   m._nivel = 0; m._sombra = true;
@@ -2981,13 +3012,17 @@ function nivelDetalle() {
     // (se rehace cuando llega el piloto 3D, que se carga aparte)
     if (!m._mallas || m._conGLB !== !!m.piloto?.glb) { prepararLod(m); m._conGLB = !!m.piloto?.glb; }
     const d = vLod.copy(m.raiz.position).sub(cp).length();
-    const nivel = d > 130 ? 2 : d > 85 ? 1 : 0, sombra = d < dSombra;
+    // (las piezas pequeñas a más de ~35 m ocupan uno o dos píxeles en un móvil: no se notan y
+    // cada una es una llamada de dibujo; tu coche siempre con todo)
+    const yo = m === modelos[sesion?.participantes?.indexOf(sesion.jugador)];
+    const nivel = yo ? 0 : d > 110 ? 2 : d > 35 ? 1 : 0, sombra = d < dSombra;
     if (nivel !== m._nivel) {
       m._nivel = nivel;
       for (const o of m._detalle) o.visible = nivel === 0 && !o.userData.oculto;
       for (const o of m._medio) o.visible = nivel < 2 && !o.userData.oculto;
     }
-    if (sombra !== m._sombra) { m._sombra = sombra; for (const o of m._mallas) o.castShadow = sombra; }
+    // sombras: solo las piezas grandes (la sombra de un tornillo no se ve y duplica el coste)
+    if (sombra !== m._sombra) { m._sombra = sombra; for (const o of m._mallas) o.castShadow = sombra && !o.userData.sinSombra; }
   }
 }
 

@@ -846,7 +846,7 @@ body.tactil-on #hudDer { top: calc(42px + var(--sa-t)); }
 #tactil .menu-bt .aviso { position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; border-radius: 50%; background: #ffd23f; display: none; box-shadow: 0 0 6px #ffd23f; }
 #tactil .menu-bt.box .aviso { display: block; }
 .menu-rapido { position: absolute; top: calc(46px + var(--sa-t)); right: calc(8px + var(--sa-r)); display: flex; flex-direction: column; gap: 8px;
-  padding: 10px; border-radius: 12px; background: rgba(8,11,18,.86); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  padding: 10px; border-radius: 12px; background: rgba(8,11,18,.92);
   box-shadow: 0 10px 30px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.07); border-top: 2px solid var(--rojo);
   opacity: 0; transform: translateY(-6px) scale(.98); transform-origin: top right; pointer-events: none !important; transition: opacity .14s, transform .14s; max-height: calc(100vh - 56px); overflow-y: auto; }
 .menu-rapido.abierto { opacity: 1; transform: none; pointer-events: auto !important; }
