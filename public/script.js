@@ -1990,7 +1990,8 @@ const PF_BANNED_VISUAL = ['crack','cracked','crackeado','crackeo','pirata','pira
   'gratis','free','gratuito','full','completo','complete','premium','pro','descargar','download'];
 const PF_ALLOWED_LINKS = ['mediafire.com','mega.nz','mega.co.nz','drive.google.com',
   'gofile.io','onedrive.live.com','icloud.com','proton.me','pcloud.com',
-  'pixeldrain.com','1fichier.com','qiwi.gg','krakenfiles.com','dropbox.com','github.com','github.io','sto.romsfast.com','clarodrive.com'];
+  'pixeldrain.com','1fichier.com','qiwi.gg','krakenfiles.com','dropbox.com','github.com','github.io','sto.romsfast.com','clarodrive.com',
+  'upgames-production.up.railway.app'];
 
 function pfAnalizarLink(url) {
   if(!url) return { ok: null };
