@@ -3716,7 +3716,9 @@ app.post('/stories/:id/ver', verificarToken, async (req, res) => {
 // Salud para el monitor de caídas (.github/workflows/uptime.yml): 503 si la base no responde
 app.get('/salud', async (req, res) => {
     const db = mongoose.connection.readyState === 1 && await mongoose.connection.db.admin().ping().then(() => true).catch(() => false);
-    res.status(db ? 200 : 503).set('Cache-Control', 'no-store').json({ ok: db, db, uptime: Math.round(process.uptime()), hora: new Date().toISOString() });
+    res.status(db ? 200 : 503).set('Cache-Control', 'no-store').json({ ok: db, db, uptime: Math.round(process.uptime()), hora: new Date().toISOString(),
+        // commit desplegado: así se ve desde fuera si Railway está al día con main
+        version: (process.env.RAILWAY_GIT_COMMIT_SHA || process.env.UPGAMES_COMMIT || '').slice(0, 7) || null });
 });
 
 // Errores de JavaScript de los visitantes (public/upgames-errores.js)
