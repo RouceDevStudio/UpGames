@@ -40,6 +40,8 @@ const config = {
         'https://upgames.games',
         'https://www.upgames.games',
         'https://roucedevstudio.github.io',
+        // la cuenta de GitHub pasó de RouceDevStudio a UpgamesStudio: GitHub Pages cambia de dominio
+        'https://upgamesstudio.github.io',
         'http://localhost:3000',
         'http://localhost:5500',
         'http://127.0.0.1:5500',
