@@ -587,7 +587,8 @@ function actualizarOtros(dt) {
 
 // ─── Arranque ──────────────────────────────────────────────────────────────────────────────
 async function arrancar() {
-  if (await sincronizar()) { nave.cambiarModelo(); }
+  const nubeLista = await Promise.race([sincronizar(), new Promise(r => setTimeout(() => r(false), 4000))]);
+  if (nubeLista) nave.cambiarModelo();
   const sec = q.get('sector') ? q.get('sector').split(',').map(Number) : (E.sector || [0, 0, 0]);
   cargarSistema(sec.length === 3 && sec.every(Number.isFinite) ? sec : [0, 0, 0]);
   ctrl.ponerModo('nave');
@@ -598,5 +599,5 @@ async function arrancar() {
   // horizontal: en el móvil se pide pantalla completa y orientación horizontal al primer toque
   addEventListener('pointerdown', () => { if (!movil || document.fullscreenElement) return; document.documentElement.requestFullscreen?.().then(() => screen.orientation?.lock?.('landscape').catch(() => {})).catch(() => {}); }, { once: true });
 }
-arrancar();
+arrancar().catch(e => { console.error(e); $('#carga small').textContent = 'No se pudo iniciar: ' + (e.message || e) + ' · recarga la página'; });
 window.upstar = { nave, astro, get planetas() { return planetas; }, camara, renderer, scene, cargarSistema, E, J, combate, criaturas, galaxia, estacion: () => estacion, evento };

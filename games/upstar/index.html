@@ -75,6 +75,10 @@
 <div id="ficha"></div>
 <div id="girar"><div class="marca grande">UP<span>STAR</span></div><p>Gira el teléfono en horizontal 📱↻</p></div>
 <div id="carga"><div class="marca grande">UP<span>STAR</span></div><small>Generando el universo…</small></div>
+<script>
+  // si un módulo no carga (red, versión del navegador…), se dice en la pantalla de carga
+  addEventListener('error', (e) => { const s = document.querySelector('#carga small'); if (s && !document.querySelector('#carga.oculta')) s.textContent = 'Error al cargar: ' + (e.message || 'recurso') + ' · recarga'; }, true);
+</script>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>

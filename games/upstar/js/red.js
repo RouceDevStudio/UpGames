@@ -10,7 +10,8 @@ export const usuario = () => LS.get('apexgp.usuario') || LS.get('user_admin') ||
 
 async function api(ruta, opc = {}) {
   const t = token();
-  const r = await fetch(API + ruta, { method: opc.method || 'GET', headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: `Bearer ${t}` } : {}) }, body: opc.body ? JSON.stringify(opc.body) : undefined });
+  // (con tiempo máximo: una red lenta nunca deja el juego colgado)
+  const r = await fetch(API + ruta, { signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined, method: opc.method || 'GET', headers: { 'Content-Type': 'application/json', ...(t ? { Authorization: `Bearer ${t}` } : {}) }, body: opc.body ? JSON.stringify(opc.body) : undefined });
   const d = await r.json().catch(() => ({}));
   if (!r.ok || d.success === false) throw new Error(d.error || `Error ${r.status}`);
   return d;
