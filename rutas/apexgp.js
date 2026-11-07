@@ -161,7 +161,7 @@ function registrar(app, deps) {
             }
         });
     }
-    const RELEASES = 'https://github.com/RouceDevStudio/UpGames/releases/download';
+    const RELEASES = 'https://github.com/UpgamesStudio/UpGames/releases/download';
     servirApk('/apexgp/apk', `${RELEASES}/apex-gp-latest/APEX-GP.apk`, 'APEX-GP.apk');
     servirApk('/upstar/apk', `${RELEASES}/upstar-latest/UPSTAR.apk`, 'UPSTAR.apk');
 

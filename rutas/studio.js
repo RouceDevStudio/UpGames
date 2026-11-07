@@ -36,7 +36,7 @@ function registrar(app, { verificarToken, logger, gestor = crearGestor() }) {
   });
   // APK: se descarga de GitHub Releases y se sirve desde aquí (el enlace de GitHub cambia de dominio
   // y algunos navegadores móviles no siguen bien la redirección)
-  const APK_ORIGEN = 'https://github.com/RouceDevStudio/UpGames/releases/download/studio-latest/UpGames-Studio.apk';
+  const APK_ORIGEN = 'https://github.com/UpgamesStudio/UpGames/releases/download/studio-latest/UpGames-Studio.apk';
   let apk = { buf: null, t: 0, cargando: null };
   async function cargarApk() {
     if (apk.buf && Date.now() - apk.t < 10 * 60e3) return apk.buf;
