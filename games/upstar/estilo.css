@@ -1,0 +1,57 @@
+:root { --neon: #00f0ff; --rosa: #ff2e88; --violeta: #7b2ff7; --texto: #eaf6ff; --tenue: rgba(234,246,255,.55); --panel: rgba(8,5,20,.55);
+  --sa-l: env(safe-area-inset-left, 0px); --sa-r: env(safe-area-inset-right, 0px); --sa-t: env(safe-area-inset-top, 0px); --sa-b: env(safe-area-inset-bottom, 0px); }
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: #07040f; color: var(--texto); font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; user-select: none; -webkit-user-select: none; touch-action: none; }
+#lienzo { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+.marca { font-weight: 900; font-style: italic; letter-spacing: 2px; font-size: 18px; text-shadow: 0 0 12px rgba(0,240,255,.6); }
+.marca span { color: var(--rosa); text-shadow: 0 0 12px rgba(255,46,136,.7); }
+.marca.grande { font-size: 44px; }
+.tenue { color: var(--tenue); font-size: 11px; }
+
+#hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; font-variant-numeric: tabular-nums; }
+.arriba-izq { position: absolute; top: calc(10px + var(--sa-t)); left: calc(12px + var(--sa-l)); display: flex; flex-direction: column; gap: 2px; font-size: 13px; font-weight: 700; }
+.arriba-der { position: absolute; top: calc(10px + var(--sa-t)); right: calc(12px + var(--sa-r)); text-align: right; font-size: 12px; display: flex; flex-direction: column; gap: 3px; }
+#planeta b { color: var(--neon); }
+.abajo { position: absolute; left: 50%; bottom: calc(10px + var(--sa-b)); transform: translateX(-50%); display: flex; gap: 14px; align-items: center; padding: 6px 14px;
+  background: linear-gradient(90deg, rgba(255,46,136,.15), var(--panel) 30%, var(--panel) 70%, rgba(0,240,255,.15)); border-top: 1px solid rgba(0,240,255,.35); clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 100%, 0 100%); }
+.dato { display: flex; flex-direction: column; align-items: center; min-width: 84px; }
+.dato small { font-size: 8px; letter-spacing: 2px; color: var(--tenue); }
+.dato b { font-size: 17px; font-weight: 900; }
+.estado { font-size: 10px; font-weight: 900; letter-spacing: 2px; padding: 3px 8px; border: 1px solid var(--neon); color: var(--neon); }
+.estado.atmosfera { border-color: #ffd23f; color: #ffd23f; }
+.estado.aterrizada { border-color: #39ff88; color: #39ff88; }
+.estado.pulso { border-color: var(--rosa); color: #fff; background: var(--rosa); box-shadow: 0 0 14px var(--rosa); }
+.empuje { width: 90px; height: 6px; background: rgba(255,255,255,.1); }
+.empuje i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--neon), var(--rosa)); box-shadow: 0 0 8px var(--neon); }
+.ayuda-teclas { position: absolute; bottom: calc(64px + var(--sa-b)); left: 50%; transform: translateX(-50%); font-size: 10px; color: var(--tenue); white-space: nowrap; }
+#aviso { position: absolute; top: 22%; left: 50%; transform: translateX(-50%); text-align: center; font-size: clamp(18px, 4vw, 30px); font-weight: 900; font-style: italic; letter-spacing: 3px; opacity: 0; transition: opacity .4s; text-shadow: 0 0 18px rgba(0,240,255,.7); }
+#aviso.visible { opacity: 1; }
+#aviso small { display: block; font-size: 45%; font-style: normal; letter-spacing: 1px; color: var(--tenue); font-weight: 600; }
+
+#etiquetas { position: fixed; inset: 0; pointer-events: none; z-index: 4; }
+.etq { position: absolute; left: 0; top: 0; display: flex; flex-direction: column; align-items: center; margin: -42px 0 0 -60px; width: 120px; font-size: 11px; }
+.etq::after { content: ''; width: 9px; height: 9px; border: 1.5px solid var(--neon); transform: rotate(45deg); margin-top: 3px; box-shadow: 0 0 6px var(--neon); }
+.etq b { color: #fff; letter-spacing: 1px; text-shadow: 0 0 6px #000; }
+.etq small { color: var(--neon); font-size: 9px; }
+.etq span { color: var(--tenue); font-size: 10px; }
+
+#tactil { position: fixed; inset: 0; z-index: 6; pointer-events: none; display: none; }
+@media (pointer: coarse) { #tactil { display: block; } .ayuda-teclas { display: none; } }
+body.teclado #tactil { display: none !important; }
+#tactil > * { pointer-events: auto; }
+#palanca { position: absolute; left: calc(18px + var(--sa-l)); bottom: calc(18px + var(--sa-b)); width: 150px; height: 150px; border-radius: 50%; border: 1.5px solid rgba(0,240,255,.35); background: radial-gradient(rgba(0,240,255,.08), transparent 70%); display: flex; align-items: center; justify-content: center; }
+#palanca i { width: 56px; height: 56px; border-radius: 50%; background: rgba(0,240,255,.25); border: 2px solid var(--neon); box-shadow: 0 0 12px rgba(0,240,255,.5); }
+#acelerador { position: absolute; right: calc(18px + var(--sa-r)); bottom: calc(18px + var(--sa-b)); width: 56px; height: 46vh; border: 1.5px solid rgba(255,46,136,.5); display: flex; flex-direction: column-reverse; align-items: stretch; }
+#acelerador i { display: block; height: 0; background: linear-gradient(0deg, var(--rosa), var(--neon)); opacity: .75; }
+#acelerador span { position: absolute; top: -16px; left: 0; right: 0; text-align: center; font-size: 8px; letter-spacing: 1.5px; color: var(--tenue); }
+.bt { position: absolute; width: 64px; height: 64px; border-radius: 50%; border: 2px solid var(--neon); background: rgba(8,5,20,.6); color: var(--texto); font: 900 10px system-ui; letter-spacing: 1px; }
+.bt.on { background: var(--neon); color: #001; box-shadow: 0 0 16px var(--neon); }
+#bTurbo { right: calc(90px + var(--sa-r)); bottom: calc(24px + var(--sa-b)); }
+#bPulso { right: calc(90px + var(--sa-r)); bottom: calc(100px + var(--sa-b)); border-color: var(--rosa); }
+.bt.peq { width: 52px; height: 30px; border-radius: 6px; font-size: 9px; }
+#bCam { right: calc(12px + var(--sa-r)); top: calc(64px + var(--sa-t)); }
+#bSaltar { right: calc(70px + var(--sa-r)); top: calc(64px + var(--sa-t)); border-color: var(--rosa); }
+
+#carga { position: fixed; inset: 0; z-index: 50; background: #07040f; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; transition: opacity .6s; }
+#carga.oculta { opacity: 0; pointer-events: none; }
+#carga small { color: var(--tenue); letter-spacing: 2px; }

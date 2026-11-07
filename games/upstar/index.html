@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#07040f">
+<title>UPSTAR · prototipo</title>
+<link rel="stylesheet" href="estilo.css">
+<script type="importmap">{ "imports": { "three": "../monoplaza/lib/three.module.min.js", "three/addons/": "../monoplaza/lib/addons/" } }</script>
+</head>
+<body>
+<canvas id="lienzo"></canvas>
+<div id="etiquetas"></div>
+
+<div id="hud">
+  <div class="arriba-izq">
+    <div class="marca">UP<span>STAR</span></div>
+    <div id="sistema">Sistema</div>
+    <div id="sector" class="tenue">Sector 0 · 0 · 0</div>
+  </div>
+  <div class="arriba-der">
+    <div id="planeta"></div>
+    <div id="fps" class="tenue"></div>
+  </div>
+  <div class="abajo">
+    <div id="estado" class="estado">ESPACIO</div>
+    <div class="dato"><small>VELOCIDAD</small><b id="vel">0</b></div>
+    <div class="dato"><small>ALTITUD</small><b id="alt">—</b></div>
+    <div class="empuje"><i id="acelBar"></i></div>
+  </div>
+  <div class="ayuda-teclas">W/S empuje · ↑↓ morro · A/D giro · Q/E alabeo · Mayús turbo · Espacio pulso · C cámara · J saltar de sistema</div>
+  <div id="aviso"></div>
+</div>
+
+<div id="tactil">
+  <div id="palanca"><i></i></div>
+  <div id="acelerador"><i></i><span>EMPUJE</span></div>
+  <button id="bTurbo" class="bt">TURBO</button>
+  <button id="bPulso" class="bt">PULSO</button>
+  <button id="bCam" class="bt peq">CAM</button>
+  <button id="bSaltar" class="bt peq">SALTO</button>
+</div>
+
+<div id="carga"><div class="marca grande">UP<span>STAR</span></div><small>Generando el universo…</small></div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
