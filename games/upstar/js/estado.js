@@ -18,6 +18,7 @@ export const E = (() => { try { return { ...NUEVA(), ...JSON.parse(localStorage.
 
 let tNube = 0;
 export function guardar(forzarNube = false) {
+  if (window.__upstarBorrando) return;
   E.t = Date.now();
   try { localStorage.setItem(CLAVE, JSON.stringify(E)); } catch { /* sin espacio */ }
   if (token() && (forzarNube || Date.now() - tNube > 60000)) { tNube = Date.now(); nube.guardar(JSON.stringify(E)).catch(() => {}); }

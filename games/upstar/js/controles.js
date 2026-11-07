@@ -8,6 +8,9 @@
 // F subir a la nave / interactuar. Siempre: R escanear, J salto, M mapa, I inventario, C cámara,
 // T visión térmica.
 
+import { AJ } from './ajustes.js';
+const iy = () => AJ.invertirY ? -1 : 1;
+
 export class Controles {
   constructor() {
     this.modo = 'nave';
@@ -36,8 +39,8 @@ export class Controles {
     addEventListener('mouseup', (e) => { if (e.button === 0) this.fuego = false; });
     addEventListener('mousemove', (e) => {
       if (document.pointerLockElement !== lienzo) return;
-      if (this.modo === 'nave') { this.raton.x = Math.max(-1, Math.min(1, this.raton.x + e.movementX * 0.004)); this.raton.y = Math.max(-1, Math.min(1, this.raton.y + e.movementY * 0.004)); }
-      else { this.mirar.x += e.movementX * 0.0035; this.mirar.y -= e.movementY * 0.003; }
+      if (this.modo === 'nave') { this.raton.x = Math.max(-1, Math.min(1, this.raton.x + e.movementX * 0.004 * AJ.sens)); this.raton.y = Math.max(-1, Math.min(1, this.raton.y + e.movementY * 0.004 * AJ.sens * iy())); }
+      else { this.mirar.x += e.movementX * 0.0035 * AJ.sens; this.mirar.y -= e.movementY * 0.003 * AJ.sens * iy(); }
     });
     addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') { document.body.classList.remove('teclado'); document.body.classList.add('tocando'); } }, true);
     this._tactil();
@@ -66,7 +69,7 @@ export class Controles {
     // a pie: arrastrar en la mitad derecha mueve la cámara
     const mz = $('mirarZona'); let im = null, lx = 0, ly = 0;
     mz.addEventListener('pointerdown', (e) => { im = e.pointerId; lx = e.clientX; ly = e.clientY; mz.setPointerCapture(im); });
-    mz.addEventListener('pointermove', (e) => { if (e.pointerId !== im) return; this.mirar.x += (e.clientX - lx) * 0.006; this.mirar.y -= (e.clientY - ly) * 0.005; lx = e.clientX; ly = e.clientY; });
+    mz.addEventListener('pointermove', (e) => { if (e.pointerId !== im) return; this.mirar.x += (e.clientX - lx) * 0.006 * AJ.sens; this.mirar.y -= (e.clientY - ly) * 0.005 * AJ.sens * iy(); lx = e.clientX; ly = e.clientY; });
     const finM = (e) => { if (e.pointerId === im) im = null; }; mz.addEventListener('pointerup', finM); mz.addEventListener('pointercancel', finM);
     // botones mantenidos
     for (const [b, k] of [['bFuego', '_fuegoT'], ['bTurbo', '_turbo'], ['bPulso', '_pulso'], ['bSaltar', '_jet'], ['bHerr', '_fuegoT']]) {
@@ -89,7 +92,7 @@ export class Controles {
     this.raton.x *= Math.exp(-dt * 1.6); this.raton.y *= Math.exp(-dt * 1.6);
     const m = {
       acelerador: this.acel,
-      cabeceo: (k('ArrowDown') - k('ArrowUp')) || this.palanca.y || this.raton.y,
+      cabeceo: ((k('ArrowDown') - k('ArrowUp')) || this.palanca.y * iy() || this.raton.y),
       guinada: (k('KeyD') + k('ArrowRight') - k('KeyA') - k('ArrowLeft')) || this.palanca.x * 0.9 || this.raton.x,
       alabeo: k('KeyE') - k('KeyQ'),
       turbo: !!(t.has('ShiftLeft') || t.has('ShiftRight') || this._turbo),

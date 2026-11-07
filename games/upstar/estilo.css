@@ -140,3 +140,33 @@ body.teclado #tactil > *:not(.accion) { display: none !important; }
 #carga.oculta { opacity: 0; pointer-events: none; }
 #carga small { color: var(--tenue); letter-spacing: 2px; }
 @media (max-height: 420px) { .abajo { gap: 8px; padding: 4px 10px; } .dato { min-width: 58px; } .dato b { font-size: 13px; } .barra i { width: 46px; } #acelerador { height: 46vh; } #palanca { width: 130px; height: 130px; } }
+
+/* ─── Tutorial ─── */
+#tuto { position: fixed; top: calc(8px + env(safe-area-inset-top, 0px)); left: 50%; transform: translate(-50%, -12px); width: min(380px, calc(100vw - 32px)); z-index: 15; background: rgba(8,5,20,.8); border: 1px solid rgba(0,240,255,.45); box-shadow: 0 0 24px rgba(0,240,255,.18); padding: 8px 12px 10px; opacity: 0; pointer-events: none; transition: opacity .35s, transform .35s, border-color .3s; }
+#tuto.visible { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+#tuto .tt { display: flex; align-items: baseline; gap: 8px; }
+#tuto .tt small { font-size: 9px; letter-spacing: 2px; color: var(--neon); }
+#tuto .tt b { font-size: 14px; letter-spacing: 1px; }
+#tuto .tt button { margin-left: auto; background: none; border: 0; color: var(--tenue); font: 700 16px system-ui; cursor: pointer; padding: 0 4px; }
+#tuto p { font-size: 11.5px; line-height: 1.4; margin: 4px 0 6px; color: var(--texto); }
+#tuto p b { color: var(--amarillo); }
+#tuto .prog { height: 3px; background: rgba(255,255,255,.1); }
+#tuto .prog i { display: block; height: 100%; background: var(--neon); transition: width .5s; }
+#tuto .bts { display: flex; justify-content: flex-end; gap: 6px; margin-top: 7px; }
+#tuto .bts button { background: rgba(0,240,255,.08); border: 1px solid rgba(0,240,255,.35); color: var(--texto); padding: 4px 9px; font: 700 11px system-ui; cursor: pointer; }
+#tuto .bts button[data-t="saltar"] { color: var(--tenue); border-color: rgba(255,255,255,.15); }
+#tuto.ok { border-color: var(--verde); box-shadow: 0 0 28px rgba(57,255,136,.35); }
+#tuto.ok .tt b::after { content: '  ✓'; color: var(--verde); }
+#tuto.min p, #tuto.min .bts { display: none; }
+#tuto.fin { border-color: var(--amarillo); }
+@media (max-height: 430px) { #tuto { width: min(330px, calc(100vw - 32px)); padding: 6px 10px 8px; } #tuto p { font-size: 10.5px; } #tuto .bts { margin-top: 5px; } }
+
+/* ─── Ajustes ─── */
+#panel .ajuste { display: flex; align-items: center; gap: 10px; font-size: 12px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,.05); }
+#panel .ajuste span { flex: 1; }
+#panel .ajuste input[type=range] { width: 42%; accent-color: var(--neon); }
+#panel .ajuste input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--neon); }
+#panel .ajuste b { width: 52px; text-align: right; color: var(--neon); }
+#panel .bts-aj { display: flex; flex-wrap: wrap; gap: 6px; }
+#panel button.peligro { border-color: rgba(255,59,59,.6); color: #ffb0b0; }
+body.sin-ayuda .ayuda-teclas, body.sin-fps #fps { display: none !important; }

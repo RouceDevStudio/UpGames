@@ -22,7 +22,7 @@ function modeloAstronauta(color = '#e8ecf5', luz = '#00f0ff') {
   return g;
 }
 
-const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _m = new THREE.Matrix4();
+const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Vector3(), _m = new THREE.Matrix4(), _o = new THREE.Vector3(), _q = new THREE.Quaternion();
 
 export class Astronauta {
   constructor(scene, E) {
@@ -61,14 +61,19 @@ export class Astronauta {
     else if (this.suelo) E.jetpack = Math.min(100, E.jetpack + dt * 30);
     this.vVert -= g * dt;
     this.pos.addScaledVector(this.up, this.vVert * dt);
-    const hS = pl.suelo(this.pos, _v), r = this.pos.distanceTo(c), alt = r - pl.R - hS;
+    const hS = pl.suelo(this.pos, _s), r = this.pos.distanceTo(c), alt = r - pl.R - hS;
     if (alt <= 0) { this.pos.addScaledVector(this.up, -alt); if (this.vVert < -16) this.golpe = (-this.vVert - 16) * 2; this.vVert = 0; this.suelo = true; this.saltos = 0; }
     else if (alt > 0.15) this.suelo = false;
     this.altitud = alt;
     // modelo: de pie sobre el suelo, mirando hacia donde camina (o a la cámara si está quieto)
-    const mira = l > 0.05 ? mov : this.adelante;
-    _m.lookAt(new THREE.Vector3(), mira, this.up);
-    this.modelo.quaternion.slerp(new THREE.Quaternion().setFromRotationMatrix(_m), Math.min(1, dt * 10));
+    // dirección a la que mira: siempre tangente al suelo (si no, el modelo se tumba)
+    const mira = _c.copy(l > 0.05 ? mov : this.adelante).projectOnPlane(this.up);
+    if (mira.lengthSq() < 1e-6) mira.copy(this.adelante);
+    mira.normalize();
+    _m.lookAt(_o.set(0, 0, 0), mira, this.up);
+    _q.setFromRotationMatrix(_m);
+    if (this.modelo.quaternion.dot(_q) < 0) _q.set(-_q.x, -_q.y, -_q.z, -_q.w);
+    this.modelo.quaternion.slerp(_q, Math.min(1, dt * 10));
     this.modelo.position.copy(this.pos);
     this.fase += dt * this.velPlano * 1.6;
     const a = Math.sin(this.fase) * Math.min(1, this.velPlano / 4) * 0.7, ud = this.modelo.userData;
@@ -79,10 +84,9 @@ export class Astronauta {
 
   /** Cámara en tercera persona detrás del astronauta. */
   camara(cam, dt) {
-    const atras = _v.copy(this.adelante).multiplyScalar(-4.6 * Math.cos(this.camPitch));
-    const obj = _w.copy(this.pos).addScaledVector(this.up, 1.8 + 4.6 * Math.sin(this.camPitch)).sub(atras.negate());
-    obj.copy(this.pos).addScaledVector(this.up, 1.8 + 4.6 * Math.sin(this.camPitch)).addScaledVector(this.adelante, -4.6 * Math.cos(this.camPitch));
-    cam.position.lerp(obj, Math.min(1, dt * 12));
+    const d = 4.6 * (this.distCam || 1);
+    const obj = _w.copy(this.pos).addScaledVector(this.up, 1.8 + d * Math.sin(this.camPitch)).addScaledVector(this.adelante, -d * Math.cos(this.camPitch));
+    if (cam.position.distanceTo(obj) > 30) cam.position.copy(obj); else cam.position.lerp(obj, Math.min(1, dt * 12));
     cam.up.copy(this.up);
     cam.lookAt(_v.copy(this.pos).addScaledVector(this.up, 1.5).addScaledVector(this.adelante, 3));
   }

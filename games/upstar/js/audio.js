@@ -1,6 +1,7 @@
 // Sonido generado por código (sin archivos): motor de la nave, viento de la atmósfera, música
 // ambiental distinta en cada planeta (acordes a partir de su semilla) y efectos.
 import { azar } from './ruido.js';
+import { AJ } from './ajustes.js';
 
 export class Audio {
   constructor() { this.ctx = null; }
@@ -8,7 +9,7 @@ export class Audio {
     if (this.ctx) { this.ctx.resume?.(); return; }
     const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
     const c = this.ctx = new C();
-    this.maestro = c.createGain(); this.maestro.gain.value = 0.7; this.maestro.connect(c.destination);
+    this.maestro = c.createGain(); this.maestro.gain.value = AJ.vol; this.maestro.connect(c.destination);
     // ruido blanco compartido
     const b = c.createBuffer(1, c.sampleRate * 2, c.sampleRate), d = b.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -40,7 +41,8 @@ export class Audio {
     // música: acordes lentos con la semilla del planeta (o del espacio)
     const sem = dentro ? semillaPlaneta : 1;
     if (sem !== this.semMusica) { this.semMusica = sem; this.escala = this._escala(sem); }
-    this.musicaG.gain.setTargetAtTime(0.18, t, 2);
+    this.musicaG.gain.setTargetAtTime(0.18 * AJ.musica, t, 2);
+    this.maestro.gain.setTargetAtTime(AJ.vol, t, 0.1);
     this.tNota -= dt;
     if (this.tNota <= 0) { this.tNota = 3.5 + Math.random() * 3; this._acorde(); }
   }

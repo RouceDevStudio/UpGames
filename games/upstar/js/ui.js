@@ -6,6 +6,7 @@ import { dibujarMapa, COSTE_SECTOR } from './mapa.js';
 import { hash, azar } from './ruido.js';
 import { nombre, expedicionSemana } from './universo.js';
 import { token } from './red.js';
+import { AJ, CAMPOS, guardarAjustes, restablecerAjustes } from './ajustes.js';
 
 const $ = (s) => document.querySelector(s);
 export const RECURSOS = { cristal: { n: 'Cristal de neón', c: '#00f0ff', precio: 18 }, ferrita: { n: 'Ferrita', c: '#ffb347', precio: 10 }, carbono: { n: 'Carbono', c: '#7dff6b', precio: 6 }, plasma: { n: 'Célula de plasma', c: '#ff2e88', precio: 60 } };
@@ -32,8 +33,8 @@ export const HISTORIA = [
   { t: 'Continuará…', d: 'La Señal ya no es ruido: es una voz. Dice tu nombre. (El siguiente capítulo llegará en una actualización.)', ok: () => false },
 ];
 
-let audio = null, alCambiarNave = null, alPlantarBase = null, juego = null;
-export function iniciarUI(opc) { ({ audio, alCambiarNave, alPlantarBase, juego } = opc); }
+let audio = null, alCambiarNave = null, alPlantarBase = null, juego = null, tutorial = null;
+export function iniciarUI(opc) { ({ audio, alCambiarNave, alPlantarBase, juego, tutorial } = opc); }
 
 function panel(titulo, pestanas, activa, alCerrar) {
   const p = $('#panel'); p.classList.add('visible');
@@ -49,7 +50,7 @@ const pagar = (c) => { for (const [r, n] of Object.entries(c)) anadir(r, -n); };
 // ─── Menú del jugador ────────────────────────────────────────────────────────────────────
 export function abrirMenu(pest = 'mapa') {
   juego.enMenu = true;
-  const p = panel('MENÚ', [['mapa', 'Mapa'], ['inv', 'Inventario'], ['bit', 'Bitácora'], ['cuenta', 'Cuenta']], pest);
+  const p = panel('MENÚ', [['mapa', 'Mapa'], ['inv', 'Inventario'], ['bit', 'Bitácora'], ['ajustes', 'Ajustes'], ['cuenta', 'Cuenta']], pest);
   p.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { audio.boton(); abrirMenu(b.dataset.p); });
   const c = p.querySelector('.cuerpo');
   if (pest === 'mapa') {
@@ -87,6 +88,28 @@ export function abrirMenu(pest = 'mapa') {
     c.innerHTML = `<div class="col"><h4>La Señal</h4>${HISTORIA.slice(0, E.historia.paso + 1).map((h, k) => `<div class="nota ${k < E.historia.paso ? 'hecha' : ''}"><b>${k < E.historia.paso ? '✓ ' : '▸ '}${h.t}</b><small>${h.d}</small></div>`).join('')}</div>
       <div class="col"><h4>Descubrimientos (${Object.keys(E.descubiertos).length})</h4>${desc.map(([, d]) => `<div class="fila"><span>${d.tipo === 'planeta' ? '🪐' : d.tipo === 'criatura' ? '🦎' : '🏛️'} ${d.nombre}</span><small>${d.por ? 'por @' + d.por : ''}</small></div>`).join('') || '<p class="tenue">Escanea planetas, criaturas y ruinas.</p>'}
       <h4>Récords de anillos</h4>${Object.entries(E.records).map(([s, t]) => `<div class="fila">Sector ${s}<b>${t.toFixed(2)} s</b></div>`).join('') || '<p class="tenue">Cruza el anillo verde junto a la estación para empezar una carrera.</p>'}</div>`;
+  } else if (pest === 'ajustes') {
+    const filas = CAMPOS.map(([k, n, tipo, mn, mx, paso, f]) => !n ? `<h4>${k}</h4>` : tipo === 'b'
+      ? `<label class="ajuste"><span>${n}</span><input type="checkbox" data-a="${k}" ${AJ[k] ? 'checked' : ''}></label>`
+      : `<label class="ajuste"><span>${n}</span><input type="range" data-a="${k}" min="${mn}" max="${mx}" step="${paso}" value="${AJ[k]}"><b>${f(AJ[k])}</b></label>`).join('');
+    const corte = filas.indexOf('<h4>Sonido');
+    c.innerHTML = `<div class="col">${filas.slice(0, corte)}</div><div class="col">${filas.slice(corte)}
+      <h4>Partida</h4>
+      <div class="bts-aj"><button data-x="tuto">${tutorial?.hecho ? 'Repetir tutorial' : 'Reiniciar tutorial'}</button><button data-x="def">Ajustes por defecto</button><button data-x="borrar" class="peligro">Borrar partida local</button></div>
+      <p class="tenue">Los ajustes se guardan en este dispositivo.</p></div>`;
+    c.querySelectorAll('[data-a]').forEach(i => i.oninput = () => {
+      const k = i.dataset.a, campo = CAMPOS.find(x => x[0] === k);
+      AJ[k] = i.type === 'checkbox' ? i.checked : Number(i.value);
+      if (campo[6]) i.nextElementSibling.textContent = campo[6](AJ[k]);
+      guardarAjustes();
+    });
+    c.querySelector('[data-x="tuto"]').onclick = () => { audio.boton(); tutorial?.reiniciar(); cerrarPanel(); };
+    c.querySelector('[data-x="def"]').onclick = () => { audio.boton(); restablecerAjustes(); abrirMenu('ajustes'); };
+    c.querySelector('[data-x="borrar"]').onclick = () => {
+      if (!confirm('¿Borrar la partida guardada en este dispositivo? Perderás nave, inventario y créditos locales (si tienes sesión iniciada, la copia de la nube se mantiene).')) return;
+      try { localStorage.removeItem('upstar.partida.v1'); localStorage.removeItem('upstar.tutorial.v1'); } catch { /* nada */ }
+      window.__upstarBorrando = true; location.reload();
+    };
   } else if (pest === 'cuenta') {
     c.innerHTML = `<div class="col"><h4>Cuenta de UpGames</h4>${token() ? '<p>Sesión iniciada: tu partida se guarda en la nube, tus descubrimientos llevan tu nombre y te ven los demás jugadores.</p>' : '<p>Inicia sesión en <a href="https://upgames.games" target="_blank">upgames.games</a> para guardar en la nube, registrar descubrimientos y jugar online.</p>'}
       <p class="tenue">Jugadores en tu sector: ${juego.online?.otros.size || 0}${juego.online?.conectado ? '' : ' (sin conexión)'}</p></div>

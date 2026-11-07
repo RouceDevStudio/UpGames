@@ -9,10 +9,11 @@ import * as THREE from 'three';
 import { crearRelieve } from './universo.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { hash, azar } from './ruido.js';
+import { AJ } from './ajustes.js';
 
 const N = 16;                      // cuadrados por lado de cada trozo
 const MAX_PROF = 10;               // profundidad máxima del árbol (trozos de ~10-20 m)
-const DIVIDIR = 2.3;               // se divide cuando la cámara está a menos de tamaño × DIVIDIR (más alto = más distancia de detalle)
+// distancia de detalle: un trozo se divide cuando la cámara está a menos de tamaño × AJ.detalle (2.3 por defecto, ajustable en el menú)
 
 // ─── Hilos de trabajo compartidos por todos los planetas ────────────────────────────────────────
 const hilos = [], cola = [], pendientes = new Map();
@@ -303,7 +304,7 @@ export class Planeta {
     if (!n.listo) this._pedir(n);
     const d = n.centro.distanceTo(this._cam);
     // por detrás del horizonte no hace falta detalle
-    const quiere = n.prof < MAX_PROF && d < n.tamMundo * DIVIDIR && dist < this.R * 6;
+    const quiere = n.prof < MAX_PROF && d < n.tamMundo * AJ.detalle && dist < this.R * 6;
     if (quiere) {
       if (!n.hijos) {
         const h = n.tam / 2;

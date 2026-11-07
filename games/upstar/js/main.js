@@ -17,6 +17,8 @@ import { Galaxia, COSTE_SECTOR } from './mapa.js';
 import { Audio } from './audio.js';
 import { E, guardar, sincronizar, anadir, capacidad, cargaTotal } from './estado.js';
 import { nube, token, usuario, Online } from './red.js';
+import { AJ, aplicarAjustes, alCambiarAjustes } from './ajustes.js';
+import { Tutorial } from './tutorial.js';
 import { iniciarUI, abrirMenu, abrirEstacion, cerrarPanel, hackeo, ficha, HISTORIA } from './ui.js';
 
 const $ = (s) => document.querySelector(s);
@@ -27,7 +29,7 @@ if (window.Capacitor) document.body.classList.add('app');
 // ─── Render ──────────────────────────────────────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ canvas: $('#lienzo'), antialias: !movil, logarithmicDepthBuffer: true, powerPreference: 'high-performance' });
 let escalaRes = 1;
-const dpr = () => Math.min(devicePixelRatio || 1, movil ? 1.5 : 2) * escalaRes;
+const dpr = () => Math.min(devicePixelRatio || 1, movil ? 1.5 : 2) * escalaRes * AJ.res;
 renderer.setPixelRatio(dpr()); renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
@@ -73,7 +75,11 @@ let nave = new Nave(scene, E);
 const J = { sector: null, destino: null, enMenu: false, online, desatracar: () => desatracar() };
 let sis = null, planetas = [], estacion = null, modo = 'nave', modoCam = 0;
 const sinDano = { t: 99 };
-iniciarUI({ audio, juego: J, alCambiarNave: () => nave.cambiarModelo(), alPlantarBase: () => plantarBase() });
+const tuto = new Tutorial();
+tuto.alOk = () => audio.boton(); tuto.alFin = () => { audio.descubrir(); E.creditos += 200; aviso('TUTORIAL COMPLETADO', '+200 créditos', 3); guardar(); };
+alCambiarAjustes(() => { renderer.setPixelRatio(dpr()); });
+aplicarAjustes();
+iniciarUI({ audio, juego: J, tutorial: tuto, alCambiarNave: () => nave.cambiarModelo(), alPlantarBase: () => plantarBase() });
 
 // ─── Sistemas estelares ─────────────────────────────────────────────────────────────────────
 let bases = [];
@@ -170,6 +176,7 @@ let destruida = 0;
 function danar(n) {
   if (modo === 'atracado' || destruida) return;
   sinDano.t = 0;
+  if (AJ.vibrar && movil && n > 3) navigator.vibrate?.(Math.min(220, 30 + n * 6));
   $('#danoFlash').style.opacity = Math.min(1, 0.3 + n / 25); setTimeout(() => { $('#danoFlash').style.opacity = 0; }, 180);
   if (modo === 'pie') { E.traje = Math.max(0, E.traje - n * (E.implantes.pielBlindada ? 0.5 : 1)); if (E.traje <= 0) morirPie(); return; }
   let r = n;
@@ -240,7 +247,7 @@ function intentarSalto() {
 // ─── Escáner y descubrimientos ────────────────────────────────────────────────────────────────
 let marcas = [], onda = null;
 function escanear() {
-  audio.iniciar(); audio.escaner();
+  audio.iniciar(); audio.escaner(); J.nEscaneos = (J.nEscaneos || 0) + 1;
   const centro = modo === 'pie' ? astro.pos : nave.pos, radio = (modo === 'pie' ? 180 : 900) * (E.implantes.escanerPlus ? 2 : 1);
   onda = { t: 0, centro: centro.clone(), radio };
   const pl = cercano(centro), clave = J.sector.join(',');
@@ -381,18 +388,24 @@ function terminalCerca() {
 }
 
 // ─── Cámara ─────────────────────────────────────────────────────────────────────────────────
-const camPos = new THREE.Vector3(); let sacudida = 0;
+const camPos = new THREE.Vector3(), camQ = new THREE.Quaternion(); let sacudida = 0, camEstira = 0, camIni = false;
 function moverCamara(dt) {
-  if (modo === 'pie') { astro.camara(camara, dt); camara.fov += (70 - camara.fov) * Math.min(1, dt * 3); camara.updateProjectionMatrix(); nave.raiz.visible = !destruida; return; }
-  const off = modoCam === 0 ? _v.set(0, 3.4, 14) : _v.set(0, 0.55, -1.1);
-  const obj = off.applyQuaternion(nave.quat).add(nave.pos);
-  if (modoCam === 0) camPos.lerp(obj, 1 - Math.exp(-dt * 10)); else camPos.copy(obj);
-  if (camPos.distanceTo(nave.pos) > 120) camPos.copy(obj);
+  if (modo === 'pie') { astro.distCam = AJ.distCam; astro.camara(camara, dt); camara.fov += (AJ.fov + 5 - camara.fov) * Math.min(1, dt * 3); camara.updateProjectionMatrix(); nave.raiz.visible = !destruida; camIni = false; return; }
+  // Cámara rígida respecto a la nave: SOLO la rotación se suaviza (slerp). Antes la posición se
+  // retrasaba con un lerp, y a mucha velocidad la nave se alejaba de la imagen y la cámara
+  // «saltaba» cada fotograma (parpadeo). Ahora la nave queda siempre en el mismo sitio de la pantalla.
+  if (!camIni || modoCam === 1) { camQ.copy(nave.quat); camIni = true; }
+  else { if (camQ.dot(nave.quat) < 0) camQ.set(-camQ.x, -camQ.y, -camQ.z, -camQ.w); camQ.slerp(nave.quat, 1 - Math.exp(-dt * 9)).normalize(); }
+  camEstira += (Math.min(1, Math.max(0, nave.vf) / 900) + (nave.pulso || galaxia.salto ? 0.6 : 0) - camEstira) * Math.min(1, dt * 2);
+  const k = AJ.distCam;
+  const off = modoCam === 0 ? _v.set(0, 3.4 * k, (14 + camEstira * 4) * k) : _v.set(0, 0.55, -1.1);
+  camPos.copy(off.applyQuaternion(modoCam === 0 ? camQ : nave.quat)).add(nave.pos);
   camara.position.copy(camPos);
   if (sacudida > 0) { camara.position.x += (Math.random() - 0.5) * sacudida; camara.position.y += (Math.random() - 0.5) * sacudida; sacudida *= Math.exp(-dt * 6); }
-  camara.up.set(0, 1, 0).applyQuaternion(nave.quat);
-  camara.lookAt(_w.copy(nave.delante()).multiplyScalar(modoCam === 0 ? 40 : 100).add(nave.pos).addScaledVector(camara.up, modoCam === 0 ? 1.5 : 0));
-  const fov = 64 + Math.min(14, Math.max(0, nave.vf) / 40) + (nave.pulso || galaxia.salto ? 18 : 0) + (nave.turbo ? 6 : 0);
+  const qv = modoCam === 0 ? camQ : nave.quat;
+  camara.up.set(0, 1, 0).applyQuaternion(qv);
+  camara.lookAt(_w.set(0, 0, -1).applyQuaternion(qv).multiplyScalar(modoCam === 0 ? 40 : 100).add(nave.pos).addScaledVector(camara.up, modoCam === 0 ? 1.5 * k : 0));
+  const fov = AJ.fov - 1 + Math.min(14, Math.max(0, nave.vf) / 40) + (nave.pulso || galaxia.salto ? 18 : 0) + (nave.turbo ? 6 : 0);
   camara.fov += (fov - camara.fov) * Math.min(1, dt * 3); camara.updateProjectionMatrix();
   nave.raiz.visible = modoCam === 0 && !destruida && modo !== 'atracado';
 }
@@ -458,6 +471,11 @@ function bucle(ahora) {
     if (jet && Math.random() < dt * 30) part.emitir(astro.pos.clone().addScaledVector(astro.up, 0.6), astro.up.clone().multiplyScalar(-6), new THREE.Color('#00f0ff'), 0.4, 0.4, 2);
     E.traje = Math.max(0, E.traje - dt * 0.15);
   }
+
+  // ── tutorial ──
+  tuto.actualizar({ dt, modo, acel: ctrl.acel, giro: modo === 'nave' && !J.enMenu ? Math.min(1, Math.abs(m.cabeceo) + Math.abs(m.guinada) + Math.abs(m.alabeo)) : 0,
+    rapido: modo === 'nave' && (m.turbo || m.pulso), fuego: modo === 'nave' && m.fuego && !J.enMenu, escaneos: J.nEscaneos || 0,
+    atm: amb.atm, estado: nave.estado, carga: cargaTotal(), destino: !!J.destino, salto: !!galaxia.salto });
 
   // ── mundo ──
   const enEspacio = modo === 'nave' && amb.atm === 0 && !galaxia.salto;
@@ -550,17 +568,21 @@ function evento(e) {
   }
 }
 
+const envolver = (a) => ((a + 80) % 160 + 160) % 160 - 80;
 function actualizarPolvo(amb) {
   const g = polvo.geometry.attributes.position, p = g.array, b = polvo.userData.base, c = camara.position;
   const v = modo === 'nave' ? nave.vel : _v.set(0, 0, 0), sp = v.length();
   polvo.visible = modo === 'nave' && sp > 4 && !galaxia.salto;
   if (!polvo.visible) return;
   const largo = Math.min(14, sp * 0.03), dir = _w.copy(v).normalize();
-  polvo.material.opacity = Math.min(0.6, sp / 200) * (amb.atm > 0 ? 0.6 : 1);
+  // a velocidades enormes las motas cruzan el cubo en un fotograma: se desvanecen
+  polvo.material.opacity = Math.min(0.6, sp / 200) * (amb.atm > 0 ? 0.6 : 1) * Math.max(0, Math.min(1, 1 - (sp - 1500) / 2500));
   for (let i = 0; i < b.length; i += 3) {
     // las motas están quietas en el mundo: al moverte pasan a tu lado (se nota avance y retroceso)
     let x = b[i] - c.x, y = b[i + 1] - c.y, z = b[i + 2] - c.z;
-    if (Math.abs(x) > 80 || Math.abs(y) > 80 || Math.abs(z) > 80) { x = (Math.random() - 0.5) * 160; y = (Math.random() - 0.5) * 160; z = (Math.random() - 0.5) * 160; b[i] = c.x + x + dir.x * 60; b[i + 1] = c.y + y + dir.y * 60; b[i + 2] = c.z + z + dir.z * 60; }
+    // envolver en un cubo de 160 m alrededor de la cámara (sin reaparecer al azar: a mucha
+    // velocidad el azar hacía que las motas parpadearan)
+    if (Math.abs(x) > 80 || Math.abs(y) > 80 || Math.abs(z) > 80) { x = envolver(x); y = envolver(y); z = envolver(z); b[i] = c.x + x; b[i + 1] = c.y + y; b[i + 2] = c.z + z; }
     const j = i * 2;
     p[j] = b[i]; p[j + 1] = b[i + 1]; p[j + 2] = b[i + 2];
     p[j + 3] = b[i] - dir.x * largo; p[j + 4] = b[i + 1] - dir.y * largo; p[j + 5] = b[i + 2] - dir.z * largo;
@@ -595,7 +617,7 @@ async function arrancar() {
   online.conectar(usuario() ? '@' + usuario() : 'Viajero');
   requestAnimationFrame(bucle);
   $('#carga').classList.add('oculta');
-  setTimeout(() => aviso('BIENVENIDO A UPSTAR', 'Acelerador: W/S o la barra derecha · F para atracar en la estación', 5), 600);
+  if (tuto.hecho) setTimeout(() => aviso('BIENVENIDO A UPSTAR', 'Acelerador: W/S o la barra derecha · F para atracar en la estación', 5), 600);
   // horizontal: en el móvil se pide pantalla completa y orientación horizontal al primer toque
   addEventListener('pointerdown', () => { if (!movil || document.fullscreenElement) return; document.documentElement.requestFullscreen?.().then(() => screen.orientation?.lock?.('landscape').catch(() => {})).catch(() => {}); }, { once: true });
 }
