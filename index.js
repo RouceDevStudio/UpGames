@@ -4071,6 +4071,9 @@ const live = require('./rutas/live').registrar(app, server, {
 require('./rutas/apexgp').registrar(app, { verificarToken, Usuario, LiveTx: live.LiveTx, io: live.io, logger, JWT_SECRET, estaSuspendido: u => adminPanel.estaSuspendido(u) });
 // UpGames Studio: IA en la nube (fotos → modelo 3D completo con TRELLIS; necesita HF_TOKEN)
 require('./rutas/studio').registrar(app, { verificarToken, logger });
+
+// UPSTAR (games/upstar): descubrimientos, bases, partida en la nube y jugadores en el sector (Socket.IO /upstar)
+require('./rutas/upstar').registrar(app, { verificarToken, io: live.io, logger, JWT_SECRET, estaSuspendido: u => adminPanel.estaSuspendido(u) });
 // Acceso directo: saltarse la página puente solo con Premium (ya no se vende por publicación)
 const mercadoPago = require('./modulos/mercadopago').crear();
 const accesoDirecto = require('./rutas/accesoDirecto').registrar(app, { verificarToken, Juego, Usuario, LiveTx: live.LiveTx, logger });

@@ -4,44 +4,76 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#07040f">
-<title>UPSTAR · prototipo</title>
+<meta name="screen-orientation" content="landscape">
+<title>UPSTAR</title>
 <link rel="stylesheet" href="estilo.css">
 <script type="importmap">{ "imports": { "three": "../monoplaza/lib/three.module.min.js", "three/addons/": "../monoplaza/lib/addons/" } }</script>
 </head>
-<body>
+<body class="modo-nave">
 <canvas id="lienzo"></canvas>
 <div id="etiquetas"></div>
+<div id="danoFlash"></div>
 
 <div id="hud">
   <div class="arriba-izq">
     <div class="marca">UP<span>STAR</span></div>
     <div id="sistema">Sistema</div>
     <div id="sector" class="tenue">Sector 0 · 0 · 0</div>
+    <div id="faccion" class="tenue"></div>
+    <div id="mision" class="tenue"></div>
   </div>
   <div class="arriba-der">
     <div id="planeta"></div>
+    <div id="clima" class="tenue"></div>
     <div id="fps" class="tenue"></div>
     <a id="lnkApk" class="apk" href="https://upgames-production.up.railway.app/upstar/apk">📲 APK Android</a>
   </div>
+  <!-- mira (morro) y vector de velocidad (hacia dónde te mueves de verdad) -->
+  <div id="mira"></div>
+  <div id="vector"></div>
+  <div id="alerta"></div>
   <div class="abajo">
+    <div class="solo-nave acel-hud"><small>ACELERADOR</small><div class="medidor"><i id="acelBar"></i><s></s></div><b id="acelTxt">0 %</b></div>
     <div id="estado" class="estado">ESPACIO</div>
     <div class="dato"><small>VELOCIDAD</small><b id="vel">0</b></div>
     <div class="dato"><small>ALTITUD</small><b id="alt">—</b></div>
-    <div class="empuje"><i id="acelBar"></i></div>
+    <div class="dato solo-nave"><small>VERTICAL</small><b id="vvert">—</b></div>
+    <div class="barras">
+      <div class="barra solo-nave"><small>CASCO</small><i><b id="bCasco"></b></i></div>
+      <div class="barra solo-nave"><small>ESCUDO</small><i><b id="bEscudo"></b></i></div>
+      <div class="barra solo-nave"><small>COMBUST.</small><i><b id="bComb"></b></i></div>
+      <div class="barra solo-pie"><small>TRAJE</small><i><b id="bTraje"></b></i></div>
+      <div class="barra solo-pie"><small>JETPACK</small><i><b id="bJet"></b></i></div>
+    </div>
   </div>
-  <div class="ayuda-teclas">W/S empuje · ↑↓ morro · A/D giro · Q/E alabeo · Mayús turbo · Espacio pulso · C cámara · J saltar de sistema</div>
+  <div id="carreraHud"></div>
+  <div class="ayuda-teclas solo-nave">Clic: capturar ratón · W/S acelerador · X parar · ratón/flechas dirección · Q/E alabeo · Mayús turbo · Espacio pulso · clic/K disparar · L aterrizar · F bajar · R escanear · J salto · M mapa · I inventario</div>
+  <div class="ayuda-teclas solo-pie">WASD andar · ratón mirar · Espacio saltar/jetpack · Mayús correr · clic minar · F subir/hackear · R escanear · I fabricar (base)</div>
   <div id="aviso"></div>
 </div>
 
 <div id="tactil">
+  <div id="mirarZona" class="solo-pie"></div>
   <div id="palanca"><i></i></div>
-  <div id="acelerador"><i></i><span>EMPUJE</span></div>
-  <button id="bTurbo" class="bt">TURBO</button>
-  <button id="bPulso" class="bt">PULSO</button>
-  <button id="bCam" class="bt peq">CAM</button>
-  <button id="bSaltar" class="bt peq">SALTO</button>
+  <div id="acelerador" class="solo-nave"><span class="t1">AVANCE</span><i></i><s></s><span class="t2">REVERSA</span></div>
+  <button id="bFuego" class="bt solo-nave">FUEGO</button>
+  <button id="bTurbo" class="bt solo-nave">TURBO</button>
+  <button id="bPulso" class="bt solo-nave">PULSO</button>
+  <button id="bSaltar" class="bt solo-pie">SALTO</button>
+  <button id="bHerr" class="bt solo-pie">MINAR</button>
+  <button id="bAccion" class="bt accion"></button>
+  <div class="sup">
+    <button id="bEscanear" class="bt peq">ESCÁNER</button>
+    <button id="bSalto" class="bt peq solo-nave">SALTO</button>
+    <button id="bCam" class="bt peq">CAM</button>
+    <button id="bMenu" class="bt peq">MENÚ</button>
+  </div>
 </div>
 
+<div id="panel"></div>
+<div id="hack"></div>
+<div id="ficha"></div>
+<div id="girar"><div class="marca grande">UP<span>STAR</span></div><p>Gira el teléfono en horizontal 📱↻</p></div>
 <div id="carga"><div class="marca grande">UP<span>STAR</span></div><small>Generando el universo…</small></div>
 <script type="module" src="js/main.js"></script>
 </body>

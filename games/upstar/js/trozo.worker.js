@@ -69,6 +69,7 @@ onmessage = (e) => {
   let fl = null;
   if (flora) {
     const r = azar(hash(p.semilla, cara, Math.round(u0 * 1e6), Math.round(v0 * 1e6)));
+    // (en los desiertos y volcanes hay menos vida y más roca)
     const lista = [];
     const n = Math.floor(flora * (0.5 + r()));
     for (let q = 0; q < n; q++) {
@@ -77,7 +78,8 @@ onmessage = (e) => {
       const h = altura(d[0], d[1], d[2]);
       if (p.agua && h < p.nivelMar * p.amplitud + 1) continue;
       const rr = R + h;
-      lista.push(d[0] * rr - c[0], d[1] * rr - c[1], d[2] * rr - c[2], d[0], d[1], d[2], 0.6 + r() * 1.8, r());
+      const tipo = r() < 0.45 ? 0 : r() < 0.6 ? 1 : 2;     // 0 cristal · 1 roca · 2 planta
+      lista.push(d[0] * rr - c[0], d[1] * rr - c[1], d[2] * rr - c[2], d[0], d[1], d[2], 0.6 + r() * 1.8, r(), tipo);
     }
     fl = new Float32Array(lista);
   }

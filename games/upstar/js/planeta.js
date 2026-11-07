@@ -7,10 +7,12 @@
 
 import * as THREE from 'three';
 import { crearRelieve } from './universo.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { hash, azar } from './ruido.js';
 
 const N = 16;                      // cuadrados por lado de cada trozo
 const MAX_PROF = 10;               // profundidad máxima del árbol (trozos de ~10-20 m)
-const DIVIDIR = 1.55;              // se divide cuando la cámara está a menos de tamaño × DIVIDIR
+const DIVIDIR = 2.3;               // se divide cuando la cámara está a menos de tamaño × DIVIDIR (más alto = más distancia de detalle)
 
 // ─── Hilos de trabajo compartidos por todos los planetas ────────────────────────────────────────
 const hilos = [], cola = [], pendientes = new Map();
@@ -105,14 +107,19 @@ function materialAtmosfera(color) {
   });
 }
 
-// Flora: cristales y «árboles» de neón, instanciados por trozo
-let _geoFlora = null;
-function geoFlora() {
-  if (_geoFlora) return _geoFlora;
+// Flora y minerales instanciados por trozo: cristales de neón, rocas (ferrita) y plantas (carbono)
+let _geos = null;
+export function geosFlora() {
+  if (_geos) return _geos;
   const cristal = new THREE.ConeGeometry(0.6, 4, 5, 1); cristal.translate(0, 2, 0);
-  _geoFlora = cristal;
-  return _geoFlora;
+  const roca = new THREE.DodecahedronGeometry(1.1, 0); roca.scale(1.3, 0.8, 1.1); roca.translate(0, 0.5, 0);
+  const tronco = new THREE.CylinderGeometry(0.18, 0.28, 3, 5); tronco.translate(0, 1.5, 0);
+  const copa = new THREE.IcosahedronGeometry(1.4, 0); copa.scale(1, 0.8, 1); copa.translate(0, 3.4, 0);
+  const planta = mergeGeometries([tronco.toNonIndexed(), copa.toNonIndexed()]);
+  _geos = [cristal, roca, planta];
+  return _geos;
 }
+export const RECURSO_FLORA = ['cristal', 'ferrita', 'carbono'];
 
 export class Planeta {
   constructor(scene, p, sol) {
@@ -121,7 +128,12 @@ export class Planeta {
     scene.add(this.grupo);
     this.altura = crearRelieve(p);
     this.mat = materialToon({ vertexColors: true });
-    this.matFlora = materialToon({ color: new THREE.Color(p.pal[1]), emissive: new THREE.Color(p.pal[1]), emissiveIntensity: 0.35 }, 0.35);
+    this.matFlora = [
+      materialToon({ color: new THREE.Color(p.pal[1]), emissive: new THREE.Color(p.pal[1]), emissiveIntensity: 0.45 }, 0.35),
+      materialToon({ color: new THREE.Color(p.pal[3]).multiplyScalar(0.6) }, 0.5),
+      materialToon({ color: new THREE.Color(p.pal[2]), emissive: new THREE.Color(p.pal[4]), emissiveIntensity: 0.12 }, 0.45),
+    ];
+    this.minables = new Set();        // mallas instanciadas que se pueden minar (para el láser)
     iniciarHilos();
     this.raices = [0, 1, 2, 3, 4, 5].map(c => this._nodo(c, 0, 0, 1, 0, null));
     // agua o lava
@@ -151,6 +163,64 @@ export class Planeta {
       this.grupo.add(this.anillo);
     }
     this.trozos = 0;
+    // lunas: pequeñas esferas de dibujo que orbitan despacio (se ven desde la superficie)
+    this.lunas = [];
+    const rl = azar(hash(p.semilla, 31));
+    for (let k = 0; k < (p.lunas || 0); k++) {
+      const ml = new THREE.Mesh(new THREE.IcosahedronGeometry(this.R * (0.12 + rl() * 0.12), 3), materialToon({ color: new THREE.Color(p.pal[2 + k]).lerp(new THREE.Color('#888'), 0.5) }));
+      ml.userData = { d: this.R * (3 + k * 1.4 + rl()), v: 0.01 + rl() * 0.02, a: rl() * 6.28, inc: rl() - 0.5 };
+      this.grupo.add(ml); this.lunas.push(ml);
+    }
+    this.estructuras = null;           // ciudad y ruinas: se construyen al acercarse
+  }
+
+  /** Ciudad de neón y ruinas sobre la superficie (deterministas). */
+  _construirEstructuras() {
+    const p = this.p, g = new THREE.Group(); this.estructuras = g; this.grupo.add(g);
+    this.ruinas = []; this.ciudad = null;
+    const sobre = (d, alto = 0) => { const h = Math.max(this.altura(d.x, d.y, d.z), p.agua ? p.nivelMar * p.amplitud : -1e9); return d.clone().multiplyScalar(this.R + h + alto); };
+    const orientar = (obj, d) => { obj.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d); };
+    if (p.ciudad) {
+      const d0 = new THREE.Vector3(...p.ciudad).normalize(), r = azar(hash(p.semilla, 41));
+      const n = 70, geo = new THREE.BoxGeometry(1, 1, 1); geo.translate(0, 0.5, 0);
+      const cv = document.createElement('canvas'); cv.width = 32; cv.height = 128; const x = cv.getContext('2d');
+      x.fillStyle = '#0b0618'; x.fillRect(0, 0, 32, 128);
+      for (let j = 4; j < 128; j += 6) for (let i = 3; i < 32; i += 7) if (Math.random() < 0.55) { x.fillStyle = Math.random() < 0.5 ? '#00f0ff' : '#ff2e88'; x.fillRect(i, j, 4, 3); }
+      const tex = new THREE.CanvasTexture(cv); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.colorSpace = THREE.SRGBColorSpace;
+      const mat = new THREE.MeshBasicMaterial({ map: tex });
+      const im = new THREE.InstancedMesh(geo, mat, n), mt = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
+      const tang = new THREE.Vector3(0, 1, 0).cross(d0).normalize(), bit = d0.clone().cross(tang);
+      for (let k = 0; k < n; k++) {
+        const a = r() * 6.28, rr = Math.sqrt(r()) * 900;
+        const d = d0.clone().multiplyScalar(this.R).addScaledVector(tang, Math.cos(a) * rr).addScaledVector(bit, Math.sin(a) * rr).normalize();
+        const h = 40 + r() ** 2 * 260 * (1 - rr / 1100), w = 18 + r() * 30;
+        q.setFromUnitVectors(up, d);
+        mt.compose(sobre(d, -5), q, new THREE.Vector3(w, h, w)); im.setMatrixAt(k, mt);
+      }
+      im.computeBoundingSphere(); g.add(im);
+      // faro de la ciudad: haz de luz que se ve desde lejos
+      const haz = new THREE.Mesh(new THREE.CylinderGeometry(6, 30, 2500, 12, 1, true), new THREE.MeshBasicMaterial({ color: '#ff2e88', transparent: true, opacity: 0.18, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+      haz.geometry.translate(0, 1250, 0); haz.position.copy(sobre(d0)); orientar(haz, d0); g.add(haz);
+      this.ciudad = { dir: d0, pos: sobre(d0) };
+    }
+    const matR = materialToon({ color: new THREE.Color(p.pal[3]).lerp(new THREE.Color('#777'), 0.6) });
+    const matT = new THREE.MeshBasicMaterial({ color: '#00f0ff' });
+    p.ruinas.forEach((rd, k) => {
+      const d = new THREE.Vector3(...rd).normalize(), r = azar(hash(p.semilla, 60 + k));
+      const ru = new THREE.Group(); ru.position.copy(sobre(d, -1)); orientar(ru, d);
+      for (let i = 0; i < 7; i++) {
+        const a = i / 7 * 6.28, alto = 6 + r() * 14;
+        const pil = new THREE.Mesh(new THREE.BoxGeometry(2.2, alto, 2.2), matR); pil.position.set(Math.cos(a) * 16, alto / 2, Math.sin(a) * 16); pil.rotation.z = (r() - 0.5) * 0.3; ru.add(pil);
+      }
+      const arco = new THREE.Mesh(new THREE.TorusGeometry(9, 1.2, 6, 16, Math.PI), matR); arco.position.y = 0; ru.add(arco);
+      // terminal antiguo (se hackea) con su luz
+      const term = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.4, 0.8), matR); term.position.set(0, 1.2, 3); ru.add(term);
+      const pant = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.6), matT); pant.position.set(0, 1.9, 3.41); ru.add(pant);
+      g.add(ru);
+      ru.updateMatrix();
+      // (posiciones relativas al centro del planeta; en el mundo: + grupo.position)
+      this.ruinas.push({ k, pos: ru.position.clone(), terminal: new THREE.Vector3(0, 1.5, 3).applyMatrix4(ru.matrix), id: `r:${p.semilla}:${k}` });
+    });
   }
 
   _nodo(cara, u0, v0, tam, prof, padre) {
@@ -184,24 +254,32 @@ export class Planeta {
     n.malla = m; n.listo = true; this.trozos++;
     n.centro.set(...r.centro);
     if (r.fl && r.fl.length) {
-      const k = r.fl.length / 8, im = new THREE.InstancedMesh(geoFlora(), this.matFlora, k);
+      const k = r.fl.length / 9, por = [[], [], []];
+      for (let i = 0; i < k; i++) por[r.fl[i * 9 + 8]].push(i);
       const mt = new THREE.Matrix4(), q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), d = new THREE.Vector3(), s = new THREE.Vector3(), pp = new THREE.Vector3(), q2 = new THREE.Quaternion();
-      for (let i = 0; i < k; i++) {
-        const f = r.fl.subarray(i * 8, i * 8 + 8);
-        d.set(f[3], f[4], f[5]); q.setFromUnitVectors(up, d).multiply(q2.setFromAxisAngle(up, f[7] * 6.28));
-        // algunas inclinadas, otras altas y finas: cada planeta su bosque
-        s.set(f[6] * (0.6 + f[7] * 0.6), f[6] * (1 + f[7] * 1.5), f[6] * (0.6 + f[7] * 0.6));
-        mt.compose(pp.set(f[0], f[1], f[2]), q, s); im.setMatrixAt(i, mt);
-      }
-      im.position.copy(m.position); im.visible = false; im.computeBoundingSphere();
-      this.grupo.add(im); n.flora = im;
+      n.flora = [];
+      por.forEach((lista, tipo) => {
+        if (!lista.length) return;
+        const im = new THREE.InstancedMesh(geosFlora()[tipo], this.matFlora[tipo], lista.length);
+        lista.forEach((i, j) => {
+          const f = r.fl.subarray(i * 9, i * 9 + 9);
+          d.set(f[3], f[4], f[5]); q.setFromUnitVectors(up, d).multiply(q2.setFromAxisAngle(up, f[7] * 6.28));
+          // (cristales de 2-7 m, rocas de 1-3 m y plantas de 3-6 m: a escala del astronauta)
+          const e = tipo === 0 ? [f[6] * (0.35 + f[7] * 0.3), f[6] * (0.45 + f[7] * 0.55)] : tipo === 1 ? [f[6] * 0.7, f[6] * 0.6] : [f[6] * 0.55, f[6] * (0.6 + f[7] * 0.5)];
+          s.set(e[0], e[1], e[0]);
+          mt.compose(pp.set(f[0], f[1], f[2]), q, s); im.setMatrixAt(j, mt);
+        });
+        im.position.copy(m.position); im.visible = false; im.computeBoundingSphere();
+        im.userData = { tipo, recurso: RECURSO_FLORA[tipo], vida: new Float32Array(lista.length).fill(1) };
+        this.grupo.add(im); n.flora.push(im); this.minables.add(im);
+      });
     }
   }
 
   _borrar(n) {
     n.muerto = true;
     if (n.malla) { this.grupo.remove(n.malla); n.malla.geometry.dispose(); this.trozos--; }
-    if (n.flora) { this.grupo.remove(n.flora); n.flora.dispose(); }
+    if (n.flora) for (const f of n.flora) { this.grupo.remove(f); f.dispose(); this.minables.delete(f); }
     n.malla = null; n.flora = null;
     for (const t of cola) if (t.id === n.id) t.cancelado = true;
     if (n.hijos) for (const h of n.hijos) this._borrar(h);
@@ -213,9 +291,11 @@ export class Planeta {
     this._cam = this._cam || new THREE.Vector3();
     this._cam.copy(camMundo).sub(this.grupo.position);
     const dist = this._cam.length();
-    // muy lejos: solo un punto con su atmósfera (los trozos raíz bastan)
     for (const r of this.raices) this._recorrer(r, dist);
     despachar();
+    if (!this.estructuras && dist < this.R * 4) this._construirEstructuras();
+    const t = performance.now() / 1000;
+    for (const l of this.lunas) { const u = l.userData, a = u.a + t * u.v; l.position.set(Math.cos(a) * u.d, Math.sin(a) * u.d * u.inc, Math.sin(a) * u.d); }
   }
 
   // devuelve true si el nodo (o sus hijos) cubre su zona con mallas listas
@@ -241,7 +321,7 @@ export class Planeta {
     this._ver(n, true);
     return n.listo;
   }
-  _ver(n, si) { if (n.malla) n.malla.visible = si; if (n.flora) n.flora.visible = si; }
+  _ver(n, si) { if (n.malla) n.malla.visible = si; if (n.flora) for (const f of n.flora) f.visible = si; }
   _ocultarRama(n) { this._ver(n, false); if (n.hijos) for (const h of n.hijos) this._ocultarRama(h); }
 
   /** Altura del suelo (m sobre el radio) bajo un punto del mundo, y la dirección «arriba». */

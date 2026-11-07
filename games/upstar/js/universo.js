@@ -26,19 +26,50 @@ export const TIPOS = {
 };
 const LISTA_TIPOS = Object.keys(TIPOS);
 
+export const FACCIONES = [
+  { id: 'corp', nombre: 'Corporación Nova', color: '#00f0ff', piratas: 0.15, precio: 0.85, desc: 'Orden, comercio y estaciones bien surtidas. Pagan por cazar piratas.' },
+  { id: 'sind', nombre: 'Sindicato de Datos', color: '#ff2e88', piratas: 0.55, precio: 1.15, desc: 'Piratas y hackers. Peligroso, pero los terminales pagan el doble.' },
+  { id: 'ia',   nombre: 'Colectivo IA', color: '#b4ff39', piratas: 0.3, precio: 1.0, desc: 'Mentes sintéticas. Venden los mejores implantes.' },
+];
+const estrellaColor = (s) => ['#ffd27a', '#ff9e6b', '#9ad7ff', '#ff6bd6', '#fff3c4', '#b18cff'][hash(s, 3) % 6];
+export const colorEstrella = (x, y, z) => estrellaColor(hash(x, y, z, 7));
+const CLIMAS = ['despejado', 'tormenta', 'acido', 'ventisca', 'calor'];
+
+/** La Señal: un punto fijo del universo hacia el que tira la historia. */
+export const SENAL = [0, 0, -48];
+/** Sector de la expedición de la semana (cambia cada lunes). */
+export function expedicionSemana(ahora = Date.now()) {
+  const semana = Math.floor((ahora / 86400000 + 3) / 7);
+  const r = azar(hash(semana, 77));
+  return { semana, sector: [Math.floor(r() * 13) - 6, Math.floor(r() * 5) - 2, Math.floor(r() * 13) - 6] };
+}
+
 /** Sistema estelar del sector (x, y, z). Distancias en metros. */
 export function sistema(x, y, z) {
   const sem = hash(x, y, z, 7);
   const r = azar(sem);
   const n = 2 + Math.floor(r() * 3);
   const sis = { sector: [x, y, z], semilla: sem, nombre: nombre(hash(sem, 1), false), planetas: [] };
-  sis.estrella = { color: ['#ffd27a', '#ff9e6b', '#9ad7ff', '#ff6bd6', '#fff3c4'][Math.floor(r() * 5)], dir: [r() - 0.5, 0.35 + r() * 0.3, r() - 0.5] };
-  let orbita = 0;
+  // la estrella está en el centro del sistema (0, 0, 0); los planetas orbitan a su alrededor
+  sis.estrella = { color: estrellaColor(sem), radio: 9000 + r() * 7000 };
+  sis.faccion = FACCIONES[Math.floor(r() * FACCIONES.length)];
+  let orbita = 30000;
   for (let i = 0; i < n; i++) {
-    orbita += 26000 + r() * 22000;
+    orbita += 28000 + r() * 26000;
     const ang = r() * Math.PI * 2;
-    sis.planetas.push(planeta(hash(sem, 100 + i), [Math.cos(ang) * orbita, (r() - 0.5) * 6000, Math.sin(ang) * orbita], i));
+    sis.planetas.push(planeta(hash(sem, 100 + i), [Math.cos(ang) * orbita, (r() - 0.5) * 8000, Math.sin(ang) * orbita], i));
   }
+  // estación espacial en órbita del primer planeta y su circuito de anillos
+  const p0 = sis.planetas[0], a0 = r() * Math.PI * 2, d0 = p0.radio * 2.6;
+  sis.estacion = { pos: [p0.pos[0] + Math.cos(a0) * d0, p0.pos[1] + p0.radio * 0.6, p0.pos[2] + Math.sin(a0) * d0], nombre: `Estación ${nombre(hash(sem, 9), false)}` };
+  sis.anillos = [];
+  { let pp = sis.estacion.pos.slice(), dir = [Math.cos(a0 + 1.6), 0, Math.sin(a0 + 1.6)];
+    for (let k = 0; k < 10; k++) {
+      dir = [dir[0] + (r() - 0.5) * 0.9, (r() - 0.5) * 0.5, dir[2] + (r() - 0.5) * 0.9];
+      const l = Math.hypot(...dir); dir = dir.map(v => v / l);
+      pp = [pp[0] + dir[0] * (900 + r() * 500), pp[1] + dir[1] * 600, pp[2] + dir[2] * (900 + r() * 500)];
+      sis.anillos.push({ pos: pp.slice(), dir: dir.slice() });
+    } }
   // el primero, cerca del punto de llegada para que el viaje empiece con un planeta a la vista
   return sis;
 }
@@ -57,6 +88,30 @@ export function planeta(semilla, pos, i = 0) {
     montes: 0.6 + r() * 0.9,
     anillos: r() < 0.3,
     gravedad: 6 + r() * 7,
+    lunas: Math.floor(r() * 3),
+    climas: [CLIMAS[0], CLIMAS[1 + Math.floor(r() * 4)]],   // alterna entre despejado y su clima propio
+    ciudad: r() < 0.45 ? [r() - 0.5, r() - 0.5, r() - 0.5] : null,
+    ruinas: [0, 1, 2, 3].map(() => [r() - 0.5, r() - 0.5, r() - 0.5]),
+    especies: [0, 1, 2, 3, 4, 5].map(k => especie(hash(semilla, 500 + k), tipo)),
+  };
+}
+
+/** Especie de criatura por piezas, a partir de su semilla. */
+export function especie(sem, tipo) {
+  const r = azar(sem), pal = TIPOS[tipo].pal;
+  const vuela = r() < 0.22;
+  const tam = vuela ? 0.6 + r() * 1.6 : r() < 0.15 ? 4 + r() * 5 : 0.5 + r() * 2.2;
+  const comp = r();
+  return {
+    sem, nombre: nombre(hash(sem, 1), false) + ' ' + ['minor', 'magnus', 'vulgaris', 'lux', 'umbra', 'neon', 'ferox'][Math.floor(r() * 7)],
+    vuela, tam, patas: vuela ? 0 : [2, 4, 4, 6][Math.floor(r() * 4)],
+    cuerpo: [0.8 + r() * 0.8, 0.5 + r() * 0.6, 0.6 + r() * 0.9], cuello: r() * 0.6, cabeza: 0.35 + r() * 0.35,
+    color: pal[1 + Math.floor(r() * 4)], acento: ['#00f0ff', '#ff2e88', '#b4ff39', '#ffd23f', '#ffffff'][Math.floor(r() * 5)],
+    cuernos: r() < 0.4, cola: r() < 0.6, ojos: 1 + Math.floor(r() * 3),
+    temperamento: comp < 0.5 ? 'pacífica' : comp < 0.8 ? 'huidiza' : 'agresiva',
+    dieta: ['herbívora', 'carnívora', 'omnívora', 'litófaga', 'fotosintética'][Math.floor(r() * 5)],
+    rareza: r() < 0.6 ? 'común' : r() < 0.85 ? 'rara' : 'legendaria',
+    velocidad: 2 + r() * 5,
   };
 }
 
