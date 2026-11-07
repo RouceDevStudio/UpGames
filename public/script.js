@@ -5614,11 +5614,13 @@ const _GAMESDB = [
 
 function clientDetectGame(title, description) {
   if (!title) return null;
-  var text = (title + ' ' + (description || '')).toLowerCase();
+  // palabras o frases completas: "apex legends" no salta con "APEX GP" ni "re4" dentro de otra palabra
+  var norm = function (t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9':]+/g, ' ').trim(); };
+  var text = ' ' + norm(title) + ' ' + norm(description) + ' ';
   for (var i = 0; i < _GAMESDB.length; i++) {
     var g = _GAMESDB[i];
     for (var j = 0; j < g.kw.length; j++) {
-      if (text.indexOf(g.kw[j]) !== -1) {
+      if (text.indexOf(' ' + norm(g.kw[j]) + ' ') !== -1) {
         return { gameName: g.n, purchaseLink: g.l };
       }
     }

@@ -190,7 +190,7 @@ const GAMES_DATABASE = {
   'Apex Legends': {
     name: 'Apex Legends', platform: 'multi',
     purchaseLink: 'https://store.steampowered.com/app/1172470/Apex_Legends/',
-    keywords: ['apex legends','apex']
+    keywords: ['apex legends']  // 'apex' solo es demasiado genérico (APEX GP, apex de curva…)
   },
   'Overwatch 2': {
     name: 'Overwatch 2', platform: 'multi',
@@ -202,7 +202,7 @@ const GAMES_DATABASE = {
   'League of Legends': {
     name: 'League of Legends', platform: 'pc',
     purchaseLink: 'https://signup.leagueoflegends.com/en-us/signup/index',
-    keywords: ['league of legends','lol','league']
+    keywords: ['league of legends']  // 'lol' y 'league' salen en cualquier texto
   },
   'Dota 2': {
     name: 'Dota 2', platform: 'pc',
@@ -301,21 +301,30 @@ const GAMES_DATABASE = {
   }
 };
 
+// Normaliza: minúsculas, sin tildes y con los signos convertidos en espacios
+function normalizar(t) {
+  return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9':]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// Cada palabra clave se busca como palabra o frase completa, no como trozo de otra palabra:
+// "apex legends" no aparece en "APEX GP" y "rdr" no aparece en "Border".
+const PATRONES = Object.entries(GAMES_DATABASE).map(([key, data]) => ({
+  key, data,
+  res: data.keywords.map(kw => new RegExp('(^|[^a-z0-9])' + normalizar(kw).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '($|[^a-z0-9])')),
+}));
+
 function detectGame(title, description) {
   if(!title) return null;
-  const text = (title + ' ' + (description||'')).toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // quita tildes
-
-  for(const [key, data] of Object.entries(GAMES_DATABASE)) {
-    for(const kw of data.keywords) {
-      if(text.includes(kw)) {
-        return {
-          gameName:     data.name,
-          gameKey:      key,
-          platform:     data.platform,
-          purchaseLink: data.purchaseLink
-        };
-      }
+  const text = ' ' + normalizar(title) + ' ' + normalizar(description) + ' ';
+  for(const { key, data, res } of PATRONES) {
+    if(res.some(re => re.test(text))) {
+      return {
+        gameName:     data.name,
+        gameKey:      key,
+        platform:     data.platform,
+        purchaseLink: data.purchaseLink
+      };
     }
   }
   return null;
