@@ -1,0 +1,75 @@
+# Despliegue de respaldo del servidor en Railway.
+# Railway despliega solo con su conexión a GitHub, pero si esa conexión se rompe
+# (permisos de la app de Railway, repositorio movido a otra organización…) los commits
+# dejan de llegar y nadie se entera. Este workflow sube el código con la CLI de Railway
+# cada vez que cambian archivos del backend en main, y después comprueba que el
+# servidor responde con el commit nuevo.
+#
+# Necesita en Settings → Secrets and variables → Actions:
+#   RAILWAY_TOKEN    token de proyecto (Railway → proyecto → Settings → Tokens, entorno production)
+#   RAILWAY_SERVICE  (variable, opcional) nombre del servicio; por defecto "UpGames"
+name: Deploy Railway
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.js'
+      - 'rutas/**'
+      - 'modulos/**'
+      - 'mediamtx/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'nixpacks.toml'
+      - 'railway.toml'
+      - 'public/pb2-touch.js'
+      - 'public/pb2-touch.css'
+      - '.github/workflows/deploy-railway.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-railway
+  cancel-in-progress: true
+
+jobs:
+  desplegar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Comprobar token
+        id: token
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "::warning::Falta el secreto RAILWAY_TOKEN: no se despliega desde aquí (solo queda la conexión GitHub de Railway)."
+            echo "hay=no" >> "$GITHUB_OUTPUT"
+          else
+            echo "hay=si" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Subir a Railway
+        if: steps.token.outputs.hay == 'si'
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          SERVICIO: ${{ vars.RAILWAY_SERVICE || 'UpGames' }}
+        run: |
+          npm install -g @railway/cli@4
+          # el commit queda en /salud aunque el despliegue no venga de la conexión GitHub
+          railway variables --service "$SERVICIO" --set "UPGAMES_COMMIT=${GITHUB_SHA}" --skip-deploys || true
+          railway up --ci --service "$SERVICIO"
+
+      - name: Verificar que el servidor nuevo responde
+        if: steps.token.outputs.hay == 'si'
+        run: |
+          corto="${GITHUB_SHA::7}"
+          for i in $(seq 1 30); do
+            r=$(curl -s --max-time 20 https://upgames-production.up.railway.app/salud || true)
+            echo "$r"
+            case "$r" in *"\"version\":\"$corto\""*) echo "Desplegado $corto"; exit 0;; esac
+            sleep 20
+          done
+          echo "::error::El servidor no responde con el commit $corto tras 10 minutos"
+          exit 1
