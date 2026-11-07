@@ -102,18 +102,19 @@ export class Nave {
     const giro = st.giro * dano * (this.pulso ? 0.25 : 1);
     const obj = _v.set(m.cabeceo * 1.5 * giro, -m.guinada * 1.05 * giro, -m.alabeo * 2.4 * giro);
     if (enAtm && up) {
-      // alabeo automático: se inclina hacia el giro y se endereza al soltar
+      // alabeo automático: se inclina hacia el giro y se endereza al soltar. El ángulo de alabeo se
+      // mide con atan2 (también sirve boca abajo) y se corrige girando en sentido contrario.
       const der = _w.set(1, 0, 0).applyQuaternion(this.quat);
-      const inclin = der.dot(up);                     // >0: ala derecha arriba
+      const arribaNave = new THREE.Vector3(0, 1, 0).applyQuaternion(this.quat);
+      const alabeo = Math.atan2(der.dot(up), arribaNave.dot(up));     // >0: ala derecha arriba
       const deseado = -m.guinada * 0.55;
-      if (Math.abs(m.alabeo) < 0.1) obj.z += (inclin - deseado) * 2.8;
-      // al inclinarse, el morro sube en el giro (viraje coordinado)
-      obj.x += Math.abs(inclin) * 0.35 * Math.sign(m.cabeceo || 0) * 0;
+      if (Math.abs(m.alabeo) < 0.1) obj.z += -(alabeo - deseado) * 2.6;
     }
     if (this.autoAterrizar && up) {
       // piloto automático de aterrizaje: nivela la nave
       const fw = this.delante(), der = _w.set(1, 0, 0).applyQuaternion(this.quat);
-      obj.x = -fw.dot(up) * 3; obj.z = der.dot(up) * 3; obj.y = 0;
+      const arribaNave = new THREE.Vector3(0, 1, 0).applyQuaternion(this.quat);
+      obj.x = -fw.dot(up) * 3; obj.z = -Math.atan2(der.dot(up), arribaNave.dot(up)) * 3; obj.y = 0;
     }
     this.rot.lerp(obj, Math.min(1, dt * 6));
     _q.setFromAxisAngle(EJE_X, this.rot.x * dt); this.quat.multiply(_q);

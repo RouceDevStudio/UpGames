@@ -599,9 +599,9 @@ export class Monoplaza {
       if (w.sup === SUP_ASFALTO) mu *= 0.975 + 0.04 * (c.goma ?? 0.6);
       // canicas fuera de la trazada en seco: casi como pisar rodamientos
       if (w.sup === SUP_ASFALTO && agua < 0.2 && c.enCanicas?.(iw, w.d)) {
-        mu *= 0.86;
-        // la goma recoge las canicas: sale sucia y tarda unas curvas en limpiarse
-        if (Math.abs(vl) > 15) { w.suciedad = Math.min(0.55, (w.suciedad || 0) + dt * 0.5); w.sucioHierba = 0; }
+        mu *= 0.88;
+        // la goma recoge las canicas: sale algo sucia y se limpia en unas curvas
+        if (Math.abs(vl) > 15) { w.suciedad = Math.min(0.35, (w.suciedad || 0) + dt * 0.3); w.sucioHierba = 0; }
       }
       // charco: aquaplaning que crece con la velocidad y la profundidad (y menos con los de lluvia)
       w.charco = c.charco ? c.charco(iw, w.d, agua) : 0;

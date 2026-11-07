@@ -2024,6 +2024,7 @@ function bucle(ahora) {
   if (escenario.ayudaFrenada) escenario.ayudaFrenada.visible = !!ajustes.ayudaFrenada && jugando;
   // la trazada se oscurece con la goma que van dejando todos los coches (y la lluvia la lava)
   if (escenario.matGoma) escenario.matGoma.opacity = 0.15 + 0.7 * Math.min(1, Math.max(0, circuito.goma ?? 0.6));
+  if (escenario.matCanicas) escenario.matCanicas.opacity = Math.min(1, (circuito.nivelCanicas || 0) * 1.2);
   actualizarGotas(dt);
   if (jugando) pintarRetrovisores();
   renderizar();

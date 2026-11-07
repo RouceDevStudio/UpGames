@@ -820,12 +820,27 @@ Circuito.prototype.enSalchicha = function (i, d) {
   return this.salchicha[lado][i] && ad > hw + 1.35 && ad < hw + 2.1;
 };
 
-// Canicas (bolitas de goma) fuera de la trazada en las curvas, y charcos en los puntos
-// bajos de la pista que aparecen con lluvia fuerte.
+// Canicas (bolitas de goma) y charcos en los puntos bajos que aparecen con lluvia fuerte.
+// Las canicas solo se acumulan en las curvas cerradas y por el EXTERIOR de la trazada (adonde las
+// escupen los neumáticos), y aparecen poco a poco con los kilómetros de carrera: cada tramo tiene
+// un umbral (`canicaUmbral`) y se ensucia cuando el nivel de la carrera (`nivelCanicas`) lo supera.
 Circuito.prototype._superficieViva = function () {
-  const n = this.n, k = this.curvSuave;
+  const n = this.n, k = this.curvSuave, off = this.trazada.off;
   this.canicas = new Uint8Array(n);
-  for (let i = 0; i < n; i++) if (Math.abs(k[i]) > 0.006 && !this.enZonaPit[i]) this.canicas[i] = 1;
+  this.canicaLado = new Int8Array(n);
+  this.canicaUmbral = new Float32Array(n);
+  this.nivelCanicas = 0;
+  // ¿hacia qué lado queda el interior? (la trazada se acerca al interior en los vértices)
+  let rel = 0; for (let i = 0; i < n; i++) if (Math.abs(k[i]) > 0.012) rel += off[i] * Math.sign(k[i]);
+  const s = rel >= 0 ? 1 : -1;
+  for (let i = 0; i < n; i++) {
+    if (Math.abs(k[i]) <= 0.012 || this.enZonaPit[i]) continue;
+    this.canicas[i] = 1;
+    this.canicaLado[i] = -Math.sign(k[i]) * s;                 // el exterior
+    // umbral suave a lo largo de la pista: aparecen por tramos, no todas a la vez
+    const x = i * this.paso;
+    this.canicaUmbral[i] = 0.5 + 0.5 * Math.sin(x * 0.013 + 1.7) * Math.sin(x * 0.0041 + 0.4);
+  }
   // charcos: puntos bajos locales (o cada ~700 m si la pista es llana), deterministas
   let sem = 97 + n;
   const rnd = () => ((sem = (sem * 16807) % 2147483647) / 2147483647);
@@ -868,7 +883,7 @@ Circuito.prototype.charco = function (i, d, agua) {
 
 // ¿Rueda sobre las canicas? (asfalto en curva, a más de 3.5 m de la trazada)
 Circuito.prototype.enCanicas = function (i, d) {
-  return this.canicas[i] && Math.abs(d) < this.semiAncho[i] && Math.abs(d - this.trazada.off[i]) > 3.5;
+  return this.canicas[i] && this.canicaUmbral[i] < this.nivelCanicas && Math.abs(d) < this.semiAncho[i] && (d - this.trazada.off[i]) * this.canicaLado[i] > 3.5;
 };
 
 export const SUP_ASFALTO = 0, SUP_BORDILLO = 1, SUP_ESCAPE = 2, SUP_HIERBA = 3, SUP_GRAVA = 4;

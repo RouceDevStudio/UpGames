@@ -38,6 +38,8 @@ export class Sesion {
     circuito.agua = this.clima.agua;
     // goma en la pista: los libres empiezan con poca, la carrera con la del fin de semana
     circuito.goma = opc.goma ?? ({ practica: 0.35, contrarreloj: 0.6, carrera: 0.75 }[opc.modo] ?? 0.6);
+    // las canicas empiezan limpias y se acumulan con los km de todos los coches
+    circuito.kmSesion = 0; circuito.nivelCanicas = 0;
     // viento del día (determinista con la semilla): dirección, fuerza media y rachas
     { const sem = (opc.semilla ?? 7) * 0.618;
       this.viento = { dir: (sem * 6.283) % 6.283, media: 1 + (Math.abs(Math.sin(sem * 3.1)) * 6), x: 0, z: 0, racha: 0 }; }
@@ -405,6 +407,10 @@ export class Sesion {
     for (const p of this.participantes) { p.coche.viento = w; km += p.coche.velocidad * dt / 1000; }
     // ~+0,05 por cada 100 km recorridos entre todos; con lluvia la pista se «lava»
     c.goma = Math.min(1, Math.max(0, (c.goma ?? 0.6) + km * 0.0005 - (c.agua > 0.3 ? dt * 0.0006 : 0)));
+    // canicas: llegan a su máximo cuando la parrilla (mín. 8 coches) ha dado ~5 vueltas; la lluvia las limpia
+    c.kmSesion = (c.kmSesion || 0) + km;
+    const lleno = (c.largo / 1000) * Math.max(8, this.participantes.length) * 5;
+    c.nivelCanicas = c.agua > 0.3 ? Math.max(0, (c.nivelCanicas || 0) - dt * 0.002) : Math.min(1, c.kmSesion / lleno);
   }
 
   _aerodinamicaRelativa() {

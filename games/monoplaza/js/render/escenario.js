@@ -317,16 +317,19 @@ export function construirEscenario(scene, renderer, c, calidad) {
   const t = c.trazada;
   const goma = new THREE.Mesh(cinta(c, (i) => [[t.off[i] - 1.6, 0.006], [t.off[i] + 1.6, 0.006]], { escalaV: 30 }), matGoma);
   res.matGoma = matGoma;
+  res.matCanicas = null;   // (se asigna abajo)
   goma.receiveShadow = true;
   scene.add(goma);
 
   // canicas fuera de la trazada en las curvas (exterior de la goma)
   const matCanicas = new THREE.MeshStandardMaterial({ map: TX.texturaCanicas(), transparent: true, roughness: 0.9, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  res.matCanicas = matCanicas; matCanicas.opacity = 0;
   for (const sg of [-1, 1]) {
     // franja entre la goma (+-3.6 m de la trazada) y el borde, ordenada de izquierda a derecha
     const franja = (i) => { const a = t.off[i] + sg * 3.6, b = sg * (hw(i) - 0.7); return sg > 0 ? [a, b] : [b, a]; };
+    // (solo por el exterior de la curva; se ven más a medida que avanza la carrera)
     const g = cinta(c, (i) => franja(i).map(d => [d, 0.007]),
-      { filtro: (i) => { const [a, b] = franja(i); return c.canicas[i] && b - a > 1; }, escalaV: 12 });
+      { filtro: (i) => { const [a, b] = franja(i); return c.canicas[i] && c.canicaLado[i] === sg && b - a > 1; }, escalaV: 12 });
     const m = new THREE.Mesh(g, matCanicas); m.receiveShadow = true; scene.add(m);
   }
   // parches de asfalto reparado
